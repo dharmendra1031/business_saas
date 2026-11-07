@@ -11,7 +11,7 @@
 
 1. **All new work is exclusively in `dharmendra1031/salon_saas`.** No changes, commits, branches, PRs, database operations or deployments in Kaifac or other projects.
 2. Kaifac Salon's `development` branch is a **read-only reference** for functional code, business rules and existing UI.
-3. Do not rewrite correctly functioning features. Inspect them first; make minimal, readable, behaviour-preserving changes.
+3. **Controlled clean rewrite:** implement a new maintainable codebase in `salon_saas`, using Kaifac only to understand verified workflows, rules and expected outputs. Deliver small end-to-end modules rather than a risky big-bang rewrite.
 4. Document the affected screen, API, business rule, database and permissions before changing a workflow.
 5. Application entity primary keys will be **numeric auto-increment IDs** (`BIGINT IDENTITY` / `INT IDENTITY`); no UUID/GUID IDs.
 6. Do not include demo customers, fake transactions, hardcoded salon details, secrets or production data.
@@ -25,8 +25,8 @@
 
 | Layer | Target |
 | --- | --- |
-| Backend | Existing ASP.NET Core Web API architecture |
-| Frontends | React + TypeScript (separate Admin and POS) |
+| Backend | New ASP.NET Core .NET 10 LTS API, informed by proven Kaifac business concepts |
+| Frontends | React + TypeScript: separate Platform Admin, Salon Admin and POS |
 | Persistence | SQL Server + EF Core |
 | Identity | Salon-scoped login, server-enforced roles and permissions |
 | Mobile | Existing Flutter apps are reference material; optional later phase |
@@ -34,7 +34,7 @@
 | Background jobs | Only for notifications, renewals, outbox and heavy work when required |
 | Scaling | Stateless API replicas, indexes, bounded queries, job separation and measured load tests |
 
-The current Kaifac backend's Domain, Application, Infrastructure and API project boundaries can be reused. Do not create numerous microservices or layers without a demonstrated requirement.
+Keep understandable Domain, Application, Infrastructure and API boundaries in the new implementation where they add value. Preserve verified business invariants via tests, not by blindly copying old components. Do not create microservices or redundant layers without a demonstrated requirement.
 
 ### Core business modules
 
@@ -215,9 +215,9 @@ Plans, trials, activation, renewal, grace period, failed payments, suspension, c
 | Phase | Work | Acceptance |
 | --- | --- | --- |
 | P0 | Plan, repository visibility, code import safety | Docs saved; Kaifac untouched; privacy decision before copying |
-| P1 | Approved clean baseline import into `salon_saas` | Backend/Admin/POS build; no secrets; smoke test |
-| P2 | Admin navigation and UX cleanup | Critical Admin workflows tested without functional regression |
-| P3 | POS checkout and cashier UX cleanup | Payment, refund, stock, register and retry tests pass |
+| P1 | New clean solution skeleton, tenant foundation and tested business specifications | .NET 10 API and Platform Admin/Salon Admin/POS builds; no secrets; smoke tests |
+| P2 | Build user-friendly Salon Admin business workflows | Core admin tasks validated using [UX Standards](./UX_STANDARDS.md) and business acceptance tests |
+| P3 | Build streamlined POS and reliable cashier workflows | Payment, refund, stock, register, retry, keyboard and usability tests pass |
 | P4 | True multi-salon onboarding and isolation | Cross-tenant access and authorization tests pass |
 | P5 | Super Admin and SaaS plan billing | Plan, renewal, payment and expiry tests pass |
 | P6 | Scale, security, monitoring and launch | Load tests, backup/recovery tests and go-live checklist pass |
@@ -239,9 +239,9 @@ Plans, trials, activation, renewal, grace period, failed payments, suspension, c
 ## 11. First implementation backlog
 
 1. Confirm private-source handling and make an explicit privacy decision for the target repo.
-2. Create a clean, approved baseline using Kaifac development as read-only input.
+2. Scaffold the new .NET 10 API and three React apps, using Kaifac development as read-only business reference only.
 3. Build the existing Admin/POS/API; capture reproducible runtime flows and identify confirmed bugs.
-4. Clean confusing Admin navigation, forms, tabs, filters and role-based journeys.
+4. Build task-based Admin navigation, forms, tabs, filters and role-based journeys against [UX Standards](./UX_STANDARDS.md).
 5. Simplify POS cashier navigation, checkout and payments while preserving financial controls.
 6. Implement tenant context, per-salon onboarding and secure login.
 7. Audit all business modules and exports for cross-tenant leakage.
@@ -252,8 +252,15 @@ Plans, trials, activation, renewal, grace period, failed payments, suspension, c
 
 - **D-001:** Work exclusively in `salon_saas`; Kaifac is read-only.
 - **D-002:** Start with a Modular Monolith.
-- **D-003:** Preserve functional Kaifac business code when authorized for reuse.
+- **D-003:** Controlled clean rewrite; preserve proven Kaifac *business behavior* using reference inspection and regression specifications, not wholesale code copying.
 - **D-004:** Use numeric auto-increment IDs and existing `SalonId` as tenant key.
 - **D-005:** Focus Admin/POS on real salon workflows, not cosmetic effects.
 - **D-006:** No private source copied to a public repo without reviewed authorization.
 - **D-007:** This document describes intended changes; it does not claim that code was changed or tests passed.
+
+## Additional mandatory release standards
+
+- The user-friendly design and screen-by-screen acceptance matrix is maintained in [UX Standards](./UX_STANDARDS.md). All three apps require task-based browser, keyboard, responsive and language/RTL review; clean code alone is not a usability pass.
+- Critical tenant, finance, security, subscription and recovery risks are maintained in [Engineering Guardrails](./ENGINEERING_GUARDRAILS.md). Every release must pass the documented risk-appropriate gates.
+- New codebase targets supported **.NET 10 LTS**; Kaifac's older runtime remains read-only reference.
+- No previous private source/history/binary/database transfer to the public SaaS repository without explicit visibility and source-sharing approval.
