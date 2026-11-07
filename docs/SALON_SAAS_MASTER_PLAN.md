@@ -264,3 +264,11 @@ Plans, trials, activation, renewal, grace period, failed payments, suspension, c
 - Critical tenant, finance, security, subscription and recovery risks are maintained in [Engineering Guardrails](./ENGINEERING_GUARDRAILS.md). Every release must pass the documented risk-appropriate gates.
 - New codebase targets supported **.NET 10 LTS**; Kaifac's older runtime remains read-only reference.
 - No previous private source/history/binary/database transfer to the public SaaS repository without explicit visibility and source-sharing approval.
+
+## Salon-domain specifications and rollout boundaries
+
+- **[Salon Business Workflows](./SALON_BUSINESS_WORKFLOWS.md):** owner, reception, cashier, staff, customer journey; onboarding; multi-service booking; chair/resource occupancy; manual waitlist; import/export and phased retention features.
+- **[Appointment & Financial Rules](./APPOINTMENT_FINANCIAL_RULES.md):** scheduling concurrency, deposits/no-shows, immutable invoice posting, retries, refunds, cash register and inventory invariants.
+- **[Pilot Acceptance Tests](./PILOT_ACCEPTANCE_TESTS.md):** real-salon user tasks, tenant isolation, money/stock regression, usability and evidence-based go/no-go gates.
+
+For initial release, **manual** waitlist and optional configurable deposits are the bounded targets. Automated waitlist marketing, AI and advanced retention come later, after basic workflows and jurisdiction/payment-provider rules are verified. Do not freeze the database schema until multi-service appointments, processing time, resource rules, payment flows, cash-register behavior, launch market and data-export policy are resolved. This does not authorize private Kaifac source import into the public repository.
