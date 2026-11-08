@@ -32,16 +32,27 @@ Do not build a generic engine that pretends every industry has identical operati
 - **Privacy:** `business_saas` is public; CBK/Kaifac are private read-only references. No copying private source/assets, customer data, SQL backups, secrets or historical commits into public repo without explicit authorization.
 - **No fake operational data** in app. Test-only fixtures and essential idempotent system catalog seed data are distinct.
 
+### Lean implementation baseline
+
+- **Initial code shape:** one `.NET 10` Web API project with feature folders and one test project; one React/Vite application with separate lazy-loaded Platform Admin, Business Admin and POS layouts. These are **three experiences, not three deployments**.
+- **Start with General Retail only.** Salon/Repair remain future vertical SRS until the Retail flow is genuinely tested. No code for hypothetical industries or 1,000 categories.
+- **Initial Business Type template:** simple supported type + default module mapping in well-named code/config. No dynamic workflow engine, runtime schema generation, plugin system or template version database on day one.
+- **First business roles:** Owner, Manager, Cashier with server-side policy checks and BusinessId membership. Add a custom role editor and per-location assignments as actual supported workflows require; never bypass tenant scoping.
+- **Initial platform data:** verified account, business, membership, location and minimal trial/plan. Add module tables, translator upload tables and paid subscription history as their **working features** are implemented, not as speculative scaffolding.
+- **No early distributed infrastructure:** one SQL Server, no Redis/queue/sharding/extra worker until a measured performance or durable-delivery requirement demands it.
+- **Do not simplify away correctness:** numeric IDs, safe auth and business switching, restricted access, reliable money/stock posting and UI error recovery are mandatory.
+- Follow the concrete [Development Roadmap](./DEVELOPMENT_ROADMAP.md) and its no-over-engineering rules before introducing any new layer, library or table.
+
 ## 3. Personas and access paths
 
-| Persona | App | Jobs |
+| Persona | Workspace / route group | Jobs |
 | --- | --- | --- |
-| Platform Super Admin | `platform-admin` | Business directory, categories/templates, plans, modules, quotas, translations, subscriptions, support/audit |
-| Platform Billing/Support | `platform-admin` | Restricted finance/support functions; no blanket customer data access |
-| Business Owner | `business-admin` | Create business, choose plan, locations, users, products/services, reporting |
-| Location Manager | `business-admin` | Assigned locations only; relevant approvals and inventory/operations |
-| Cashier | `pos` | Fast sale, refunds if allowed, register, receipt |
-| Receptionist/Stylist/Technician | `operations` or role-specific route | Bookings or jobs only when corresponding vertical supported |
+| Platform Super Admin | `platform` layout | Business directory, categories/templates, plans, modules, quotas, translations, subscriptions, support/audit |
+| Platform Billing/Support | `platform` layout | Restricted finance/support functions; no blanket customer data access |
+| Business Owner | `business` layout | Create business, choose plan, locations, users, products/services, reporting |
+| Location Manager | `business` layout | Assigned locations only; relevant approvals and inventory/operations |
+| Cashier | `pos` layout | Fast sale, refunds if allowed, register, receipt |
+| Receptionist/Stylist/Technician | Role-specific routes when supported | Bookings or jobs only when corresponding vertical supported |
 | Public customer | Public URL where activated | Book/order with trusted business context |
 
 A single person may have different roles in multiple businesses. Platform roles are separate from each business membership.
@@ -78,7 +89,7 @@ Identity/Organizations; Locations; Users/Roles/Permissions; Customer and Supplie
 
 ### Template engine contract
 
-A published template has a stable BusinessType, template version, required/optional modules, initial navigation, setup fields and workflow family. The template produces configuration; **it does not generate arbitrary executable code or database tables from user input**.
+A published template can eventually have a stable BusinessType, template version, required/optional modules, initial navigation, setup fields and workflow family. The template produces configuration; **it does not generate arbitrary executable code or database tables from user input**.
 
 | Type | Workflow family | Included initial capabilities | Release status |
 | --- | --- | --- | --- |
@@ -87,7 +98,7 @@ A published template has a stable BusinessType, template version, required/optio
 | Repair Shop | Customer -> Job -> Technician -> Parts -> Bill | Jobs, Parts, Inventory and Sale | **Third planned vertical** |
 | Studios, classes, rentals, other verticals | Distinct workflow families | Future specialized modules | Discovery/Not supported until tested |
 
-A taxonomy with 1,000+ labels can be searchable long-term, but `BusinessTypes.IsSupported` and `BusinessTemplates.Status` gate usable selection. No promise of support from a catalog label alone.
+A taxonomy with 1,000+ labels can be searchable long-term, but `BusinessTypes.IsSupported` (and published template status once persisted templates exist) gates usable selection. No promise of support from a catalog label alone.
 
 ### Configuration ownership
 
@@ -119,7 +130,7 @@ A taxonomy with 1,000+ labels can be searchable long-term, but `BusinessTypes.Is
 
 ## 8. UI/UX and applications
 
-| Frontend | Goal | Required main experience |
+| Frontend workspace (initially one React app) | Goal | Required main experience |
 | --- | --- | --- |
 | Platform Admin | Manage platform and subscriptions | Businesses, categories/templates, modules, plans, languages, finance, usage, audit, support |
 | Business Admin | Operate one selected business | Business switcher, context-specific navigation, people, catalog, operations, reports, settings |
