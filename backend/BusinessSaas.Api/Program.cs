@@ -76,8 +76,9 @@ app.Use(async (context, next) =>
             await context.RequestServices.GetRequiredService<IAntiforgery>()
                 .ValidateRequestAsync(context);
         }
-        catch (AntiforgeryValidationException)
+        catch (AntiforgeryValidationException error)
         {
+            app.Logger.LogWarning("Rejected request: {Reason}", error.Message);
             context.Response.StatusCode = StatusCodes.Status400BadRequest;
             await context.Response.WriteAsJsonAsync(new
             {
