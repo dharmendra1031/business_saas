@@ -82,7 +82,7 @@ app.Use(async (context, next) =>
             context.Response.StatusCode = StatusCodes.Status400BadRequest;
             await context.Response.WriteAsJsonAsync(new
             {
-                message = "Invalid security token. Refresh the page and try again."
+                message = app.Environment.IsDevelopment() ? error.Message : "Invalid security token. Refresh the page and try again."
             });
             return;
         }
