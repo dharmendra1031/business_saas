@@ -1,18 +1,20 @@
-# Salon SaaS — Engineering Guardrails and Release Gates
+# Business SaaS — Engineering Guardrails and Release Gates
 
 **Status:** Mandatory engineering specification; implementation and tests not yet completed  
 **Updated:** 2026-11-07  
-**Working repository:** `dharmendra1031/salon_saas` only  
-**Reference:** `dharmendra1031/Kaifac_salon` `development` branch (READ-ONLY)  
-**Companion docs:** [Master Plan](./SALON_SAAS_MASTER_PLAN.md) · [UX Standards](./UX_STANDARDS.md) · [Plans](./SUBSCRIPTION_PLANS.md) · [Languages](./LANGUAGE_MANAGEMENT.md)
+**Working repository:** `dharmendra1031/business_saas` only  
+**References:** `dharmendra1031/CBK` and `dharmendra1031/Kaifac_salon`, `development` branches (READ-ONLY)  
+**Companion docs:** [Master SRS](./BUSINESS_SAAS_MASTER_SRS.md) · [Database](./DATABASE_ARCHITECTURE.md) · [UX Standards](./UX_STANDARDS.md) · [Plans](./SUBSCRIPTION_PLANS.md) · [Languages](./LANGUAGE_MANAGEMENT.md)
+
+**Scope update:** These engineering gates cover the entire multi-business platform. Salon-specific pilot checks supplement but never replace the core BusinessId and Retail V1 test suites.
 
 ## 1. Engineering decisions
 
-- **Controlled clean rewrite:** New project, clear business ownership, tested parity with the Kaifac workflows. No blind code copy or big-bang release. Work feature-by-feature from business specifications to UI, API, database and tests.
+- **Controlled clean rewrite:** New multi-business platform built in vertical slices. CBK and Kaifac are read-only design/workflow references. Never blindly copy their private source, assets or data.
 - **Modular monolith:** ASP.NET Core API, React + TypeScript (Platform Admin, Salon Admin, POS), SQL Server + EF Core, selective background processing. Do not build microservices without measured need.
 - **Runtime:** New backend targets **.NET 10 LTS** with supported compatible libraries; the Kaifac .NET 8 backend is reference only. Confirm dependency compatibility before implementation.
-- **Database keys:** `BIGINT IDENTITY` / `INT IDENTITY` for application entity primary keys. No GUID/UUID entity keys. Use existing conceptual `SalonId` as the tenancy key instead of a duplicated tenant column.
-- **Private-to-public security gate:** At the time of writing `salon_saas` is public and Kaifac is private. No private source, backup, secrets or real customer data may be transferred to this repo until its visibility and publication permissions are explicitly approved.
+- **Database keys:** `BIGINT IDENTITY` / `INT IDENTITY` for all application entity IDs, including Identity users and roles. No GUID/UUID IDs. Platform tenancy key is **BusinessId**, with BusinessLocationId when necessary.
+- **Private-to-public security gate:** At the time of writing `business_saas` is public and CBK/Kaifac are private. No private source, backup, secrets or real customer data may be transferred to this repo until its visibility and publication permissions are explicitly approved.
 - **No demo data in production UI:** Seed essential system settings/module codes only where necessary, in an auditable and idempotent way. Synthetic fixtures belong in tests.
 - **Real workflows first:** UX completion is a release requirement, not a cosmetic task. Follow [UX Standards](./UX_STANDARDS.md).
 
@@ -20,7 +22,7 @@
 
 | ID | Priority | Failure | Required mitigation |
 | --- | --- | --- | --- |
-| R01 | BLOCKER | Salon A can access Salon B's customers, invoices or files | Trusted salon context, server-side scope checks, cross-tenant negative test suite |
+| R01 | BLOCKER | Business A can access Business B's customers, invoices or files | Trusted business context, server-side scope checks, cross-tenant negative test suite |
 | R02 | BLOCKER | Duplicate charge or sale after timeout/retry | Durable idempotency and server reconciliation; show outcome-unknown state |
 | R03 | BLOCKER | Wrong amount/tax/discount/stock due to concurrency or rounding | Decimal currency arithmetic, single server authority, transaction and ledger tests |
 | R04 | BLOCKER | Private Kaifac data/code exposed through public repo | Visibility/source approval, import allowlist, secret scan, never copy .bak |
@@ -40,13 +42,13 @@ This is an initial engineering risk assessment, **not** a claim that a penetrati
 
 ## 3. Tenant and identity isolation
 
-1. Resolve authenticated SalonId from a trusted tenant context. Never trust arbitrary SalonId query/body values for authorization.
+1. Resolve authenticated BusinessId from verified membership. Never trust arbitrary BusinessId query/body/header values as authorization.
 2. Platform users and salon users have separate access boundaries; a Platform Admin does not automatically receive salon business data access.
-3. Validate SalonId/BranchId and permission for each relevant read, write, report/export, file download and background job.
+3. Validate BusinessId/BusinessLocationId and permission for each relevant read, write, report/export, file download and background job.
 4. Audit EF queries, raw SQL, joins, projections, caches, idempotency keys and object storage for tenant scoping.
-5. Require verified tenant context for login; resolve duplicate email/phone used by multiple salons without guessing.
+5. Use global numeric UserId with explicit multi-business memberships; never infer business membership from matching contact details.
 6. Protect Platform Admin with MFA, role separation, audit trails and carefully controlled support access.
-7. Prove a two-tenant negative test suite: attempts to access foreign appointments, customers, employees, sales, inventory, invoices, attachments, settings and reports must fail.
+7. Prove a two-business negative test suite: attempts to access foreign appointments, customers, employees, sales, inventory, invoices, attachments, settings and reports must fail.
 8. Hidden frontend modules are not security controls.
 
 ## 4. Money, stock and operational correctness
@@ -71,12 +73,12 @@ This is an initial engineering risk assessment, **not** a claim that a penetrati
 ## 6. Availability, performance and operations
 
 - Start with a stateless horizontally scalable modular monolith. Use a separate background worker only for justified notifications, billing jobs and heavy exports.
-- Define real workload assumptions: number of registered salons, branches/users, peak concurrent checkouts, booking requests, reports and generated PDFs.
+- Define real workload assumptions: number of registered businesses, locations/users, peak concurrent checkouts, booking requests, reports and generated PDFs.
 - Monitor error rate, p50/p95/p99 latency, SQL locks/waits, queue lag, payment failure and infrastructure expense.
 - Back up data and files, verify restores in a separate environment, define recovery point/time objectives and test rollback.
 - Implement rate limits, request validation, secrets management, actionable alerts, health checks and trace IDs.
 - Test degraded database/network conditions and ambiguous checkout states, not only the success path.
-- Capacity for 10,000 salons must be verified with representative load testing. Registration count alone is not concurrency.
+- Capacity for 10,000 businesses must be verified with representative load testing. Registration count alone is not concurrency.
 
 ## 7. Release gates
 
@@ -97,7 +99,7 @@ For each delivered module record: business flow, affected data, permissions, aut
 ## 8. Development sequence
 
 1. Lock repository visibility/source-handling rules and architecture/acceptance documents.
-2. Create clean backend/frontend skeleton and supported .NET 10 environment in `salon_saas`.
+2. Create clean backend/frontend skeleton and supported .NET 10 environment in `business_saas`.
 3. Tenant context, authentication and initial platform/salon admin workflows.
 4. Complete per-module vertical slices with functional backend and user-friendly frontend.
 5. POS financial posting and inventory correctness with strong regression tests.
