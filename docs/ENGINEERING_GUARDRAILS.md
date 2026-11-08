@@ -11,7 +11,7 @@
 ## 1. Engineering decisions
 
 - **Controlled clean rewrite:** New multi-business platform built in vertical slices. CBK and Kaifac are read-only design/workflow references. Never blindly copy their private source, assets or data.
-- **Modular monolith:** ASP.NET Core API, React + TypeScript (Platform Admin, Salon Admin, POS), SQL Server + EF Core, selective background processing. Do not build microservices without measured need.
+- **Modular monolith:** ASP.NET Core API, React + TypeScript (Platform Admin, Business Admin, POS), SQL Server + EF Core, selective background processing. Do not build microservices without measured need.
 - **Runtime:** New backend targets **.NET 10 LTS** with supported compatible libraries; the Kaifac .NET 8 backend is reference only. Confirm dependency compatibility before implementation.
 - **Database keys:** `BIGINT IDENTITY` / `INT IDENTITY` for all application entity IDs, including Identity users and roles. No GUID/UUID IDs. Platform tenancy key is **BusinessId**, with BusinessLocationId when necessary.
 - **Private-to-public security gate:** At the time of writing `business_saas` is public and CBK/Kaifac are private. No private source, backup, secrets or real customer data may be transferred to this repo until its visibility and publication permissions are explicitly approved.
@@ -100,7 +100,7 @@ For each delivered module record: business flow, affected data, permissions, aut
 
 1. Lock repository visibility/source-handling rules and architecture/acceptance documents.
 2. Create clean backend/frontend skeleton and supported .NET 10 environment in `business_saas`.
-3. Tenant context, authentication and initial platform/salon admin workflows.
+3. Tenant context, authentication and initial platform/business admin workflows.
 4. Complete per-module vertical slices with functional backend and user-friendly frontend.
 5. POS financial posting and inventory correctness with strong regression tests.
 6. Plan billing, language management, reporting, notifications and tenant scale work.
