@@ -1,17 +1,19 @@
-# Salon SaaS — Master Product & Engineering Plan
+# Salon Vertical — Historical Product and Engineering Reference
 
-**Status:** Planning approved; implementation not started  
+> **Scope notice:** Historical Salon-specific plan. **Not authoritative for the new platform architecture.** The canonical [Business SaaS Master SRS](./BUSINESS_SAAS_MASTER_SRS.md) and [Database Architecture](./DATABASE_ARCHITECTURE.md) supersede Salon-only tenant structure, repository naming and release phases. In original Kaifac source, `SalonId` exists; all newly implemented Business SaaS tenant data uses `BusinessId` / `BusinessLocationId`. Use these Salon rules only for the dedicated Salon vertical in a later phase.
+
+**Status:** Historical Salon-vertical reference only; not a current platform development plan  
 **Date:** 7 November 2026  
-**Target repository:** `dharmendra1031/salon_saas`  
+**Target repository:** `dharmendra1031/business_saas` (Salon vertical is a future module)  
 **Reference only:** `dharmendra1031/Kaifac_salon`, branch `development`  
 **Reviewed source commit:** `3ebb119f0cb62f699513ef343861ebd897588950`  
 **Target:** Support a platform of up to 10,000 salons; concurrency must be verified by performance testing.
 
 ## 1. Repository and scope rules
 
-1. **All new work is exclusively in `dharmendra1031/salon_saas`.** No changes, commits, branches, PRs, database operations or deployments in Kaifac or other projects.
+1. **All new work is exclusively in `dharmendra1031/business_saas`.** No changes, commits, branches, PRs, database operations or deployments in Kaifac or other projects.
 2. Kaifac Salon's `development` branch is a **read-only reference** for functional code, business rules and existing UI.
-3. **Controlled clean rewrite:** implement a new maintainable codebase in `salon_saas`, using Kaifac only to understand verified workflows, rules and expected outputs. Deliver small end-to-end modules rather than a risky big-bang rewrite.
+3. **Controlled clean rewrite:** implement a new maintainable codebase in `business_saas`, using Kaifac only to understand verified workflows, rules and expected outputs. Deliver small end-to-end modules rather than a risky big-bang rewrite.
 4. Document the affected screen, API, business rule, database and permissions before changing a workflow.
 5. Application entity primary keys will be **numeric auto-increment IDs** (`BIGINT IDENTITY` / `INT IDENTITY`); no UUID/GUID IDs.
 6. Do not include demo customers, fake transactions, hardcoded salon details, secrets or production data.
@@ -233,7 +235,7 @@ Plans, trials, activation, renewal, grace period, failed payments, suspension, c
 - Validate relevant browser, DB, permission and branch/tenant test cases.
 - Check responsiveness, keyboard use, language/RTL and error paths.
 - Inspect the diff for accidental changes, dead code, sensitive files or package bloat.
-- Commit/push only within **`dharmendra1031/salon_saas`**.
+- Commit/push only within **`dharmendra1031/business_saas`**.
 - Provide the commit link and actual verification results. Unrun tests must be stated as unrun.
 
 ## 11. First implementation backlog
@@ -250,10 +252,10 @@ Plans, trials, activation, renewal, grace period, failed payments, suspension, c
 
 ## Decisions
 
-- **D-001:** Work exclusively in `salon_saas`; Kaifac is read-only.
+- **D-001:** Work exclusively in `business_saas`; Kaifac is read-only.
 - **D-002:** Start with a Modular Monolith.
 - **D-003:** Controlled clean rewrite; preserve proven Kaifac *business behavior* using reference inspection and regression specifications, not wholesale code copying.
-- **D-004:** Use numeric auto-increment IDs and existing `SalonId` as tenant key.
+- **D-004:** Historic Kaifac uses `SalonId`; the new Business SaaS platform uses `BusinessId` / `BusinessLocationId` with numeric auto-increment IDs.
 - **D-005:** Focus Admin/POS on real salon workflows, not cosmetic effects.
 - **D-006:** No private source copied to a public repo without reviewed authorization.
 - **D-007:** This document describes intended changes; it does not claim that code was changed or tests passed.
