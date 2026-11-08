@@ -130,12 +130,12 @@ All persisted entity IDs use numeric SQL Server IDENTITY, not UUID/GUID.
 | `Languages` | Id, Code (unique), Name, NativeName, Direction, IsActive |
 | `TranslationKeys` | Id, Code (unique), Module, Description, DefaultText |
 | `TranslationImports` | Id, LanguageId, Module, Status, CreatedByUserId, CreatedAt, PublishedAt |
-| `TranslationValues` | Id, TranslationImportId, TranslationKeyId, Value |
+| `TranslationValues` | Id, TranslationVersionId, TranslationKeyId, Value |
 | `TranslationVersions` | Id, LanguageId, Module, VersionNumber, IsPublished, PublishedAt |
 | `BusinessLanguages` | Id, BusinessId, LanguageId, IsEnabled, IsDefault |
 | `UserLanguagePreferences` | Id, UserId, LanguageId |
 
-These are **candidate entities**; avoid redundant tables if existing models support the requirements. Ensure uniqueness and immutable published-version semantics. Do not store uploaded translation blobs unbounded in database without a retention policy.
+Draft imports are validated before materializing an immutable published translation version. These are **candidate entities**; avoid redundant tables if existing models support the requirements. Ensure uniqueness and immutable published-version semantics. Do not store uploaded translation blobs unbounded in database without a retention policy.
 
 ## 6. English, Arabic and other script support
 
