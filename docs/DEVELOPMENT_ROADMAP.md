@@ -39,7 +39,7 @@
 | --- | --- | --- | --- |
 | **P0 — Product & Architecture** | Master SRS, BusinessId multi-tenancy, database, templates, roles/plans, onboarding, Retail V1, risk/pilot standards | Reviewed authoritative documents | Phase 0 document consistency and key open decisions recorded |
 | **P1 — Foundation** | Solution, identity with long IDs, auth/verification, business memberships, location, tenant security, audit, migrations | One user can safely create/switch businesses | Auth, numeric IDs, cross-tenant tests, build/migration pass |
-| **P2 — SaaS Platform Admin** | Business Types, published Templates, Modules, Plan versions, entitlements, limits, languages, subscription/trial | Central configuration, no app code edits for translation changes | Module/role/limit tests and draft/publish/rollback language tests |
+| **P2 — SaaS Platform Admin** | Minimal business directory, supported-type toggle, module/plan mapping, trial status and requested language upload/publish | Central configuration for working Retail modules | Entitlement/role/limit and translation import/publish tests |
 | **P3 — Self-Service Onboarding** | Signup, choose supported type, choose plan/trial, create business + first location, guided setup | Owner can open a usable business workspace | Idempotent provisioning, retry/resume, tested business switch |
 | **P4 — General Retail V1** | Products, Suppliers, Purchase, Receiving, Stock, POS, Returns, Cash Register, basic Reports | First working shop end-to-end | Financial/stock reconciliation, usability pilot, browser/device tests |
 | **P5 — Salon / Barber V1** | Services, Staff, Resources, Appointment Calendar, Booking, Checkout, manual Waitlist/Deposit where supported | Second verified workflow family | Concurrency/no-show, booking and checkout pilot |
@@ -111,11 +111,11 @@ No development implementation or performance testing is represented by these sta
 ### Platform Admin screens
 
 - Business Directory and Business Details (status, type, owner membership, subscription, usage).
-- Business Category/Type Master (search, create/edit/archive, **IsSupported** release state).
-- Business Templates (version, required modules, onboarding steps, publish/retire).
-- Modules and Dependencies, Plan Master/Versions, Prices and Limits, Business overrides.
+- Supported Business Type list and activate/deactivate status. Add category tree only when a sufficiently large real catalog needs it.
+- Simple setup defaults for the released Retail template; build template editor/versioning only when multiple maintained live versions require it.
+- Modules and dependencies used by Retail, Plan/Trial setup, effective limits. Add paid plan version history, complex overrides and add-on billing when real paid customers require them.
 - Language Master, CSV/JSON pack validation/preview/publish/rollback.
-- Subscription management, payment reconciliation, support/audit, platform settings.
+- Basic subscription status and audit. Add payment reconciliation, support desk, advanced settings alongside their actual integrated provider/features.
 
 ### Onboarding and entitlement flows
 
