@@ -1,6 +1,6 @@
 # Business SaaS
 
-**Status:** Phase 0 documentation complete; application implementation has not started.
+**Status:** Phase 0 complete; P1 development slice committed. Build/tests and production readiness require independent verification.
 
 A self-service multi-business SaaS platform. A person registers once, creates one or more independently managed businesses, selects a published business template and plan, configures a first location and begins operations in the workflow appropriate to that business.
 
@@ -17,6 +17,7 @@ A self-service multi-business SaaS platform. A person registers once, creates on
 | [UX Standards](docs/UX_STANDARDS.md) | User-friendly forms, keyboard/navigation, task-based UX testing |
 | [CBK UI Reference](docs/CBK_UI_REFERENCE.md) | Compact blue/white UI patterns from read-only CBK source |
 | [Engineering Guardrails](docs/ENGINEERING_GUARDRAILS.md) | Financial, tenancy, security, privacy and release safety |
+| [P1 Implementation](docs/P1_IMPLEMENTATION.md) | Run guide, committed endpoints, tests and launch blockers |
 
 ### Vertical-specific reference documents
 
@@ -49,4 +50,4 @@ The long-term goal of **1,000+ business categories** is a product coverage targe
 
 ## Work status
 
-The repository currently holds planning documents only. No application code, EF migration, UI prototype, automated test result, pilot, security certification or deployed product is represented by this README. The next milestone is **P1 Foundation**, after reviewing open launch-market, tax/payment, trial and privacy decisions in the Master SRS and Roadmap.
+The repository now contains a **development-only P1 foundation slice**: one API, one React app, numeric Identity IDs, Register/Login, Create Business, membership-scoped switching and Retail Dashboard shell. [Run instructions and limitations](docs/P1_IMPLEMENTATION.md). Retail transactions, migrations, verification email, subscription payments and production security/scale testing remain pending.
