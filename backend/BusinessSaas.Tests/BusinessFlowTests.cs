@@ -68,6 +68,25 @@ public sealed class BusinessFlowTests
         var owned = await owner.GetFromJsonAsync<JsonElement>("/api/businesses");
         Assert.Equal(1, owned.GetArrayLength());
 
+        var anotherOwned = await Post(owner, "/api/businesses", new
+        {
+            name = "Owner's Second Shop",
+            businessTypeId = 1,
+            countryCode = "KW",
+            currencyCode = "KWD",
+            timeZoneId = "Asia/Kuwait",
+            requestKey = "request-second-owned-20261109"
+        });
+        Assert.Equal(HttpStatusCode.Created, anotherOwned.StatusCode);
+        var otherOwnedId = (await anotherOwned.Content.ReadFromJsonAsync<JsonElement>())
+            .GetProperty("id").GetInt64();
+        Assert.NotEqual(firstId, otherOwnedId);
+
+        owned = await owner.GetFromJsonAsync<JsonElement>("/api/businesses");
+        Assert.Equal(2, owned.GetArrayLength());
+        Assert.Equal(HttpStatusCode.OK,
+            (await owner.GetAsync($"/api/businesses/{otherOwnedId}/dashboard")).StatusCode);
+
         var second = await Post(stranger, "/api/businesses", new
         {
             name = "Another Shop",
@@ -88,6 +107,8 @@ public sealed class BusinessFlowTests
             (await stranger.GetAsync($"/api/businesses/{firstId}/dashboard")).StatusCode);
         Assert.Equal(HttpStatusCode.NotFound,
             (await owner.GetAsync($"/api/businesses/{secondId}/dashboard")).StatusCode);
+        Assert.Equal(HttpStatusCode.NotFound,
+            (await stranger.GetAsync($"/api/businesses/{otherOwnedId}/dashboard")).StatusCode);
 
         var strangerList = await stranger.GetFromJsonAsync<JsonElement>("/api/businesses");
         Assert.Equal(1, strangerList.GetArrayLength());
