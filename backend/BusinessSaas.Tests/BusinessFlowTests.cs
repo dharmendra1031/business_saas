@@ -41,6 +41,10 @@ public sealed class BusinessFlowTests
         await RegisterAndLogin(owner, "owner@example.test");
         await RegisterAndLogin(stranger, "stranger@example.test");
 
+        Assert.Equal(HttpStatusCode.OK, (await owner.GetAsync("/api/auth/me")).StatusCode);
+        Assert.Equal(HttpStatusCode.OK, (await stranger.GetAsync("/api/auth/me")).StatusCode);
+        Assert.Equal(HttpStatusCode.OK, (await owner.GetAsync("/api/business-types")).StatusCode);
+
         var creation = new
         {
             name = "Main Retail Shop",
