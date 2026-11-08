@@ -63,6 +63,8 @@ else
     app.UseHttpsRedirection();
 }
 
+app.UseAuthentication();
+
 // Browser sessions use HttpOnly cookies. Every write, including login/logout,
 // requires the CSRF token obtained from GET /api/auth/csrf.
 app.Use(async (context, next) =>
@@ -76,13 +78,12 @@ app.Use(async (context, next) =>
             await context.RequestServices.GetRequiredService<IAntiforgery>()
                 .ValidateRequestAsync(context);
         }
-        catch (AntiforgeryValidationException error)
+        catch (AntiforgeryValidationException)
         {
-            app.Logger.LogWarning("Rejected request: {Reason}", error.Message);
             context.Response.StatusCode = StatusCodes.Status400BadRequest;
             await context.Response.WriteAsJsonAsync(new
             {
-                message = app.Environment.IsDevelopment() ? error.Message : "Invalid security token. Refresh the page and try again."
+                message = "Invalid security token. Refresh the page and try again."
             });
             return;
         }
@@ -91,7 +92,6 @@ app.Use(async (context, next) =>
     await next();
 });
 
-app.UseAuthentication();
 app.UseAuthorization();
 
 app.MapGet("/api/health", () => Results.Ok(new { status = "ok" }));
