@@ -1,25 +1,27 @@
-# Salon SaaS — Subscription Plans and Module Entitlements
+# Business SaaS — Subscription Plans and Module Entitlements
 
 **Status:** Proposed commercial structure for implementation design. Actual prices, feature inclusions and quantitative limits remain configurable and require commercial approval.  
-**Repository:** `dharmendra1031/salon_saas` only  
-**Reference:** [Master Plan](./SALON_SAAS_MASTER_PLAN.md)  
+**Repository:** `dharmendra1031/business_saas` only  
+**Reference:** [Canonical Master SRS](./BUSINESS_SAAS_MASTER_SRS.md)  
 **Last updated:** 2026-11-07
+
+**Scope:** Business-wide SaaS plan catalog. Module inclusions vary by published business template and immutable plan version; the examples are not universal hardcoded entitlements. Global platform models use **BusinessId**, not SalonId.
 
 ## 1. Plan catalog
 
 The catalog contains **four public subscription plans** and **one custom Enterprise plan**. **Free Trial is not a separately paid plan**; it is a configurable subscription phase.
 
-| Plan code | Display name | Intended salon | Proposed features |
+| Plan code | Display name | Intended business | Proposed features |
 | --- | --- | --- | --- |
-| `STARTER` | Starter | Small / single branch | 1 branch by default; customers; services; appointments; basic POS |
-| `GROWTH` | Growth | Growing salon | Starter features + inventory, purchase, staff attendance, basic reporting |
-| `PROFESSIONAL` | Professional | Established salon | Growth features + customer memberships, loyalty, commissions, payroll, advanced reports |
-| `BUSINESS` | Business | Multi-branch salon | Professional features + multiple branches, branch transfers, consolidated reports, advanced permissions |
-| `ENTERPRISE` | Enterprise | Salon chain / custom account | Negotiated modules, account limits, integrations and support |
+| `STARTER` | Starter | Small / single location | Basic operational catalog and POS or booking, only when the business template supports it |
+| `GROWTH` | Growth | Growing business | Expanded template-compatible inventory, purchase or scheduling modules and reports |
+| `PROFESSIONAL` | Professional | Established business | Template-compatible staff, customer engagement and advanced reports |
+| `BUSINESS` | Business | Multi-location business | More locations, transfers where supported, consolidated reports and advanced permissions |
+| `ENTERPRISE` | Enterprise | Chain / custom account | Negotiated supported modules, limits, integrations and support |
 
 - Starter, Growth, Professional and Business are shown in the public plan picker.
 - Enterprise uses **Contact Sales / Custom Pricing**, with an explicitly approved contract/quote.
-- Salon customer membership products are distinct from the salon's SaaS subscription.
+- Business-facing customer memberships (e.g., salon packages) are distinct from the business's SaaS subscription.
 - Plan names/codes should remain stable identifiers in configuration. Display text is localized (English/Arabic) and may be edited without changing IDs.
 - The initial module matrix is a **starting configuration**, not a hardcoded product rule.
 
@@ -44,7 +46,7 @@ Public prices, exact quotas and provider charges **are not yet finalized**. Do n
 
 | Group | Modules / capabilities |
 | --- | --- |
-| Core | Salon profile, branch settings, owner account, users, roles, customer/service master |
+| Core | Business profile, location settings, owner account, users, roles and relevant customer/catalog master |
 | Booking | Appointments, calendar, staff availability |
 | Sales | POS, payments, receipts, cash register, sale returns/voids |
 | Inventory | Products, stock balances, adjustments, transfers |
@@ -55,19 +57,19 @@ Public prices, exact quotas and provider charges **are not yet finalized**. Do n
 | Messaging | Email/SMS/WhatsApp notifications and associated paid credits |
 | Integrations | External APIs or integrations when provisioned |
 
-A paid plan, add-on or override must never bypass platform security or remove a required core prerequisite. For instance, POS needs the relevant service/product catalog and safe checkout permissions; consolidated multi-branch reports require the salon to have access to the selected branches.
+A paid plan, add-on or override must never bypass platform security or remove a required core prerequisite. For instance, POS needs the relevant service/product catalog and safe checkout permissions; consolidated multi-branch reports require the business to have access to the selected branches.
 
 ## 4. Entitlement resolution
 
-**Effective access = subscription state AND module entitlement AND usage limit AND authenticated role/permission AND authorized branch within the same salon.**
+**Effective access = subscription state AND module entitlement AND usage limit AND authenticated role/permission AND authorized branch within the same business.**
 
-1. Authenticate and resolve a **trusted SalonId**.
+1. Authenticate and resolve a **trusted BusinessId**.
 2. Evaluate subscription state according to the published grace/suspension policy.
 3. Resolve effective enabled modules from plan + active add-ons + approved salon overrides.
 4. Check limits before *creating* a branch, activating a user, registering a terminal, etc.
 5. Check role permissions for the specific action and allowed branches.
 6. Enforce the result on **every relevant backend API**, not only in navigation.
-7. Cache with SalonId-scoped keys and explicit invalidation on plan/override/permission changes.
+7. Cache with BusinessId-scoped keys and explicit invalidation on plan/override/permission changes.
 8. Keep read-only access to historical records/export under an explicit policy when access is downgraded or expires. Never delete data on module disable.
 
 If a plan changes, existing subscribers should retain the agreed entitlement version until a defined renewal/migration event; do not retroactively downgrade customers by editing a shared plan row.
@@ -94,13 +96,13 @@ All entity primary keys must be **numeric SQL Server IDENTITY** (e.g. BIGINT IDE
 | `PlanModules` | Id, SubscriptionPlanId, ModuleId |
 | `PlanPrices` | Id, SubscriptionPlanId, BillingPeriod, CurrencyCode, Amount, IsActive |
 | `PlanLimits` | Id, SubscriptionPlanId, LimitCode, LimitValue |
-| `SalonSubscriptions` | Id, SalonId, SubscriptionPlanId, Status, StartedAt, EndsAt, PlanVersion |
-| `SalonModuleOverrides` | Id, SalonId, ModuleId, IsEnabled, Reason, EffectiveFrom, EffectiveTo |
-| `SubscriptionAddOns` | Id, SalonSubscriptionId, AddOnId, Quantity, Status |
-| `SubscriptionInvoices` | Id, SalonSubscriptionId, InvoiceNumber, Total, Status |
+| `BusinessSubscriptions` | Id, BusinessId, PlanVersionId, Status, StartedAt, EndsAt |
+| `BusinessModuleOverrides` | Id, BusinessId, ModuleId, IsEnabled, Reason, EffectiveFrom, EffectiveTo |
+| `SubscriptionAddOns` | Id, BusinessSubscriptionId, AddOnId, Quantity, Status |
+| `SubscriptionInvoices` | Id, BusinessSubscriptionId, InvoiceNumber, Total, Status |
 | `SubscriptionPayments` | Id, SubscriptionInvoiceId, Amount, Status, ProviderReference |
-| `SalonUsage` | Id, SalonId, UsageCode, Quantity, MeasuredAt |
-| `SubscriptionAuditLogs` | Id, SalonId, ActorUserId, Action, ChangeSummary, CreatedAt |
+| `BusinessUsage` | Id, BusinessId, UsageCode, Quantity, MeasuredAt |
+| `SubscriptionAuditLogs` | Id, BusinessId, ActorUserId, Action, ChangeSummary, CreatedAt |
 
 These are **design candidates**, not a migration request. Review duplicate entities and actual query patterns before introducing tables; reuse existing models when appropriate. External payment references or secure idempotency tokens are **not entity IDs**.
 
@@ -122,4 +124,4 @@ These are **design candidates**, not a migration request. Review duplicate entit
 - **SP-003:** Free Trial is a subscription phase, not an additional paid plan.
 - **SP-004:** Plan inclusions, prices and quotas are data-driven through Platform Super Admin, not hardcoded.
 - **SP-005:** Module visibility is not authorization; API, branch and tenant checks are mandatory.
-- **SP-006:** Any private Kaifac source remains read-only and is not copied to this public repository.
+- **SP-006:** Any private Kaifac/CBK source remains read-only and is not copied to this public repository.
