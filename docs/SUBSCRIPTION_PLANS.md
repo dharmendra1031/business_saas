@@ -109,9 +109,9 @@ These are **design candidates**, not a migration request. Review duplicate entit
 ## 7. Implementation order and acceptance
 
 1. Finalize module codes, dependencies, plan limits and expiry policy.
-2. Implement Platform Super Admin plan/module configuration in `salon_saas`.
+2. Implement Platform Super Admin plan/module configuration in `business_saas`.
 3. Implement trusted tenant-scoped subscription and entitlement resolution in backend.
-4. Apply checks at APIs and roles/branches, then render allowed modules in Salon Admin and POS.
+4. Apply checks at APIs and roles/branches, then render allowed modules in Business Admin and relevant POS/Operations.
 5. Implement trials, lifecycle billing, add-ons, renewals and webhook handling.
 6. Test plan upgrade/downgrade, expiry, paid grace, exceeded limits, permissions and cross-salon access.
 
