@@ -1,8 +1,10 @@
-# Salon SaaS — UX Product Standard and Screen Acceptance Matrix
+# Business SaaS — Core UX Standards and Salon Screen Examples
+
+> **Scope notice:** The generic usability and accessible UI criteria apply to every Business SaaS app. Salon-specific screen matrices remain **vertical examples**, not menus that Retail and Repair must inherit. The first retail workflow is in [Retail V1 SRS](./RETAIL_V1_SRS.md). CBK is [read-only design reference](./CBK_UI_REFERENCE.md); reimplement in React without copying private assets.
 
 **Status:** Mandatory design and implementation standard; UX implementation not started  
 **Date:** 2026-11-07  
-**Repository:** `dharmendra1031/salon_saas` ONLY  
+**Repository:** `dharmendra1031/business_saas` ONLY  
 **Scope:** Platform Admin, Salon Admin, POS and future customer/owner applications  
 **Product aim:** A new salon owner, manager or cashier can complete common work quickly and confidently without intensive training.
 
@@ -197,4 +199,4 @@ P2: Progressive onboarding, shortcuts, in-product contextual help, mobile refine
 
 ## Decision
 
-The project deliberately prioritizes **simple and trustworthy daily tasks over flashy enterprise-looking screens**. Usability is a release requirement and will be verified with representative salon owner, manager and cashier scenarios. Work remains exclusively in `dharmendra1031/salon_saas`.
+The project deliberately prioritizes **simple and trustworthy daily tasks over flashy enterprise-looking screens**. Usability is a release requirement and will be verified with representative salon owner, manager and cashier scenarios. Work remains exclusively in `dharmendra1031/business_saas`.
