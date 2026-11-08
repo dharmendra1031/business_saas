@@ -35,6 +35,8 @@ The documents below preserve valuable **Salon-specific** workflow knowledge for 
 - Subscriptions, modules, roles and branch permissions are enforced server-side.
 - Application entity keys are **numeric auto-increment** (SQL Server IDENTITY), including auth users and roles; no GUID/UUID entity IDs.
 - Proposed stack: ASP.NET Core .NET 10 LTS, EF Core, SQL Server; React + TypeScript + Bootstrap 5; modular monolith.
+- **Lean V1:** One API project + tests; one React app with separate Platform/Business/POS route layouts; one SQL database. Feature folders, not premature projects/services/plugins.
+- **Schema by working slice:** add only required tables/migrations, one supported General Retail template first. No Redis, queues, microservices or speculative 1,000-category engine without evidence. See [Roadmap](docs/DEVELOPMENT_ROADMAP.md) and [Database Architecture](docs/DATABASE_ARCHITECTURE.md).
 - CBK and Kaifac `development` are **read-only private references**. Do not copy proprietary source, backup, data, logo, secrets or history to this **public** repository without explicit approval.
 
 ## Initial vertical rollout
