@@ -30,18 +30,40 @@ User (global numeric Id)
 - `BusinessTypeId` is categorization/configuration, not tenant identity; changing business type cannot transfer another business's data.
 - External payment references and expiring security tokens may be nonnumeric strings, but are **not** entity IDs; the application's own IDs remain numeric.
 
-## 2. Phase 0 entity catalog — platform and business membership
+## 1A. Lean physical database rollout — do not create every planned table
+
+The tables below are **what the first working foundation needs**, not an instruction to create the full future entity catalog. Add one reviewed EF migration when a tested feature requires a new table or column.
+
+| When | Minimal physical model | Why |
+| --- | --- | --- |
+| P1 — Authentication | Built-in ASP.NET Core Identity with `long` numeric keys and its standard tables | Never create a duplicate custom `Users` table or handmade password/session service |
+| P1 — Business creation | `BusinessTypes`, `Businesses`, `BusinessUsers`, `BusinessLocations` | First supported Retail type, owner membership, one usable shop/location, safe business switch |
+| P1/P3 — Trial | `SubscriptionPlans`, `BusinessSubscriptions` with basic plan/trial state | Simple independent business trial; no billing gateway required before actual paid billing |
+| P2 — Module access | `Modules` and a minimal plan-to-module mapping as soon as Platform Admin control works | Store effective entitlements only when managed; API authorization must still enforce them |
+| P4 — Retail operations | Product, supplier, stock ledger/balance, purchase, invoice/payment, return, cash register tables **per implemented slice** | Do not create future Salon/Repair/Rental/Class tables |
+
+**Avoid at first:** `BusinessCategories` (a simple supported business type code is enough), persisted `BusinessTemplates` and `BusinessTemplateModules`, `BusinessOnboarding` (derive a short checklist from actual setup state), `BusinessInvitations` (until invitations ship), `BusinessSettings` for fields already on `Businesses`, custom role-editing tables, paid plan version history, module overrides, add-on billing tables, translation-publishing history, Redis/sharding metadata, generic EAV/custom-form entities. Add each only with a real user journey and test.
+
+**V1 permission implementation:** `BusinessUsers` may have a simple validated `RoleCode` (`Owner`/`Manager`/`Cashier`) while all relevant APIs still verify the current `BusinessId` and authorized location. Separate BusinessRole/Permission join tables and `BusinessUserLocations` become necessary when configurable roles or multi-location assignments are genuinely delivered. Do not put platform Super Admin powers into the business RoleCode.
+
+**V1 subscription implementation:** start with basic plan/trial state. Before **real paid subscriptions** are activated, preserve price/currency/billing-term snapshots or immutable plan versions and durable payment reconciliation; simplicity must not let plan edits retroactively alter paid contracts.
+
+**V1 language implementation:** ship stable translation keys and small built-in locale bundles first. Build the requested upload/validate/publish system when Language Management is being implemented, without building a generic file-import framework.
+
+The conceptual lists below describe future candidates. **They are not a V1 table creation checklist.** SQL constraints, concurrency, tenant isolation and data correctness remain mandatory from the first operation.
+
+## 2. Future entity candidates — platform and membership (not all V1 tables)
 
 | Table | Primary fields | Constraints / owner |
 | --- | --- | --- |
-| `Users` | Id, Email, Phone, PasswordHash, IsActive | Global login; email/phone normalization and verification |
+| ASP.NET Core Identity `AspNetUsers` and standard Identity tables | Long numeric Id, Email/Phone, PasswordHash, verification state | Reuse Identity's official schema; do not create a parallel custom Users table |
 | `Businesses` | Id, Name, BusinessTypeId, CountryCode, CurrencyCode, TimeZoneId, Status, CreatedByUserId | Independent tenant |
 | `BusinessCategories` | Id, Code, Name, IsActive | Admin-managed taxonomy |
 | `BusinessTypes` | Id, BusinessCategoryId, Code, Name, IsSupported, IsActive | Only supported types usable for self-service activation |
 | `BusinessTemplates` | Id, BusinessTypeId, Version, Status, SetupSchemaVersion | Versioned, published/retired setup definition |
 | `BusinessTemplateModules` | Id, BusinessTemplateId, ModuleId, IsRequired | Published template capabilities |
 | `BusinessLocations` | Id, BusinessId, Code, Name, LocationType, IsActive, IsPrimary | Business-scoped; Shop/Branch/Warehouse |
-| `BusinessUsers` | Id, BusinessId, UserId, Status, JoinedAt | Unique(BusinessId, UserId); no implicit access |
+| `BusinessUsers` | Id, BusinessId, UserId, RoleCode (simple V1), Status, JoinedAt | Unique(BusinessId, UserId); no implicit access |
 | `BusinessRoles` | Id, BusinessId, Code, Name, IsSystem | Per-business RBAC templates |
 | `BusinessUserRoles` | Id, BusinessUserId, BusinessRoleId | Role in the same business enforced |
 | `BusinessUserLocations` | Id, BusinessUserId, BusinessLocationId | Assigned location in the same business enforced |
@@ -139,7 +161,7 @@ Measure execution plans before adding costly or redundant indexes. All list/repo
 - Auth verifies current UserId; active BusinessId is selected from that user's memberships server-side. Switching businesses obtains a validated context and recomputes authorization.
 - A BusinessId in route/body/header is an object selector, **not proof of authorization**. Every involved record must belong to the selected business.
 - Queries/EF Core global filters may be a second layer of defense but do not replace service-level permission and branch checks. Review background jobs and `IgnoreQueryFilters` explicitly.
-- Shared Redis/app cache keys must include BusinessId, relevant location/role and version; purge on switch and revocation. Never cache tenant-private responses under global public URLs.
+- First use correctly scoped database queries and a React query cache keyed by current BusinessId; cancel/invalidate on business switch or revoked access. If a distributed cache is later introduced, all private keys must include BusinessId, relevant location/role and version; never cache tenant-private responses under global public URLs.
 - Public booking/store links resolve business through a verified public code/domain and limit visible fields.
 
 ## 7. Consistent writes, money and stock
