@@ -1,14 +1,16 @@
-# Salon SaaS — Salon Business Workflows
+# Salon Vertical — Business Workflows
+
+> **Scope notice:** **Salon-only vertical scope**, retained for the future Salon/Barber release. The current platform-wide source is [Business SaaS Master SRS](./BUSINESS_SAAS_MASTER_SRS.md), and the first build is [General Retail V1](./RETAIL_V1_SRS.md). For new code the tenant key is `BusinessId`; branch/location key is `BusinessLocationId`, even if historical Salon software called it `SalonId`.
 
 **Status:** Product specification / proposed acceptance rules; not implemented  
 **Date:** 2026-11-07  
-**Repository:** `dharmendra1031/salon_saas` ONLY  
+**Repository:** `dharmendra1031/business_saas` ONLY  
 **Reference:** Kaifac Salon `development` is read-only; this document does not authorize copying private code into the public repository.  
 **Related:** [Master Plan](./SALON_SAAS_MASTER_PLAN.md), [UX Standards](./UX_STANDARDS.md), [Appointment & Financial Rules](./APPOINTMENT_FINANCIAL_RULES.md), [Pilot Tests](./PILOT_ACCEPTANCE_TESTS.md)
 
 ## 1. Product promise and boundaries
 
-Salon SaaS is a multi-tenant salon operating system, not just an invoicing or ERP dashboard. Its primary jobs are:
+The Salon vertical in Business SaaS is a multi-tenant salon operating module, not just an invoicing or ERP dashboard. Its primary jobs are:
 - Complete daily reception, booking, staff and cashier work with minimal training.
 - Prevent lost appointments, duplicate bookings, incorrect charges and stock losses.
 - Enable reliable repeat visits, retention and business insight without forcing expensive marketing add-ons.
@@ -16,7 +18,7 @@ Salon SaaS is a multi-tenant salon operating system, not just an invoicing or ER
 
 **First recommended customer segment:** conventional hair salon / barbershop. Confirm launch country and real pilot salon needs before signing off tax, payments, receipt, privacy and labor rules. Spa, nail, medspa and franchise workflows require separate discovery and cannot be assumed identical.
 
-**Scope boundaries:** A tenant = one salon business/account; it may own several branches. Platform Admin, Salon Admin and POS have separate experiences and roles. SalonId is the tenant scope. All persisted business entity IDs use numeric SQL IDENTITY values, not UUID/GUID.
+**Scope boundaries:** A tenant = one salon business/account; it may own several branches. Platform Admin, Salon Admin and POS have separate experiences and roles. BusinessId is the tenant scope for new implementation. All persisted business entity IDs use numeric SQL IDENTITY values, not UUID/GUID.
 
 ## 2. Real users and their everyday jobs
 
