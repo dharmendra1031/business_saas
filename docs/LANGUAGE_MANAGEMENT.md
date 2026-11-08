@@ -31,7 +31,7 @@ Manage:
 - Language code/locale tag (`ar`, `ar-KW`) and optional parent locale
 - Text direction (`ltr` / `rtl`)
 - Published/disabled status, version, coverage and last update
-- Language scope: Platform Admin, Salon Admin, POS, Customer App, Reports, Notifications
+- Language scope: Platform Admin, Business Admin, POS, Customer App, Reports, Notifications
 
 ### Translation file import
 
@@ -82,14 +82,14 @@ UTF-8 only; parse quoted CSV correctly. Export CSV safely to prevent spreadsheet
 The system resolves language per request:
 
 1. User's explicit language preference, if active and allowed in the current business.
-2. Salon's configured default locale, if available (on business-facing applications).
+2. Current business's configured default locale, if available (on business-facing applications).
 3. Platform's default locale, normally `en`.
 
 For a missing key, fall back from regional locale to base language, then to **English** (e.g. `ar-KW` → `ar` → `en`). Log missing keys for admin review; do not show raw technical keys to end users.
 
 The Platform Admin has its own global language setting, independent of the business's chosen language.
 
-Salon owners can choose from globally published supported languages. Salon-specific business content (service names, salon descriptions and messages) must have its own localized content model where needed; it must not be confused with the global UI translation dictionary.
+Business owners can choose from globally published supported languages. Business-specific content (product/service names, business descriptions and messages) must have its own localized content model where needed; it must not be confused with the global UI translation dictionary.
 
 ## 4. Runtime translation architecture
 
@@ -115,7 +115,7 @@ POST   /api/platform/languages/{languageId}/imports
 GET    /api/platform/languages/{languageId}/imports/{importId}/preview
 POST   /api/platform/languages/{languageId}/imports/{importId}/publish
 POST   /api/platform/languages/{languageId}/versions/{versionId}/restore
-PUT    /api/salon/settings/language
+PUT    /api/business/settings/language
 PUT    /api/account/preferences/language
 ```
 
@@ -144,7 +144,7 @@ These are **candidate entities**; avoid redundant tables if existing models supp
 - Buttons, forms, breadcrumbs, tables, dialogs, mobile navigation and focus order must be reviewed in RTL.
 - Do not mirror logos, numbers or business document content blindly.
 - Use Unicode-safe database fields and fonts with coverage for Latin, Arabic, Devanagari and other supported scripts.
-- Format dates, numbers and currencies using locale-aware APIs with the **salon's actual currency and business timezone**.
+- Format dates, numbers and currencies using locale-aware APIs with the **business's actual currency and business timezone**.
 - Reports, RDLC/PDF, receipts and notifications need explicit locale tests, not only React translation coverage.
 - Translation text, right-to-left switching and local date formatting must be supported in registration and subscription screens too.
 
@@ -166,7 +166,7 @@ These are **candidate entities**; avoid redundant tables if existing models supp
 3. Disable a locale: existing users fall back safely to an allowed locale.
 4. Change an Arabic/Urdu locale: RTL layout and keyboard order remain usable.
 5. Missing `ar-KW` key falls back via `ar` then `en`.
-6. A salon's default affects its users but does not change the SaaS Platform Admin locale.
+6. A business's default affects its users but does not change the SaaS Platform Admin locale.
 7. Switching user language does not alter salon billing currency, tax calculations or business timezone.
 8. Language version rollback restores prior strings without deploying new frontend code.
 9. Inactive or unauthorized users cannot publish packs.
@@ -177,7 +177,7 @@ These are **candidate entities**; avoid redundant tables if existing models supp
 1. Create stable module-scoped translation keys and a small English source catalog.
 2. Build Language Master, JSON/CSV import validator, draft/preview/publish/rollback backend.
 3. Add platform language management screens.
-4. Integrate runtime translation loader and locale preference into Platform Admin, Salon Admin and POS.
+4. Integrate runtime translation loader and locale preference into Platform Admin, Business Admin and POS.
 5. Verify RTL, numbers/dates/currency, accessibility, report printing, customer apps and offline fallback.
 6. Add import audit, version cache and tests before production rollout.
 
