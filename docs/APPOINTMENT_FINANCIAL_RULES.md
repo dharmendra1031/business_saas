@@ -1,13 +1,15 @@
-# Salon SaaS — Appointment, Payment and Financial Invariants
+# Salon Vertical — Appointment and Financial Invariants
+
+> **Scope notice:** **Salon-only appointment/financial rules**, not a generic Retail booking feature. Financial safeguards (idempotency, refund authority, stock ledger) also apply where relevant to other businesses. New platform tenancy uses `BusinessId`, not historical `SalonId`. See [Master SRS](./BUSINESS_SAAS_MASTER_SRS.md) and [Retail V1 SRS](./RETAIL_V1_SRS.md).
 
 **Status:** Proposed business specification. No database migrations or production flows implemented.  
 **Scope:** Booking, resources, deposits, payments, refunds, credits, cash register and inventory consistency.  
-**Repository:** `dharmendra1031/salon_saas` ONLY  
+**Repository:** `dharmendra1031/business_saas` ONLY  
 **References:** [Salon Workflows](./SALON_BUSINESS_WORKFLOWS.md) · [Engineering Guardrails](./ENGINEERING_GUARDRAILS.md)
 
 ## 1. Non-negotiable rules
 
-1. **Tenant isolation:** every operation uses trusted SalonId and authorized BranchId. An entity ID from another salon must never expose or change records.
+1. **Tenant isolation:** every operation uses trusted BusinessId and authorized BusinessLocationId. An entity ID from another salon must never expose or change records.
 2. **No double-booking of exclusive resources:** final booking/reschedule checks staff and configured chair/room/equipment overlap under concurrency.
 3. **No duplicate sale or capture:** retried requests and payment callbacks identify the same logical operation and reconcile state before any second attempt.
 4. **Server is financial authority:** do not trust UI subtotals, discounts, tax, tips, balances or eligibility decisions.
