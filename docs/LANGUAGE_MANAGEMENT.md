@@ -1,13 +1,15 @@
-# Salon SaaS — Multi-Language Management Specification
+# Business SaaS — Multi-Language Management Specification
 
 **Status:** Agreed product direction; implementation not started  
-**Repository:** `dharmendra1031/salon_saas` only  
-**Scope:** Platform Admin, Salon Admin, POS, customer interfaces, reports, receipts and notifications  
-**Reference:** [Master Plan](./SALON_SAAS_MASTER_PLAN.md)
+**Repository:** `dharmendra1031/business_saas` only  
+**Scope:** Platform Admin, Business Admin, POS/Operations, customer interfaces, reports, receipts and notifications  
+**Reference:** [Canonical Master SRS](./BUSINESS_SAAS_MASTER_SRS.md)
+
+**Multi-business rule:** Language packs are platform-wide, published centrally. One login may switch across businesses with different default locales, but the explicit user preference and current business policy are resolved without mixing business data. Translation-only updates require no frontend redeploy.
 
 ## 1. Product decision
 
-Salon SaaS must support **multiple languages**, not just English and Arabic. New language packs can be uploaded, validated, reviewed, published and rolled back **from the SaaS Platform Admin UI without editing or deploying frontend code**.
+Business SaaS must support **multiple languages**, not just English and Arabic. New language packs can be uploaded, validated, reviewed, published and rolled back **from the SaaS Platform Admin UI without editing or deploying frontend code**.
 
 Initial candidate language packs: English (`en`), Arabic (`ar`), Hindi (`hi`), Urdu (`ur`), French (`fr`) and Spanish (`es`). This is an illustrative launch list, **not a hard limit or claim that translations are complete**.
 
@@ -15,9 +17,9 @@ Initial candidate language packs: English (`en`), Arabic (`ar`), Hindi (`hi`), U
 - Language direction is metadata: LTR or RTL. Arabic and Urdu require RTL.
 - A language pack can be Draft, Published, Disabled or Archived.
 - Only published/active language packs can be selected by normal users.
-- Platform UI language availability is managed centrally; each salon can choose a permitted default and enable a subset for users.
-- Each user may choose a preferred language. Salon defaults apply when a user has no preference.
-- POS and Salon Admin may be switched at runtime; a full deployment is not required.
+- Platform UI language availability is managed centrally; each business can choose a permitted default and enable a subset for users.
+- Each user may choose a preferred language. The currently selected business default applies when a user has no preference.
+- POS, Business Admin and Platform Admin may be switched at runtime; a full deployment is not required.
 - Do not infer locale, currency, timezone or subscription entitlements from one another.
 
 ## 2. Language Admin screens (SaaS Super Admin)
@@ -79,13 +81,13 @@ UTF-8 only; parse quoted CSV correctly. Export CSV safely to prevent spreadsheet
 
 The system resolves language per request:
 
-1. User's explicit language preference, if active and allowed.
-2. Salon's configured default locale, if available (on salon-facing applications).
+1. User's explicit language preference, if active and allowed in the current business.
+2. Salon's configured default locale, if available (on business-facing applications).
 3. Platform's default locale, normally `en`.
 
 For a missing key, fall back from regional locale to base language, then to **English** (e.g. `ar-KW` → `ar` → `en`). Log missing keys for admin review; do not show raw technical keys to end users.
 
-The Platform Admin has its own global language setting, independent of the salon's chosen language.
+The Platform Admin has its own global language setting, independent of the business's chosen language.
 
 Salon owners can choose from globally published supported languages. Salon-specific business content (service names, salon descriptions and messages) must have its own localized content model where needed; it must not be confused with the global UI translation dictionary.
 
@@ -98,7 +100,7 @@ Salon owners can choose from globally published supported languages. Salon-speci
 - Avoid one gigantic translation payload for all apps.
 - Cache immutable versions via ETag or versioned keys; publishing invalidates the active-version pointer.
 - Never use the raw uploaded file directly in the public UI before validation and publication.
-- Keep language services independent of salon subscriptions; feature access still uses tenant entitlement + permission checks.
+- Keep language services independent of business subscriptions; feature access still uses tenant entitlement + permission checks.
 - POS must remain usable with its last valid cached pack during temporary network outages.
 - Mobile apps and report generators should use the same stable keys and locale metadata, with platform-specific rendering where required.
 
@@ -130,7 +132,7 @@ All persisted entity IDs use numeric SQL Server IDENTITY, not UUID/GUID.
 | `TranslationImports` | Id, LanguageId, Module, Status, CreatedByUserId, CreatedAt, PublishedAt |
 | `TranslationValues` | Id, TranslationImportId, TranslationKeyId, Value |
 | `TranslationVersions` | Id, LanguageId, Module, VersionNumber, IsPublished, PublishedAt |
-| `SalonLanguages` | Id, SalonId, LanguageId, IsEnabled, IsDefault |
+| `BusinessLanguages` | Id, BusinessId, LanguageId, IsEnabled, IsDefault |
 | `UserLanguagePreferences` | Id, UserId, LanguageId |
 
 These are **candidate entities**; avoid redundant tables if existing models support the requirements. Ensure uniqueness and immutable published-version semantics. Do not store uploaded translation blobs unbounded in database without a retention policy.
@@ -183,7 +185,7 @@ These are **candidate entities**; avoid redundant tables if existing models supp
 
 - **LM-001:** Multi-language support is platform-wide; no two-language hardcoding.
 - **LM-002:** SaaS Platform Admin manages languages and publishes translation files.
-- **LM-003:** Salon can enable published languages and choose its default; users can choose their preference.
+- **LM-003:** Each business can enable published languages and choose its default; users can choose their preference.
 - **LM-004:** Translation changes are data-driven, previewed and versioned; no frontend deploy to change strings.
 - **LM-005:** English fallback, regional fallback, RTL and safe handling of interpolation are required.
-- **LM-006:** Everything is implemented only in `salon_saas`, with numeric auto-increment entity IDs.
+- **LM-006:** Everything is implemented only in `business_saas`, with numeric auto-increment entity IDs.
