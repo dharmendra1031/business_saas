@@ -93,12 +93,12 @@ All entity primary keys must be **numeric SQL Server IDENTITY** (e.g. BIGINT IDE
 | --- | --- |
 | `Modules` | Id, Code, NameEnglish, NameArabic, IsActive |
 | `SubscriptionPlans` | Id, Code, NameEnglish, NameArabic, IsPublic, IsActive |
-| `PlanModules` | Id, SubscriptionPlanId, ModuleId |
-| `PlanPrices` | Id, SubscriptionPlanId, BillingPeriod, CurrencyCode, Amount, IsActive |
-| `PlanLimits` | Id, SubscriptionPlanId, LimitCode, LimitValue |
+| `PlanVersions` | Id, SubscriptionPlanId, VersionNumber, EffectiveFrom, Status |\n| `PlanVersionModules` | Id, PlanVersionId, ModuleId |
+| `PlanPrices` | Id, PlanVersionId, BillingPeriod, CurrencyCode, Amount, IsActive |
+| `PlanVersionLimits` | Id, PlanVersionId, LimitCode, LimitValue |
 | `BusinessSubscriptions` | Id, BusinessId, PlanVersionId, Status, StartedAt, EndsAt |
 | `BusinessModuleOverrides` | Id, BusinessId, ModuleId, IsEnabled, Reason, EffectiveFrom, EffectiveTo |
-| `SubscriptionAddOns` | Id, BusinessSubscriptionId, AddOnId, Quantity, Status |
+| `BusinessAddOns` | Id, BusinessSubscriptionId, AddOnId, Quantity, Status |
 | `SubscriptionInvoices` | Id, BusinessSubscriptionId, InvoiceNumber, Total, Status |
 | `SubscriptionPayments` | Id, SubscriptionInvoiceId, Amount, Status, ProviderReference |
 | `BusinessUsage` | Id, BusinessId, UsageCode, Quantity, MeasuredAt |
@@ -113,7 +113,7 @@ These are **design candidates**, not a migration request. Review duplicate entit
 3. Implement trusted tenant-scoped subscription and entitlement resolution in backend.
 4. Apply checks at APIs and roles/branches, then render allowed modules in Business Admin and relevant POS/Operations.
 5. Implement trials, lifecycle billing, add-ons, renewals and webhook handling.
-6. Test plan upgrade/downgrade, expiry, paid grace, exceeded limits, permissions and cross-salon access.
+6. Test plan upgrade/downgrade, expiry, paid grace, exceeded limits, permissions and cross-business access.
 
 **Acceptance tests:** module disabled => UI hidden **and API denied**; plan quota reached => relevant create denied; authorized branch only; expiry preserves historic data; renewal/payment retry is idempotent; user permissions cannot exceed subscribed entitlements.
 
