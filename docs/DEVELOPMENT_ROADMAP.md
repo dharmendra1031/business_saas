@@ -1,6 +1,6 @@
 # Business SaaS — Development Roadmap, Phase Gates and Decisions
 
-**Status:** Planned — Phase 0 documentation in progress; application code not started  
+**Status:** Phase 0 documentation prepared and link-checked; business/country decisions remain open; application code not started  
 **Updated:** 2026-11-08  
 **Repository:** `dharmendra1031/business_saas` ONLY  
 **Source-of-truth:** [Master SRS](./BUSINESS_SAAS_MASTER_SRS.md) · [Database Architecture](./DATABASE_ARCHITECTURE.md) · [Retail V1 SRS](./RETAIL_V1_SRS.md)  
@@ -66,7 +66,7 @@ Backend modules are cohesive folders/features, e.g. Identity, Businesses, Locati
 | Single login / multi-business flow | Verified membership selection, scoped switch, safe cache reset | Documented; API not built |
 | Subscription + role + location access | Server-side permission matrix and billing version rule | Documented; final prices/policy open |
 | First retail workflow | Create business -> products -> receiving -> POS -> return -> reports | Documented; tests not run |
-| Roadmap & reference governance | CBK/Kaifac read-only; old salon docs classified as vertical | Documented; link audit pending |
+| Roadmap & reference governance | CBK/Kaifac read-only; old salon docs classified as vertical | Documented; cross-document links verified |
 | Country-specific financial and privacy rules | Launch market, tax, payments, export/retention | **Open — must approve before production** |
 | Source/privacy security boundary | Public repo may contain only independently authored docs/code | Mandatory; private source import prohibited |
 
