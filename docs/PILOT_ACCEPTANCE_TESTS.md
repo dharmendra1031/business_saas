@@ -1,7 +1,9 @@
-# Salon SaaS — Pilot and Production Acceptance Plan
+# Salon Vertical — Pilot and Production Acceptance Plan
+
+> **Scope notice:** **Salon vertical pilot plan**, planned for the second operational release. It must not be used as evidence that the first General Retail pilot or the platform has been tested. Refer to [Development Roadmap](./DEVELOPMENT_ROADMAP.md) and [Retail V1 SRS](./RETAIL_V1_SRS.md) for the first business type. BusinessId is the platform tenant key.
 
 **Status:** Proposed test plan; no users recruited, pilots run, builds completed or tests executed.  
-**Repository:** `dharmendra1031/salon_saas` ONLY  
+**Repository:** `dharmendra1031/business_saas` ONLY  
 **Scope:** Pilot salons, acceptance scenarios, usability, security, finance, reliability and go-live decision.  
 **Related:** [UX Standards](./UX_STANDARDS.md) · [Salon Workflows](./SALON_BUSINESS_WORKFLOWS.md) · [Appointment & Financial Rules](./APPOINTMENT_FINANCIAL_RULES.md) · [Engineering Guardrails](./ENGINEERING_GUARDRAILS.md)
 
