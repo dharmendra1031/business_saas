@@ -52,7 +52,7 @@ public sealed class BusinessFlowTests
         };
 
         var first = await Post(owner, "/api/businesses", creation);
-        Assert.Equal(HttpStatusCode.Created, first.StatusCode);
+        Assert.True(first.StatusCode == HttpStatusCode.Created, await first.Content.ReadAsStringAsync());
         var firstId = (await first.Content.ReadFromJsonAsync<JsonElement>()).GetProperty("id").GetInt64();
         Assert.True(firstId > 0);
 
@@ -73,7 +73,7 @@ public sealed class BusinessFlowTests
             timeZoneId = "Asia/Kolkata",
             requestKey = "request-other-20261109"
         });
-        Assert.Equal(HttpStatusCode.Created, second.StatusCode);
+        Assert.True(second.StatusCode == HttpStatusCode.Created, await second.Content.ReadAsStringAsync());
         var secondId = (await second.Content.ReadFromJsonAsync<JsonElement>()).GetProperty("id").GetInt64();
         Assert.NotEqual(firstId, secondId);
 
