@@ -18,6 +18,21 @@
 - Clean developer-style code, minimal purposeful layers, no duplicate abstractions or code copied from private repositories into public `business_saas`.
 - Feature flags/unsupported templates are honest and enforced by server. No fake dashboard transactions.
 
+## 1A. Strict no-over-engineering rules
+
+1. **First runnable slice:** login -> create Retail business -> first location -> product -> receive stock -> bill -> return -> report. Do not scaffold Salon, Repair, Rental, Class or Projects until needed.
+2. **One API and one web app:** separate role-based layouts and feature folders, not multiple deployments or cross-app synchronization.
+3. **One SQL Server database:** no sharding, separate database per category, Redis, Kafka, message broker, microservices, event sourcing, CQRS, generic repository/unit-of-work wrappers or home-grown workflow engine in V1.
+4. **Minimal tables per working slice:** use the phased physical schema in [Database Architecture](./DATABASE_ARCHITECTURE.md). The future entity catalog is not a migration checklist.
+5. **No framework for hypothetical 1,000 categories:** one supported Retail type, basic declarative default modules in code/config; add persisted template editor/versioning only when a second real workflow needs it.
+6. **Simple roles:** Owner, Manager and Cashier with explicit API policies first; add configurable role/permission editor only when verified customer requirements demand it. Business membership and location checks remain mandatory.
+7. **Subscription basics first:** one business trial/plan entitlement path and clear usage limits. Payment automation, overrides, complex add-on billing and historical plan versions are implemented only when actual paid operations require them; never lose agreed plan terms.
+8. **Language scope:** keep keys and localization hooks from first screen; begin with known published packs and implement the user-requested Platform Admin upload/preview/publish when Platform Admin localization is built, without a generic file-processing framework.
+9. **No premature caching:** React query cache scoped by BusinessId; SQL indexes, pagination and correct queries first. Add distributed cache/background workers after real performance or reliable delivery need.
+10. **Keep non-negotiables:** numeric IDENTITY IDs; verified tenant switching; permissions; financial idempotency; stock ledger; safe transactions; clear UX; responsive/RTL; backup/restore and tests.
+
+**New-dependency and new-table test:** before adding a package, project, table, interface, background worker or engine, name the specific current feature requiring it. If none exists, defer it. Each delivered feature should have a small understandable diff and an end-to-end test.
+
 ## 2. High-level roadmap
 
 | Phase | Scope | Deliverable | Gate |
@@ -39,22 +54,30 @@
 ```text
 business_saas/
   backend/
-    src/
-      BusinessSaas.Api/
-      BusinessSaas.Application/
-      BusinessSaas.Domain/
-      BusinessSaas.Infrastructure/
-    tests/
+    BusinessSaas.Api/
+      Features/
+        Auth/
+        Businesses/
+        Subscriptions/
+        Retail/
+      Data/
+    BusinessSaas.Tests/
   frontend/
-    platform-admin/
-    business-admin/
-    pos/
+    web/
+      src/
+        app/
+        features/
+          platform/
+          business/
+          retail/
+        components/
+        styles/
   docs/
 ```
 
-Start with only necessary solution/project boundaries. A shared frontend UI package can be introduced only when the same audited components are reused. Avoid creating a generic plugin runtime, executable business scripts or code-generation framework for 1,000 categories.
+**One deployable ASP.NET Core API + one test project + one React/Vite app at first.** The React app contains three distinct route/layout groups: Platform Admin, Business Admin and POS. Lazy-load route groups so a cashier does not download the Platform Admin screens. Keep authorization exclusively on the backend.
 
-Backend modules are cohesive folders/features, e.g. Identity, Businesses, Locations, Subscription, Localization, Retail. Keep data/business logic behind server-side permissions and focus controllers on HTTP orchestration.
+Within the API, keep business logic in focused feature/service files and EF Core in `Data`. Do not create separate Domain/Application/Infrastructure projects, a shared UI package, generic repositories, a plugin framework, a worker, or microservices on day one. Extract a project/package only when repeat use, code ownership, independent deployment or measurable build complexity makes it necessary.
 
 ## 4. P0 detailed tasks and exit criteria
 
@@ -74,7 +97,7 @@ No development implementation or performance testing is represented by these sta
 
 ## 5. P1 Foundation build sequence
 
-1. Scaffold supported .NET 10 solution + React apps + minimal Bootstrap theme, CI build/test and secure environment config.
+1. Scaffold one .NET 10 API and test project + one React/Vite app with separate Platform, Business and POS layouts, minimal Bootstrap theme, CI build/test and secure environment config.
 2. EF Core numeric identity `Users<long>`, platform roles, verified login, safe session management and optional MFA for privileged users.
 3. Businesses, BusinessTypes, BusinessUsers, roles/permissions, Locations and membership-based BusinessId context.
 4. `POST /businesses` uses a durable server-side idempotency boundary; create owner, first location, basic settings and trial/subscription safely.
