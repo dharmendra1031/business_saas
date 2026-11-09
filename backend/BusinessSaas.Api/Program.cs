@@ -51,10 +51,13 @@ var app = builder.Build();
 
 if (app.Environment.IsDevelopment())
 {
-    // Development-only bootstrap. Replace with a reviewed EF migration before deployment.
+    // Local SQL Server databases use reviewed migrations; SQLite stays in-memory for tests.
     using var scope = app.Services.CreateScope();
-    await scope.ServiceProvider.GetRequiredService<AppDbContext>()
-        .Database.EnsureCreatedAsync();
+    var db = scope.ServiceProvider.GetRequiredService<AppDbContext>();
+    if (db.Database.IsSqlServer())
+        await db.Database.MigrateAsync();
+    else
+        await db.Database.EnsureCreatedAsync();
 }
 else
 {
