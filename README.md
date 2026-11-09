@@ -50,4 +50,4 @@ The long-term goal of **1,000+ business categories** is a product coverage targe
 
 ## Work status
 
-The repository now contains a **development-only P1 foundation slice**: one API, one React app, numeric Identity IDs, Register/Login, Create Business, membership-scoped switching and Retail Dashboard shell. [Run instructions and limitations](docs/P1_IMPLEMENTATION.md). Retail transactions, migrations, verification email, subscription payments and production security/scale testing remain pending.
+The repository now contains a **development-only P1 foundation slice**: one API, one React app, numeric Identity IDs, Register/Login, Create Business, membership-scoped switching and Retail Dashboard shell. [Run instructions and limitations](docs/P1_IMPLEMENTATION.md). Retail transactions, verified email delivery, subscription payments and production security/scale testing remain pending. The InitialCreate EF migration is committed and SQL Server 2022 integration tests are passing; signup is intentionally disabled outside Development until verification is implemented.

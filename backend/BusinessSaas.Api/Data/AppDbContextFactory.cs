@@ -7,8 +7,11 @@ public sealed class AppDbContextFactory : IDesignTimeDbContextFactory<AppDbConte
 {
     public AppDbContext CreateDbContext(string[] args)
     {
+        var connectionString = Environment.GetEnvironmentVariable("ConnectionStrings__Default")
+            ?? "Server=(localdb)\\MSSQLLocalDB;Database=BusinessSaasDev;Trusted_Connection=True;Encrypt=False";
+
         var options = new DbContextOptionsBuilder<AppDbContext>()
-            .UseSqlServer("Server=localhost;Database=BusinessSaasDesign;Trusted_Connection=True;Encrypt=False")
+            .UseSqlServer(connectionString)
             .Options;
 
         return new AppDbContext(options);
