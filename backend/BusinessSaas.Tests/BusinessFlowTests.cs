@@ -116,6 +116,30 @@ public sealed class BusinessFlowTests
     }
 
     [Fact]
+    public async Task Production_registration_stays_disabled_without_email_verification()
+    {
+        using var factory = new WebApplicationFactory<Program>().WithWebHostBuilder(builder =>
+        {
+            builder.UseEnvironment("Production");
+            builder.UseSetting("ConnectionStrings:Default",
+                "Server=localhost;Database=BusinessSaasUnused;Trusted_Connection=True;Encrypt=False");
+        });
+
+        using var client = factory.CreateClient(new WebApplicationFactoryClientOptions
+        {
+            BaseAddress = new Uri("https://localhost")
+        });
+
+        var response = await Post(client, "/api/auth/register", new
+        {
+            email = "unverified@example.test",
+            password = "SecurePassword123!"
+        });
+
+        Assert.Equal(HttpStatusCode.ServiceUnavailable, response.StatusCode);
+    }
+
+    [Fact]
     public async Task Writes_require_an_antiforgery_token()
     {
         using var database = new SqliteConnection("Data Source=:memory:");

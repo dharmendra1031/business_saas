@@ -15,8 +15,14 @@ public static class AuthEndpoints
         group.MapGet("/csrf", (HttpContext context, IAntiforgery antiforgery) =>
             Results.Ok(new { token = antiforgery.GetAndStoreTokens(context).RequestToken }));
 
-        group.MapPost("/register", async (RegisterRequest request, UserManager<AppUser> users) =>
+        group.MapPost("/register", async (RegisterRequest request,
+            IWebHostEnvironment environment, UserManager<AppUser> users) =>
         {
+            if (!environment.IsDevelopment())
+                return Results.Problem(
+                    "Registration is unavailable until verified email delivery is configured.",
+                    statusCode: StatusCodes.Status503ServiceUnavailable);
+
             var email = request.Email?.Trim() ?? "";
             if (!new EmailAddressAttribute().IsValid(email))
                 return Results.BadRequest(new { message = "Enter a valid email address." });
