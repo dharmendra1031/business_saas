@@ -1,6 +1,7 @@
 using System.Security.Claims;
 using BusinessSaas.Api.Data;
 using Microsoft.EntityFrameworkCore;
+using Microsoft.Data.SqlClient;
 
 namespace BusinessSaas.Api.Features;
 
@@ -59,7 +60,9 @@ public static class BusinessEndpoints
             var existing = await db.Businesses.AsNoTracking()
                 .FirstOrDefaultAsync(x => x.CreatedByUserId == userId && x.CreationKey == requestKey);
             if (existing is not null)
-                return Results.Ok(new { existing.Id });
+                return Matches(existing, request, name, country, currency, timeZone)
+                    ? Results.Ok(new { existing.Id })
+                    : Results.Conflict(new { message = "Request key was already used for another business." });
 
             var supported = await db.BusinessTypes.AnyAsync(x =>
                 x.Id == request.BusinessTypeId && x.IsSupported);
@@ -68,37 +71,55 @@ public static class BusinessEndpoints
 
             await using var transaction = await db.Database.BeginTransactionAsync();
 
-            var business = new Business
+            try
             {
-                Name = name,
-                BusinessTypeId = request.BusinessTypeId,
-                CreatedByUserId = userId,
-                CreationKey = requestKey,
-                CountryCode = country,
-                CurrencyCode = currency,
-                TimeZoneId = timeZone
-            };
+                var business = new Business
+                {
+                    Name = name,
+                    BusinessTypeId = request.BusinessTypeId,
+                    CreatedByUserId = userId,
+                    CreationKey = requestKey,
+                    CountryCode = country,
+                    CurrencyCode = currency,
+                    TimeZoneId = timeZone
+                };
 
-            db.Businesses.Add(business);
-            await db.SaveChangesAsync();
+                db.Businesses.Add(business);
+                await db.SaveChangesAsync();
 
-            db.BusinessUsers.Add(new BusinessUser
+                db.BusinessUsers.Add(new BusinessUser
+                {
+                    BusinessId = business.Id,
+                    UserId = userId,
+                    RoleCode = "Owner"
+                });
+                db.BusinessLocations.Add(new BusinessLocation
+                {
+                    BusinessId = business.Id,
+                    Code = "MAIN",
+                    Name = "Main Shop"
+                });
+
+                await db.SaveChangesAsync();
+                await transaction.CommitAsync();
+
+                return Results.Created($"/api/businesses/{business.Id}/dashboard", new { business.Id });
+            }
+            catch (DbUpdateException exception) when (
+                exception.InnerException is SqlException { Number: 2601 or 2627 })
             {
-                BusinessId = business.Id,
-                UserId = userId,
-                RoleCode = "Owner"
-            });
-            db.BusinessLocations.Add(new BusinessLocation
-            {
-                BusinessId = business.Id,
-                Code = "MAIN",
-                Name = "Main Shop"
-            });
+                await transaction.RollbackAsync();
+                db.ChangeTracker.Clear();
 
-            await db.SaveChangesAsync();
-            await transaction.CommitAsync();
+                var created = await db.Businesses.AsNoTracking().FirstOrDefaultAsync(
+                    x => x.CreatedByUserId == userId && x.CreationKey == requestKey);
+                if (created is null)
+                    throw;
 
-            return Results.Created($"/api/businesses/{business.Id}/dashboard", new { business.Id });
+                return Matches(created, request, name, country, currency, timeZone)
+                    ? Results.Ok(new { created.Id })
+                    : Results.Conflict(new { message = "Request key was already used for another business." });
+            }
         });
 
         group.MapGet("/businesses/{businessId:long}/dashboard", async (
@@ -134,6 +155,14 @@ public static class BusinessEndpoints
             return Results.Ok(new { business = details, locations });
         });
     }
+
+    private static bool Matches(Business business, CreateBusinessRequest request,
+        string name, string country, string currency, string timeZone) =>
+        business.BusinessTypeId == request.BusinessTypeId &&
+        business.Name == name &&
+        business.CountryCode == country &&
+        business.CurrencyCode == currency &&
+        business.TimeZoneId == timeZone;
 
     private static long CurrentUserId(ClaimsPrincipal principal) =>
         long.Parse(principal.FindFirstValue(ClaimTypes.NameIdentifier)!);
