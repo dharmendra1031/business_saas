@@ -1,6 +1,6 @@
 # White Label, Custom Domain and Dedicated Database — Implementation Plan
 
-**Status:** Approved architecture direction / not implemented  
+**Status:** Planned architecture / not implemented  
 **Repository:** dharmendra1031/business_saas  
 **Updated:** 2026-11-10  
 **Scope:** One managed SaaS product serving shared businesses and optionally custom-branded, domain-bound, database-isolated businesses. Do not confuse a dedicated **operational** database with a fully standalone installation.
@@ -33,7 +33,7 @@
 - All tenant-owned records include BusinessId even if stored in an isolated database. Local row Id is numeric auto-increment. If IDs are referenced outside a database, the reference must include BusinessId + local Id.
 - Never require operational tables to have SQL foreign keys into central Identity/Businesses/BusinessLocations; validate centrally before executing local transactions.
 
-**Implementation constraint:** Do not put Retail masters into the current combined AppDbContext and then attempt to split hundreds of tables later. Introduce an operational context with the first real business master slice, pointed to the existing shared SQL Server database at first. Keep central transactions and operational transactions explicitly separate.
+**Implementation constraint:** Do not put Retail masters into the current combined AppDbContext and then attempt to split hundreds of tables later. Introduce an operational context with the first real business master slice, pointed to the existing shared SQL Server database at first. Keep central transactions and operational transactions explicitly separate. Configure distinct EF Core migration histories for the control and operational contexts if they initially share one physical database; review table mappings and schema ownership to avoid deployment collisions.
 
 ## 3. Smallest necessary metadata (create only when the feature ships)
 
