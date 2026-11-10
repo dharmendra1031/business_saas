@@ -84,6 +84,8 @@ The conceptual lists below describe future candidates. **They are not a V1 table
 
 **Sequence without over-engineering:** keep P1 shared SQL Server working; design operational table placement **before** shipping Retail P4; deliver first dedicated SQL Server pilot with tenant isolation and restore tests; only then add another engine with provider-specific tests. No extra microservices, database-per-business-type, separate frontend fork or speculative provider factories in P1.
 
+The detailed engineering sequence, domain/session choices, provisioning, recovery and acceptance gates are in [White Label & Dedicated Database Implementation Plan](./WHITE_LABEL_DATABASE_IMPLEMENTATION.md).
+
 ## 2. Future entity candidates — platform and membership (not all V1 tables)
 
 | Table | Primary fields | Constraints / owner |
