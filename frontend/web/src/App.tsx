@@ -1,6 +1,6 @@
 import { useEffect, useState, type FormEvent } from 'react'
 import { ArrowLeft, ArrowRight, Building2, CheckCircle2, LayoutDashboard, LogOut, Menu, Plus, ShieldCheck, Store, UserRound } from 'lucide-react'
-import { api, post, resetCsrf, type Business, type BusinessType, type RetailDashboard, type User } from './api'
+import { api, post, resetCsrf, type Business, type BusinessMarket, type BusinessType, type RetailDashboard, type User } from './api'
 
 type Page = 'loading' | 'login' | 'register' | 'businesses' | 'create' | 'retail'
 
@@ -16,6 +16,7 @@ export default function App() {
   const [dashboard, setDashboard] = useState<RetailDashboard | null>(null)
   const [error, setError] = useState('')
   const [notice, setNotice] = useState('')
+  const [menuOpen, setMenuOpen] = useState(false)
 
   useEffect(() => {
     api<User>('/auth/me')
@@ -77,10 +78,11 @@ export default function App() {
 
   return (
     <div className="app-shell">
-      <aside className="app-sidebar">
+      {menuOpen && <button type="button" className="sidebar-scrim" aria-label="Close navigation" onClick={() => setMenuOpen(false)} />}
+      <aside id="main-navigation" className={`app-sidebar${menuOpen ? ' is-open' : ''}`}>
         <div className="brand"><span className="brand-mark">B</span><div>Business SaaS<small>Business Workspace</small></div></div>
         <div className="sidebar-heading">WORKSPACE</div>
-        <button className="nav-entry active" onClick={() => { setError(''); void loadBusinesses() }}>
+        <button className="nav-entry active" onClick={() => { setMenuOpen(false); setError(''); void loadBusinesses() }}>
           <Building2 size={18} /> My Businesses
         </button>
         {page === 'retail' && <div className="nav-entry active"><LayoutDashboard size={18} /> Retail Dashboard</div>}
@@ -89,7 +91,13 @@ export default function App() {
 
       <div className="app-main">
         <header className="app-topbar">
-          <div className="topbar-title"><Menu size={18} className="d-lg-none" /> {page === 'retail' ? dashboard?.business.name : 'My Businesses'}</div>
+          <div className="topbar-title">
+            <button type="button" className="mobile-menu-toggle" aria-label={menuOpen ? 'Close navigation' : 'Open navigation'}
+              aria-controls="main-navigation" aria-expanded={menuOpen} onClick={() => setMenuOpen(open => !open)}>
+              <Menu size={20} />
+            </button>
+            {page === 'retail' ? dashboard?.business.name : 'My Businesses'}
+          </div>
           <div className="topbar-account"><UserRound size={17} /> <span className="account-email">{user?.email}</span>
             <button className="btn btn-outline-secondary btn-sm" onClick={() => void logout()}><LogOut size={15} /> Sign out</button>
           </div>
@@ -255,17 +263,23 @@ function CreateBusiness({ onCancel, onCreated }: {
   const [types, setTypes] = useState<BusinessType[]>([])
   const [typeId, setTypeId] = useState(0)
   const [name, setName] = useState('')
+  const [markets, setMarkets] = useState<BusinessMarket[]>([])
   const [country, setCountry] = useState('IN')
-  const [currency, setCurrency] = useState('INR')
-  const [timezone, setTimezone] = useState('Asia/Kolkata')
+  const market = markets.find(item => item.code === country)
   const [requestKey] = useState(operationKey)
   const [busy, setBusy] = useState(false)
   const [error, setError] = useState('')
 
   useEffect(() => {
-    api<BusinessType[]>('/business-types')
-      .then(list => { setTypes(list); setTypeId(list[0]?.id ?? 0) })
-      .catch(cause => setError(message(cause)))
+    Promise.all([
+      api<BusinessType[]>('/business-types'),
+      api<BusinessMarket[]>('/business-markets')
+    ]).then(([list, supportedMarkets]) => {
+      setTypes(list)
+      setTypeId(list[0]?.id ?? 0)
+      setMarkets(supportedMarkets)
+      setCountry(supportedMarkets[0]?.code ?? '')
+    }).catch(cause => setError(message(cause)))
   }, [])
 
   async function create(event: FormEvent) {
@@ -274,8 +288,8 @@ function CreateBusiness({ onCancel, onCreated }: {
     setError('')
     try {
       const result = await post<{ id: number }>('/businesses', {
-        name, businessTypeId: typeId, countryCode: country.trim().toUpperCase(),
-        currencyCode: currency.trim().toUpperCase(), timeZoneId: timezone.trim(), requestKey
+        name, businessTypeId: typeId, countryCode: country,
+        currencyCode: market?.currencyCode, timeZoneId: market?.timeZoneId, requestKey
       })
       await onCreated(result.id)
     } catch (cause) {
@@ -304,20 +318,21 @@ function CreateBusiness({ onCancel, onCreated }: {
                 {types.length === 0 && <option value={0}>No business types available</option>}
                 {types.map(type => <option value={type.id} key={type.id}>{type.name}</option>)}
               </select></div>
-            <div><label className="form-label" htmlFor="country">Country code *</label>
-              <input id="country" className="form-control" maxLength={2} minLength={2}
-                value={country} onChange={event => setCountry(event.target.value)} required /></div>
-            <div><label className="form-label" htmlFor="currency">Currency code *</label>
-              <input id="currency" className="form-control" maxLength={3} minLength={3}
-                value={currency} onChange={event => setCurrency(event.target.value)} required /></div>
-            <div className="form-wide"><label className="form-label" htmlFor="timezone">Timezone *</label>
-              <input id="timezone" className="form-control" maxLength={80} value={timezone}
-                onChange={event => setTimezone(event.target.value)} required />
-              <div className="field-help">Use an IANA timezone, for example Asia/Kolkata or Asia/Kuwait.</div>
+            <div><label className="form-label" htmlFor="country">Country *</label>
+              <select id="country" className="form-select" value={country}
+                onChange={event => setCountry(event.target.value)} required>
+                {markets.length === 0 && <option value="">No markets available</option>}
+                {markets.map(item => <option value={item.code} key={item.code}>{item.name}</option>)}
+              </select></div>
+            <div><label className="form-label" htmlFor="currency">Currency</label>
+              <input id="currency" className="form-control" value={market?.currencyCode ?? ''} readOnly /></div>
+            <div className="form-wide"><label className="form-label" htmlFor="timezone">Timezone</label>
+              <input id="timezone" className="form-control" value={market?.timeZoneId ?? ''} readOnly />
+              <div className="field-help">Currency and timezone are set from the selected country.</div>
             </div>
           </div>
           <div className="form-footer"><button type="button" className="btn btn-outline-secondary" onClick={onCancel}>Cancel</button>
-            <button type="submit" className="btn btn-primary" disabled={busy || typeId === 0}>
+            <button type="submit" className="btn btn-primary" disabled={busy || typeId === 0 || !market}>
               {busy ? 'Creating…' : 'Create Business'} <ArrowRight size={16} />
             </button></div>
         </form>

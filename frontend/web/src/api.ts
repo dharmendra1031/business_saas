@@ -9,6 +9,13 @@ export interface BusinessType {
   name: string
 }
 
+export interface BusinessMarket {
+  code: string
+  name: string
+  currencyCode: string
+  timeZoneId: string
+}
+
 export interface Business {
   id: number
   name: string

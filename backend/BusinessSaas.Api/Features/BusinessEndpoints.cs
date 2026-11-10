@@ -5,8 +5,16 @@ using Microsoft.Data.SqlClient;
 
 namespace BusinessSaas.Api.Features;
 
+public sealed record BusinessMarket(string Code, string Name, string CurrencyCode, string TimeZoneId);
+
 public static class BusinessEndpoints
 {
+    private static readonly BusinessMarket[] Markets =
+    [
+        new("IN", "India", "INR", "Asia/Kolkata"),
+        new("KW", "Kuwait", "KWD", "Asia/Kuwait")
+    ];
+
     public static void MapBusinessEndpoints(this WebApplication app)
     {
         var group = app.MapGroup("/api").RequireAuthorization();
@@ -17,6 +25,8 @@ public static class BusinessEndpoints
                 .OrderBy(x => x.Name)
                 .Select(x => new { x.Id, x.Code, x.Name })
                 .ToListAsync());
+
+        group.MapGet("/business-markets", () => Results.Ok(Markets));
 
         group.MapGet("/businesses", async (ClaimsPrincipal principal, AppDbContext db) =>
         {
@@ -52,10 +62,12 @@ public static class BusinessEndpoints
             var timeZone = request.TimeZoneId?.Trim() ?? "";
             var requestKey = request.RequestKey?.Trim() ?? "";
 
-            if (name.Length is < 2 or > 150 || country.Length != 2 ||
-                currency.Length != 3 || timeZone.Length is < 3 or > 80 ||
-                requestKey.Length is < 12 or > 80)
-                return Results.BadRequest(new { message = "Check business name, country, currency and timezone." });
+            if (name.Length is < 2 or > 150 || requestKey.Length is < 12 or > 80)
+                return Results.BadRequest(new { message = "Enter a valid business name and request key." });
+
+            var market = Markets.FirstOrDefault(x => x.Code == country);
+            if (market is null || market.CurrencyCode != currency || market.TimeZoneId != timeZone)
+                return Results.BadRequest(new { message = "Choose a supported country, currency and timezone." });
 
             var existing = await db.Businesses.AsNoTracking()
                 .FirstOrDefaultAsync(x => x.CreatedByUserId == userId && x.CreationKey == requestKey);

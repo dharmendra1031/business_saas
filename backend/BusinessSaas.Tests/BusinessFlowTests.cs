@@ -44,6 +44,30 @@ public sealed class BusinessFlowTests
         Assert.Equal(HttpStatusCode.OK, (await owner.GetAsync("/api/auth/me")).StatusCode);
         Assert.Equal(HttpStatusCode.OK, (await stranger.GetAsync("/api/auth/me")).StatusCode);
         Assert.Equal(HttpStatusCode.OK, (await owner.GetAsync("/api/business-types")).StatusCode);
+        var markets = await owner.GetFromJsonAsync<JsonElement>("/api/business-markets");
+        Assert.Equal(2, markets.GetArrayLength());
+
+        var invalidMarket = await Post(owner, "/api/businesses", new
+        {
+            name = "Invalid Country Shop",
+            businessTypeId = 1,
+            countryCode = "XX",
+            currencyCode = "USD",
+            timeZoneId = "Unknown/Zone",
+            requestKey = "invalid-market-20261110"
+        });
+        Assert.Equal(HttpStatusCode.BadRequest, invalidMarket.StatusCode);
+
+        var invalidCurrency = await Post(owner, "/api/businesses", new
+        {
+            name = "Wrong Currency Shop",
+            businessTypeId = 1,
+            countryCode = "IN",
+            currencyCode = "USD",
+            timeZoneId = "Asia/Kolkata",
+            requestKey = "invalid-currency-20261110"
+        });
+        Assert.Equal(HttpStatusCode.BadRequest, invalidCurrency.StatusCode);
 
         var creation = new
         {
