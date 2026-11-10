@@ -1,0 +1,31 @@
+name: Generate Migration (Temporary)
+
+on:
+  push:
+    paths:
+      - '.github/workflows/generate-migration.yml'
+
+jobs:
+  generate:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-dotnet@v4
+        with:
+          dotnet-version: 10.0.x
+      - name: Generate additive migration
+        run: |
+          dotnet tool install --global dotnet-ef --version 10.0.14
+          dotnet ef migrations add AddBusinessSubscription --project backend/BusinessSaas.Api/BusinessSaas.Api.csproj --startup-project backend/BusinessSaas.Api/BusinessSaas.Api.csproj --output-dir Data/Migrations
+      - name: Emit generated source for review
+        shell: bash
+        run: |
+          python3 - <<'PY'
+          import json, pathlib
+          directory = pathlib.Path("backend/BusinessSaas.Api/Data/Migrations")
+          paths = list(directory.glob("*_AddBusinessSubscription*.cs")) + [directory / "AppDbContextModelSnapshot.cs"]
+          for path in paths:
+              print("MIGRATION_FILE_BEGIN " + path.as_posix())
+              print(json.dumps(path.read_text(encoding="utf-8-sig")))
+              print("MIGRATION_FILE_END")
+          PY
