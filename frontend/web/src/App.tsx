@@ -274,8 +274,15 @@ function CreateBusiness({ onCancel, onCreated }: {
   const [typeId, setTypeId] = useState(0)
   const [name, setName] = useState('')
   const [markets, setMarkets] = useState<BusinessMarket[]>([])
-  const [country, setCountry] = useState('IN')
-  const market = markets.find(item => item.code === country)
+  const [countrySearch, setCountrySearch] = useState('')
+  const [selectedCurrency, setSelectedCurrency] = useState('')
+  const [selectedTimeZone, setSelectedTimeZone] = useState('')
+  const market = markets.find(item =>
+    `${item.name} (${item.code})`.toLowerCase() === countrySearch.trim().toLowerCase() ||
+    item.name.toLowerCase() === countrySearch.trim().toLowerCase() ||
+    item.code.toLowerCase() === countrySearch.trim().toLowerCase())
+  const currency = market?.currencies.includes(selectedCurrency) ? selectedCurrency : market?.currencies[0] ?? ''
+  const timeZone = market?.timeZones.includes(selectedTimeZone) ? selectedTimeZone : market?.timeZones[0] ?? ''
   const [requestKey] = useState(operationKey)
   const [busy, setBusy] = useState(false)
   const [error, setError] = useState('')
@@ -288,7 +295,6 @@ function CreateBusiness({ onCancel, onCreated }: {
       setTypes(list)
       setTypeId(list[0]?.id ?? 0)
       setMarkets(supportedMarkets)
-      setCountry(supportedMarkets[0]?.code ?? '')
     }).catch(cause => setError(message(cause)))
   }, [])
 
@@ -298,8 +304,8 @@ function CreateBusiness({ onCancel, onCreated }: {
     setError('')
     try {
       const result = await post<{ id: number }>('/businesses', {
-        name, businessTypeId: typeId, countryCode: country,
-        currencyCode: market?.currencyCode, timeZoneId: market?.timeZoneId, requestKey
+        name, businessTypeId: typeId, countryCode: market?.code,
+        currencyCode: currency, timeZoneId: timeZone, requestKey
       })
       await onCreated(result.id)
     } catch (cause) {
@@ -328,17 +334,34 @@ function CreateBusiness({ onCancel, onCreated }: {
                 {types.length === 0 && <option value={0}>No business types available</option>}
                 {types.map(type => <option value={type.id} key={type.id}>{type.name}</option>)}
               </select></div>
-            <div><label className="form-label" htmlFor="country">Country *</label>
-              <select id="country" className="form-select" value={country}
-                onChange={event => setCountry(event.target.value)} required>
-                {markets.length === 0 && <option value="">No markets available</option>}
-                {markets.map(item => <option value={item.code} key={item.code}>{item.name}</option>)}
-              </select></div>
-            <div><label className="form-label" htmlFor="currency">Currency</label>
-              <input id="currency" className="form-control" value={market?.currencyCode ?? ''} readOnly /></div>
-            <div className="form-wide"><label className="form-label" htmlFor="timezone">Timezone</label>
-              <input id="timezone" className="form-control" value={market?.timeZoneId ?? ''} readOnly />
-              <div className="field-help">Currency and timezone are set from the selected country.</div>
+            <div className="form-wide">
+              <label className="form-label" htmlFor="country">Country *</label>
+              <input id="country" className="form-control" type="search" list="business-countries"
+                autoComplete="off" placeholder="Search country name or ISO code"
+                value={countrySearch}
+                onChange={event => {
+                  setCountrySearch(event.target.value)
+                  setSelectedCurrency('')
+                  setSelectedTimeZone('')
+                }} required />
+              <datalist id="business-countries">
+                {markets.map(item => <option key={item.code} value={`${item.name} (${item.code})`} />)}
+              </datalist>
+              {countrySearch && !market && <div className="field-help text-danger">Select a country from the suggestions.</div>}
+            </div>
+            <div>
+              <label className="form-label" htmlFor="currency">Currency *</label>
+              <select id="currency" className="form-select" value={currency}
+                onChange={event => setSelectedCurrency(event.target.value)} disabled={!market} required>
+                {market?.currencies.map(code => <option key={code} value={code}>{code === 'XXX' ? 'No official currency' : code}</option>)}
+              </select>
+            </div>
+            <div>
+              <label className="form-label" htmlFor="timezone">Timezone *</label>
+              <select id="timezone" className="form-select" value={timeZone}
+                onChange={event => setSelectedTimeZone(event.target.value)} disabled={!market} required>
+                {market?.timeZones.map(zone => <option key={zone} value={zone}>{zone}</option>)}
+              </select>
             </div>
           </div>
           <div className="form-footer"><button type="button" className="btn btn-outline-secondary" onClick={onCancel}>Cancel</button>

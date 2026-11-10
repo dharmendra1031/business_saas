@@ -1,19 +1,16 @@
 using System.Security.Claims;
+using System.Text.Json;
 using BusinessSaas.Api.Data;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Data.SqlClient;
 
 namespace BusinessSaas.Api.Features;
 
-public sealed record BusinessMarket(string Code, string Name, string CurrencyCode, string TimeZoneId);
+public sealed record BusinessMarket(string Code, string Name, string[] Currencies, string[] TimeZones);
 
 public static class BusinessEndpoints
 {
-    private static readonly BusinessMarket[] Markets =
-    [
-        new("IN", "India", "INR", "Asia/Kolkata"),
-        new("KW", "Kuwait", "KWD", "Asia/Kuwait")
-    ];
+    private static readonly BusinessMarket[] Markets = LoadMarkets();
 
     public static void MapBusinessEndpoints(this WebApplication app)
     {
@@ -66,7 +63,7 @@ public static class BusinessEndpoints
                 return Results.BadRequest(new { message = "Enter a valid business name and request key." });
 
             var market = Markets.FirstOrDefault(x => x.Code == country);
-            if (market is null || market.CurrencyCode != currency || market.TimeZoneId != timeZone)
+            if (market is null || !market.Currencies.Contains(currency) || !market.TimeZones.Contains(timeZone))
                 return Results.BadRequest(new { message = "Choose a supported country, currency and timezone." });
 
             var existing = await db.Businesses.AsNoTracking()
@@ -183,6 +180,17 @@ public static class BusinessEndpoints
 
             return Results.Ok(new { business = details, locations, subscription, canOperate });
         });
+    }
+
+    private static BusinessMarket[] LoadMarkets()
+    {
+        using var stream = typeof(BusinessEndpoints).Assembly
+            .GetManifestResourceStream("BusinessSaas.Api.Data.countries.json")
+            ?? throw new InvalidOperationException("Country catalog is missing.");
+
+        return JsonSerializer.Deserialize<BusinessMarket[]>(stream,
+            new JsonSerializerOptions(JsonSerializerDefaults.Web))
+            ?? throw new InvalidOperationException("Country catalog is invalid.");
     }
 
     private static bool Matches(Business business, CreateBusinessRequest request,

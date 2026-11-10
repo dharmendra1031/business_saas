@@ -12,8 +12,8 @@ export interface BusinessType {
 export interface BusinessMarket {
   code: string
   name: string
-  currencyCode: string
-  timeZoneId: string
+  currencies: string[]
+  timeZones: string[]
 }
 
 export interface Business {

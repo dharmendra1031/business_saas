@@ -45,7 +45,10 @@ public sealed class BusinessFlowTests
         Assert.Equal(HttpStatusCode.OK, (await stranger.GetAsync("/api/auth/me")).StatusCode);
         Assert.Equal(HttpStatusCode.OK, (await owner.GetAsync("/api/business-types")).StatusCode);
         var markets = await owner.GetFromJsonAsync<JsonElement>("/api/business-markets");
-        Assert.Equal(2, markets.GetArrayLength());
+        Assert.Equal(249, markets.GetArrayLength());
+        Assert.Contains(markets.EnumerateArray(), item => item.GetProperty("code").GetString() == "IN");
+        Assert.Contains(markets.EnumerateArray(), item => item.GetProperty("code").GetString() == "US");
+        Assert.Contains(markets.EnumerateArray(), item => item.GetProperty("code").GetString() == "KW");
 
         var invalidMarket = await Post(owner, "/api/businesses", new
         {
@@ -69,6 +72,17 @@ public sealed class BusinessFlowTests
         });
         Assert.Equal(HttpStatusCode.BadRequest, invalidCurrency.StatusCode);
 
+        var usaMarket = await Post(owner, "/api/businesses", new
+        {
+            name = "West Coast Retail",
+            businessTypeId = 1,
+            countryCode = "US",
+            currencyCode = "USD",
+            timeZoneId = "America/Los_Angeles",
+            requestKey = "united-states-20261110"
+        });
+        Assert.Equal(HttpStatusCode.Created, usaMarket.StatusCode);
+
         var creation = new
         {
             name = "Main Retail Shop",
@@ -90,7 +104,7 @@ public sealed class BusinessFlowTests
         Assert.Equal(firstId, sameId);
 
         var owned = await owner.GetFromJsonAsync<JsonElement>("/api/businesses");
-        Assert.Equal(1, owned.GetArrayLength());
+        Assert.Equal(2, owned.GetArrayLength());
 
         var anotherOwned = await Post(owner, "/api/businesses", new
         {
@@ -107,7 +121,7 @@ public sealed class BusinessFlowTests
         Assert.NotEqual(firstId, otherOwnedId);
 
         owned = await owner.GetFromJsonAsync<JsonElement>("/api/businesses");
-        Assert.Equal(2, owned.GetArrayLength());
+        Assert.Equal(3, owned.GetArrayLength());
         Assert.Equal(HttpStatusCode.OK,
             (await owner.GetAsync($"/api/businesses/{otherOwnedId}/dashboard")).StatusCode);
         var ownerDashboardData = await owner.GetFromJsonAsync<JsonElement>(
