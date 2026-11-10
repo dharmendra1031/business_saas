@@ -150,8 +150,18 @@ export default function App() {
                 <div><button className="back-link" onClick={() => { setNotice(''); void loadBusinesses() }}><ArrowLeft size={16} /> All businesses</button>
                   <h1>Retail Dashboard</h1><p>{dashboard.business.name} · {dashboard.business.typeName}</p>
                 </div>
-                <span className="workspace-state"><CheckCircle2 size={16} /> Workspace ready</span>
+                {dashboard.canOperate
+                  ? <span className="workspace-state"><CheckCircle2 size={16} /> Trial active</span>
+                  : <span className="workspace-state">Plan required</span>}
               </div>
+              {!dashboard.canOperate && <div className="alert alert-warning" role="status">
+                This business does not have an active plan or trial. Transactions will remain unavailable.
+              </div>}
+              {dashboard.subscription && <p className="small text-secondary">
+                {dashboard.subscription.planCode} · {dashboard.subscription.status}
+                {dashboard.subscription.status === 'Trial' &&
+                  ` · Ends ${new Date(dashboard.subscription.trialEndsAtUtc).toLocaleDateString()}`}
+              </p>}
               <div className="detail-grid">
                 <section className="content-section">
                   <h2>Store Details</h2>

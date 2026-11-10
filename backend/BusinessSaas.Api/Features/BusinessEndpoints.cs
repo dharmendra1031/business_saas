@@ -53,7 +53,7 @@ public static class BusinessEndpoints
         });
 
         group.MapPost("/businesses", async (CreateBusinessRequest request,
-            ClaimsPrincipal principal, AppDbContext db) =>
+            ClaimsPrincipal principal, AppDbContext db, IConfiguration configuration) =>
         {
             var userId = CurrentUserId(principal);
             var name = request.Name?.Trim() ?? "";
@@ -75,6 +75,10 @@ public static class BusinessEndpoints
                 return Matches(existing, request, name, country, currency, timeZone)
                     ? Results.Ok(new { existing.Id })
                     : Results.Conflict(new { message = "Request key was already used for another business." });
+
+            var trialDays = configuration.GetValue<int>("Saas:TrialDays");
+            if (trialDays is < 1 or > 90)
+                return Results.Problem("Trial duration must be between 1 and 90 days.", statusCode: 503);
 
             var supported = await db.BusinessTypes.AnyAsync(x =>
                 x.Id == request.BusinessTypeId && x.IsSupported);
@@ -110,6 +114,11 @@ public static class BusinessEndpoints
                     BusinessId = business.Id,
                     Code = "MAIN",
                     Name = "Main Shop"
+                });
+                db.BusinessSubscriptions.Add(new BusinessSubscription
+                {
+                    BusinessId = business.Id,
+                    TrialEndsAtUtc = DateTime.UtcNow.AddDays(trialDays)
                 });
 
                 await db.SaveChangesAsync();
@@ -164,7 +173,15 @@ public static class BusinessEndpoints
                 .Select(x => new { x.Id, x.Name, x.Code })
                 .ToListAsync();
 
-            return Results.Ok(new { business = details, locations });
+            var subscription = await db.BusinessSubscriptions.AsNoTracking()
+                .Where(x => x.BusinessId == businessId)
+                .Select(x => new { x.PlanCode, x.Status, x.TrialEndsAtUtc })
+                .SingleOrDefaultAsync();
+            var canOperate = subscription is not null &&
+                (subscription.Status == "Active" ||
+                 subscription.Status == "Trial" && subscription.TrialEndsAtUtc > DateTime.UtcNow);
+
+            return Results.Ok(new { business = details, locations, subscription, canOperate });
         });
     }
 

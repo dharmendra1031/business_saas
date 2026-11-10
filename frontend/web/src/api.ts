@@ -38,6 +38,8 @@ export interface RetailDashboard {
     timeZoneId: string
   }
   locations: { id: number; name: string; code: string }[]
+  subscription: { planCode: string; status: string; trialEndsAtUtc: string } | null
+  canOperate: boolean
 }
 
 let csrfToken: string | null = null

@@ -35,6 +35,15 @@ public sealed class BusinessUser
     public string RoleCode { get; set; } = "Owner";
 }
 
+public sealed class BusinessSubscription
+{
+    public long Id { get; set; }
+    public long BusinessId { get; set; }
+    public string PlanCode { get; set; } = "STARTER";
+    public string Status { get; set; } = "Trial";
+    public DateTime TrialEndsAtUtc { get; set; }
+}
+
 public sealed class BusinessLocation
 {
     public long Id { get; set; }
@@ -50,6 +59,7 @@ public sealed class AppDbContext(DbContextOptions<AppDbContext> options)
     public DbSet<BusinessType> BusinessTypes => Set<BusinessType>();
     public DbSet<Business> Businesses => Set<Business>();
     public DbSet<BusinessUser> BusinessUsers => Set<BusinessUser>();
+    public DbSet<BusinessSubscription> BusinessSubscriptions => Set<BusinessSubscription>();
     public DbSet<BusinessLocation> BusinessLocations => Set<BusinessLocation>();
 
     protected override void OnModelCreating(ModelBuilder builder)
@@ -92,6 +102,15 @@ public sealed class AppDbContext(DbContextOptions<AppDbContext> options)
                 .HasForeignKey(x => x.BusinessId).OnDelete(DeleteBehavior.Cascade);
             entity.HasOne<AppUser>().WithMany()
                 .HasForeignKey(x => x.UserId).OnDelete(DeleteBehavior.Restrict);
+        });
+
+        builder.Entity<BusinessSubscription>(entity =>
+        {
+            entity.HasIndex(x => x.BusinessId).IsUnique();
+            entity.Property(x => x.PlanCode).HasMaxLength(30).IsRequired();
+            entity.Property(x => x.Status).HasMaxLength(20).IsRequired();
+            entity.HasOne<Business>().WithMany()
+                .HasForeignKey(x => x.BusinessId).OnDelete(DeleteBehavior.Restrict);
         });
 
         builder.Entity<BusinessLocation>(entity =>

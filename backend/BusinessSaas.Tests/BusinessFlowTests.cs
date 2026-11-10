@@ -110,6 +110,21 @@ public sealed class BusinessFlowTests
         Assert.Equal(2, owned.GetArrayLength());
         Assert.Equal(HttpStatusCode.OK,
             (await owner.GetAsync($"/api/businesses/{otherOwnedId}/dashboard")).StatusCode);
+        var ownerDashboardData = await owner.GetFromJsonAsync<JsonElement>(
+            $"/api/businesses/{otherOwnedId}/dashboard");
+        Assert.True(ownerDashboardData.GetProperty("canOperate").GetBoolean());
+        Assert.Equal("Trial", ownerDashboardData.GetProperty("subscription").GetProperty("status").GetString());
+        using (var scope = factory.Services.CreateScope())
+        {
+            var db = scope.ServiceProvider.GetRequiredService<AppDbContext>();
+            var subscription = await db.BusinessSubscriptions
+                .SingleAsync(x => x.BusinessId == otherOwnedId);
+            subscription.TrialEndsAtUtc = DateTime.UtcNow.AddDays(-1);
+            await db.SaveChangesAsync();
+        }
+        ownerDashboardData = await owner.GetFromJsonAsync<JsonElement>(
+            $"/api/businesses/{otherOwnedId}/dashboard");
+        Assert.False(ownerDashboardData.GetProperty("canOperate").GetBoolean());
 
         var second = await Post(stranger, "/api/businesses", new
         {
