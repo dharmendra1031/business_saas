@@ -134,6 +134,8 @@ Never implement an unverified dual-write mechanism or copy whole shared-database
 
 **Not permitted to claim production-ready until:** domain verification/certificate renewal, secured host routing, central auth, tenant negative tests, controlled migration, secret handling, operational backups/restores and browser tests pass on representative deployed infrastructure.
 
+For a fully disconnected customer-owned installation, see the separate [Offline / On-Premise Deployment Plan](./OFFLINE_ON_PREMISE_DEPLOYMENT.md). It carries its own **local Identity and control plane**, not a call to the hosted SaaS control database.
+
 ## References
 
 - [Database Architecture](./DATABASE_ARCHITECTURE.md)

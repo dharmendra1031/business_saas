@@ -11,6 +11,7 @@ A self-service multi-business SaaS platform. A person registers once, creates on
 | [Business SaaS Master SRS](docs/BUSINESS_SAAS_MASTER_SRS.md) | **Authoritative** product requirements and the multi-business model |
 | [Database Architecture](docs/DATABASE_ARCHITECTURE.md) | **Authoritative** BusinessId tenant isolation, numeric SQL identity IDs, schema rules |
 | [White Label & Dedicated Database Plan](docs/WHITE_LABEL_DATABASE_IMPLEMENTATION.md) | Custom domains, safe tenant DB routing, provisioning, migration, provider support and release gates |
+| [Offline / On-Premise Deployment Plan](docs/OFFLINE_ON_PREMISE_DEPLOYMENT.md) | Independent local IIS/API/SQL deployment, offline license, LAN auth, backup, updates and release tests |
 | [Development Roadmap](docs/DEVELOPMENT_ROADMAP.md) | Phase ownership, dependencies and release quality gates |
 | [Retail V1 SRS](docs/RETAIL_V1_SRS.md) | First planned working business: General Retail Shop |
 | [Subscription Plans](docs/SUBSCRIPTION_PLANS.md) | Starter, Growth, Professional, Business, Enterprise; plan/version entitlements |
