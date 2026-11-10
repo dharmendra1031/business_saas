@@ -100,6 +100,8 @@ For a first release, support **controlled export/import or a one-time migration*
 - Restore encrypted backup to spare hardware, re-establish license/certificates/secrets under an approved replacement policy, and reconcile balances.
 - Install upgrade from authenticated offline package; incompatible/unsigned packages fail closed.
 
+**Existing licensed components:** Reuse the private `Dharmu.Security` packages for Windows offline validation and verified `Dharmu-License-Manager` issuer logic behind Business SaaS Platform Admin; do not copy private code into this public repository. See [License Management Integration](./LICENSE_MANAGEMENT_INTEGRATION.md).
+
 **Current state:** No on-premise install package, local login bootstrap, offline license, operational DB split, approved local HTTPS/certificate automation, backup/restore drill, or Internet-disconnected acceptance test exists in the current `business_saas` code. This document is planning, not a feature release.
 
 ## Official deployment references
