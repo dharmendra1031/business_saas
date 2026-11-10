@@ -66,7 +66,7 @@
 
 ## 7. Known findings and dependencies
 
-- Existing projects contain code, but prior 2026-10-19 GitHub Actions runs failed. First failed jobs exposed **no logs or step execution**, so their failures cannot be automatically classified as source compilation defects. Rerun Windows CI and inspect actual outcomes before modifying source.
+- **Verified 2026-11-10 Windows CI:** Dharmu.Security build + **8/8 tests PASS** on [rerun attempt 2](https://github.com/dharmendra1031/Dharmu.Security/actions/runs/39233145919/attempts/2), commit `a0b4b04`. Dharmu-License-Manager build + **5/5 tests PASS** on [run 42784765745](https://github.com/dharmendra1031/Dharmu-License-Manager/actions/runs/42784765745), commit `39abae1`. Its previous restore failed because of known vulnerabilities in transitive `System.Security.Cryptography.Pkcs 9.0.4` (NU1902/NU1903), resolved by explicitly selecting patched `10.0.14` in the web project's package references. These passing unit tests do not establish real two-machine activation or production readiness.
 - A private GitHub Packages publish workflow exists in `Dharmu.Security`; publishing a workflow file is not equivalent to having a verified released package.
 - Current license payload v1 does not convey module/user/location entitlements; design a **backwards-compatible, versioned** extension and compatibility tests rather than silently reinterpreting signed bytes.
 - Current offline validator is Windows-specific in its host integration. Keep cloud environment provider and operating-system independence unless separately tested.
