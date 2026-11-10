@@ -1,6 +1,6 @@
 # Business SaaS — License Management Integration
 
-**Status:** Integration plan; not implemented in `business_saas`  
+**Status:** First runtime Platform Admin authorization gate implemented; license issuance/renewal and offline runtime not yet implemented  
 **Updated:** 2026-11-10  
 **Scope:** One customer-facing Business SaaS platform manages hosted subscriptions and offline licenses, reusing verified components from existing private projects.
 
@@ -64,7 +64,16 @@
 
 **Never ship until:** production signing-key access controls and rotation, cross-role authorization, restore drills, package authenticity, Windows IIS key permissions, external Internet unplug test and end-to-end signed activation tests pass.
 
-## 7. Known findings and dependencies
+## 7. Implemented foundation (2026-11-10)
+
+- `GET /api/platform/license-access` is authenticated and **server-side permission checked** against the existing ASP.NET Identity `AspNetUserClaims` table. This avoids new tables or migrations.
+- Only the explicit existing-Identity claim `ClaimType = platform.permission`, `ClaimValue = licenses.manage` grants access. Ordinary authenticated Business Owners receive 403; unauthenticated users receive 401.
+- Permissions are checked against the database for each request, so removing a grant takes effect without waiting for a user to log out. The API only reports access; it **does not** create, sign, issue or renew licenses.
+- Initial administrative grants must be provisioned by a trusted database/platform operator after verifying the intended user account. **No public endpoint may assign this claim to itself.** The managed Platform Admin provisioning, MFA, audit trail and approvals still need implementation before production.
+- [Business SaaS CI](https://github.com/dharmendra1031/business_saas/actions/runs/42799410752) verified backend tests, SQL Server migration/tenant tests and frontend build all passed for commit `6705e35`.
+- `Dharmu.Security` package consumption was tested in a separate Windows app; private GitHub Packages publication is **still pending**. A controlled release requires a matching tag such as `security-v0.1.0` on a reviewed commit; normal branch pushes do not publish and must not bypass the version tag check.
+
+## 8. Known findings and dependencies
 
 - **Verified 2026-11-10 Windows CI:** Dharmu.Security build + **8/8 tests PASS** on [rerun attempt 2](https://github.com/dharmendra1031/Dharmu.Security/actions/runs/39233145919/attempts/2), commit `a0b4b04`. Dharmu-License-Manager build + **5/5 tests PASS** on [run 42784765745](https://github.com/dharmendra1031/Dharmu-License-Manager/actions/runs/42784765745), commit `39abae1`. Its previous restore failed because of known vulnerabilities in transitive `System.Security.Cryptography.Pkcs 9.0.4` (NU1902/NU1903), resolved by explicitly selecting patched `10.0.14` in the web project's package references. These passing unit tests do not establish real two-machine activation or production readiness.
 - A private GitHub Packages publish workflow exists in `Dharmu.Security`; publishing a workflow file is not equivalent to having a verified released package.
