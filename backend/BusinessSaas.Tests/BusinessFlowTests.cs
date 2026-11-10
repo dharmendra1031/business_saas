@@ -169,6 +169,60 @@ public sealed class BusinessFlowTests
     }
 
     [Fact]
+    public async Task Platform_license_access_requires_explicit_permission()
+    {
+        using var database = new SqliteConnection("Data Source=:memory:");
+        await database.OpenAsync();
+
+        using var factory = new WebApplicationFactory<Program>().WithWebHostBuilder(builder =>
+        {
+            builder.UseEnvironment("Development");
+            builder.ConfigureServices(services =>
+            {
+                services.RemoveAll<DbContextOptions<AppDbContext>>();
+                services.RemoveAll<IDbContextOptionsConfiguration<AppDbContext>>();
+                services.AddDbContext<AppDbContext>(options => options.UseSqlite(database));
+            });
+        });
+
+        using var owner = factory.CreateClient();
+        Assert.Equal(HttpStatusCode.Unauthorized,
+            (await owner.GetAsync("/api/platform/license-access")).StatusCode);
+
+        await RegisterAndLogin(owner, "license-admin@example.test");
+        Assert.Equal(HttpStatusCode.Forbidden,
+            (await owner.GetAsync("/api/platform/license-access")).StatusCode);
+
+        using (var scope = factory.Services.CreateScope())
+        {
+            var db = scope.ServiceProvider.GetRequiredService<AppDbContext>();
+            var user = await db.Users.SingleAsync(x => x.Email == "license-admin@example.test");
+            db.Set<Microsoft.AspNetCore.Identity.IdentityUserClaim<long>>().Add(new()
+            {
+                UserId = user.Id,
+                ClaimType = "platform.permission",
+                ClaimValue = "licenses.manage"
+            });
+            await db.SaveChangesAsync();
+        }
+
+        var granted = await owner.GetFromJsonAsync<JsonElement>("/api/platform/license-access");
+        Assert.True(granted.GetProperty("canManageLicenses").GetBoolean());
+
+        using (var scope = factory.Services.CreateScope())
+        {
+            var db = scope.ServiceProvider.GetRequiredService<AppDbContext>();
+            var claim = await db.Set<Microsoft.AspNetCore.Identity.IdentityUserClaim<long>>()
+                .SingleAsync(x => x.ClaimType == "platform.permission" && x.ClaimValue == "licenses.manage");
+            db.Remove(claim);
+            await db.SaveChangesAsync();
+        }
+
+        Assert.Equal(HttpStatusCode.Forbidden,
+            (await owner.GetAsync("/api/platform/license-access")).StatusCode);
+    }
+
+    [Fact]
     public async Task Production_registration_stays_disabled_without_email_verification()
     {
         using var factory = new WebApplicationFactory<Program>().WithWebHostBuilder(builder =>

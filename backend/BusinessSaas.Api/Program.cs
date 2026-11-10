@@ -102,6 +102,7 @@ app.UseAuthorization();
 app.MapGet("/api/health", () => Results.Ok(new { status = "ok" }));
 app.MapAuthEndpoints();
 app.MapBusinessEndpoints();
+app.MapPlatformEndpoints();
 
 app.Run();
 
