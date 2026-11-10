@@ -17,10 +17,10 @@ The catalog contains **four public subscription plans** and **one custom Enterpr
 | `GROWTH` | Growth | Growing business | Expanded template-compatible inventory, purchase or scheduling modules and reports |
 | `PROFESSIONAL` | Professional | Established business | Template-compatible staff, customer engagement and advanced reports |
 | `BUSINESS` | Business | Multi-location business | More locations, transfers where supported, consolidated reports and advanced permissions |
-| `ENTERPRISE` | Enterprise | Chain / custom account | Negotiated supported modules, limits, integrations and support |
+| `ENTERPRISE` | Enterprise | Chain / custom account | Negotiated modules, limits, white-label domain/branding, optional dedicated/customer-managed database and support after approved provisioning |
 
 - Starter, Growth, Professional and Business are shown in the public plan picker.
-- Enterprise uses **Contact Sales / Custom Pricing**, with an explicitly approved contract/quote.
+- Enterprise uses **Contact Sales / Custom Pricing**, with an explicitly approved contract/quote. White-label brand, custom domain, managed dedicated DB, BYO/customer-hosted DB and isolated deployment are **separately scoped options**, not automatic free features. Only tested supported engines may be quoted.
 - Business-facing customer memberships (e.g., salon packages) are distinct from the business's SaaS subscription.
 - Plan names/codes should remain stable identifiers in configuration. Display text is localized (English/Arabic) and may be edited without changing IDs.
 - The initial module matrix is a **starting configuration**, not a hardcoded product rule.

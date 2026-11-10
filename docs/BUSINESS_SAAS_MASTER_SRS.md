@@ -1,14 +1,14 @@
 # Business SaaS — Master Software Requirements Specification
 
 **Status:** Phase 0 design baseline; requirements approved direction, implementation pending  
-**Last updated:** 2026-11-08  
+**Last updated:** 2026-11-10  
 **Authoritative repository:** `dharmendra1031/business_saas` (`main`)  
 **Product:** Self-service multi-business operating platform  
 **Related:** [Database](./DATABASE_ARCHITECTURE.md) · [Roadmap](./DEVELOPMENT_ROADMAP.md) · [Retail V1](./RETAIL_V1_SRS.md) · [UX Standards](./UX_STANDARDS.md) · [CBK UI Reference](./CBK_UI_REFERENCE.md)
 
 ## 1. Vision and measurable outcomes
 
-One person registers once, creates one or more business workspaces, chooses a business category/template and an eligible SaaS plan, configures the first shop/branch and can begin genuine operations without the vendor manually provisioning a server, database or admin.
+One person registers once, creates one or more business workspaces, chooses a supported business type and eligible plan, configures the first shop/branch and begins operations without manual infrastructure setup **on the standard shared SaaS tier**. Dedicated/customer-hosted deployments are reviewed Platform Admin/Enterprise operations.
 
 Target outcomes (not yet achieved):
 - Owner completes a simple business onboarding and first useful business task in a **5–10 minute target** for the supported starter template, tested with real pilot users.
@@ -32,6 +32,29 @@ Do not build a generic engine that pretends every industry has identical operati
 - **Privacy:** `business_saas` is public; CBK/Kaifac are private read-only references. No copying private source/assets, customer data, SQL backups, secrets or historical commits into public repo without explicit authorization.
 - **No fake operational data** in app. Test-only fixtures and essential idempotent system catalog seed data are distinct.
 
+### White-label, dedicated databases and customer-selected provider (approved product capability)
+
+**Two separate choices:** branding/white-label does **not** imply a dedicated database, and dedicated database isolation does **not** imply a different database engine.
+
+| Deployment offering | Branding | Operational data storage | Provisioning |
+| --- | --- | --- | --- |
+| Standard SaaS | Our product brand | Shared SQL Server, all records BusinessId-scoped | Self-service |
+| Branded/white-label SaaS | Approved customer logo, app name, colors, verified domain and mail/receipt branding | Shared or managed dedicated DB, as contracted | Brand/domain verification by Platform Admin |
+| Managed Enterprise dedicated | Customer branding optional | Independent SQL Server database for a selected BusinessId (or separately contracted business group) | Platform Admin; independent backup/restore |
+| Customer-hosted Enterprise / BYO database | Customer brand and optionally isolated deployment | Supported customer-managed DB **after** connectivity, security, backups, network and compatibility checks | Explicit sales/technical onboarding; not an arbitrary self-service connection string |
+
+- **Database provider choices are certified options, not "any database works"**: SQL Server shared + SQL Server dedicated are the first target. PostgreSQL, MySQL/MariaDB and Oracle are candidates **only after** a compatible EF Core provider, separate migrations, feature parity, payment/stock tests and operational support are verified. The UI must label unsupported engines "Contact Sales" or "Not available"; do not claim multi-engine implementation today.
+- **Identity/control plane stays central for managed SaaS:** account, login, business ownership/membership, subscription and plan, domain/brand mapping, database assignment and audit. **Business operational data** (products, inventory, orders, invoices, customers and business files) follows the assigned data store. If the customer requires *all* personal, identity and billing data within their own infrastructure, negotiate an **isolated application deployment and identity model**, not just a separate operational DB.
+- Keep **one common codebase** with the same APIs and React UI; branding comes from verified tenant configuration and never from hardcoded copies/forks. A reseller serving several businesses must not merge their BusinessIds or grant automatic cross-business rights.
+- Platform Admin chooses supported **Shared / Dedicated / Customer-hosted** modes only after permission/contract and environment checks. Ordinary business users never submit raw database credentials, hostnames or connection strings to a working tenant API.
+- Tenant-to-database routing must be resolved **server-side after authenticated BusinessId membership**; map trusted BusinessId to a vetted data-store assignment, never by user-supplied DB name, hostname or unverified domain. Credentials are stored in a secrets manager, not Git, ordinary business records or browser responses.
+- A domain only becomes active after ownership proof, TLS setup and approved host-to-brand mapping. Domain selection cannot bypass login, BusinessId permissions, payment entitlement or location restrictions.
+- **Customer migration** between shared/dedicated/provider is an explicit, audited maintenance workflow: backup, export/import, verify data and money/stock totals, pause writes at cutover, change mapping atomically and test rollback. No untested instant switch, cross-provider DB joins or dual-writes.
+- Dedicated DBs need schema/version inventory, provider-specific reviewed migrations, isolated backups and restore drills, encryption, monitoring, region/data-residency controls and price/usage support. IDs remain numeric auto-increment *inside each database*. Combine BusinessId + local Id when identifying a record across deployments.
+- **No premature infrastructure:** record this as an Enterprise requirement now; do not introduce a shard router, DB-per-category, provider plugins, automatic arbitrary DB provisioning or extra projects into the current P1 application. Before Retail P4 gains many cross-table dependencies, establish the control-plane/operational-data boundary and deliver/test the first **dedicated SQL Server** pilot. Add a second database provider only when an actual contracted need is approved.
+
+**Acceptance criteria:** one account switches between a shared and dedicated business safely; invalid BusinessId/domain/role never accesses another data store; same workflow and numeric IDs function in both; backup/restore, migration and failback have evidence; secret rotation and account revocation work; branding/domain do not expose another business.
+
 ### Lean implementation baseline
 
 - **Initial code shape:** one `.NET 10` Web API project with feature folders and one test project; one React/Vite application with separate lazy-loaded Platform Admin, Business Admin and POS layouts. These are **three experiences, not three deployments**.
@@ -39,7 +62,7 @@ Do not build a generic engine that pretends every industry has identical operati
 - **Initial Business Type template:** simple supported type + default module mapping in well-named code/config. No dynamic workflow engine, runtime schema generation, plugin system or template version database on day one.
 - **First business roles:** Owner, Manager, Cashier with server-side policy checks and BusinessId membership. Add a custom role editor and per-location assignments as actual supported workflows require; never bypass tenant scoping.
 - **Initial platform data:** verified account, business, membership, location and minimal trial/plan. Add module tables, translator upload tables and paid subscription history as their **working features** are implemented, not as speculative scaffolding.
-- **No early distributed infrastructure:** one SQL Server, no Redis/queue/sharding/extra worker until a measured performance or durable-delivery requirement demands it.
+- **No early distributed infrastructure:** one shared SQL Server initially; a verified managed dedicated SQL Server option is a contract-driven Enterprise milestone, not an excuse for Redis/queues/sharding/extra workers on day one.
 - **Do not simplify away correctness:** numeric IDs, safe auth and business switching, restricted access, reliable money/stock posting and UI error recovery are mandatory.
 - Follow the concrete [Development Roadmap](./DEVELOPMENT_ROADMAP.md) and its no-over-engineering rules before introducing any new layer, library or table.
 
@@ -200,4 +223,5 @@ These require final business and country-specific approval before production rel
 - **BS-004:** .NET 10 LTS modular monolith; React/TypeScript/Bootstrap; CBK read-only UX reference.
 - **BS-005:** All application entity IDs numeric SQL IDENTITY; never use GUID/UUID entity IDs.
 - **BS-006:** Default first fully working vertical: General Retail; second Salon; third Repair.
+- **BS-007:** White-label branding/custom domain is independent of database deployment mode. Shared SQL Server first, contract-driven dedicated SQL Server, other providers only after certification; no customer-supplied connection strings in public APIs.
 - **BS-007:** All modifications restricted to `dharmendra1031/business_saas`; CBK/Kaifac remain read-only references.

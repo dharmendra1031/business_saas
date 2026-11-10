@@ -1,7 +1,7 @@
 # Business SaaS — Development Roadmap, Phase Gates and Decisions
 
-**Status:** Phase 0 documentation prepared and link-checked; business/country decisions remain open; application code not started  
-**Updated:** 2026-11-08  
+**Status:** Phase 0 complete; P1 code and SQL Server migrations started, CI verified; Enterprise white-label/dedicated data-store requirement documented, implementation pending  
+**Updated:** 2026-11-10  
 **Repository:** `dharmendra1031/business_saas` ONLY  
 **Source-of-truth:** [Master SRS](./BUSINESS_SAAS_MASTER_SRS.md) · [Database Architecture](./DATABASE_ARCHITECTURE.md) · [Retail V1 SRS](./RETAIL_V1_SRS.md)  
 **Design:** [CBK UI Reference](./CBK_UI_REFERENCE.md) · [UX Standards](./UX_STANDARDS.md)  
@@ -22,7 +22,7 @@
 
 1. **First runnable slice:** login -> create Retail business -> first location -> product -> receive stock -> bill -> return -> report. Do not scaffold Salon, Repair, Rental, Class or Projects until needed.
 2. **One API and one web app:** separate role-based layouts and feature folders, not multiple deployments or cross-app synchronization.
-3. **One SQL Server database:** no sharding, separate database per category, Redis, Kafka, message broker, microservices, event sourcing, CQRS, generic repository/unit-of-work wrappers or home-grown workflow engine in V1.
+3. **Shared SQL Server default:** keep one API and React app; a contract-driven, separately tested dedicated SQL Server database is an Enterprise offering. Never create a database per business **type**, or add Redis, Kafka, microservices, event sourcing, CQRS, generic repositories or a workflow engine to support this prematurely.
 4. **Minimal tables per working slice:** use the phased physical schema in [Database Architecture](./DATABASE_ARCHITECTURE.md). The future entity catalog is not a migration checklist.
 5. **No framework for hypothetical 1,000 categories:** one supported Retail type, basic declarative default modules in code/config; add persisted template editor/versioning only when a second real workflow needs it.
 6. **Simple roles:** Owner, Manager and Cashier with explicit API policies first; add configurable role/permission editor only when verified customer requirements demand it. Business membership and location checks remain mandatory.
@@ -32,6 +32,19 @@
 10. **Keep non-negotiables:** numeric IDENTITY IDs; verified tenant switching; permissions; financial idempotency; stock ledger; safe transactions; clear UX; responsive/RTL; backup/restore and tests.
 
 **New-dependency and new-table test:** before adding a package, project, table, interface, background worker or engine, name the specific current feature requiring it. If none exists, defer it. Each delivered feature should have a small understandable diff and an end-to-end test.
+
+## 1B. White-label and multiple database rollout (requested Enterprise capability)
+
+- **P1/P4 architecture gate:** Before adding extensive Retail master/transaction tables, mark global Identity/membership/subscription as **control plane** and Retail data as **operational plane**. The current `AppDbContext` is still one physical SQL Server context; do not claim tenant routing already works.
+- **First supported offering:** Shared SQL Server self-service, including approved logo/name/theme/custom-domain configuration when branded delivery ships. Domain ownership, HTTPS and login scope must be verified.
+- **First dedicated offering:** Platform Admin provisions a **separate SQL Server operational database per contracted business**, preserving numeric local identities, BusinessId scoping, safe migrations, independent backups and tested restore. Existing users continue to authenticate in the central SaaS account unless a separate full-instance contract requires otherwise.
+- **Customer-hosted / BYO database:** Enterprise onboarding with permitted providers, credentials stored outside repo/tenant DB, connectivity/allowlisting/TLS, permissions, backups and support responsibility. Never accept an arbitrary database connection string from a regular user interface.
+- **Provider support:** SQL Server first; PostgreSQL and MySQL/MariaDB candidates after explicit provider compatibility and full migration/stock/money/security test parity; Oracle only if commercially required and tested. Database engines may require independent migration histories. Do not enable options just because EF Core has a provider.
+- **Customer migration:** a controlled request with backup, freeze writes, verified import/reconciliation, approved switch and rollback plan. No automatic live DB swapping or dual-write system in V1.
+- **Scope/pricing:** White-label licensing, dedicated database hosting, customer-managed database access and dedicated installation are separate contract options, not automatically included with Starter/Growth plans.
+- **No early extra projects or tables:** add routing metadata, brand configuration or additional provider-specific code only with a working approved deployment use case and cross-tenant negative tests.
+
+**Release gates:** shared business A cannot read dedicated business B (and vice versa); wrong host/domain, user, BusinessId or provider cannot reroute; one client can access only authorized businesses even if they use different databases; SQL schema migration/rollback, backup/restore, secret rotation and invoice/stock totals verified in both modes.
 
 ## 2. High-level roadmap
 
@@ -165,7 +178,7 @@ Track separately:
 - **Registered/active businesses** (commercial adoption).
 - **Branches, cashiers and checkout/booking requests at peak** (runtime capacity).
 
-Scaling approach: optimize proper tenant indexes, server-pagination, transaction locks, short transactions, stateless API and isolated background exports first. Measure SQL plans, contention, memory, API p50/p95/p99; only then assess separate databases, read replicas or other infrastructure. 1,000 category names do not require 1,000 databases or services.
+Scaling approach: optimize tenant indexes, server pagination, safe transactions and stateless API first. **Dedicated databases are also a customer isolation/contract feature**, not only a performance response: implement the minimal approved SQL Server routing when a dedicated tenant is sold. Measure latency and restore costs before adding sharding/read replicas/other infrastructure. 1,000 category names do not require 1,000 databases or services.
 
 ## 10. Important product owner decisions (explicitly open)
 
@@ -183,4 +196,4 @@ Open decisions should be tracked as explicit issues or decision records before p
 
 All new docs/code/commits inside `dharmendra1031/business_saas`. Existing `SALON_*` documents are **Salon vertical references** and should be labeled as such; their historical `SalonId` semantics never supersede canonical platform `BusinessId`. CBK and Kaifac remain read-only. Do not import or expose their private source/assets to the public repo.
 
-**Current state:** Documentation and planning only. No implementation, database migration, production release or pilot is claimed.
+**Current state:** P1 Web API, React, SQL Server migrations and CI tests exist. Production onboarding, white-label domain deployment, dedicated database routing, customer-hosted engines and operational modules are **not yet delivered**. See [P1 status](./P1_IMPLEMENTATION.md).

@@ -1,11 +1,11 @@
 # Business SaaS — Database and Multi-Tenant Architecture
 
-**Status:** Phase 0 logical schema and EF Core constraints; SQL migrations not implemented  
-**Updated:** 2026-11-08  
+**Status:** Logical model + actual P1 SQL Server migrations in code; dedicated database/provider routing is a future Enterprise capability  
+**Updated:** 2026-11-10  
 **Repository:** `dharmendra1031/business_saas` ONLY  
 **Source of truth:** [Business SaaS Master SRS](./BUSINESS_SAAS_MASTER_SRS.md)  
 **First vertical:** [Retail V1](./RETAIL_V1_SRS.md)  
-**Database:** Microsoft SQL Server + EF Core in .NET 10 modular monolith.
+**Database today:** Microsoft SQL Server + EF Core in .NET 10 modular monolith. Target enterprise modes: shared SQL Server, dedicated SQL Server and separately certified database providers.
 
 ## 1. Tenancy and identity model
 
@@ -51,6 +51,38 @@ The tables below are **what the first working foundation needs**, not an instruc
 **V1 language implementation:** ship stable translation keys and small built-in locale bundles first. Build the requested upload/validate/publish system when Language Management is being implemented, without building a generic file-import framework.
 
 The conceptual lists below describe future candidates. **They are not a V1 table creation checklist.** SQL constraints, concurrency, tenant isolation and data correctness remain mandatory from the first operation.
+
+## 1B. Deployment-independent tenant storage boundary (Enterprise requirement)
+
+**Current truth:** The P1 `AppDbContext` contains Identity, Businesses, membership, subscriptions, locations and the current SQL Server migrations. There is **no runtime tenant database router, white-label domain mapping, customer-managed DB or second production EF provider**. The SQL Server integration job tests one shared database, not dedicated routing.
+
+```text
+                      One SaaS API + one React app
+                                   |
+                  Authenticate global numeric UserId
+                                   |
+                  Authorize (BusinessId, UserId)
+                                   |
+           Control-plane BusinessId -> approved data-store mapping
+                     /                            \
+       Shared tenant data store           Dedicated tenant database
+       BusinessId mandatory               BusinessId still mandatory
+       (SQL Server initially)             (SQL Server first)
+```
+
+- **Control plane:** Global Identity users, BusinessTypes, Businesses, BusinessUsers, BusinessSubscriptions, subscription plans, supported modules, approved white-label brand/domain mapping, data-store assignment metadata, operational provisioning/audit. Managed SaaS Identity does **not** move with just the tenant operational database.
+- **Tenant operational plane:** Business-specific Products, Categories, Units, Customers, Suppliers, Stock, Purchase, Sales, Returns, Invoice, Payments and related operational data. Keep BusinessId on these tables in both shared and dedicated modes; it is still the authorization boundary.
+- **Locations:** Existing BusinessLocations live in the current control-plane schema. Before splitting, decide which location configuration remains centrally accessible and validate operational LocationId values against authorized BusinessId; do not assume a cross-database foreign key exists.
+- **Trusted routing:** Resolve BusinessId from authenticated membership and platform assignment; cache safely only with invalidation and revocation. Reject missing/inactive assignments, unknown provider/mode, mismatched expected schema version or unauthorized business. Never dynamically concatenate SQL Server/host identifiers from an HTTP request.
+- **When first dedicated tenant is implemented:** introduce a minimal operational `DbContext` or equivalent explicit data-access boundary in the **same API project**; shared and dedicated SQL Server use the same tested operational schema. Create only the required assignment metadata (for example a single `BusinessDataStores` table with numeric Id, BusinessId, Mode, Provider, SecretReference, State, SchemaVersion, Region); **do not create it until provisioning actually ships**.
+- **Different engines:** EF Core is a provider abstraction, **not** automatic migration or SQL portability. Each certified engine needs its own migrations, identity generation, decimal precision, UTC/date handling, SQL/concurrency semantics and test matrix. See [Microsoft's multiple-provider migration guidance](https://learn.microsoft.com/en-us/ef/core/managing-schemas/migrations/providers). Do not silently allow unsupported provider selections.
+- **BusinessId / numeric keys:** application primary keys remain SQL numeric IDENTITY or provider-equivalent auto-increment. Values can repeat *between* dedicated DBs; global references therefore require both BusinessId and the local numeric Id. Never use GUID/UUID application entity keys to paper over data routing.
+- **Cross-database operations:** No ad-hoc SQL joins or implicit distributed transactions from control plane to dedicated tenant DB. Use deliberate authorized application reads and compensating/reconciliation operations where needed. Keep stock/invoice/payment atomic within the **one selected tenant data store**.
+- **Secret safety:** Customer DB passwords, admin credentials and private connection strings belong in a secret store with least-privilege access, TLS, rotation and no user-visible exposure. Customer-hosted DBs require reachable private networking and explicit customer-approved responsibilities.
+- **Relocation / full customer isolation:** Backup and verify; stop writes; migrate in staging; verify row counts, business ownership, financial/stock balances and legal invoice references; switch assignment; rollback if checks fail. Dedicated operational DB alone is **not** a full customer-independent identity/billing installation.
+- **White-label domains:** Verified domain+TLS -> approved branding context. A request host is never authorization for a BusinessId; one reseller brand may contain multiple separately secured business tenants.
+
+**Sequence without over-engineering:** keep P1 shared SQL Server working; design operational table placement **before** shipping Retail P4; deliver first dedicated SQL Server pilot with tenant isolation and restore tests; only then add another engine with provider-specific tests. No extra microservices, database-per-business-type, separate frontend fork or speculative provider factories in P1.
 
 ## 2. Future entity candidates — platform and membership (not all V1 tables)
 
@@ -188,7 +220,7 @@ Measure execution plans before adding costly or redundant indexes. All list/repo
 ## 9. Operations and future scaling
 
 - Start with one SQL database and stateless modular-monolith API; scale via measured bottlenecks.
-- Tenant isolation must survive future shard/dedicated database routing, but **do not build a shard router now**.
+- Tenant isolation must survive managed dedicated database routing, but **do not build an arbitrary shard/router framework now**; implement the minimal trusted BusinessId assignment when the first dedicated SQL Server tenant ships.
 - Track registered businesses, active businesses, active users, concurrent cashiers, API/DB p95 latency, queue lag, storage and report activity as separate metrics.
 - No claim that a category catalog of 1,000+ types implies support for 1,000 distinct executable workflows or 10,000 concurrent checkouts.
 - Critical two-business negative tests, stock and payment idempotency tests, restore drills and usability pilots are release blockers.
@@ -211,4 +243,4 @@ Products.Id <- SalesInvoiceLines.ProductId (same BusinessId enforced)
 Businesses.Id <- StockBalances.BusinessId / StockMovements.BusinessId
 ```
 
-**Phase 1 must produce the actual EF model and reviewed migrations after these logical constraints are confirmed.** This document is a design, not a database deployment.
+**Current implementation:** P1 EF models and reviewed `InitialCreate` / `AddBusinessSubscription` SQL Server migrations exist; the multi-database deployment boundary above is a documented requirement, **not a deployed capability**. Refer to [P1 Implementation](./P1_IMPLEMENTATION.md).
