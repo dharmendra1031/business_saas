@@ -158,7 +158,7 @@
 
 | ID | Task / clear deliverable | Mandatory task-specific UI/UX check | Status |
 | --- | --- | --- | --- |
-| BS-071 | Add Category master and uniqueness rules | New/Edit/List compact हों | BASELINE |
+| BS-071 | Add Category master and uniqueness rules | New/Edit/List compact हों | TODO |
 | BS-072 | Add Unit master and validation | Unit selection unambiguous हो | TODO |
 | BS-073 | Add Product master with scoped SKU | Duplicate SKU inline message दे | TODO |
 | BS-074 | Add barcode field and lookup | Scanner/manual search दोनों सरल हों | TODO |
@@ -233,7 +233,7 @@
 
 | ID | Task / clear deliverable | Mandatory task-specific UI/UX check | Status |
 | --- | --- | --- | --- |
-| BS-121 | Build real Retail Dashboard actions | Fake KPI या demo data न हों | BASELINE |
+| BS-121 | Build real Retail Dashboard actions | Fake KPI या demo data न हों | TODO |
 | BS-122 | Build date-filtered daily sales report | Business date/timezone स्पष्ट हो | TODO |
 | BS-123 | Build purchase/receiving report | Ordered vs received totals अलग हों | TODO |
 | BS-124 | Build stock balance and movement report | Available vs on-hand समझ आए | TODO |
