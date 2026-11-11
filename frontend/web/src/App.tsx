@@ -100,7 +100,7 @@ export default function App() {
     return <main className="center-screen" aria-live="polite">Loading your workspace…</main>
 
   if (page === 'login' || page === 'register')
-    return <AuthPage mode={page} onChange={setPage} onSignedIn={onSignedIn}
+    return <AuthPage key={page} mode={page} onChange={setPage} onSignedIn={onSignedIn}
       sessionExpired={sessionExpired} authNotice={authNotice} onRegistered={setAuthNotice} />
 
   return (
@@ -333,17 +333,32 @@ function CreateBusiness({ onCancel, onCreated }: {
   const [requestKey] = useState(operationKey)
   const [busy, setBusy] = useState(false)
   const [error, setError] = useState('')
+  const [loadingOptions, setLoadingOptions] = useState(true)
+  const [loadFailed, setLoadFailed] = useState(false)
+  const [retryOptions, setRetryOptions] = useState(0)
 
   useEffect(() => {
+    let active = true
+    setLoadingOptions(true)
+    setLoadFailed(false)
+    setError('')
     Promise.all([
       api<BusinessType[]>('/business-types'),
       api<BusinessMarket[]>('/business-markets')
     ]).then(([list, supportedMarkets]) => {
+      if (!active) return
       setTypes(list)
       setTypeId(list[0]?.id ?? 0)
       setMarkets(supportedMarkets)
-    }).catch(cause => setError(message(cause)))
-  }, [])
+    }).catch(cause => {
+      if (!active || cause instanceof SessionExpiredError) return
+      setError(message(cause))
+      setLoadFailed(true)
+    }).finally(() => {
+      if (active) setLoadingOptions(false)
+    })
+    return () => { active = false }
+  }, [retryOptions])
 
   async function create(event: FormEvent) {
     event.preventDefault()
@@ -369,8 +384,13 @@ function CreateBusiness({ onCancel, onCreated }: {
         <h1>Create Business</h1><p>Choose a supported business type and enter your shop details.</p>
       </div></div>
       <section className="content-section form-panel">
-        <form onSubmit={event => void create(event)}>
+        <form onSubmit={event => void create(event)} aria-busy={busy || loadingOptions}>
           {error && <div className="alert alert-danger" role="alert">{error}</div>}
+          {loadingOptions && <p className="text-secondary" role="status">Loading business setup options…</p>}
+          {loadFailed && <button type="button" className="btn btn-outline-secondary mb-3"
+            onClick={() => setRetryOptions(value => value + 1)}>Retry loading options</button>}
+          {!loadingOptions && !loadFailed && types.length === 0 &&
+            <p className="alert alert-info" role="status">No business types are available yet.</p>}
           <div className="form-grid">
             <div><label className="form-label" htmlFor="businessName">Business name *</label>
               <input id="businessName" className="form-control" value={name} onChange={event => setName(event.target.value)}
@@ -378,12 +398,14 @@ function CreateBusiness({ onCancel, onCreated }: {
             <div><label className="form-label" htmlFor="businessType">Business type *</label>
               <select id="businessType" className="form-select" value={typeId}
                 onChange={event => setTypeId(Number(event.target.value))} required>
-                {types.length === 0 && <option value={0}>No business types available</option>}
+                {types.length === 0 && <option value={0}>{loadingOptions ? 'Loading business types…' : 'No business types available'}</option>}
                 {types.map(type => <option value={type.id} key={type.id}>{type.name}</option>)}
               </select></div>
             <div className="form-wide">
               <label className="form-label" htmlFor="country">Country *</label>
               <input id="country" className="form-control" type="search" list="business-countries"
+                aria-describedby={countrySearch && !market ? 'country-help' : undefined}
+                aria-invalid={Boolean(countrySearch && !market)}
                 autoComplete="off" placeholder="Search country name or ISO code"
                 value={countrySearch}
                 onChange={event => {
@@ -394,7 +416,7 @@ function CreateBusiness({ onCancel, onCreated }: {
               <datalist id="business-countries">
                 {markets.map(item => <option key={item.code} value={`${item.name} (${item.code})`} />)}
               </datalist>
-              {countrySearch && !market && <div className="field-help text-danger">Select a country from the suggestions.</div>}
+              {countrySearch && !market && <div id="country-help" className="field-help text-danger">Select a country from the suggestions.</div>}
             </div>
             <div>
               <label className="form-label" htmlFor="currency">Currency *</label>
@@ -412,7 +434,7 @@ function CreateBusiness({ onCancel, onCreated }: {
             </div>
           </div>
           <div className="form-footer"><button type="button" className="btn btn-outline-secondary" onClick={onCancel}>Cancel</button>
-            <button type="submit" className="btn btn-primary" disabled={busy || typeId === 0 || !market}>
+            <button type="submit" className="btn btn-primary" disabled={busy || loadingOptions || loadFailed || typeId === 0 || !market}>
               {busy ? 'Creating…' : 'Create Business'} <ArrowRight size={16} />
             </button></div>
         </form>

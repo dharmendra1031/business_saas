@@ -6,6 +6,8 @@ export default function TeamMembers({ businessId }: { businessId: number }) {
   const [email, setEmail] = useState('')
   const [role, setRole] = useState<'Manager' | 'Cashier'>('Manager')
   const [loading, setLoading] = useState(true)
+  const [loadFailed, setLoadFailed] = useState(false)
+  const [reload, setReload] = useState(0)
   const [busy, setBusy] = useState(false)
   const [error, setError] = useState('')
   const [notice, setNotice] = useState('')
@@ -13,16 +15,21 @@ export default function TeamMembers({ businessId }: { businessId: number }) {
 
   useEffect(() => {
     let active = true
+    setLoading(true)
+    setLoadFailed(false)
+    setMembers([])
+    setError('')
     api<StaffMember[]>(path)
       .then(list => { if (active) setMembers(list) })
       .catch(cause => {
-        if (active && !(cause instanceof SessionExpiredError))
-          setError(cause instanceof Error ? cause.message : 'Unable to load staff.')
+        if (!active || cause instanceof SessionExpiredError) return
+        setLoadFailed(true)
+        setError(cause instanceof Error ? cause.message : 'Unable to load staff.')
       })
       .finally(() => { if (active) setLoading(false) })
 
     return () => { active = false }
-  }, [path])
+  }, [path, reload])
 
   async function add(event: FormEvent<HTMLFormElement>) {
     event.preventDefault()
@@ -31,8 +38,8 @@ export default function TeamMembers({ businessId }: { businessId: number }) {
     setError('')
     setNotice('')
     try {
-      await post(path, { email: email.trim(), roleCode: role })
-      setMembers(await api<StaffMember[]>(path))
+      const member = await post<StaffMember>(path, { email: email.trim(), roleCode: role })
+      setMembers(current => [...current, member])
       setEmail('')
       setNotice('Team member added.')
     } catch (cause) {
@@ -83,14 +90,16 @@ export default function TeamMembers({ businessId }: { businessId: number }) {
             <option value="Cashier">Cashier</option>
           </select>
         </div>
-        <button className="btn btn-primary" type="submit" disabled={busy}>
+        <button className="btn btn-primary" type="submit" disabled={busy || loading || loadFailed}>
           {busy ? 'Saving…' : 'Add Team Member'}
         </button>
       </form>
 
       {loading ? <p className="text-secondary" role="status">Loading team…</p>
-        : members.length === 0 ? <p className="text-secondary">No team members yet.</p>
-          : <div className="table-responsive">
+        : loadFailed ? <button type="button" className="btn btn-outline-secondary"
+            onClick={() => setReload(value => value + 1)}>Retry loading team</button>
+          : members.length === 0 ? <p className="text-secondary">No team members yet.</p>
+            : <div className="table-responsive">
             <table className="table table-sm align-middle mb-0">
               <thead><tr><th scope="col">Account</th><th scope="col">Role</th><th scope="col" className="text-end">Action</th></tr></thead>
               <tbody>
