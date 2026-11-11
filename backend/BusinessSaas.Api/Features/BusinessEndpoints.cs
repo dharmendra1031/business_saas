@@ -144,9 +144,11 @@ public static class BusinessEndpoints
             long businessId, ClaimsPrincipal principal, AppDbContext db) =>
         {
             var userId = CurrentUserId(principal);
-            var isMember = await db.BusinessUsers.AsNoTracking().AnyAsync(
-                x => x.BusinessId == businessId && x.UserId == userId);
-            if (!isMember)
+            var roleCode = await db.BusinessUsers.AsNoTracking()
+                .Where(x => x.BusinessId == businessId && x.UserId == userId)
+                .Select(x => x.RoleCode)
+                .SingleOrDefaultAsync();
+            if (roleCode is not ("Owner" or "Manager" or "Cashier"))
                 return Results.NotFound();
 
             var details = await (from business in db.Businesses.AsNoTracking()
@@ -165,7 +167,7 @@ public static class BusinessEndpoints
                                  }).SingleAsync();
 
             var locations = await db.BusinessLocations.AsNoTracking()
-                .Where(x => x.BusinessId == businessId)
+                .Where(x => x.BusinessId == businessId && (roleCode == "Owner" || x.IsPrimary))
                 .OrderBy(x => x.Id)
                 .Select(x => new { x.Id, x.Name, x.Code })
                 .ToListAsync();
@@ -178,7 +180,7 @@ public static class BusinessEndpoints
                 (subscription.Status == "Active" ||
                  subscription.Status == "Trial" && subscription.TrialEndsAtUtc > DateTime.UtcNow);
 
-            return Results.Ok(new { business = details, locations, subscription, canOperate });
+            return Results.Ok(new { business = details, roleCode, locations, subscription, canOperate });
         });
     }
 
