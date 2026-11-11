@@ -25,6 +25,16 @@ Ten tasks reviewed. Existing design/code is not counted as finished without real
 - **Actual browser/real user review is pending:** not verified at 360/768/1440px, with keyboard, mobile or cashier/owner walkthrough. **Do not mark BS-009 DONE until that evidence exists.** RTL review follows after Arabic is supported.
 - **No fabricated UX evidence:** Product/Purchase/POS/Return/Reports screens are not implemented, so they cannot be visually signed off.
 
+## Verified GitHub CI
+
+[Run 42986340375](https://github.com/dharmendra1031/business_saas/actions/runs/42986340375) — **all jobs PASS** on the Batch 01 code commit `1798c317`:
+
+- Backend: **5/5 tests PASS**.
+- SQL Server 2022 integration: **1/1 test PASS**.
+- React TypeScript production build: **PASS**.
+
+The new inactive-Salon negative case runs within the existing backend flow test. These results verify code behavior and build, **not** actual responsive browser UX or pilot-user usability. Keep those tasks short of DONE until UI evidence is available.
+
 ## Decisions still open
 
 1. **BS-005:** First official market (India/Kuwait/other); supported tax invoice/numbering and receipt rules.
