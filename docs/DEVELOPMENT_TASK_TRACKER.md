@@ -55,6 +55,8 @@
 
 **Batch 04:** [BS-031–BS-040 business and staff access review](./BATCH_04_REVIEW.md). Owner staff management is a working first slice, **not** complete invitation or branch assignment.
 
+**Batch 05:** [BS-041–BS-050 UI/UX review](./BATCH_05_REVIEW.md). Static review and TypeScript CI are not a substitute for actual browser/role acceptance.
+
 ## Detailed backlog
 
 ### A. Product scope & architecture — Now
@@ -121,15 +123,15 @@
 
 | ID | Task / clear deliverable | Mandatory task-specific UI/UX check | Status |
 | --- | --- | --- | --- |
-| BS-041 | Create one clean navigation hierarchy | Primary actions तुरंत मिलें | TODO |
-| BS-042 | Define compact typography and spacing | हर viewport पर readable hierarchy | TODO |
-| BS-043 | Define responsive widths 360/768/1440 | Horizontal overflow न हो | TODO |
-| BS-044 | Standardize form labels and required fields | Field purpose समझने में guesswork न हो | TODO |
-| BS-045 | Standardize first-field focus and keyboard order | Tab/Enter से workflow तेज हो | TODO |
+| BS-041 | Create one clean navigation hierarchy | Primary actions तुरंत मिलें | UX REVIEW PENDING |
+| BS-042 | Define compact typography and spacing | हर viewport पर readable hierarchy | UX REVIEW PENDING |
+| BS-043 | Define responsive widths 360/768/1440 | Horizontal overflow न हो | UX REVIEW PENDING |
+| BS-044 | Standardize form labels and required fields | Field purpose समझने में guesswork न हो | UX REVIEW PENDING |
+| BS-045 | Standardize first-field focus and keyboard order | Tab/Enter से workflow तेज हो | UX REVIEW PENDING |
 | BS-046 | Standardize edit prefill and validation | Edit के दौरान data सुरक्षित दिखे | TODO |
-| BS-047 | Standardize loading/empty/error states | Empty और failed state अलग हों | TODO |
+| BS-047 | Standardize loading/empty/error states | Empty और failed state अलग हों | UX REVIEW PENDING |
 | BS-048 | Standardize search/filter/pagination tables | Filter हटाना और row action सरल हो | TODO |
-| BS-049 | Review dialogs, confirms, destructive actions | गलती से delete/void न हो | TODO |
+| BS-049 | Review dialogs, confirms, destructive actions | गलती से delete/void न हो | UX REVIEW PENDING |
 | BS-050 | Do cross-role usability walkthrough each task | अगला action बिना explanation समझ आए | TODO |
 
 ### F. Super Admin platform — After access baseline
