@@ -14,6 +14,7 @@ A self-service multi-business SaaS platform. A person registers once, creates on
 | [Offline / On-Premise Deployment Plan](docs/OFFLINE_ON_PREMISE_DEPLOYMENT.md) | Independent local IIS/API/SQL deployment, offline license, LAN auth, backup, updates and release tests |
 | [License Management Integration](docs/LICENSE_MANAGEMENT_INTEGRATION.md) | Reuse existing private licensing projects in Platform Admin and offline package; tests and release gates |
 | [Development Roadmap](docs/DEVELOPMENT_ROADMAP.md) | Phase ownership, dependencies and release quality gates |
+| [190-Step Development Task Tracker](docs/DEVELOPMENT_TASK_TRACKER.md) | 190 numbered tasks, status, dependency sequencing and mandatory UI/UX review after **every** task |
 | [Retail V1 SRS](docs/RETAIL_V1_SRS.md) | First planned working business: General Retail Shop |
 | [Subscription Plans](docs/SUBSCRIPTION_PLANS.md) | Starter, Growth, Professional, Business, Enterprise; plan/version entitlements |
 | [Language Management](docs/LANGUAGE_MANAGEMENT.md) | Platform-published language files, fallback, RTL, per-business language preference |
