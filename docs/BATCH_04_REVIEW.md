@@ -35,7 +35,7 @@
 - Backend xUnit **7/7 PASS**, including tenant scoping, duplicate staff, invalid role, non-owner denial, membership revoke and limited location visibility.
 - SQL Server 2022 integration **1/1 PASS** (existing concurrent Create Business/tenant suite).
 - React TypeScript production build **PASS**.
-- Later UI-copy commit `d36e978` requires its own check before claiming the final branch fully verified.
+- [Final UI copy run 42989694240](https://github.com/dharmendra1031/business_saas/actions/runs/42989694240) for `d36e978` also **PASS** (backend, SQL Server, React). The later documentation-only commit does not change runtime code.
 
 ## Mandatory UI/UX review after every task
 
