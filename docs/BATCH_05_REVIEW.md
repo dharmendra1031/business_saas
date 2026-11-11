@@ -32,7 +32,7 @@
 
 - UI/backend commits include `28f0bcc` (initial navigation changes), `ee28855` (corrected auth notice placement), `4ab0d66` (form error/retry states), `089bc5d` (clear page/feature copy) and `0f03aa7` (mobile keyboard focus).
 - The initial `28f0bcc` frontend typecheck **FAILED** because of a misplaced success notice. The targeted fix in `ee28855` was then verified by a **successful** GitHub CI run [42990953041](https://github.com/dharmendra1031/business_saas/actions/runs/42990953041). The next UI changes in `4ab0d66` passed [42991093299](https://github.com/dharmendra1031/business_saas/actions/runs/42991093299).
-- Newer [code CI](https://github.com/dharmendra1031/business_saas/actions) for `0f03aa7` must be verified before claiming the *latest* runtime commit fully passed. On success attach the exact run.
+- [Final code CI 42991410475](https://github.com/dharmendra1031/business_saas/actions/runs/42991410475) for `0f03aa7` — **all jobs SUCCESS**, backend **7/7 PASS**, SQL Server 2022 **1/1 PASS**, React TypeScript production build **PASS**. The prior copy refinement `089bc5d` also passed [CI 42991307724](https://github.com/dharmendra1031/business_saas/actions/runs/42991307724). Later documentation-only commits do not change runtime code.
 - Backend registration options GET has development/production assertions inside existing tests; authorization, tenant and SQL integration tests remain unchanged.
 
 ## Mandatory role, viewport and regression checks — **NOT YET VISUALLY VERIFIED**
