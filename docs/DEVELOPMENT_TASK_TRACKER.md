@@ -53,6 +53,8 @@
 
 **Batch 03:** [BS-021–BS-030 account security review](./BATCH_03_REVIEW.md).
 
+**Batch 04:** [BS-031–BS-040 business and staff access review](./BATCH_04_REVIEW.md). Owner staff management is a working first slice, **not** complete invitation or branch assignment.
+
 ## Detailed backlog
 
 ### A. Product scope & architecture — Now
@@ -110,7 +112,7 @@
 | BS-034 | Keep first location creation | First shop ready state साफ दिखे | BASELINE |
 | BS-035 | Keep 14-day trial setup | Trial date और eligibility स्पष्ट हो | BASELINE |
 | BS-036 | Verify two accounts and two businesses | Business switch पर पुराने records न दिखें | BASELINE |
-| BS-037 | Add membership-based business context guard | Wrong URL पर safe access denied | TODO |
+| BS-037 | Add membership-based business context guard | Wrong URL पर safe access denied | UX REVIEW PENDING |
 | BS-038 | Add Owner/Manager/Cashier permissions | Role के हिसाब से ही menus दिखें | TODO |
 | BS-039 | Add location-specific user assignment | Selected branch unmistakable हो | TODO |
 | BS-040 | Add invite and deactivate business staff | Invite status, errors, revoke action स्पष्ट हों | TODO |
