@@ -37,6 +37,8 @@ public sealed class BusinessFlowTests
 
         var unauthenticated = await stranger.GetAsync("/api/businesses");
         Assert.Equal(HttpStatusCode.Unauthorized, unauthenticated.StatusCode);
+        Assert.False(string.IsNullOrWhiteSpace(
+            unauthenticated.Headers.GetValues("X-Request-Id").Single()));
 
         await RegisterAndLogin(owner, "owner@example.test");
         await RegisterAndLogin(stranger, "stranger@example.test");

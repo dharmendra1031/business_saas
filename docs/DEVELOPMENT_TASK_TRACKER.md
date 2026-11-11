@@ -49,6 +49,8 @@
 
 **Batch 01:** [BS-001–BS-010 review and UX evidence](./BATCH_01_REVIEW.md). No task marked DONE without actual UI/UX verification.
 
+**Batch 02:** [BS-011–BS-020 review](./BATCH_02_REVIEW.md).
+
 ## Detailed backlog
 
 ### A. Product scope & architecture — Now
@@ -74,11 +76,11 @@
 | BS-012 | Maintain one React TypeScript web app | Navigation consistent रहे | BASELINE |
 | BS-013 | Keep SQL Server EF migrations reviewed | Migration के बाद login/setup smoke test | BASELINE |
 | BS-014 | Verify numeric Identity and entity IDs | UI में IDs technical clutter न बनें | BASELINE |
-| BS-015 | Keep secure environment configuration | Secret fields UI में leak न हों | TODO |
+| BS-015 | Keep secure environment configuration | Secret fields UI में leak न हों | UX REVIEW PENDING |
 | BS-016 | Run backend and SQL integration CI | Core journey browser smoke के लिए तैयार हो | BASELINE |
 | BS-017 | Run frontend typecheck and production build | हर existing screen render हो | BASELINE |
-| BS-018 | Add request error logging and correlation | User को readable error, internals नहीं | TODO |
-| BS-019 | Persist auth/data-protection keys for deployment | Restart पर user session predictable हो | TODO |
+| BS-018 | Add request error logging and correlation | User को readable error, internals नहीं | UX REVIEW PENDING |
+| BS-019 | Persist auth/data-protection keys for deployment | Restart पर user session predictable हो | UX REVIEW PENDING |
 | BS-020 | Document Windows local setup and clean deployment | Fresh installation का first-run सरल हो | TODO |
 
 ### C. Accounts and security — Now

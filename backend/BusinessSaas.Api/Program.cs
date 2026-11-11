@@ -1,7 +1,9 @@
+using System.Security.Cryptography.X509Certificates;
 using BusinessSaas.Api.Data;
 using BusinessSaas.Api.Features;
 using Microsoft.AspNetCore.Antiforgery;
 using Microsoft.AspNetCore.Authentication.Cookies;
+using Microsoft.AspNetCore.DataProtection;
 using Microsoft.AspNetCore.Identity;
 using Microsoft.EntityFrameworkCore;
 
@@ -12,6 +14,23 @@ if (string.IsNullOrWhiteSpace(connectionString))
     throw new InvalidOperationException("ConnectionStrings:Default is required.");
 
 builder.Services.AddDbContext<AppDbContext>(options => options.UseSqlServer(connectionString));
+
+// Use a shared encrypted key ring when deployment settings are provided.
+// Keep certificate files and passwords outside source control.
+var keyDirectory = builder.Configuration["DataProtection:KeyDirectory"];
+if (!string.IsNullOrWhiteSpace(keyDirectory))
+{
+    var certificatePath = builder.Configuration["DataProtection:CertificatePath"];
+    var certificatePassword = builder.Configuration["DataProtection:CertificatePassword"];
+    if (string.IsNullOrWhiteSpace(certificatePath) || string.IsNullOrWhiteSpace(certificatePassword))
+        throw new InvalidOperationException("DataProtection requires a certificate and password.");
+
+    builder.Services.AddDataProtection()
+        .SetApplicationName("BusinessSaas")
+        .PersistKeysToFileSystem(new DirectoryInfo(keyDirectory))
+        .ProtectKeysWithCertificate(X509CertificateLoader.LoadPkcs12FromFile(
+            certificatePath, certificatePassword));
+}
 
 builder.Services.AddIdentityCore<AppUser>(options =>
 {
@@ -47,7 +66,9 @@ builder.Services.ConfigureApplicationCookie(options =>
 
 builder.Services.AddAuthorization();
 builder.Services.AddAntiforgery(options => options.HeaderName = "X-CSRF-TOKEN");
-builder.Services.AddProblemDetails();
+builder.Services.AddProblemDetails(options =>
+    options.CustomizeProblemDetails = context =>
+        context.ProblemDetails.Extensions["requestId"] = context.HttpContext.TraceIdentifier);
 
 var app = builder.Build();
 
@@ -67,6 +88,13 @@ else
     app.UseHsts();
     app.UseHttpsRedirection();
 }
+
+// Correlate a user's error reference with server logs without exposing internals.
+app.Use(async (context, next) =>
+{
+    context.Response.Headers["X-Request-Id"] = context.TraceIdentifier;
+    await next();
+});
 
 app.UseAuthentication();
 

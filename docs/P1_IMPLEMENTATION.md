@@ -49,6 +49,22 @@ The design-time factory reads `ConnectionStrings__Default`, falling back only to
 
 **Verified CI:** [SQL Server migration, backend and frontend success](https://github.com/dharmendra1031/business_saas/actions/runs/42596131153) — latest checked 9 November 2026.
 
+## Protected key-ring deployment (optional until production release)
+
+For IIS/Windows or multi-instance hosting, persist ASP.NET Core Data Protection keys in a shared, access-controlled folder and encrypt them with a private-key-enabled PFX certificate. Keep its password in protected environment configuration, never in `appsettings.json` or Git. Use the **same application name, key directory and certificate** across app nodes; back up the key ring and certificate securely before upgrades.
+
+```powershell
+# On the deployment host; create ACLs allowing only the IIS App Pool identity.
+$env:ConnectionStrings__Default = "<approved SQL Server connection string>"
+$env:DataProtection__KeyDirectory = "C:\BusinessSaasData\Keys"
+$env:DataProtection__CertificatePath = "C:\BusinessSaasSecrets\protection.pfx"
+$env:DataProtection__CertificatePassword = "<read from an approved secret store>"
+```
+
+These are **configuration examples only**, not committed credentials or proof that the IIS installation was tested. Do not create a public certificate/key folder under `wwwroot`. A partially supplied key-ring configuration fails startup instead of persisting unencrypted keys. A missing configuration retains framework defaults for development, but **is not production-ready**. Windows IIS ACL, certificate rotation, restart, multi-instance cookie/CSRF, backup/restore and real UI login checks are still mandatory.
+
+All API responses now include `X-Request-Id` for support correlation; standard production Problem Details expose `requestId` without an exception stack trace. Sensitive error text belongs in server logs only.
+
 ## Technical boundaries and open launch blockers
 
 - **Migration:** `InitialCreate` is committed and has been applied successfully on an ephemeral SQL Server 2022 CI database. Production migration deployment, restore and rollback still require operational approval.
