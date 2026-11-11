@@ -215,6 +215,119 @@ public sealed class BusinessFlowTests
     }
 
     [Fact]
+    public async Task Business_staff_access_is_owner_managed_and_tenant_scoped()
+    {
+        using var database = new SqliteConnection("Data Source=:memory:");
+        await database.OpenAsync();
+
+        using var factory = new WebApplicationFactory<Program>().WithWebHostBuilder(builder =>
+        {
+            builder.UseEnvironment("Development");
+            builder.ConfigureServices(services =>
+            {
+                services.RemoveAll<DbContextOptions<AppDbContext>>();
+                services.RemoveAll<IDbContextOptionsConfiguration<AppDbContext>>();
+                services.AddDbContext<AppDbContext>(options => options.UseSqlite(database));
+            });
+        });
+
+        using var owner = factory.CreateClient();
+        using var manager = factory.CreateClient();
+        using var cashier = factory.CreateClient();
+        using var outsider = factory.CreateClient();
+
+        await RegisterAndLogin(owner, "team-owner@example.test");
+        await RegisterAndLogin(manager, "team-manager@example.test");
+        await RegisterAndLogin(cashier, "team-cashier@example.test");
+        await RegisterAndLogin(outsider, "team-outsider@example.test");
+
+        var created = await Post(owner, "/api/businesses", new
+        {
+            name = "Team Retail",
+            businessTypeId = 1,
+            countryCode = "IN",
+            currencyCode = "INR",
+            timeZoneId = "Asia/Kolkata",
+            requestKey = "team-owner-request-20261111"
+        });
+        Assert.Equal(HttpStatusCode.Created, created.StatusCode);
+        var businessId = (await created.Content.ReadFromJsonAsync<JsonElement>())
+            .GetProperty("id").GetInt64();
+        var staffPath = $"/api/businesses/{businessId}/staff";
+
+        Assert.Equal(HttpStatusCode.NotFound, (await outsider.GetAsync(staffPath)).StatusCode);
+        Assert.Equal(HttpStatusCode.BadRequest,
+            (await Post(owner, staffPath,
+                new { email = "team-manager@example.test", roleCode = "Owner" })).StatusCode);
+        Assert.Equal(HttpStatusCode.BadRequest,
+            (await Post(owner, staffPath,
+                new { email = "unknown@example.test", roleCode = "Manager" })).StatusCode);
+
+        var managerAdded = await Post(owner, staffPath,
+            new { email = "team-manager@example.test", roleCode = "Manager" });
+        Assert.Equal(HttpStatusCode.OK, managerAdded.StatusCode);
+
+        var cashierAdded = await Post(owner, staffPath,
+            new { email = "team-cashier@example.test", roleCode = "Cashier" });
+        Assert.Equal(HttpStatusCode.OK, cashierAdded.StatusCode);
+        var cashierId = (await cashierAdded.Content.ReadFromJsonAsync<JsonElement>())
+            .GetProperty("userId").GetInt64();
+
+        Assert.Equal(HttpStatusCode.Conflict,
+            (await Post(owner, staffPath,
+                new { email = "team-manager@example.test", roleCode = "Cashier" })).StatusCode);
+        var members = await owner.GetFromJsonAsync<JsonElement>(staffPath);
+        Assert.Equal(3, members.GetArrayLength());
+        Assert.Equal(HttpStatusCode.NotFound, (await manager.GetAsync(staffPath)).StatusCode);
+        Assert.Equal(HttpStatusCode.NotFound,
+            (await Post(manager, staffPath,
+                new { email = "team-outsider@example.test", roleCode = "Cashier" })).StatusCode);
+
+        using (var scope = factory.Services.CreateScope())
+        {
+            var db = scope.ServiceProvider.GetRequiredService<AppDbContext>();
+            db.BusinessLocations.Add(new BusinessLocation
+            {
+                BusinessId = businessId,
+                Code = "SIDE",
+                Name = "Other Location",
+                IsPrimary = false
+            });
+            await db.SaveChangesAsync();
+        }
+
+        var ownerDashboard = await owner.GetFromJsonAsync<JsonElement>(
+            $"/api/businesses/{businessId}/dashboard");
+        Assert.Equal("Owner", ownerDashboard.GetProperty("roleCode").GetString());
+        Assert.Equal(2, ownerDashboard.GetProperty("locations").GetArrayLength());
+
+        var managerDashboard = await manager.GetFromJsonAsync<JsonElement>(
+            $"/api/businesses/{businessId}/dashboard");
+        Assert.Equal("Manager", managerDashboard.GetProperty("roleCode").GetString());
+        Assert.Single(managerDashboard.GetProperty("locations").EnumerateArray());
+
+        var cashierDashboard = await cashier.GetFromJsonAsync<JsonElement>(
+            $"/api/businesses/{businessId}/dashboard");
+        Assert.Equal("Cashier", cashierDashboard.GetProperty("roleCode").GetString());
+        Assert.Single(cashierDashboard.GetProperty("locations").EnumerateArray());
+
+        var csrf = await owner.GetFromJsonAsync<JsonElement>("/api/auth/csrf");
+        using var revokeOwner = new HttpRequestMessage(HttpMethod.Delete,
+            $"/api/businesses/{businessId}/staff/1");
+        revokeOwner.Headers.Add("X-CSRF-TOKEN", csrf.GetProperty("token").GetString());
+        Assert.Equal(HttpStatusCode.NotFound,
+            (await owner.SendAsync(revokeOwner)).StatusCode);
+
+        using var revokeCashier = new HttpRequestMessage(HttpMethod.Delete,
+            $"/api/businesses/{businessId}/staff/{cashierId}");
+        revokeCashier.Headers.Add("X-CSRF-TOKEN", csrf.GetProperty("token").GetString());
+        Assert.Equal(HttpStatusCode.NoContent,
+            (await owner.SendAsync(revokeCashier)).StatusCode);
+        Assert.Equal(HttpStatusCode.NotFound,
+            (await cashier.GetAsync($"/api/businesses/{businessId}/dashboard")).StatusCode);
+    }
+
+    [Fact]
     public async Task Failed_sign_ins_lock_the_account_after_five_attempts()
     {
         using var database = new SqliteConnection("Data Source=:memory:");
