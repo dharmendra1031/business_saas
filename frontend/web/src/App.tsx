@@ -142,9 +142,9 @@ export default function App() {
             <>
               <div className="page-header">
                 <div><h1>My Businesses</h1><p>Choose a business to continue, or create a new one.</p></div>
-                <button className="btn btn-primary" onClick={() => { setNotice(''); setError(''); setPage('create') }}>
+                {businesses.length > 0 && <button className="btn btn-primary" onClick={() => { setNotice(''); setError(''); setPage('create') }}>
                   <Plus size={18} /> Create Business
-                </button>
+                </button>}
               </div>
               {businesses.length === 0 ? (
                 <section className="empty-state">
@@ -215,8 +215,10 @@ export default function App() {
                 <TeamMembers businessId={dashboard.business.id} />}
               <section className="next-steps">
                 <ShieldCheck size={22} />
-                <div><strong>Foundation is ready</strong>
-                  <p>Account, business ownership and location access are active. Product, Purchase, Stock and POS screens will be added in the Retail phase. No sales figures are shown until real transactions exist.</p>
+                <div><strong>Retail features are coming later</strong>
+                  <p>Product, Purchase, Stock and POS are not available yet. {dashboard.roleCode === 'Owner'
+                    ? 'You can manage team access above.'
+                    : 'Ask your business owner about access.'} No sample sales figures are shown.</p>
                 </div>
               </section>
             </>
@@ -239,7 +241,7 @@ function AuthPage({ mode, onChange, onSignedIn, sessionExpired, authNotice, onRe
   const [password, setPassword] = useState('')
   const [busy, setBusy] = useState(false)
   const [error, setError] = useState('')
-  const [registrationEnabled, setRegistrationEnabled] = useState(false)
+  const [registrationEnabled, setRegistrationEnabled] = useState<boolean | null>(null)
 
   useEffect(() => {
     api<{ canRegister: boolean }>('/auth/options')
@@ -275,8 +277,8 @@ function AuthPage({ mode, onChange, onSignedIn, sessionExpired, authNotice, onRe
     <div className="auth-layout">
       <aside className="auth-aside"><div className="brand"><span className="brand-mark">B</span><div>Business SaaS<small>Business Workspace</small></div></div>
         <div className="auth-intro"><div className="auth-overline">ONE ACCOUNT. MULTIPLE BUSINESSES.</div>
-          <h1>Everything your business needs, in one place.</h1>
-          <p>Create a workspace, set up your shop and get ready for daily operations.</p>
+          <h1>One account for your businesses.</h1>
+          <p>Set up your Retail workspace today. Product, stock and billing features are still in development.</p>
         </div>
         <span className="auth-bottom">Business SaaS · Foundation Release</span>
       </aside>
@@ -304,7 +306,7 @@ function AuthPage({ mode, onChange, onSignedIn, sessionExpired, authNotice, onRe
                 {mode === 'login' ? 'Create account' : 'Sign in'}
               </button>
             </p>
-          ) : mode === 'login' ? (
+          ) : registrationEnabled === false && mode === 'login' ? (
             <p className="auth-switch">New account registration is not available yet.</p>
           ) : null}
         </form>
