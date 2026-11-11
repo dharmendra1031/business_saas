@@ -19,7 +19,7 @@
 
 **Code rules:** Small developer-style changes, simple names and existing code reuse. One .NET API and React app, no unnecessary services, abstraction, dependencies, or duplicate licensing code. SQL primary keys are numeric auto-increment; no UUID/GUID entity IDs. Every sensitive API enforces verified BusinessId and user permissions. Preserve security, financial correctness and tenant isolation.
 
-**Status legend:** `BASELINE` = source or documented foundation already exists but this full acceptance/UX check is not confirmed; `TODO` = development/verification outstanding; `DONE` = code, CI, security and actual UX gate verified with evidence. Baseline does **not** count as Done.
+**Status legend:** `BASELINE` = code/docs exist but full UI/UX gate not verified; `TODO` = pending; `DECISION REQUIRED` = business policy/hardware approval pending; `UX REVIEW PENDING` = tests/static review done but actual browser/role review outstanding; `DONE` = implementation + tests + real user-flow verification. Only DONE counts as complete.
 
 **How to execute:** Work in numeric task order **within a working vertical slice**, respecting dependencies; platform security and limited plan/trial can run in parallel with Retail. Keep future Salon, Repair, BYO database and 1,000-category framework unimplemented until their dependent workflows are proven. For each finished task append commit/CI/UX evidence and change its status to DONE; do not create a new project or table simply because a task appears here.
 
@@ -47,6 +47,8 @@
 | R | Repair Center vertical | BS-171–BS-180 | After Salon readiness |
 | S | Production, quality & scale | BS-181–BS-190 | Release gate |
 
+**Batch 01:** [BS-001–BS-010 review and UX evidence](./BATCH_01_REVIEW.md). No task marked DONE without actual UI/UX verification.
+
 ## Detailed backlog
 
 ### A. Product scope & architecture — Now
@@ -57,11 +59,11 @@
 | BS-002 | Confirm numeric IDs and BusinessId model | कहीं UUID या confusing tenant identifier न दिखे | BASELINE |
 | BS-003 | Review Retail V1 acceptance flow | Login से Sale और Return तक steps स्पष्ट हों | BASELINE |
 | BS-004 | Record privacy, security and release gates | Business user को तकनीकी jargon न दिखे | BASELINE |
-| BS-005 | Finalize initial launch country and tax policy | Currency और tax labels market से मेल खाएँ | TODO |
-| BS-006 | Agree plan names, trial terms and limits | Plans तुलना करने में ambiguity न हो | TODO |
-| BS-007 | Confirm payment and refund policies | Payment states स्पष्ट समझ आएँ | TODO |
-| BS-008 | Confirm printer and barcode requirements | Cashier को scanner fallback दिखे | TODO |
-| BS-009 | Define supported/unsupported business types | अधूरे templates selectable न हों | TODO |
+| BS-005 | Finalize initial launch country and tax policy | Currency और tax labels market से मेल खाएँ | DECISION REQUIRED |
+| BS-006 | Agree plan names, trial terms and limits | Plans तुलना करने में ambiguity न हो | DECISION REQUIRED |
+| BS-007 | Confirm payment and refund policies | Payment states स्पष्ट समझ आएँ | DECISION REQUIRED |
+| BS-008 | Confirm printer and barcode requirements | Cashier को scanner fallback दिखे | DECISION REQUIRED |
+| BS-009 | Define supported/unsupported business types | अधूरे templates selectable न हों | UX REVIEW PENDING |
 | BS-010 | Approve phase dependencies and no-overengineering rules | Menu सिर्फ usable features दिखाए | TODO |
 
 ### B. Core engineering foundation — Now

@@ -43,7 +43,37 @@ public sealed class BusinessFlowTests
 
         Assert.Equal(HttpStatusCode.OK, (await owner.GetAsync("/api/auth/me")).StatusCode);
         Assert.Equal(HttpStatusCode.OK, (await stranger.GetAsync("/api/auth/me")).StatusCode);
-        Assert.Equal(HttpStatusCode.OK, (await owner.GetAsync("/api/business-types")).StatusCode);
+        // Unpublished templates must not appear in onboarding or be accepted by the API.
+        long unsupportedTypeId;
+        using (var scope = factory.Services.CreateScope())
+        {
+            var db = scope.ServiceProvider.GetRequiredService<AppDbContext>();
+            var unsupportedType = new BusinessType
+            {
+                Code = "SALON",
+                Name = "Salon / Barber",
+                IsSupported = false
+            };
+            db.BusinessTypes.Add(unsupportedType);
+            await db.SaveChangesAsync();
+            unsupportedTypeId = unsupportedType.Id;
+        }
+
+        var types = await owner.GetFromJsonAsync<JsonElement>("/api/business-types");
+        Assert.Single(types.EnumerateArray());
+        Assert.Equal("RETAIL", types[0].GetProperty("code").GetString());
+
+        var unsupported = await Post(owner, "/api/businesses", new
+        {
+            name = "Unreleased Salon",
+            businessTypeId = unsupportedTypeId,
+            countryCode = "IN",
+            currencyCode = "INR",
+            timeZoneId = "Asia/Kolkata",
+            requestKey = "unsupported-salon-20261111"
+        });
+        Assert.Equal(HttpStatusCode.BadRequest, unsupported.StatusCode);
+
         var markets = await owner.GetFromJsonAsync<JsonElement>("/api/business-markets");
         Assert.Equal(249, markets.GetArrayLength());
         Assert.Contains(markets.EnumerateArray(), item => item.GetProperty("code").GetString() == "IN");

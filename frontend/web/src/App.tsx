@@ -151,7 +151,7 @@ export default function App() {
                   <h1>Retail Dashboard</h1><p>{dashboard.business.name} · {dashboard.business.typeName}</p>
                 </div>
                 {dashboard.canOperate
-                  ? <span className="workspace-state"><CheckCircle2 size={16} /> Trial active</span>
+                  ? <span className="workspace-state"><CheckCircle2 size={16} /> {dashboard.subscription?.status === 'Trial' ? 'Trial active' : 'Plan active'}</span>
                   : <span className="workspace-state">Plan required</span>}
               </div>
               {!dashboard.canOperate && <div className="alert alert-warning" role="status">
