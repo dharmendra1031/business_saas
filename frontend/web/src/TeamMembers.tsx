@@ -64,7 +64,7 @@ export default function TeamMembers({ businessId }: { businessId: number }) {
     <section className="content-section mt-3" aria-labelledby="team-heading">
       <h2 id="team-heading">Team Access</h2>
       <p className="text-secondary small mb-3">
-        Add someone who already has a Business SaaS account. Email invitations are not available yet.
+        Only existing accounts can be added. Team members currently see the primary location; POS access is not available yet. Email invitations will come later.
       </p>
       {error && <div className="alert alert-danger" role="alert">{error}</div>}
       {notice && <div className="alert alert-success" role="status">{notice}</div>}
