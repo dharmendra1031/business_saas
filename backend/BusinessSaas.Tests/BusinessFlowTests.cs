@@ -312,8 +312,10 @@ public sealed class BusinessFlowTests
         Assert.Single(cashierDashboard.GetProperty("locations").EnumerateArray());
 
         var csrf = await owner.GetFromJsonAsync<JsonElement>("/api/auth/csrf");
+        var ownerDetails = await owner.GetFromJsonAsync<JsonElement>("/api/auth/me");
+        var ownerId = ownerDetails.GetProperty("id").GetInt64();
         using var revokeOwner = new HttpRequestMessage(HttpMethod.Delete,
-            $"/api/businesses/{businessId}/staff/1");
+            $"/api/businesses/{businessId}/staff/{ownerId}");
         revokeOwner.Headers.Add("X-CSRF-TOKEN", csrf.GetProperty("token").GetString());
         Assert.Equal(HttpStatusCode.NotFound,
             (await owner.SendAsync(revokeOwner)).StatusCode);

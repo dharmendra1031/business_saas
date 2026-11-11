@@ -1,6 +1,7 @@
 import { useEffect, useState, type FormEvent } from 'react'
 import { ArrowLeft, ArrowRight, Building2, CheckCircle2, LayoutDashboard, LogOut, Menu, Plus, ShieldCheck, Store, UserRound } from 'lucide-react'
 import { api, post, resetCsrf, SessionExpiredError, setSessionExpiredHandler, type Business, type BusinessMarket, type BusinessType, type RetailDashboard, type User } from './api'
+import TeamMembers from './TeamMembers'
 
 type Page = 'loading' | 'login' | 'register' | 'businesses' | 'create' | 'retail'
 
@@ -201,6 +202,8 @@ export default function App() {
                   ))}
                 </section>
               </div>
+              {dashboard.roleCode === 'Owner' &&
+                <TeamMembers businessId={dashboard.business.id} />}
               <section className="next-steps">
                 <ShieldCheck size={22} />
                 <div><strong>Foundation is ready</strong>

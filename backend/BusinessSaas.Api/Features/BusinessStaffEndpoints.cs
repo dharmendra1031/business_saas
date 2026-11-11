@@ -40,7 +40,8 @@ public static class BusinessStaffEndpoints
             var email = request.Email?.Trim() ?? "";
             if (role is not ("Manager" or "Cashier"))
                 return Results.BadRequest(new { message = "Choose Manager or Cashier." });
-            if (email.Length > 256 || !new EmailAddressAttribute().IsValid(email))
+            if (string.IsNullOrWhiteSpace(email) || email.Length > 256 ||
+                !new EmailAddressAttribute().IsValid(email))
                 return Results.BadRequest(new { message = "Enter a valid account email." });
 
             var account = await users.FindByEmailAsync(email);

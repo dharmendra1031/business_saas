@@ -27,7 +27,14 @@ export interface Business {
   timeZoneId: string
 }
 
+export interface StaffMember {
+  userId: number
+  email: string
+  roleCode: 'Owner' | 'Manager' | 'Cashier'
+}
+
 export interface RetailDashboard {
+  roleCode: 'Owner' | 'Manager' | 'Cashier'
   business: {
     id: number
     name: string
