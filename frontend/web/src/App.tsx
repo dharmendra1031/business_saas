@@ -136,7 +136,7 @@ export default function App() {
 
         <main className="page-content">
           {error && <div className="alert alert-danger" role="alert">{error}</div>}
-          {authNotice && mode === 'login' && <div className="alert alert-success" role="status">{authNotice}</div>}
+          {notice && <div className="alert alert-success" role="status">{notice}</div>}
 
           {page === 'businesses' && (
             <>
@@ -287,7 +287,7 @@ function AuthPage({ mode, onChange, onSignedIn, sessionExpired, authNotice, onRe
           <p className="form-hint">{mode === 'login' ? 'Access your business workspace.' : 'Start with your email and a secure password.'}</p>
           {error && <div className="alert alert-danger" role="alert">{error}</div>}
           {sessionExpired && mode === 'login' && <div className="alert alert-warning" role="status">Your session expired. Please sign in again.</div>}
-          {notice && <div className="alert alert-success" role="status">{notice}</div>}
+          {authNotice && mode === 'login' && <div className="alert alert-success" role="status">{authNotice}</div>}
           <label className="form-label" htmlFor="email">Email address</label>
           <input className="form-control" id="email" type="email" autoComplete="email" value={email}
             onChange={event => setEmail(event.target.value)} required autoFocus />
