@@ -24,6 +24,10 @@
 - **Email confirmation, password recovery and MFA cannot be approved** merely because the login form exists. These require secure delivery/recovery integration and independent negative tests.
 - **CI:** attach actual run once successful; do not report unverified test success.
 
+## GitHub verification
+
+[Batch 03 CI](https://github.com/dharmendra1031/business_saas/actions/runs/42987573738) for commit `07f7eaf` — **all jobs SUCCESS**: backend **6/6 PASS** (including lockout test), SQL Server 2022 **1/1 PASS**, frontend typecheck/production build **PASS**. Real session-expiry browser, 360/768/1440px and keyboard review remain pending.
+
 ## Next work after this pair of batches
 
 Finish real browser review for BS-011–030, then BS-031–BS-040 tenant permissions and business operations. Preserve the 10-task batch evidence standard.

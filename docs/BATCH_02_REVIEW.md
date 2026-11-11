@@ -22,4 +22,8 @@
 - **Browser review remains pending** for 360/768/1440px, keyboard, mobile, login/session restart and IIS installation. Do not mark any UI-dependent task DONE based only on the code review.
 - Evidence: CI run for the commit will be linked once verified; operational testing required before production release.
 
+## GitHub verification
+
+[Batch 02 CI](https://github.com/dharmendra1031/business_saas/actions/runs/42987278994) for commit `b2e5cc8` — **all jobs SUCCESS**: backend **5/5 PASS**, SQL Server 2022 **1/1 PASS**, frontend typecheck/production build **PASS**. This is not proof of certificate provisioning, restart or browser acceptance.
+
 **Next:** Batch 03 BS-021–BS-030 includes lockout/revocation tests and session-expired UX. Email delivery, recovery and MFA remain explicitly blocked until their secure workflows exist.

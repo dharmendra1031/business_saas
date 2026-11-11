@@ -47,7 +47,7 @@ dotnet ef database update --project backend/BusinessSaas.Api/BusinessSaas.Api.cs
 
 The design-time factory reads `ConnectionStrings__Default`, falling back only to the local development database. Confirm the target database before applying a migration. Production startup does **not** apply migrations automatically.
 
-**Verified CI:** [SQL Server migration, backend and frontend success](https://github.com/dharmendra1031/business_saas/actions/runs/42596131153) — latest checked 9 November 2026.
+**Verified CI:** [Batch 03 backend 6/6, SQL Server 1/1, frontend PASS](https://github.com/dharmendra1031/business_saas/actions/runs/42987573738) — 11 November 2026. See [Batch 02](./BATCH_02_REVIEW.md) and [Batch 03](./BATCH_03_REVIEW.md) for remaining production/browser gates.
 
 ## Protected key-ring deployment (optional until production release)
 
