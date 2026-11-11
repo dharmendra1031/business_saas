@@ -43,6 +43,8 @@ public sealed class BusinessFlowTests
         await RegisterAndLogin(owner, "owner@example.test");
         await RegisterAndLogin(stranger, "stranger@example.test");
 
+        var authOptions = await owner.GetFromJsonAsync<JsonElement>("/api/auth/options");
+        Assert.True(authOptions.GetProperty("canRegister").GetBoolean());
         Assert.Equal(HttpStatusCode.OK, (await owner.GetAsync("/api/auth/me")).StatusCode);
         Assert.Equal(HttpStatusCode.OK, (await stranger.GetAsync("/api/auth/me")).StatusCode);
         // Unpublished templates must not appear in onboarding or be accepted by the API.
@@ -455,6 +457,8 @@ public sealed class BusinessFlowTests
         });
 
         Assert.Equal(HttpStatusCode.ServiceUnavailable, response.StatusCode);
+        var options = await client.GetFromJsonAsync<JsonElement>("/api/auth/options");
+        Assert.False(options.GetProperty("canRegister").GetBoolean());
     }
 
     [Fact]

@@ -15,6 +15,9 @@ public static class AuthEndpoints
         group.MapGet("/csrf", (HttpContext context, IAntiforgery antiforgery) =>
             Results.Ok(new { token = antiforgery.GetAndStoreTokens(context).RequestToken }));
 
+        group.MapGet("/options", (IWebHostEnvironment environment) =>
+            Results.Ok(new { canRegister = environment.IsDevelopment() }));
+
         group.MapPost("/register", async (RegisterRequest request,
             IWebHostEnvironment environment, UserManager<AppUser> users) =>
         {

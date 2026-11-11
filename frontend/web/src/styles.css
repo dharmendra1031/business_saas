@@ -48,7 +48,7 @@ button:focus-visible, a:focus-visible, input:focus-visible, select:focus-visible
 .sidebar-scrim, .mobile-menu-toggle { display: none; }
 .app-main { min-width: 0; flex: 1; }
 .app-topbar { height: 68px; background: var(--surface); border-bottom: 1px solid var(--line); display: flex; justify-content: space-between; align-items: center; padding: 0 32px; }
-.topbar-title { font-weight: 700; display: flex; align-items: center; gap: 9px; }
+.topbar-title { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font-weight: 700; display: flex; align-items: center; gap: 9px; }
 .topbar-account { display: flex; align-items: center; gap: 10px; color: var(--muted); font-size: .9rem; }
 .page-content { margin: auto; max-width: 1320px; padding: 34px 34px 60px; }
 .page-header { display: flex; justify-content: space-between; align-items: center; gap: 20px; margin-bottom: 26px; }
@@ -62,8 +62,8 @@ button:focus-visible, a:focus-visible, input:focus-visible, select:focus-visible
 .business-row { display: flex; align-items: center; gap: 15px; width: 100%; text-align: left; background: white; border: 1px solid var(--line); border-radius: 8px; padding: 17px 19px; }
 .business-row:hover { border-color: #9fc0d9; background: #fcfdff; }
 .business-row > svg:last-child { margin-left: auto; color: var(--brand); }
-.shop-symbol { display: grid; place-items: center; background: #e9f2f8; color: var(--brand); width: 43px; height: 43px; border-radius: 7px; }
-.business-summary { display: grid; gap: 5px; }
+.shop-symbol { flex-shrink: 0; display: grid; place-items: center; background: #e9f2f8; color: var(--brand); width: 43px; height: 43px; border-radius: 7px; }
+.business-summary { display: grid; gap: 5px; min-width: 0; overflow-wrap: anywhere; }
 .business-summary small { color: var(--muted); }
 .content-section { background: var(--surface); border: 1px solid var(--line); border-radius: 8px; padding: 25px; }
 .content-section h2 { font-size: 1.08rem; font-weight: 700; padding-bottom: 15px; border-bottom: 1px solid var(--line); margin-bottom: 18px; }
@@ -97,15 +97,15 @@ button:focus-visible, a:focus-visible, input:focus-visible, select:focus-visible
   .auth-aside { padding: 18px 25px; }
   .auth-intro, .auth-bottom { display: none; }
   .auth-content { min-height: calc(100vh - 78px); }
-  .app-sidebar { width: 74px; flex-basis: 74px; padding: 20px 9px; }
-  .app-sidebar .brand { padding: 0 6px 24px; }
-  .app-sidebar .brand > div, .sidebar-heading, .sidebar-footer, .nav-entry { font-size: 0; }
-  .nav-entry { justify-content: center; padding: 13px 0; }
+  .app-sidebar { width: 195px; flex-basis: 195px; padding: 20px 10px; }
+  .app-sidebar .brand { padding: 0 8px 24px; }
+  .app-sidebar .brand > div { font-size: .95rem; }
+  .nav-entry { gap: 9px; padding: 12px 10px; }
   .app-topbar { padding: 0 20px; }
 }
 @media (max-width: 600px) {
   .app-sidebar { position: fixed; top: 0; bottom: 0; left: 0; z-index: 30; display: flex;
-    width: 245px; padding: 22px 15px; transform: translateX(-100%);
+    width: min(245px, 85vw); padding: 22px 15px; transform: translateX(-100%);
     transition: transform .2s ease; }
   .app-sidebar.is-open { transform: translateX(0); }
   .app-sidebar .brand > div { display: block; }
@@ -118,6 +118,7 @@ button:focus-visible, a:focus-visible, input:focus-visible, select:focus-visible
   .account-email { display: none; }
   .page-content { padding: 22px 14px 50px; }
   .page-header { align-items: flex-start; flex-direction: column; }
+  .page-header > .btn { max-width: 100%; }
   .form-grid, .detail-grid { grid-template-columns: 1fr; }
   .form-wide { grid-column: auto; }
   .content-section { padding: 18px; }

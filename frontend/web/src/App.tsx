@@ -19,6 +19,7 @@ export default function App() {
   const [notice, setNotice] = useState('')
   const [menuOpen, setMenuOpen] = useState(false)
   const [sessionExpired, setSessionExpired] = useState(false)
+  const [authNotice, setAuthNotice] = useState('')
 
   useEffect(() => {
     setSessionExpiredHandler(() => {
@@ -29,6 +30,7 @@ export default function App() {
       setMenuOpen(false)
       setError('')
       setSessionExpired(true)
+      setAuthNotice('')
       setPage('login')
     })
 
@@ -76,6 +78,7 @@ export default function App() {
       setBusinesses([])
       setPage('login')
       setSessionExpired(false)
+      setAuthNotice('')
       setError('')
       setNotice('')
     } catch (cause) {
@@ -88,6 +91,7 @@ export default function App() {
     setUser(next)
     setBusinesses(list)
     setSessionExpired(false)
+    setAuthNotice('')
     setPage('businesses')
     setError('')
   }
@@ -96,7 +100,8 @@ export default function App() {
     return <main className="center-screen" aria-live="polite">Loading your workspace…</main>
 
   if (page === 'login' || page === 'register')
-    return <AuthPage mode={page} onChange={setPage} onSignedIn={onSignedIn} sessionExpired={sessionExpired} />
+    return <AuthPage mode={page} onChange={setPage} onSignedIn={onSignedIn}
+      sessionExpired={sessionExpired} authNotice={authNotice} onRegistered={setAuthNotice} />
 
   return (
     <div className="app-shell">
@@ -104,10 +109,14 @@ export default function App() {
       <aside id="main-navigation" className={`app-sidebar${menuOpen ? ' is-open' : ''}`}>
         <div className="brand"><span className="brand-mark">B</span><div>Business SaaS<small>Business Workspace</small></div></div>
         <div className="sidebar-heading">WORKSPACE</div>
-        <button className="nav-entry active" onClick={() => { setMenuOpen(false); setError(''); void loadBusinesses() }}>
+        <button type="button" className={`nav-entry${page !== 'retail' ? ' active' : ''}`}
+          aria-current={page !== 'retail' ? 'page' : undefined}
+          onClick={() => { setMenuOpen(false); setError(''); void loadBusinesses() }}>
           <Building2 size={18} /> My Businesses
         </button>
-        {page === 'retail' && <div className="nav-entry active"><LayoutDashboard size={18} /> Retail Dashboard</div>}
+        {page === 'retail' && <div className="nav-entry active" aria-current="page">
+          <LayoutDashboard size={18} /> Retail Dashboard
+        </div>}
         <div className="sidebar-footer">A workspace for every business.</div>
       </aside>
 
@@ -118,7 +127,7 @@ export default function App() {
               aria-controls="main-navigation" aria-expanded={menuOpen} onClick={() => setMenuOpen(open => !open)}>
               <Menu size={20} />
             </button>
-            {page === 'retail' ? dashboard?.business.name : 'My Businesses'}
+            {page === 'retail' ? dashboard?.business.name : page === 'create' ? 'Create Business' : 'My Businesses'}
           </div>
           <div className="topbar-account"><UserRound size={17} /> <span className="account-email">{user?.email}</span>
             <button className="btn btn-outline-secondary btn-sm" onClick={() => void logout()}><LogOut size={15} /> Sign out</button>
@@ -127,7 +136,7 @@ export default function App() {
 
         <main className="page-content">
           {error && <div className="alert alert-danger" role="alert">{error}</div>}
-          {notice && <div className="alert alert-success" role="status">{notice}</div>}
+          {authNotice && mode === 'login' && <div className="alert alert-success" role="status">{authNotice}</div>}
 
           {page === 'businesses' && (
             <>
@@ -218,17 +227,25 @@ export default function App() {
   )
 }
 
-function AuthPage({ mode, onChange, onSignedIn, sessionExpired }: {
+function AuthPage({ mode, onChange, onSignedIn, sessionExpired, authNotice, onRegistered }: {
   mode: 'login' | 'register'
   onChange: (page: Page) => void
   onSignedIn: (user: User, businesses: Business[]) => void
   sessionExpired: boolean
+  authNotice: string
+  onRegistered: (notice: string) => void
 }) {
   const [email, setEmail] = useState('')
   const [password, setPassword] = useState('')
   const [busy, setBusy] = useState(false)
   const [error, setError] = useState('')
-  const [notice, setNotice] = useState('')
+  const [registrationEnabled, setRegistrationEnabled] = useState(false)
+
+  useEffect(() => {
+    api<{ canRegister: boolean }>('/auth/options')
+      .then(options => setRegistrationEnabled(options.canRegister))
+      .catch(() => setRegistrationEnabled(false))
+  }, [])
 
   async function submit(event: FormEvent) {
     event.preventDefault()
@@ -238,7 +255,7 @@ function AuthPage({ mode, onChange, onSignedIn, sessionExpired }: {
       if (mode === 'register') {
         await post('/auth/register', { email, password })
         setPassword('')
-        setNotice('Account created. You can now sign in.')
+        onRegistered('Account created. Sign in to continue.')
         onChange('login')
       } else {
         await post('/auth/login', { email, password })
@@ -281,11 +298,15 @@ function AuthPage({ mode, onChange, onSignedIn, sessionExpired }: {
           <button className="btn btn-primary w-100 mt-4" type="submit" disabled={busy}>
             {busy ? 'Please wait…' : mode === 'login' ? 'Sign in' : 'Create account'} <ArrowRight size={16} />
           </button>
-          <p className="auth-switch">{mode === 'login' ? 'New to Business SaaS?' : 'Already have an account?'}{' '}
-            <button type="button" onClick={() => { setError(''); onChange(mode === 'login' ? 'register' : 'login') }}>
-              {mode === 'login' ? 'Create account' : 'Sign in'}
-            </button>
-          </p>
+          {registrationEnabled ? (
+            <p className="auth-switch">{mode === 'login' ? 'New to Business SaaS?' : 'Already have an account?'}{' '}
+              <button type="button" onClick={() => { setError(''); onChange(mode === 'login' ? 'register' : 'login') }}>
+                {mode === 'login' ? 'Create account' : 'Sign in'}
+              </button>
+            </p>
+          ) : mode === 'login' ? (
+            <p className="auth-switch">New account registration is not available yet.</p>
+          ) : null}
         </form>
       </main>
     </div>
