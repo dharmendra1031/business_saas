@@ -1,4 +1,4 @@
-import { useEffect, useState, type FormEvent } from 'react'
+import { useEffect, useRef, useState, type FormEvent } from 'react'
 import { ArrowLeft, ArrowRight, Building2, CheckCircle2, LayoutDashboard, LogOut, Menu, Plus, ShieldCheck, Store, UserRound } from 'lucide-react'
 import { api, post, resetCsrf, SessionExpiredError, setSessionExpiredHandler, type Business, type BusinessMarket, type BusinessType, type RetailDashboard, type User } from './api'
 import TeamMembers from './TeamMembers'
@@ -18,6 +18,8 @@ export default function App() {
   const [error, setError] = useState('')
   const [notice, setNotice] = useState('')
   const [menuOpen, setMenuOpen] = useState(false)
+  const menuToggle = useRef<HTMLButtonElement>(null)
+  const businessNav = useRef<HTMLButtonElement>(null)
   const [sessionExpired, setSessionExpired] = useState(false)
   const [authNotice, setAuthNotice] = useState('')
 
@@ -44,6 +46,20 @@ export default function App() {
       .catch(() => setPage('login'))
     return () => setSessionExpiredHandler(null)
   }, [])
+
+  useEffect(() => {
+    if (!menuOpen) return
+
+    businessNav.current?.focus()
+    function onKeyDown(event: KeyboardEvent) {
+      if (event.key !== 'Escape') return
+      setMenuOpen(false)
+      menuToggle.current?.focus()
+    }
+
+    window.addEventListener('keydown', onKeyDown)
+    return () => window.removeEventListener('keydown', onKeyDown)
+  }, [menuOpen])
 
   async function loadBusinesses() {
     try {
@@ -105,13 +121,19 @@ export default function App() {
 
   return (
     <div className="app-shell">
-      {menuOpen && <button type="button" className="sidebar-scrim" aria-label="Close navigation" onClick={() => setMenuOpen(false)} />}
+      {menuOpen && <button type="button" className="sidebar-scrim" aria-label="Close navigation"
+        onClick={() => { setMenuOpen(false); menuToggle.current?.focus() }} />}
       <aside id="main-navigation" className={`app-sidebar${menuOpen ? ' is-open' : ''}`}>
         <div className="brand"><span className="brand-mark">B</span><div>Business SaaS<small>Business Workspace</small></div></div>
         <div className="sidebar-heading">WORKSPACE</div>
-        <button type="button" className={`nav-entry${page !== 'retail' ? ' active' : ''}`}
+        <button type="button" ref={businessNav} className={`nav-entry${page !== 'retail' ? ' active' : ''}`}
           aria-current={page !== 'retail' ? 'page' : undefined}
-          onClick={() => { setMenuOpen(false); setError(''); void loadBusinesses() }}>
+          onClick={() => {
+            if (menuOpen) menuToggle.current?.focus()
+            setMenuOpen(false)
+            setError('')
+            void loadBusinesses()
+          }}>
           <Building2 size={18} /> My Businesses
         </button>
         {page === 'retail' && <div className="nav-entry active" aria-current="page">
@@ -123,7 +145,7 @@ export default function App() {
       <div className="app-main">
         <header className="app-topbar">
           <div className="topbar-title">
-            <button type="button" className="mobile-menu-toggle" aria-label={menuOpen ? 'Close navigation' : 'Open navigation'}
+            <button type="button" ref={menuToggle} className="mobile-menu-toggle" aria-label={menuOpen ? 'Close navigation' : 'Open navigation'}
               aria-controls="main-navigation" aria-expanded={menuOpen} onClick={() => setMenuOpen(open => !open)}>
               <Menu size={20} />
             </button>
