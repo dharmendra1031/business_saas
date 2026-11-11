@@ -43,6 +43,17 @@ export interface RetailDashboard {
 }
 
 let csrfToken: string | null = null
+let sessionExpiredHandler: (() => void) | null = null
+
+export class SessionExpiredError extends Error {
+  constructor() {
+    super('Your session expired. Please sign in again.')
+  }
+}
+
+export function setSessionExpiredHandler(handler: (() => void) | null): void {
+  sessionExpiredHandler = handler
+}
 
 export function resetCsrf(): void {
   csrfToken = null
@@ -74,6 +85,15 @@ export async function api<T>(path: string, options: RequestInit = {}): Promise<T
   })
 
   if (!response.ok) {
+    if (response.status === 401 && path !== '/auth/login' && path !== '/auth/me') {
+      resetCsrf()
+      sessionExpiredHandler?.()
+      throw new SessionExpiredError()
+    }
+
+    if (response.status === 401 && path === '/auth/login')
+      throw new Error('Incorrect email or password.')
+
     const body = await response.json().catch(() => ({})) as { message?: string; detail?: string }
     throw new Error(body.message ?? body.detail ??
       (response.status === 401 ? 'Please sign in to continue.' : 'Request failed.'))

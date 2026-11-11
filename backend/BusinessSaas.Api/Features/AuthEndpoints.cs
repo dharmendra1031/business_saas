@@ -43,7 +43,8 @@ public static class AuthEndpoints
         });
 
         group.MapPost("/login", async (LoginRequest request,
-            UserManager<AppUser> users, SignInManager<AppUser> signIn) =>
+            UserManager<AppUser> users, SignInManager<AppUser> signIn,
+            ILogger<Program> logger) =>
         {
             var user = await users.FindByEmailAsync(request.Email?.Trim() ?? "");
             if (user is null)
@@ -53,9 +54,16 @@ public static class AuthEndpoints
                 user, request.Password ?? "", isPersistent: false, lockoutOnFailure: true);
 
             if (result.IsLockedOut)
+            {
+                logger.LogWarning("Account lockout for user {UserId}", user.Id);
                 return Results.Problem("Account temporarily locked. Try again later.", statusCode: 429);
+            }
 
-            return result.Succeeded ? Results.NoContent() : Results.Unauthorized();
+            if (!result.Succeeded)
+                return Results.Unauthorized();
+
+            logger.LogInformation("User {UserId} signed in", user.Id);
+            return Results.NoContent();
         });
 
         group.MapGet("/me", (ClaimsPrincipal principal) =>
@@ -65,9 +73,12 @@ public static class AuthEndpoints
                 email = principal.Identity?.Name
             })).RequireAuthorization();
 
-        group.MapPost("/logout", async (SignInManager<AppUser> signIn) =>
+        group.MapPost("/logout", async (ClaimsPrincipal principal,
+            SignInManager<AppUser> signIn, ILogger<Program> logger) =>
         {
             await signIn.SignOutAsync();
+            logger.LogInformation("User {UserId} signed out",
+                principal.FindFirstValue(ClaimTypes.NameIdentifier));
             return Results.NoContent();
         }).RequireAuthorization();
     }

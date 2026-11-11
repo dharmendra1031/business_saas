@@ -51,6 +51,8 @@
 
 **Batch 02:** [BS-011–BS-020 review](./BATCH_02_REVIEW.md).
 
+**Batch 03:** [BS-021–BS-030 account security review](./BATCH_03_REVIEW.md).
+
 ## Detailed backlog
 
 ### A. Product scope & architecture — Now
@@ -88,14 +90,14 @@
 | ID | Task / clear deliverable | Mandatory task-specific UI/UX check | Status |
 | --- | --- | --- | --- |
 | BS-021 | Keep register flow and password validation | Form labels, focus और inline errors साफ हों | BASELINE |
-| BS-022 | Keep login and logout flows | Wrong password पर actionable message | BASELINE |
+| BS-022 | Keep login and logout flows | Wrong password पर actionable message | UX REVIEW PENDING |
 | BS-023 | Complete verified email registration | Verify link के बाद next step साफ हो | TODO |
 | BS-024 | Add password reset with expiring token | Recovery flow confusion-free हो | TODO |
 | BS-025 | Add production-compatible MFA for privileged users | Admin security prompts understandable हों | TODO |
-| BS-026 | Verify lockout and abuse/rate limiting | Lockout duration स्पष्ट दिखे | TODO |
+| BS-026 | Verify lockout and abuse/rate limiting | Lockout duration स्पष्ट दिखे | UX REVIEW PENDING |
 | BS-027 | Verify CSRF and secure cookie handling | Normal form submission बाधित न हो | BASELINE |
-| BS-028 | Build secure session-expired handling | Session खत्म होने पर clear sign-in redirect | TODO |
-| BS-029 | Test privilege removal and revoked access | Removed user को सही access denied view | TODO |
+| BS-028 | Build secure session-expired handling | Session खत्म होने पर clear sign-in redirect | UX REVIEW PENDING |
+| BS-029 | Test privilege removal and revoked access | Removed user को सही access denied view | UX REVIEW PENDING |
 | BS-030 | Audit login, recovery and security events | User-facing errors में sensitive data न दिखे | TODO |
 
 ### D. Business creation & tenant isolation — Now

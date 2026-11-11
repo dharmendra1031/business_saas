@@ -1,6 +1,6 @@
 import { useEffect, useState, type FormEvent } from 'react'
 import { ArrowLeft, ArrowRight, Building2, CheckCircle2, LayoutDashboard, LogOut, Menu, Plus, ShieldCheck, Store, UserRound } from 'lucide-react'
-import { api, post, resetCsrf, type Business, type BusinessMarket, type BusinessType, type RetailDashboard, type User } from './api'
+import { api, post, resetCsrf, SessionExpiredError, setSessionExpiredHandler, type Business, type BusinessMarket, type BusinessType, type RetailDashboard, type User } from './api'
 
 type Page = 'loading' | 'login' | 'register' | 'businesses' | 'create' | 'retail'
 
@@ -17,8 +17,20 @@ export default function App() {
   const [error, setError] = useState('')
   const [notice, setNotice] = useState('')
   const [menuOpen, setMenuOpen] = useState(false)
+  const [sessionExpired, setSessionExpired] = useState(false)
 
   useEffect(() => {
+    setSessionExpiredHandler(() => {
+      resetCsrf()
+      setUser(null)
+      setBusinesses([])
+      setDashboard(null)
+      setMenuOpen(false)
+      setError('')
+      setSessionExpired(true)
+      setPage('login')
+    })
+
     api<User>('/auth/me')
       .then(async me => {
         setUser(me)
@@ -27,13 +39,19 @@ export default function App() {
         setPage('businesses')
       })
       .catch(() => setPage('login'))
+    return () => setSessionExpiredHandler(null)
   }, [])
 
   async function loadBusinesses() {
-    const list = await api<Business[]>('/businesses')
-    setBusinesses(list)
-    setDashboard(null)
-    setPage('businesses')
+    try {
+      const list = await api<Business[]>('/businesses')
+      setBusinesses(list)
+      setDashboard(null)
+      setPage('businesses')
+    } catch (cause) {
+      if (!(cause instanceof SessionExpiredError))
+        setError(message(cause))
+    }
   }
 
   async function openBusiness(id: number) {
@@ -43,7 +61,8 @@ export default function App() {
       setDashboard(details)
       setPage('retail')
     } catch (cause) {
-      setError(message(cause))
+      if (!(cause instanceof SessionExpiredError))
+        setError(message(cause))
     }
   }
 
@@ -55,6 +74,7 @@ export default function App() {
       setDashboard(null)
       setBusinesses([])
       setPage('login')
+      setSessionExpired(false)
       setError('')
       setNotice('')
     } catch (cause) {
@@ -66,6 +86,7 @@ export default function App() {
     resetCsrf()
     setUser(next)
     setBusinesses(list)
+    setSessionExpired(false)
     setPage('businesses')
     setError('')
   }
@@ -74,7 +95,7 @@ export default function App() {
     return <main className="center-screen" aria-live="polite">Loading your workspace…</main>
 
   if (page === 'login' || page === 'register')
-    return <AuthPage mode={page} onChange={setPage} onSignedIn={onSignedIn} />
+    return <AuthPage mode={page} onChange={setPage} onSignedIn={onSignedIn} sessionExpired={sessionExpired} />
 
   return (
     <div className="app-shell">
@@ -194,10 +215,11 @@ export default function App() {
   )
 }
 
-function AuthPage({ mode, onChange, onSignedIn }: {
+function AuthPage({ mode, onChange, onSignedIn, sessionExpired }: {
   mode: 'login' | 'register'
   onChange: (page: Page) => void
   onSignedIn: (user: User, businesses: Business[]) => void
+  sessionExpired: boolean
 }) {
   const [email, setEmail] = useState('')
   const [password, setPassword] = useState('')
@@ -244,6 +266,7 @@ function AuthPage({ mode, onChange, onSignedIn }: {
           <h2>{mode === 'login' ? 'Sign in' : 'Create your account'}</h2>
           <p className="form-hint">{mode === 'login' ? 'Access your business workspace.' : 'Start with your email and a secure password.'}</p>
           {error && <div className="alert alert-danger" role="alert">{error}</div>}
+          {sessionExpired && mode === 'login' && <div className="alert alert-warning" role="status">Your session expired. Please sign in again.</div>}
           {notice && <div className="alert alert-success" role="status">{notice}</div>}
           <label className="form-label" htmlFor="email">Email address</label>
           <input className="form-control" id="email" type="email" autoComplete="email" value={email}

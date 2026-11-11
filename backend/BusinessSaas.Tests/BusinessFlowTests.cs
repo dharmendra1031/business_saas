@@ -198,6 +198,70 @@ public sealed class BusinessFlowTests
         var strangerList = await stranger.GetFromJsonAsync<JsonElement>("/api/businesses");
         Assert.Equal(1, strangerList.GetArrayLength());
         Assert.Equal(secondId, strangerList[0].GetProperty("id").GetInt64());
+
+        // Membership removal must take effect without requiring the old cookie to expire.
+        using (var scope = factory.Services.CreateScope())
+        {
+            var db = scope.ServiceProvider.GetRequiredService<AppDbContext>();
+            var member = await db.BusinessUsers.SingleAsync(x => x.BusinessId == firstId);
+            db.BusinessUsers.Remove(member);
+            await db.SaveChangesAsync();
+        }
+        Assert.Equal(HttpStatusCode.NotFound,
+            (await owner.GetAsync($"/api/businesses/{firstId}/dashboard")).StatusCode);
+        var remaining = await owner.GetFromJsonAsync<JsonElement>("/api/businesses");
+        Assert.DoesNotContain(remaining.EnumerateArray(),
+            item => item.GetProperty("id").GetInt64() == firstId);
+    }
+
+    [Fact]
+    public async Task Failed_sign_ins_lock_the_account_after_five_attempts()
+    {
+        using var database = new SqliteConnection("Data Source=:memory:");
+        await database.OpenAsync();
+
+        using var factory = new WebApplicationFactory<Program>().WithWebHostBuilder(builder =>
+        {
+            builder.UseEnvironment("Development");
+            builder.ConfigureServices(services =>
+            {
+                services.RemoveAll<DbContextOptions<AppDbContext>>();
+                services.RemoveAll<IDbContextOptionsConfiguration<AppDbContext>>();
+                services.AddDbContext<AppDbContext>(options => options.UseSqlite(database));
+            });
+        });
+
+        using var client = factory.CreateClient();
+        var registered = await Post(client, "/api/auth/register", new
+        {
+            email = "lockout@example.test",
+            password = "SecurePassword123!"
+        });
+        Assert.Equal(HttpStatusCode.OK, registered.StatusCode);
+
+        for (var attempt = 1; attempt <= 4; attempt++)
+        {
+            var response = await Post(client, "/api/auth/login", new
+            {
+                email = "lockout@example.test",
+                password = "WrongPassword123!"
+            });
+            Assert.Equal(HttpStatusCode.Unauthorized, response.StatusCode);
+        }
+
+        var locked = await Post(client, "/api/auth/login", new
+        {
+            email = "lockout@example.test",
+            password = "WrongPassword123!"
+        });
+        Assert.Equal(HttpStatusCode.TooManyRequests, locked.StatusCode);
+
+        var correctWhileLocked = await Post(client, "/api/auth/login", new
+        {
+            email = "lockout@example.test",
+            password = "SecurePassword123!"
+        });
+        Assert.Equal(HttpStatusCode.TooManyRequests, correctWhileLocked.StatusCode);
     }
 
     [Fact]
