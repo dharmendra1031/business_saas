@@ -507,6 +507,10 @@ namespace BusinessSaas.Api.Data.Migrations
 
                     b.HasKey("Id");
 
+                    b.HasIndex("LocationId");
+
+                    b.HasIndex("ProductId");
+
                     b.HasIndex("BusinessId", "LocationId", "ProductId").IsUnique();
 
                     b.ToTable("RetailStockBalances", t =>
