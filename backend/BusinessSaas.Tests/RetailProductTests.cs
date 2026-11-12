@@ -102,8 +102,9 @@ public sealed class RetailProductTests
         Assert.Equal(HttpStatusCode.Conflict,
             (await Post(owner, path, Product(sku: "PEN-200", barcode: "890000010001"))).StatusCode);
 
-        var found = await owner.GetFromJsonAsync<JsonElement>(
-            path + "/lookup?barcode=890000010001");
+        var lookupResponse = await owner.GetAsync(path + "/lookup?barcode=890000010001");
+        Assert.True(lookupResponse.IsSuccessStatusCode, await lookupResponse.Content.ReadAsStringAsync());
+        var found = await lookupResponse.Content.ReadFromJsonAsync<JsonElement>();
         Assert.Equal(productId, found.GetProperty("id").GetInt64());
         Assert.Equal("EXEMPT", found.GetProperty("taxClassification").GetString());
         Assert.Equal(12.50m, found.GetProperty("salePrice").GetDecimal());
