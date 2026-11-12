@@ -176,10 +176,10 @@
 | --- | --- | --- | --- |
 | BS-071 | Add Category master and uniqueness rules | New/Edit/List compact हों | UX REVIEW PENDING |
 | BS-072 | Add Unit master and validation | Unit selection unambiguous हो | UX REVIEW PENDING |
-| BS-073 | Add Product master with scoped SKU | Duplicate SKU inline message दे | TODO |
-| BS-074 | Add barcode field and lookup | Scanner/manual search दोनों सरल हों | TODO |
-| BS-075 | Add sale price and tax classification | Money rounding और unit साफ दिखें | TODO |
-| BS-076 | Add Product Edit/Deactivate actions | Inactive meaning तुरंत समझ आए | TODO |
+| BS-073 | Add Product master with scoped SKU | Duplicate SKU inline message दे | UX REVIEW PENDING |
+| BS-074 | Add barcode field and lookup | Scanner/manual search दोनों सरल हों | UX REVIEW PENDING |
+| BS-075 | Add sale price and tax classification | Money rounding और unit साफ दिखें | UX REVIEW PENDING |
+| BS-076 | Add Product Edit/Deactivate actions | Inactive meaning तुरंत समझ आए | UX REVIEW PENDING |
 | BS-077 | Add Supplier master | Required contact fields स्पष्ट हों | TODO |
 | BS-078 | Add Customer master for optional association | Walk-in sale customer बिना भी चले | TODO |
 | BS-079 | Add product table search/filter/paging | Large catalog में fast search हो | TODO |
