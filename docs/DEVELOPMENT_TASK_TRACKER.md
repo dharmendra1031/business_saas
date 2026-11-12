@@ -1,6 +1,6 @@
 # Business SaaS — Development Task Tracker (190 Tasks)
 
-**Updated:** 11 November 2026  
+**Updated:** 12 November 2026  
 **Repository:** `dharmendra1031/business_saas` · **Source of truth:** [Development Roadmap](./DEVELOPMENT_ROADMAP.md), [Master SRS](./BUSINESS_SAAS_MASTER_SRS.md), [UX Standards](./UX_STANDARDS.md)  
 **Scope:** Planning and acceptance tracking, not a claim of implementation. The platform is not production-ready.
 
@@ -61,7 +61,7 @@
 
 **Batch 07:** [BS-061–BS-070 subscription/billing review](./BATCH_07_REVIEW.md). Trial status code/tests verified; payment, policy, operational entitlement enforcement and live browser UX remain pending.
 
-**Batch 08:** [BS-071–BS-080 retail master-data review](./BATCH_08_REVIEW.md). Category/Unit API and UI implemented; Product/Supplier/Customer and real browser UX verification pending.
+**Batch 08:** [BS-071–BS-080 retail master-data review](./BATCH_08_REVIEW.md). Category/Unit/Product implementations merged; Supplier/Customer under PR #4 review. Real browser UX verification remains pending.
 
 ## Detailed backlog
 
@@ -180,10 +180,10 @@
 | BS-074 | Add barcode field and lookup | Scanner/manual search दोनों सरल हों | UX REVIEW PENDING |
 | BS-075 | Add sale price and tax classification | Money rounding और unit साफ दिखें | UX REVIEW PENDING |
 | BS-076 | Add Product Edit/Deactivate actions | Inactive meaning तुरंत समझ आए | UX REVIEW PENDING |
-| BS-077 | Add Supplier master | Required contact fields स्पष्ट हों | TODO |
-| BS-078 | Add Customer master for optional association | Walk-in sale customer बिना भी चले | TODO |
-| BS-079 | Add product table search/filter/paging | Large catalog में fast search हो | TODO |
-| BS-080 | Test cross-business master access denial | Wrong ID पर data/metadata leak न हो | TODO |
+| BS-077 | Add Supplier master | Required contact fields स्पष्ट हों | UX REVIEW PENDING |
+| BS-078 | Add Customer master for optional association | Walk-in sale customer बिना भी चले | UX REVIEW PENDING |
+| BS-079 | Add product table search/filter/paging | Large catalog में fast search हो | UX REVIEW PENDING |
+| BS-080 | Test cross-business master access denial | Wrong ID पर data/metadata leak न हो | UX REVIEW PENDING |
 
 ### I. Retail stock & inventory — Retail V1
 

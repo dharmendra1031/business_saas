@@ -195,10 +195,14 @@ public static class RetailMasterEndpoints
         if (!long.TryParse(user.FindFirstValue(ClaimTypes.NameIdentifier), out var userId))
             return Results.NotFound();
 
-        var role = await db.BusinessUsers.AsNoTracking()
-            .Where(x => x.BusinessId == businessId && x.UserId == userId)
-            .Select(x => x.RoleCode)
-            .SingleOrDefaultAsync();
+        var role = await (from member in db.BusinessUsers.AsNoTracking()
+                          join business in db.Businesses.AsNoTracking()
+                              on member.BusinessId equals business.Id
+                          join type in db.BusinessTypes.AsNoTracking()
+                              on business.BusinessTypeId equals type.Id
+                          where member.BusinessId == businessId && member.UserId == userId
+                              && type.Code == "RETAIL"
+                          select member.RoleCode).SingleOrDefaultAsync();
         if (role is not ("Owner" or "Manager"))
             return Results.NotFound();
 

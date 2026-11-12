@@ -48,6 +48,8 @@ public sealed class SqlServerTests
                 migration => migration.EndsWith("_AddRetailCategoriesAndUnits"));
             Assert.Contains(await db.Database.GetAppliedMigrationsAsync(),
                 migration => migration.EndsWith("_AddRetailProducts"));
+            Assert.Contains(await db.Database.GetAppliedMigrationsAsync(),
+                migration => migration.EndsWith("_AddRetailContacts"));
             Assert.True(await db.Database.CanConnectAsync());
             Assert.True(await db.BusinessTypes.AnyAsync(x => x.Code == "RETAIL" && x.IsSupported));
         }

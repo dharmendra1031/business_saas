@@ -35,13 +35,16 @@ export default function RetailMasters({ businessId, canOperate }: {
   const [loading, setLoading] = useState(true)
   const [saving, setSaving] = useState(false)
   const [error, setError] = useState('')
+  const [loadError, setLoadError] = useState('')
   const [notice, setNotice] = useState('')
   const firstInput = useRef<HTMLInputElement>(null)
 
   useEffect(() => {
     let mounted = true
     setLoading(true)
-    setError('')
+    setItems([])
+    setTotal(0)
+    setLoadError('')
 
     api<MasterPage>(`/businesses/${businessId}/${type}?page=${page}&search=${encodeURIComponent(query)}`)
       .then(result => {
@@ -51,7 +54,7 @@ export default function RetailMasters({ businessId, canOperate }: {
       })
       .catch(cause => {
         if (mounted && !(cause instanceof SessionExpiredError))
-          setError(cause instanceof Error ? cause.message : 'Unable to load records.')
+          setLoadError(cause instanceof Error ? cause.message : 'Unable to load records.')
       })
       .finally(() => { if (mounted) setLoading(false) })
 
@@ -132,6 +135,10 @@ export default function RetailMasters({ businessId, canOperate }: {
 
       {!canOperate && <div className="alert alert-warning">Subscription is inactive. You can view saved records but cannot edit them.</div>}
       {error && <div className="alert alert-danger" role="alert">{error}</div>}
+      {loadError && <div className="alert alert-danger" role="alert">
+        {loadError} <button type="button" className="btn btn-sm btn-outline-secondary ms-2"
+          onClick={() => setReload(value => value + 1)}>Retry</button>
+      </div>}
       {notice && <div className="alert alert-success" role="status">{notice}</div>}
 
       {canOperate && (
@@ -179,7 +186,7 @@ export default function RetailMasters({ businessId, canOperate }: {
       </form>
 
       {loading ? <p className="text-secondary" role="status">Loading {type}…</p>
-        : items.length === 0 ? <p className="masters-empty">No {type} found. {canOperate && !query ? `Add your first ${label.toLowerCase()} above.` : ''}</p>
+        : loadError ? null : items.length === 0 ? <p className="masters-empty">No {type} found. {canOperate && !query ? `Add your first ${label.toLowerCase()} above.` : ''}</p>
           : <div className="table-responsive">
             <table className="table table-sm align-middle">
               <thead><tr><th scope="col">Name</th>{isUnit && <th scope="col">Code</th>}
@@ -192,7 +199,7 @@ export default function RetailMasters({ businessId, canOperate }: {
               </tr>)}</tbody>
             </table>
           </div>}
-      {!loading && total > 0 && <div className="masters-pages">
+      {!loading && !loadError && total > 0 && <div className="masters-pages">
         <span className="small text-secondary">Page {page} · {total} records</span>
         <div className="btn-group">
           <button className="btn btn-sm btn-outline-secondary" disabled={page === 1}

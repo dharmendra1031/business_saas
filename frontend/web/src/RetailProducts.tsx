@@ -74,6 +74,9 @@ export default function RetailProducts({ businessId, canOperate, currencyCode }:
   const [optionsLoading, setOptionsLoading] = useState(true)
   const [saving, setSaving] = useState(false)
   const [error, setError] = useState('')
+  const [loadError, setLoadError] = useState('')
+  const [optionsError, setOptionsError] = useState('')
+  const [optionsReload, setOptionsReload] = useState(0)
   const [notice, setNotice] = useState('')
   const [skuError, setSkuError] = useState('')
   const firstInput = useRef<HTMLInputElement>(null)
@@ -83,16 +86,21 @@ export default function RetailProducts({ businessId, canOperate, currencyCode }:
   useEffect(() => {
     let active = true
     setOptionsLoading(true)
+    setOptions({ categories: [], units: [] })
+    setOptionsError('')
     api<CatalogOptions>(basePath + '/options')
       .then(value => { if (active) setOptions(value) })
-      .catch(cause => { if (active && !(cause instanceof SessionExpiredError)) setError(errorMessage(cause)) })
+      .catch(cause => { if (active && !(cause instanceof SessionExpiredError)) setOptionsError(errorMessage(cause)) })
       .finally(() => { if (active) setOptionsLoading(false) })
     return () => { active = false }
-  }, [basePath])
+  }, [basePath, optionsReload])
 
   useEffect(() => {
     let active = true
     setLoading(true)
+    setProducts([])
+    setTotal(0)
+    setLoadError('')
     const params = new URLSearchParams({
       search: query, status, page: String(page),
       ...(categoryFilter ? { categoryId: String(categoryFilter) } : {})
@@ -103,12 +111,22 @@ export default function RetailProducts({ businessId, canOperate, currencyCode }:
         setProducts(value.items)
         setTotal(value.total)
       })
-      .catch(cause => { if (active && !(cause instanceof SessionExpiredError)) setError(errorMessage(cause)) })
+      .catch(cause => { if (active && !(cause instanceof SessionExpiredError)) setLoadError(errorMessage(cause)) })
       .finally(() => { if (active) setLoading(false) })
     return () => { active = false }
   }, [basePath, query, status, page, categoryFilter, reload])
 
   useEffect(() => { if (formOpen) firstInput.current?.focus() }, [formOpen, editingId])
+
+  useEffect(() => {
+    setPage(1)
+    setSearch('')
+    setQuery('')
+    setStatus('all')
+    setCategoryFilter(0)
+    setFormOpen(false)
+    setEditingId(null)
+  }, [businessId])
 
   function startCreate() {
     setEditingId(null)
@@ -199,8 +217,16 @@ export default function RetailProducts({ businessId, canOperate, currencyCode }:
         Your subscription is inactive. Products are read-only.
       </div>}
       {error && <div className="alert alert-danger" role="alert">{error}</div>}
+      {loadError && <div className="alert alert-danger" role="alert">
+        {loadError} <button type="button" className="btn btn-sm btn-outline-secondary ms-2"
+          onClick={() => setReload(value => value + 1)}>Retry</button>
+      </div>}
+      {optionsError && <div className="alert alert-danger" role="alert">
+        {optionsError} <button type="button" className="btn btn-sm btn-outline-secondary ms-2"
+          onClick={() => setOptionsReload(value => value + 1)}>Retry setup</button>
+      </div>}
       {notice && <div className="alert alert-success" role="status">{notice}</div>}
-      {!optionsLoading && !canCreate && <p className="alert alert-info" role="status">
+      {!optionsLoading && !optionsError && !canCreate && <p className="alert alert-info" role="status">
         Create at least one active Category and Unit in Catalog Setup before adding products.
       </p>}
 
@@ -315,7 +341,7 @@ export default function RetailProducts({ businessId, canOperate, currencyCode }:
         </form>
 
         {loading ? <p className="text-secondary" role="status">Loading products…</p>
-          : products.length === 0 ? <p className="masters-empty">
+          : loadError ? null : products.length === 0 ? <p className="masters-empty">
             {query || status !== 'all' || categoryFilter ? 'No products match these filters.' : 'No products yet. Add your first product to get started.'}
           </p> : <div className="table-responsive">
             <table className="table table-sm align-middle">
@@ -334,7 +360,7 @@ export default function RetailProducts({ businessId, canOperate, currencyCode }:
             </table>
           </div>}
 
-        {!loading && total > 0 && <div className="masters-pages">
+        {!loading && !loadError && total > 0 && <div className="masters-pages">
           <span className="small text-secondary">Page {page} · {total} products</span>
           <div className="btn-group">
             <button className="btn btn-sm btn-outline-secondary" type="button" disabled={page === 1}

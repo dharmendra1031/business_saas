@@ -1,6 +1,6 @@
 # Business SaaS — General Retail V1 Requirements
 
-**Status:** First vertical specification, not implemented  
+**Status:** Retail specification; catalog masters under review, transactional modules pending  
 **Updated:** 2026-11-08  
 **Repository:** `dharmendra1031/business_saas` ONLY  
 **Reference UI:** CBK `development` read-only. New React + TypeScript + Bootstrap UI.  
