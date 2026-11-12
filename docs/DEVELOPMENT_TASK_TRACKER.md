@@ -63,6 +63,8 @@
 
 **Batch 08:** [BS-071–BS-080 retail master-data review](./BATCH_08_REVIEW.md). Category/Unit/Product implementations merged; Supplier/Customer under PR #4 review. Real browser UX verification remains pending.
 
+**Batch 09:** [BS-081–BS-090 stock foundation review](./BATCH_09_REVIEW.md). One-time Opening Stock and movement ledger are a draft slice; adjustments, deductions, concurrency consumption and browser verification remain pending.
+
 ## Detailed backlog
 
 ### A. Product scope & architecture — Now
@@ -189,9 +191,9 @@
 
 | ID | Task / clear deliverable | Mandatory task-specific UI/UX check | Status |
 | --- | --- | --- | --- |
-| BS-081 | Create stock movement ledger design | Stock history user-readable हो | TODO |
-| BS-082 | Implement opening stock with one-time rules | Opening vs Adjustment अलग दिखें | TODO |
-| BS-083 | Implement branch-scoped stock balance view | Available quantity prominent हो | TODO |
+| BS-081 | Create stock movement ledger design | Stock history user-readable हो | UX REVIEW PENDING |
+| BS-082 | Implement opening stock with one-time rules | Opening vs Adjustment अलग दिखें | UX REVIEW PENDING |
+| BS-083 | Implement branch-scoped stock balance view | Available quantity prominent हो | UX REVIEW PENDING |
 | BS-084 | Implement stock adjustment with reason | Old/New/Delta before save साफ हों | TODO |
 | BS-085 | Prevent negative stock under concurrency | Insufficient stock तुरंत दिखे | TODO |
 | BS-086 | Add audited inventory corrections | Correction किसने किया दिखे | TODO |
