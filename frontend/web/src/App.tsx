@@ -2,6 +2,7 @@ import { useEffect, useRef, useState, type FormEvent } from 'react'
 import { ArrowLeft, ArrowRight, Building2, CheckCircle2, LayoutDashboard, LogOut, Menu, Plus, ShieldCheck, Store, UserRound } from 'lucide-react'
 import { api, post, resetCsrf, SessionExpiredError, setSessionExpiredHandler, type Business, type BusinessMarket, type BusinessType, type RetailDashboard, type User } from './api'
 import TeamMembers from './TeamMembers'
+import RetailMasters from './RetailMasters'
 import PlatformAdmin from './PlatformAdmin'
 
 type Page = 'loading' | 'login' | 'register' | 'businesses' | 'create' | 'retail' | 'platform'
@@ -273,6 +274,9 @@ export default function App() {
                   ))}
                 </section>
               </div>
+              {dashboard.roleCode !== 'Cashier' &&
+                <RetailMasters key={dashboard.business.id} businessId={dashboard.business.id}
+                  canOperate={dashboard.canOperate} />}
               {dashboard.roleCode === 'Owner' &&
                 <TeamMembers businessId={dashboard.business.id} />}
               <section className="next-steps">
