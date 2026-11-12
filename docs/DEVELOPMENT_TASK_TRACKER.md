@@ -59,6 +59,8 @@
 
 **Batch 06:** [BS-051–BS-060 Platform Admin review](./BATCH_06_REVIEW.md). The read-only directory is implemented and CI checked; changes and privileged provisioning stay locked until separately audited. Actual browser UX remains pending.
 
+**Batch 07:** [BS-061–BS-070 subscription/billing review](./BATCH_07_REVIEW.md). Trial status code/tests verified; payment, policy, operational entitlement enforcement and live browser UX remain pending.
+
 ## Detailed backlog
 
 ### A. Product scope & architecture — Now
@@ -155,15 +157,15 @@
 
 | ID | Task / clear deliverable | Mandatory task-specific UI/UX check | Status |
 | --- | --- | --- | --- |
-| BS-061 | Keep subscription and Starter trial record | Plan और expiry UI consistent हों | BASELINE |
-| BS-062 | Define exact plan/module limits | Limit wording unambiguous हो | TODO |
+| BS-061 | Keep subscription and Starter trial record | Plan और expiry UI consistent हों | UX REVIEW PENDING |
+| BS-062 | Define exact plan/module limits | Limit wording unambiguous हो | DECISION REQUIRED |
 | BS-063 | Enforce trial/active status in operation APIs | Disabled action explanatory बने | TODO |
 | BS-064 | Add subscription upgrade/downgrade flow | Proration/changes से पहले summary हो | TODO |
-| BS-065 | Add payment provider selection for launch market | Supported methods ही दिखें | TODO |
+| BS-065 | Add payment provider selection for launch market | Supported methods ही दिखें | DECISION REQUIRED |
 | BS-066 | Implement secure checkout redirect/return | Pending vs success अलग दिखाई दे | TODO |
 | BS-067 | Verify webhook signature and idempotency | Double charge का UI impression न बने | TODO |
 | BS-068 | Add invoice and subscription payment history | Customer आसानी से proof ढूँढ सके | TODO |
-| BS-069 | Implement failed-payment/retry/grace policy | Next step और deadline साफ हो | TODO |
+| BS-069 | Implement failed-payment/retry/grace policy | Next step और deadline साफ हो | DECISION REQUIRED |
 | BS-070 | Test expiry, renewal and entitlement denial | Expired user को read/export policy समझ आए | TODO |
 
 ### H. Retail master data — Retail V1
