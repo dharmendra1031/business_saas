@@ -237,16 +237,21 @@ export default function App() {
                   <h1>Retail Dashboard</h1><p>{dashboard.business.name} · {dashboard.business.typeName}</p>
                 </div>
                 {dashboard.canOperate
-                  ? <span className="workspace-state"><CheckCircle2 size={16} /> {dashboard.subscription?.status === 'Trial' ? 'Trial active' : 'Plan active'}</span>
-                  : <span className="workspace-state">Plan required</span>}
+                  ? <span className="workspace-state"><CheckCircle2 size={16} /> {dashboard.accessStatus === 'Trial' ? 'Trial active' : 'Plan active'}</span>
+                  : <span className="workspace-state inactive">
+                    {dashboard.accessStatus === 'TrialExpired' ? 'Trial expired' : 'Subscription inactive'}
+                  </span>}
               </div>
               {!dashboard.canOperate && <div className="alert alert-warning" role="status">
-                This business does not have an active plan or trial. Transactions will remain unavailable.
+                {dashboard.accessStatus === 'TrialExpired'
+                  ? 'Your free trial has ended. Subscription activation is not available yet. Contact the platform administrator.'
+                  : 'This business has no active subscription. Contact the platform administrator for help.'}
               </div>}
               {dashboard.subscription && <p className="small text-secondary">
-                {dashboard.subscription.planCode} · {dashboard.subscription.status}
+                {dashboard.subscription.planCode} · {dashboard.accessStatus === 'TrialExpired'
+                  ? 'Trial expired' : dashboard.subscription.status}
                 {dashboard.subscription.status === 'Trial' &&
-                  ` · Ends ${new Date(dashboard.subscription.trialEndsAtUtc).toLocaleDateString()}`}
+                  ` · ${dashboard.accessStatus === 'TrialExpired' ? 'Ended' : 'Ends'} ${new Date(dashboard.subscription.trialEndsAtUtc).toLocaleDateString()}`}
               </p>}
               <div className="detail-grid">
                 <section className="content-section">

@@ -46,6 +46,7 @@ export interface RetailDashboard {
   }
   locations: { id: number; name: string; code: string }[]
   subscription: { planCode: string; status: string; trialEndsAtUtc: string } | null
+  accessStatus: 'Trial' | 'TrialExpired' | 'Active' | 'Inactive'
   canOperate: boolean
 }
 

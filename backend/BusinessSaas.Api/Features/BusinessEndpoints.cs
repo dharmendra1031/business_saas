@@ -176,11 +176,16 @@ public static class BusinessEndpoints
                 .Where(x => x.BusinessId == businessId)
                 .Select(x => new { x.PlanCode, x.Status, x.TrialEndsAtUtc })
                 .SingleOrDefaultAsync();
-            var canOperate = subscription is not null &&
-                (subscription.Status == "Active" ||
-                 subscription.Status == "Trial" && subscription.TrialEndsAtUtc > DateTime.UtcNow);
+            var accessStatus = subscription?.Status switch
+            {
+                "Active" => "Active",
+                "Trial" when subscription.TrialEndsAtUtc > DateTime.UtcNow => "Trial",
+                "Trial" => "TrialExpired",
+                _ => "Inactive"
+            };
+            var canOperate = accessStatus is "Active" or "Trial";
 
-            return Results.Ok(new { business = details, roleCode, locations, subscription, canOperate });
+            return Results.Ok(new { business = details, roleCode, locations, subscription, accessStatus, canOperate });
         });
     }
 

@@ -162,6 +162,7 @@ public sealed class BusinessFlowTests
             $"/api/businesses/{otherOwnedId}/dashboard");
         Assert.True(ownerDashboardData.GetProperty("canOperate").GetBoolean());
         Assert.Equal("Trial", ownerDashboardData.GetProperty("subscription").GetProperty("status").GetString());
+        Assert.Equal("Trial", ownerDashboardData.GetProperty("accessStatus").GetString());
         using (var scope = factory.Services.CreateScope())
         {
             var db = scope.ServiceProvider.GetRequiredService<AppDbContext>();
@@ -173,6 +174,32 @@ public sealed class BusinessFlowTests
         ownerDashboardData = await owner.GetFromJsonAsync<JsonElement>(
             $"/api/businesses/{otherOwnedId}/dashboard");
         Assert.False(ownerDashboardData.GetProperty("canOperate").GetBoolean());
+        Assert.Equal("TrialExpired", ownerDashboardData.GetProperty("accessStatus").GetString());
+
+        foreach (var (status, expectedAccess, canOperate) in new[]
+        {
+            ("Active", "Active", true),
+            ("Suspended", "Inactive", false),
+            ("PastDue", "Inactive", false),
+            ("Grace", "Inactive", false),
+            ("Cancelled", "Inactive", false),
+            ("Trial", "TrialExpired", false)
+        })
+        {
+            using (var scope = factory.Services.CreateScope())
+            {
+                var db = scope.ServiceProvider.GetRequiredService<AppDbContext>();
+                var subscription = await db.BusinessSubscriptions
+                    .SingleAsync(x => x.BusinessId == otherOwnedId);
+                subscription.Status = status;
+                await db.SaveChangesAsync();
+            }
+
+            var current = await owner.GetFromJsonAsync<JsonElement>(
+                $"/api/businesses/{otherOwnedId}/dashboard");
+            Assert.Equal(expectedAccess, current.GetProperty("accessStatus").GetString());
+            Assert.Equal(canOperate, current.GetProperty("canOperate").GetBoolean());
+        }
 
         var second = await Post(stranger, "/api/businesses", new
         {

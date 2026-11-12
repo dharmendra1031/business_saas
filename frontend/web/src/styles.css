@@ -90,6 +90,7 @@ button:focus-visible, a:focus-visible, input:focus-visible, select:focus-visible
 .location-row small { margin-top: 3px; color: var(--muted); }
 .back-link { display: inline-flex; align-items: center; gap: 6px; margin-bottom: 12px; font-size: .85rem; }
 .workspace-state { display: inline-flex; align-items: center; gap: 7px; border: 1px solid #b6dcc5; border-radius: 20px; padding: 7px 12px; color: #20673f; font-size: .8rem; font-weight: 600; }
+.workspace-state.inactive { border-color: #e5c98d; color: #795413; }
 .team-form { display: grid; grid-template-columns: minmax(200px, 2fr) minmax(150px, 1fr) auto; gap: 12px; align-items: end; }
 .team-form > * { min-width: 0; }
 .team-form .btn { min-height: 42px; }
