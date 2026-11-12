@@ -2,6 +2,7 @@ import { useEffect, useRef, useState, type FormEvent } from 'react'
 import { ArrowLeft, ArrowRight, Building2, CheckCircle2, LayoutDashboard, LogOut, Menu, Plus, ShieldCheck, Store, UserRound } from 'lucide-react'
 import { api, post, resetCsrf, SessionExpiredError, setSessionExpiredHandler, type Business, type BusinessMarket, type BusinessType, type RetailDashboard, type User } from './api'
 import TeamMembers from './TeamMembers'
+import RetailMasters from './RetailMasters'
 import PlatformAdmin from './PlatformAdmin'
 
 type Page = 'loading' | 'login' | 'register' | 'businesses' | 'create' | 'retail' | 'platform'
@@ -273,12 +274,15 @@ export default function App() {
                   ))}
                 </section>
               </div>
+              {dashboard.roleCode !== 'Cashier' &&
+                <RetailMasters key={dashboard.business.id} businessId={dashboard.business.id}
+                  canOperate={dashboard.canOperate} />}
               {dashboard.roleCode === 'Owner' &&
                 <TeamMembers businessId={dashboard.business.id} />}
               <section className="next-steps">
                 <ShieldCheck size={22} />
-                <div><strong>Retail features are coming later</strong>
-                  <p>Product, Purchase, Stock and POS are not available yet. {dashboard.roleCode === 'Owner'
+                <div><strong>Next retail modules</strong>
+                  <p>Product, Purchase, Stock and POS are not available yet. Category and Unit setup is available to owners and managers. {dashboard.roleCode === 'Owner'
                     ? 'You can manage team access above.'
                     : 'Ask your business owner about access.'} No sample sales figures are shown.</p>
                 </div>
