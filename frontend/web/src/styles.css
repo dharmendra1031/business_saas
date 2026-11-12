@@ -64,6 +64,12 @@ button:focus-visible, a:focus-visible, input:focus-visible, select:focus-visible
 .business-row > svg:last-child { margin-left: auto; flex-shrink: 0; color: var(--brand); }
 .shop-symbol { flex-shrink: 0; display: grid; place-items: center; background: #e9f2f8; color: var(--brand); width: 43px; height: 43px; border-radius: 7px; }
 .business-summary { display: grid; gap: 5px; min-width: 0; overflow-wrap: anywhere; }
+.platform-search { display: flex; flex-wrap: wrap; gap: 10px; align-items: end; }
+.platform-search .form-control { width: min(300px, 100%); }
+.platform-summary { display: flex; flex-wrap: wrap; gap: 12px; align-items: center; justify-content: space-between; }
+.platform-summary p { margin: 0; }
+.platform-table td, .platform-table th { vertical-align: middle; }
+.platform-table td { max-width: 250px; overflow-wrap: anywhere; }
 .business-summary small { color: var(--muted); }
 .content-section { min-width: 0; background: var(--surface); border: 1px solid var(--line); border-radius: 8px; padding: 25px; }
 .content-section h2 { font-size: 1.08rem; font-weight: 700; padding-bottom: 15px; border-bottom: 1px solid var(--line); margin-bottom: 18px; }

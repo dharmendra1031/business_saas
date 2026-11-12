@@ -2,8 +2,9 @@ import { useEffect, useRef, useState, type FormEvent } from 'react'
 import { ArrowLeft, ArrowRight, Building2, CheckCircle2, LayoutDashboard, LogOut, Menu, Plus, ShieldCheck, Store, UserRound } from 'lucide-react'
 import { api, post, resetCsrf, SessionExpiredError, setSessionExpiredHandler, type Business, type BusinessMarket, type BusinessType, type RetailDashboard, type User } from './api'
 import TeamMembers from './TeamMembers'
+import PlatformAdmin from './PlatformAdmin'
 
-type Page = 'loading' | 'login' | 'register' | 'businesses' | 'create' | 'retail'
+type Page = 'loading' | 'login' | 'register' | 'businesses' | 'create' | 'retail' | 'platform'
 
 function operationKey(): string {
   const bytes = crypto.getRandomValues(new Uint8Array(16))
@@ -14,6 +15,7 @@ export default function App() {
   const [page, setPage] = useState<Page>('loading')
   const [user, setUser] = useState<User | null>(null)
   const [businesses, setBusinesses] = useState<Business[]>([])
+  const [canViewPlatform, setCanViewPlatform] = useState(false)
   const [dashboard, setDashboard] = useState<RetailDashboard | null>(null)
   const [error, setError] = useState('')
   const [notice, setNotice] = useState('')
@@ -27,6 +29,7 @@ export default function App() {
     setSessionExpiredHandler(() => {
       resetCsrf()
       setUser(null)
+      setCanViewPlatform(false)
       setBusinesses([])
       setDashboard(null)
       setMenuOpen(false)
@@ -46,6 +49,17 @@ export default function App() {
       .catch(() => setPage('login'))
     return () => setSessionExpiredHandler(null)
   }, [])
+
+  useEffect(() => {
+    if (!user) return
+    let active = true
+
+    api<{ canViewBusinesses: boolean }>('/platform/access')
+      .then(access => { if (active) setCanViewPlatform(access.canViewBusinesses) })
+      .catch(() => { if (active) setCanViewPlatform(false) })
+
+    return () => { active = false }
+  }, [user])
 
   useEffect(() => {
     if (!menuOpen) return
@@ -90,6 +104,7 @@ export default function App() {
       await api<void>('/auth/logout', { method: 'POST' })
       resetCsrf()
       setUser(null)
+      setCanViewPlatform(false)
       setDashboard(null)
       setBusinesses([])
       setPage('login')
@@ -105,6 +120,7 @@ export default function App() {
   function onSignedIn(next: User, list: Business[]) {
     resetCsrf()
     setUser(next)
+    setCanViewPlatform(false)
     setBusinesses(list)
     setSessionExpired(false)
     setAuthNotice('')
@@ -126,8 +142,8 @@ export default function App() {
       <aside id="main-navigation" className={`app-sidebar${menuOpen ? ' is-open' : ''}`}>
         <div className="brand"><span className="brand-mark">B</span><div>Business SaaS<small>Business Workspace</small></div></div>
         <div className="sidebar-heading">WORKSPACE</div>
-        <button type="button" ref={businessNav} className={`nav-entry${page !== 'retail' ? ' active' : ''}`}
-          aria-current={page !== 'retail' ? 'page' : undefined}
+        <button type="button" ref={businessNav} className={`nav-entry${page === 'businesses' || page === 'create' ? ' active' : ''}`}
+          aria-current={page === 'businesses' || page === 'create' ? 'page' : undefined}
           onClick={() => {
             if (menuOpen) menuToggle.current?.focus()
             setMenuOpen(false)
@@ -139,6 +155,19 @@ export default function App() {
         {page === 'retail' && <div className="nav-entry active" aria-current="page">
           <LayoutDashboard size={18} /> Retail Dashboard
         </div>}
+        {canViewPlatform && <button type="button"
+          className={`nav-entry${page === 'platform' ? ' active' : ''}`}
+          aria-current={page === 'platform' ? 'page' : undefined}
+          onClick={() => {
+            if (menuOpen) menuToggle.current?.focus()
+            setMenuOpen(false)
+            setDashboard(null)
+            setError('')
+            setNotice('')
+            setPage('platform')
+          }}>
+          <ShieldCheck size={18} /> Platform Admin
+        </button>}
         <div className="sidebar-footer">A workspace for every business.</div>
       </aside>
 
@@ -149,7 +178,9 @@ export default function App() {
               aria-controls="main-navigation" aria-expanded={menuOpen} onClick={() => setMenuOpen(open => !open)}>
               <Menu size={20} />
             </button>
-            {page === 'retail' ? dashboard?.business.name : page === 'create' ? 'Create Business' : 'My Businesses'}
+            {page === 'retail' ? dashboard?.business.name
+              : page === 'create' ? 'Create Business'
+              : page === 'platform' ? 'Platform Admin' : 'My Businesses'}
           </div>
           <div className="topbar-account"><UserRound size={17} /> <span className="account-email">{user?.email}</span>
             <button className="btn btn-outline-secondary btn-sm" onClick={() => void logout()}><LogOut size={15} /> Sign out</button>
@@ -159,6 +190,8 @@ export default function App() {
         <main className="page-content">
           {error && <div className="alert alert-danger" role="alert">{error}</div>}
           {notice && <div className="alert alert-success" role="status">{notice}</div>}
+
+          {page === 'platform' && canViewPlatform && <PlatformAdmin />}
 
           {page === 'businesses' && (
             <>
