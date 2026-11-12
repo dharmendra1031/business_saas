@@ -11,10 +11,10 @@
 | BS-074 — Barcode lookup | UX REVIEW PENDING | Optional business-unique barcode, active-only exact lookup and list search |
 | BS-075 — Sale price/tax | UX REVIEW PENDING | Decimal(18,2) sale price, validation and tax classification code; actual tax computation not implemented |
 | BS-076 — Product edit/deactivate | UX REVIEW PENDING | Edit prefill and active/inactive status; product is hidden from barcode lookup when inactive |
-| BS-077 — Supplier master | TODO | Not implemented |
-| BS-078 — Customer master | TODO | Not implemented |
-| BS-079 — Product search/paging | TODO | Category/Unit paging exists; Product search does not |
-| BS-080 — Cross-business master tests | IN PROGRESS | Category/Unit/Product isolated; Supplier and Customer still pending |
+| BS-077 — Supplier master | UX REVIEW PENDING | Scoped create/edit/list, supplier name uniqueness, phone or email required, inactive status; browser review pending |
+| BS-078 — Customer master | UX REVIEW PENDING | Optional customer association, scoped create/edit/list, optional contacts and inactive status; browser review pending |
+| BS-079 — Product search/paging | UX REVIEW PENDING | Product name/SKU/barcode search, category/status filters and server-side paging exist; large-catalog load/browser testing pending |
+| BS-080 — Cross-business master tests | UX REVIEW PENDING | Category, Unit, Product, Supplier and Customer tenant denial tests; Retail template denial added, live role testing pending |
 
 ## Implemented
 
@@ -24,6 +24,15 @@
 - Owner and Manager only; Cashier and non-members receive NotFound. Each read/edit is scoped by the authenticated user's business membership.
 - Editing is denied when subscription is not Active or an unexpired Trial. Read access remains available for subscribed business members so previous catalog data is not hidden.
 - Category and Unit setup is reachable from the Retail Dashboard, with no demo records, edit prefill, clear form cancellation, validation and mobile-responsive controls.
+
+## Supplier and Customer Masters (BS-077–BS-078)
+
+- Added `RetailSuppliers` and `RetailCustomers` with numeric `BIGINT IDENTITY` IDs and scoped `BusinessId` keys. No UUIDs, sample data, or unnecessary business tables.
+- Supplier name is case-normalized and unique per business. Supplier contact requires phone or email; Customer contact is optional and duplicate customer names are allowed.
+- Scoped lists (20 per page), search, create/update, active/inactive states, compact React forms and edit prefill. No destructive delete.
+- Every route checks authenticated membership, Owner/Manager access, RETAIL template, and active subscription on writes. Cashier cannot use the management endpoints.
+- Tests cover tenant denial, non-RETAIL template denial, cashier, Manager writes, duplicate suppliers, invalid contact fields, cross-business update attempts and expired Trial write denial.
+- GitHub Draft PR: [#4](https://github.com/dharmendra1031/business_saas/pull/4). Browser and final CI are release gates; no DONE status yet.
 
 ## Verification
 
@@ -44,7 +53,7 @@
 
 - Running browser tests for owner/manager/cashier, focus behavior, errors, 360px/768px/1440px viewports and screen-reader usability are still needed.
 - English/Arabic RTL support is not implemented yet; this remains a wider product requirement.
-- Supplier, Customer, stock, purchase, POS, published entitlements and plan-specific limits are **not** covered. Product tax class is a reference code, not an approved tax engine.
+- Supplier and Customer contact masters are implemented but their real purchase/POS usage is not covered. Stock, purchase, POS, published entitlements and plan-specific limits are **not** covered. Product tax class is a reference code, not an approved tax engine.
 - No task is DONE until real workflow verification and the mandatory UX gate are completed.
 
-**Next slice:** BS-077–BS-078 Supplier/Customer masters, then BS-079 product list performance and BS-080 expanded cross-business audit. Real browser UX remains a prerequisite for DONE.
+**Next slice:** Verify browser and large-catalog performance for BS-071–BS-080, then start BS-081 stock ledger design before Purchase Receiving. Real browser UX remains a prerequisite for DONE.
