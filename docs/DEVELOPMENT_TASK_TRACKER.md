@@ -61,6 +61,8 @@
 
 **Batch 07:** [BS-061–BS-070 subscription/billing review](./BATCH_07_REVIEW.md). Trial status code/tests verified; payment, policy, operational entitlement enforcement and live browser UX remain pending.
 
+**Batch 08:** [BS-071–BS-080 retail master-data review](./BATCH_08_REVIEW.md). Category/Unit API and UI implemented; Product/Supplier/Customer and real browser UX verification pending.
+
 ## Detailed backlog
 
 ### A. Product scope & architecture — Now
@@ -172,8 +174,8 @@
 
 | ID | Task / clear deliverable | Mandatory task-specific UI/UX check | Status |
 | --- | --- | --- | --- |
-| BS-071 | Add Category master and uniqueness rules | New/Edit/List compact हों | TODO |
-| BS-072 | Add Unit master and validation | Unit selection unambiguous हो | TODO |
+| BS-071 | Add Category master and uniqueness rules | New/Edit/List compact हों | UX REVIEW PENDING |
+| BS-072 | Add Unit master and validation | Unit selection unambiguous हो | UX REVIEW PENDING |
 | BS-073 | Add Product master with scoped SKU | Duplicate SKU inline message दे | TODO |
 | BS-074 | Add barcode field and lookup | Scanner/manual search दोनों सरल हों | TODO |
 | BS-075 | Add sale price and tax classification | Money rounding और unit साफ दिखें | TODO |
