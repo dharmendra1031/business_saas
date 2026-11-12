@@ -53,6 +53,25 @@ public sealed class BusinessLocation
     public bool IsPrimary { get; set; } = true;
 }
 
+public sealed class RetailCategory
+{
+    public long Id { get; set; }
+    public long BusinessId { get; set; }
+    public string Name { get; set; } = "";
+    public string NameKey { get; set; } = "";
+    public bool IsActive { get; set; } = true;
+}
+
+public sealed class RetailUnit
+{
+    public long Id { get; set; }
+    public long BusinessId { get; set; }
+    public string Code { get; set; } = "";
+    public string Name { get; set; } = "";
+    public string NameKey { get; set; } = "";
+    public bool IsActive { get; set; } = true;
+}
+
 public sealed class AppDbContext(DbContextOptions<AppDbContext> options)
     : IdentityUserContext<AppUser, long>(options)
 {
@@ -61,6 +80,9 @@ public sealed class AppDbContext(DbContextOptions<AppDbContext> options)
     public DbSet<BusinessUser> BusinessUsers => Set<BusinessUser>();
     public DbSet<BusinessSubscription> BusinessSubscriptions => Set<BusinessSubscription>();
     public DbSet<BusinessLocation> BusinessLocations => Set<BusinessLocation>();
+
+    public DbSet<RetailCategory> RetailCategories => Set<RetailCategory>();
+    public DbSet<RetailUnit> RetailUnits => Set<RetailUnit>();
 
     protected override void OnModelCreating(ModelBuilder builder)
     {
@@ -121,5 +143,25 @@ public sealed class AppDbContext(DbContextOptions<AppDbContext> options)
             entity.HasOne<Business>().WithMany()
                 .HasForeignKey(x => x.BusinessId).OnDelete(DeleteBehavior.Cascade);
         });
+        builder.Entity<RetailCategory>(entity =>
+        {
+            entity.Property(x => x.Name).HasMaxLength(80).IsRequired();
+            entity.Property(x => x.NameKey).HasMaxLength(80).IsRequired();
+            entity.HasIndex(x => new { x.BusinessId, x.NameKey }).IsUnique();
+            entity.HasOne<Business>().WithMany()
+                .HasForeignKey(x => x.BusinessId).OnDelete(DeleteBehavior.Cascade);
+        });
+
+        builder.Entity<RetailUnit>(entity =>
+        {
+            entity.Property(x => x.Code).HasMaxLength(12).IsRequired();
+            entity.Property(x => x.Name).HasMaxLength(60).IsRequired();
+            entity.Property(x => x.NameKey).HasMaxLength(60).IsRequired();
+            entity.HasIndex(x => new { x.BusinessId, x.Code }).IsUnique();
+            entity.HasIndex(x => new { x.BusinessId, x.NameKey }).IsUnique();
+            entity.HasOne<Business>().WithMany()
+                .HasForeignKey(x => x.BusinessId).OnDelete(DeleteBehavior.Cascade);
+        });
+
     }
 }
