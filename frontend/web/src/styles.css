@@ -148,3 +148,17 @@ button:focus-visible, a:focus-visible, input:focus-visible, select:focus-visible
   .masters-heading { flex-direction: column; }
   .masters-form > div, .masters-form > .btn { flex: 1 1 100%; }
 }
+
+.catalog-navigation { display: flex; flex-wrap: wrap; gap: 8px; margin-top: 20px; }
+.retail-products, .catalog-navigation + .retail-masters { margin-top: 12px; }
+.product-form { border-top: 1px solid var(--line); padding-top: 18px; margin-top: 18px; }
+.product-form h3 { font-size: 1rem; font-weight: 700; margin-bottom: 16px; }
+.product-filters { display: flex; flex-wrap: wrap; gap: 10px; margin: 16px 0; align-items: center; }
+.product-filters > div { min-width: 0; flex: 1 1 150px; }
+.product-filters .product-filter-search { flex: 2 1 230px; }
+.product-filters > button { min-height: 38px; }
+.product-secondary { display: block; color: var(--muted); font-size: .8rem; margin-top: 4px; }
+@media (max-width: 600px) {
+  .catalog-navigation > button { flex: 1 1 auto; }
+  .product-filters > div, .product-filters > button { flex: 1 1 100%; }
+}
