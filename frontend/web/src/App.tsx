@@ -251,7 +251,9 @@ export default function App() {
                 {dashboard.subscription.planCode} · {dashboard.accessStatus === 'TrialExpired'
                   ? 'Trial expired' : dashboard.subscription.status}
                 {dashboard.subscription.status === 'Trial' &&
-                  ` · ${dashboard.accessStatus === 'TrialExpired' ? 'Ended' : 'Ends'} ${new Date(dashboard.subscription.trialEndsAtUtc).toLocaleDateString()}`}
+                  ` · ${dashboard.accessStatus === 'TrialExpired' ? 'Ended' : 'Ends'} ${new Date(dashboard.subscription.trialEndsAtUtc).toLocaleString(undefined, {
+                    dateStyle: 'medium', timeStyle: 'short', timeZone: dashboard.business.timeZoneId
+                  })}`}
               </p>}
               <div className="detail-grid">
                 <section className="content-section">
