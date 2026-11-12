@@ -133,6 +133,7 @@ app.MapBusinessEndpoints();
 app.MapBusinessStaffEndpoints();
 app.MapRetailMasterEndpoints();
 app.MapRetailProductEndpoints();
+app.MapRetailContactEndpoints();
 app.MapPlatformEndpoints();
 
 app.Run();

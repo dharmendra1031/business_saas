@@ -86,6 +86,28 @@ public sealed class RetailProduct
     public bool IsActive { get; set; } = true;
 }
 
+public sealed class RetailSupplier
+{
+    public long Id { get; set; }
+    public long BusinessId { get; set; }
+    public string Name { get; set; } = "";
+    public string NameKey { get; set; } = "";
+    public string Phone { get; set; } = "";
+    public string Email { get; set; } = "";
+    public bool IsActive { get; set; } = true;
+}
+
+public sealed class RetailCustomer
+{
+    public long Id { get; set; }
+    public long BusinessId { get; set; }
+    public string Name { get; set; } = "";
+    public string NameKey { get; set; } = "";
+    public string Phone { get; set; } = "";
+    public string Email { get; set; } = "";
+    public bool IsActive { get; set; } = true;
+}
+
 public sealed class AppDbContext(DbContextOptions<AppDbContext> options)
     : IdentityUserContext<AppUser, long>(options)
 {
@@ -98,6 +120,8 @@ public sealed class AppDbContext(DbContextOptions<AppDbContext> options)
     public DbSet<RetailCategory> RetailCategories => Set<RetailCategory>();
     public DbSet<RetailUnit> RetailUnits => Set<RetailUnit>();
     public DbSet<RetailProduct> RetailProducts => Set<RetailProduct>();
+    public DbSet<RetailSupplier> RetailSuppliers => Set<RetailSupplier>();
+    public DbSet<RetailCustomer> RetailCustomers => Set<RetailCustomer>();
 
     protected override void OnModelCreating(ModelBuilder builder)
     {
@@ -196,5 +220,26 @@ public sealed class AppDbContext(DbContextOptions<AppDbContext> options)
                 .HasForeignKey(x => x.UnitId).OnDelete(DeleteBehavior.Restrict);
         });
 
+        builder.Entity<RetailSupplier>(entity =>
+        {
+            entity.Property(x => x.Name).HasMaxLength(120).IsRequired();
+            entity.Property(x => x.NameKey).HasMaxLength(120).IsRequired();
+            entity.Property(x => x.Phone).HasMaxLength(25).IsRequired();
+            entity.Property(x => x.Email).HasMaxLength(160).IsRequired();
+            entity.HasIndex(x => new { x.BusinessId, x.NameKey }).IsUnique();
+            entity.HasOne<Business>().WithMany()
+                .HasForeignKey(x => x.BusinessId).OnDelete(DeleteBehavior.Cascade);
+        });
+
+        builder.Entity<RetailCustomer>(entity =>
+        {
+            entity.Property(x => x.Name).HasMaxLength(120).IsRequired();
+            entity.Property(x => x.NameKey).HasMaxLength(120).IsRequired();
+            entity.Property(x => x.Phone).HasMaxLength(25).IsRequired();
+            entity.Property(x => x.Email).HasMaxLength(160).IsRequired();
+            entity.HasIndex(x => new { x.BusinessId, x.NameKey });
+            entity.HasOne<Business>().WithMany()
+                .HasForeignKey(x => x.BusinessId).OnDelete(DeleteBehavior.Cascade);
+        });
     }
 }
