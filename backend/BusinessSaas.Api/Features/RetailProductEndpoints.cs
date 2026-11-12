@@ -43,6 +43,24 @@ public static class RetailProductEndpoints
             return Results.Ok(new { items, total, page = currentPage, pageSize = PageSize });
         });
 
+        group.MapGet("/options", async (long businessId,
+            ClaimsPrincipal user, AppDbContext db) =>
+        {
+            var denied = await RetailMasterEndpoints.CheckAccess(db, user, businessId, false);
+            if (denied is not null) return denied;
+
+            var categories = await db.RetailCategories.AsNoTracking()
+                .Where(x => x.BusinessId == businessId && x.IsActive)
+                .OrderBy(x => x.Name)
+                .Select(x => new { x.Id, x.Name }).ToListAsync();
+            var units = await db.RetailUnits.AsNoTracking()
+                .Where(x => x.BusinessId == businessId && x.IsActive)
+                .OrderBy(x => x.Name)
+                .Select(x => new { x.Id, x.Name, x.Code }).ToListAsync();
+
+            return Results.Ok(new { categories, units });
+        });
+
         group.MapGet("/lookup", async (long businessId, string? barcode,
             ClaimsPrincipal user, AppDbContext db) =>
         {
