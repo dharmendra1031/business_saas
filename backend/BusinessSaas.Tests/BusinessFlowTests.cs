@@ -382,6 +382,127 @@ public sealed class BusinessFlowTests
     }
 
     [Fact]
+    public async Task Platform_directory_requires_permission_and_respects_paging()
+    {
+        using var database = new SqliteConnection("Data Source=:memory:");
+        await database.OpenAsync();
+
+        using var factory = new WebApplicationFactory<Program>().WithWebHostBuilder(builder =>
+        {
+            builder.UseEnvironment("Development");
+            builder.ConfigureServices(services =>
+            {
+                services.RemoveAll<DbContextOptions<AppDbContext>>();
+                services.RemoveAll<IDbContextOptionsConfiguration<AppDbContext>>();
+                services.AddDbContext<AppDbContext>(options => options.UseSqlite(database));
+            });
+        });
+
+        using var owner = factory.CreateClient();
+        using var admin = factory.CreateClient();
+        using var outsider = factory.CreateClient();
+        using var anonymous = factory.CreateClient();
+
+        await RegisterAndLogin(owner, "directory-owner@example.test");
+        await RegisterAndLogin(admin, "directory-admin@example.test");
+        await RegisterAndLogin(outsider, "directory-outsider@example.test");
+
+        var first = await Post(owner, "/api/businesses", new
+        {
+            name = "Alpha Retail",
+            businessTypeId = 1,
+            countryCode = "IN",
+            currencyCode = "INR",
+            timeZoneId = "Asia/Kolkata",
+            requestKey = "directory-alpha-20261112"
+        });
+        Assert.Equal(HttpStatusCode.Created, first.StatusCode);
+        var firstId = (await first.Content.ReadFromJsonAsync<JsonElement>())
+            .GetProperty("id").GetInt64();
+
+        var second = await Post(outsider, "/api/businesses", new
+        {
+            name = "Beta Retail",
+            businessTypeId = 1,
+            countryCode = "IN",
+            currencyCode = "INR",
+            timeZoneId = "Asia/Kolkata",
+            requestKey = "directory-beta-20261112"
+        });
+        Assert.Equal(HttpStatusCode.Created, second.StatusCode);
+
+        Assert.Equal(HttpStatusCode.Unauthorized,
+            (await anonymous.GetAsync("/api/platform/businesses")).StatusCode);
+        Assert.Equal(HttpStatusCode.Forbidden,
+            (await owner.GetAsync("/api/platform/businesses")).StatusCode);
+        Assert.Equal(HttpStatusCode.Forbidden,
+            (await admin.GetAsync("/api/platform/businesses")).StatusCode);
+        Assert.Equal(HttpStatusCode.Forbidden,
+            (await admin.GetAsync($"/api/platform/businesses/{firstId}")).StatusCode);
+
+        var access = await admin.GetFromJsonAsync<JsonElement>("/api/platform/access");
+        Assert.False(access.GetProperty("canViewBusinesses").GetBoolean());
+        Assert.False(access.GetProperty("canManageLicenses").GetBoolean());
+
+        using (var scope = factory.Services.CreateScope())
+        {
+            var db = scope.ServiceProvider.GetRequiredService<AppDbContext>();
+            var user = await db.Users.SingleAsync(x => x.Email == "directory-admin@example.test");
+            db.Set<Microsoft.AspNetCore.Identity.IdentityUserClaim<long>>().Add(new()
+            {
+                UserId = user.Id,
+                ClaimType = "platform.permission",
+                ClaimValue = "businesses.view"
+            });
+            await db.SaveChangesAsync();
+        }
+
+        access = await admin.GetFromJsonAsync<JsonElement>("/api/platform/access");
+        Assert.True(access.GetProperty("canViewBusinesses").GetBoolean());
+        Assert.False(access.GetProperty("canManageLicenses").GetBoolean());
+        Assert.Equal(HttpStatusCode.Forbidden,
+            (await admin.GetAsync("/api/platform/license-access")).StatusCode);
+
+        var page = await admin.GetFromJsonAsync<JsonElement>(
+            "/api/platform/businesses?page=1&pageSize=1");
+        Assert.Equal(2, page.GetProperty("total").GetInt32());
+        Assert.Single(page.GetProperty("items").EnumerateArray());
+        Assert.Equal(1, page.GetProperty("page").GetInt32());
+
+        var filtered = await admin.GetFromJsonAsync<JsonElement>(
+            "/api/platform/businesses?search=Alpha");
+        Assert.Equal(1, filtered.GetProperty("total").GetInt32());
+        Assert.Equal(firstId, filtered.GetProperty("items")[0].GetProperty("id").GetInt64());
+        Assert.Equal("directory-owner@example.test",
+            filtered.GetProperty("items")[0].GetProperty("ownerEmail").GetString());
+
+        var details = await admin.GetFromJsonAsync<JsonElement>(
+            $"/api/platform/businesses/{firstId}");
+        Assert.Equal("Alpha Retail", details.GetProperty("name").GetString());
+        Assert.Equal("Trial", details.GetProperty("subscriptionStatus").GetString());
+
+        Assert.Equal(HttpStatusCode.BadRequest,
+            (await admin.GetAsync("/api/platform/businesses?pageSize=100")).StatusCode);
+        Assert.Equal(HttpStatusCode.NotFound,
+            (await admin.GetAsync("/api/platform/businesses/9999999")).StatusCode);
+
+        using (var scope = factory.Services.CreateScope())
+        {
+            var db = scope.ServiceProvider.GetRequiredService<AppDbContext>();
+            var user = await db.Users.SingleAsync(x => x.Email == "directory-admin@example.test");
+            var claim = await db.Set<Microsoft.AspNetCore.Identity.IdentityUserClaim<long>>()
+                .SingleAsync(x => x.UserId == user.Id &&
+                    x.ClaimType == "platform.permission" &&
+                    x.ClaimValue == "businesses.view");
+            db.Remove(claim);
+            await db.SaveChangesAsync();
+        }
+
+        Assert.Equal(HttpStatusCode.Forbidden,
+            (await admin.GetAsync("/api/platform/businesses")).StatusCode);
+    }
+
+    [Fact]
     public async Task Platform_license_access_requires_explicit_permission()
     {
         using var database = new SqliteConnection("Data Source=:memory:");
