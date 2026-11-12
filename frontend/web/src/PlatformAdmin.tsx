@@ -9,6 +9,7 @@ interface BusinessRow {
   countryCode: string
   planCode: string | null
   subscriptionStatus: string | null
+  trialEndsAtUtc: string | null
 }
 
 interface BusinessPage {
@@ -22,7 +23,6 @@ interface BusinessDetails extends BusinessRow {
   currencyCode: string
   timeZoneId: string
   createdAtUtc: string
-  trialEndsAtUtc: string | null
 }
 
 function statusLabel(status: string | null, trialEnds: string | null = null) {
@@ -157,7 +157,7 @@ export default function PlatformAdmin() {
                         {item.typeName} · {item.countryCode}</small></td>
                       <td>{item.ownerEmail}</td>
                       <td>{item.planCode ?? 'Not assigned'}</td>
-                      <td>{statusLabel(item.subscriptionStatus)}</td>
+                      <td>{statusLabel(item.subscriptionStatus, item.trialEndsAtUtc)}</td>
                       <td className="text-end"><button type="button"
                         className="btn btn-outline-secondary btn-sm" disabled={detailLoading}
                         onClick={() => void openBusiness(item.id)}>View</button></td>

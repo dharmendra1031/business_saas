@@ -37,7 +37,7 @@ public static class PlatformEndpoints
             if (!await HasPermission(user, db, "businesses.view"))
                 return Results.Forbid();
 
-            if (page < 1 || pageSize is < 1 or > 50)
+            if (page is < 1 or > 100000 || pageSize is < 1 or > 50)
                 return Results.BadRequest(new { message = "Choose a valid page and page size (1–50)." });
 
             var term = search?.Trim() ?? "";
@@ -65,7 +65,9 @@ public static class PlatformEndpoints
                                    TypeName = type.Name,
                                    OwnerEmail = owner.Email,
                                    PlanCode = subscription == null ? null : subscription.PlanCode,
-                                   SubscriptionStatus = subscription == null ? null : subscription.Status
+                                   SubscriptionStatus = subscription == null ? null : subscription.Status,
+                                   TrialEndsAtUtc = subscription == null
+                                       ? (DateTime?)null : subscription.TrialEndsAtUtc
                                }).Skip((page - 1) * pageSize).Take(pageSize).ToListAsync();
 
             return Results.Ok(new { items, total, page, pageSize });
