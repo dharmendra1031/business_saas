@@ -189,7 +189,7 @@ public static class RetailMasterEndpoints
     private static bool IsDuplicate(DbUpdateException error) =>
         error.InnerException is SqlException { Number: 2601 or 2627 };
 
-    private static async Task<IResult?> CheckAccess(AppDbContext db, ClaimsPrincipal user,
+    internal static async Task<IResult?> CheckAccess(AppDbContext db, ClaimsPrincipal user,
         long businessId, bool write)
     {
         if (!long.TryParse(user.FindFirstValue(ClaimTypes.NameIdentifier), out var userId))
