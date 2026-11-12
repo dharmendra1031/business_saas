@@ -289,7 +289,7 @@ export default function RetailStock({ businessId, locations, canOperate }: {
             : history.length === 0 ? <p>No stock movements found.</p>
               : <div className="table-responsive">
                 <table className="table table-sm align-middle">
-                  <thead><tr><th scope="col">Date (UTC)</th><th scope="col">Source</th>
+                  <thead><tr><th scope="col">Date / time (local)</th><th scope="col">Source</th>
                     <th scope="col" className="text-end">Change</th>
                     <th scope="col" className="text-end">Balance after</th>
                     <th scope="col">Posted by</th></tr></thead>
