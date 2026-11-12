@@ -131,6 +131,7 @@ app.MapGet("/api/health", () => Results.Ok(new { status = "ok" }));
 app.MapAuthEndpoints();
 app.MapBusinessEndpoints();
 app.MapBusinessStaffEndpoints();
+app.MapRetailCategoryEndpoints();
 app.MapPlatformEndpoints();
 
 app.Run();

@@ -1,8 +1,9 @@
 import { useEffect, useRef, useState, type FormEvent } from 'react'
-import { ArrowLeft, ArrowRight, Building2, CheckCircle2, LayoutDashboard, LogOut, Menu, Plus, ShieldCheck, Store, UserRound } from 'lucide-react'
+import { ArrowLeft, ArrowRight, Building2, CheckCircle2, LayoutDashboard, LogOut, Menu, Plus, Tags, ShieldCheck, Store, UserRound } from 'lucide-react'
 import { api, post, resetCsrf, SessionExpiredError, setSessionExpiredHandler, type Business, type BusinessMarket, type BusinessType, type RetailDashboard, type User } from './api'
 import TeamMembers from './TeamMembers'
 import PlatformAdmin from './PlatformAdmin'
+import RetailCategories from './RetailCategories'
 
 type Page = 'loading' | 'login' | 'register' | 'businesses' | 'create' | 'retail' | 'platform'
 
@@ -17,6 +18,7 @@ export default function App() {
   const [businesses, setBusinesses] = useState<Business[]>([])
   const [canViewPlatform, setCanViewPlatform] = useState(false)
   const [dashboard, setDashboard] = useState<RetailDashboard | null>(null)
+  const [retailView, setRetailView] = useState<'dashboard' | 'categories'>('dashboard')
   const [error, setError] = useState('')
   const [notice, setNotice] = useState('')
   const [menuOpen, setMenuOpen] = useState(false)
@@ -80,6 +82,7 @@ export default function App() {
       const list = await api<Business[]>('/businesses')
       setBusinesses(list)
       setDashboard(null)
+      setRetailView('dashboard')
       setPage('businesses')
     } catch (cause) {
       if (!(cause instanceof SessionExpiredError))
@@ -92,6 +95,7 @@ export default function App() {
     try {
       const details = await api<RetailDashboard>(`/businesses/${id}/dashboard`)
       setDashboard(details)
+      setRetailView('dashboard')
       setPage('retail')
     } catch (cause) {
       if (!(cause instanceof SessionExpiredError))
@@ -152,9 +156,18 @@ export default function App() {
           }}>
           <Building2 size={18} /> My Businesses
         </button>
-        {page === 'retail' && <div className="nav-entry active" aria-current="page">
-          <LayoutDashboard size={18} /> Retail Dashboard
-        </div>}
+        {page === 'retail' && <>
+          <button type="button" className={`nav-entry${retailView === 'dashboard' ? ' active' : ''}`}
+            aria-current={retailView === 'dashboard' ? 'page' : undefined}
+            onClick={() => { setRetailView('dashboard'); setMenuOpen(false) }}>
+            <LayoutDashboard size={18} /> Retail Dashboard
+          </button>
+          <button type="button" className={`nav-entry${retailView === 'categories' ? ' active' : ''}`}
+            aria-current={retailView === 'categories' ? 'page' : undefined}
+            onClick={() => { setRetailView('categories'); setMenuOpen(false) }}>
+            <Tags size={18} /> Categories
+          </button>
+        </>}
         {canViewPlatform && <button type="button"
           className={`nav-entry${page === 'platform' ? ' active' : ''}`}
           aria-current={page === 'platform' ? 'page' : undefined}
@@ -230,7 +243,12 @@ export default function App() {
             }} />
           )}
 
-          {page === 'retail' && dashboard && (
+          {page === 'retail' && dashboard && retailView === 'categories' &&
+            <RetailCategories key={dashboard.business.id} businessId={dashboard.business.id}
+              roleCode={dashboard.roleCode} canOperate={dashboard.canOperate}
+              onBack={() => setRetailView('dashboard')} />}
+
+          {page === 'retail' && dashboard && retailView === 'dashboard' && (
             <>
               <div className="page-header">
                 <div><button className="back-link" onClick={() => { setNotice(''); void loadBusinesses() }}><ArrowLeft size={16} /> All businesses</button>
@@ -277,8 +295,8 @@ export default function App() {
                 <TeamMembers businessId={dashboard.business.id} />}
               <section className="next-steps">
                 <ShieldCheck size={22} />
-                <div><strong>Retail features are coming later</strong>
-                  <p>Product, Purchase, Stock and POS are not available yet. {dashboard.roleCode === 'Owner'
+                <div><strong>Retail transactions are coming later</strong>
+                  <p>Categories are available. Product, Purchase, Stock and POS are not available yet. {dashboard.roleCode === 'Owner'
                     ? 'You can manage team access above.'
                     : 'Ask your business owner about access.'} No sample sales figures are shown.</p>
                 </div>

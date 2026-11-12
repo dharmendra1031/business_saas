@@ -45,6 +45,8 @@ public sealed class SqlServerTests
             Assert.Contains(await db.Database.GetAppliedMigrationsAsync(),
                 migration => migration.EndsWith("_InitialCreate"));
             Assert.True(await db.BusinessTypes.AnyAsync(x => x.Code == "RETAIL" && x.IsSupported));
+            Assert.Contains(await db.Database.GetAppliedMigrationsAsync(),
+                migration => migration.EndsWith("_AddRetailCategories"));
         }
 
         await RegisterAndLogin(owner, "sql-owner@example.test");
@@ -85,6 +87,14 @@ public sealed class SqlServerTests
 
         Assert.Equal(HttpStatusCode.OK,
             (await owner.GetAsync($"/api/businesses/{ids[0]}/dashboard")).StatusCode);
+
+        var categoriesPath = $"/api/businesses/{ids[0]}/categories";
+        Assert.Equal(HttpStatusCode.OK,
+            (await Post(owner, categoriesPath, new { name = "Beverages" })).StatusCode);
+        Assert.Equal(HttpStatusCode.Conflict,
+            (await Post(owner, categoriesPath, new { name = "beverages" })).StatusCode);
+        Assert.Equal(HttpStatusCode.NotFound,
+            (await stranger.GetAsync(categoriesPath)).StatusCode);
         Assert.Equal(HttpStatusCode.NotFound,
             (await stranger.GetAsync($"/api/businesses/{ids[0]}/dashboard")).StatusCode);
 

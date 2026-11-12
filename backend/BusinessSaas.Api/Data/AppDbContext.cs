@@ -53,6 +53,14 @@ public sealed class BusinessLocation
     public bool IsPrimary { get; set; } = true;
 }
 
+public sealed class ProductCategory
+{
+    public long Id { get; set; }
+    public long BusinessId { get; set; }
+    public string Name { get; set; } = "";
+    public string NameKey { get; set; } = "";
+}
+
 public sealed class AppDbContext(DbContextOptions<AppDbContext> options)
     : IdentityUserContext<AppUser, long>(options)
 {
@@ -61,6 +69,7 @@ public sealed class AppDbContext(DbContextOptions<AppDbContext> options)
     public DbSet<BusinessUser> BusinessUsers => Set<BusinessUser>();
     public DbSet<BusinessSubscription> BusinessSubscriptions => Set<BusinessSubscription>();
     public DbSet<BusinessLocation> BusinessLocations => Set<BusinessLocation>();
+    public DbSet<ProductCategory> ProductCategories => Set<ProductCategory>();
 
     protected override void OnModelCreating(ModelBuilder builder)
     {
@@ -111,6 +120,15 @@ public sealed class AppDbContext(DbContextOptions<AppDbContext> options)
             entity.Property(x => x.Status).HasMaxLength(20).IsRequired();
             entity.HasOne<Business>().WithMany()
                 .HasForeignKey(x => x.BusinessId).OnDelete(DeleteBehavior.Restrict);
+        });
+
+        builder.Entity<ProductCategory>(entity =>
+        {
+            entity.HasIndex(x => new { x.BusinessId, x.NameKey }).IsUnique();
+            entity.Property(x => x.Name).HasMaxLength(100).IsRequired();
+            entity.Property(x => x.NameKey).HasMaxLength(100).IsRequired();
+            entity.HasOne<Business>().WithMany()
+                .HasForeignKey(x => x.BusinessId).OnDelete(DeleteBehavior.Cascade);
         });
 
         builder.Entity<BusinessLocation>(entity =>
