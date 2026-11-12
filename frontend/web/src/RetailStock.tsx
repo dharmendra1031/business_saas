@@ -1,5 +1,6 @@
 import { useEffect, useRef, useState, type FormEvent } from 'react'
 import { api, post, SessionExpiredError } from './api'
+import RetailStockAdjustments from './RetailStockAdjustments'
 
 interface Location {
   id: number
@@ -46,10 +47,11 @@ function message(error: unknown): string {
   return error instanceof Error ? error.message : 'Request failed. Please try again.'
 }
 
-export default function RetailStock({ businessId, locations, canOperate }: {
+export default function RetailStock({ businessId, locations, canOperate, isOwner }: {
   businessId: number
   locations: Location[]
   canOperate: boolean
+  isOwner: boolean
 }) {
   const [locationId, setLocationId] = useState(locations[0]?.id ?? 0)
   const [items, setItems] = useState<StockItem[]>([])
@@ -61,6 +63,7 @@ export default function RetailStock({ businessId, locations, canOperate }: {
   const [error, setError] = useState('')
   const [reload, setReload] = useState(0)
   const [opening, setOpening] = useState<StockItem | null>(null)
+  const [adjusting, setAdjusting] = useState<StockItem | null>(null)
   const [quantity, setQuantity] = useState('')
   const [saving, setSaving] = useState(false)
   const [saveError, setSaveError] = useState('')
@@ -80,6 +83,7 @@ export default function RetailStock({ businessId, locations, canOperate }: {
     setSearch('')
     setQuery('')
     setOpening(null)
+    setAdjusting(null)
     setHistoryProductId(null)
     setNotice('')
   }, [locationId])
@@ -133,6 +137,7 @@ export default function RetailStock({ businessId, locations, canOperate }: {
 
   function chooseOpening(item: StockItem) {
     setOpening(item)
+    setAdjusting(null)
     setQuantity('0')
     setSaveError('')
     setNotice('')
@@ -256,6 +261,9 @@ export default function RetailStock({ businessId, locations, canOperate }: {
                     {canOperate && item.isActive && !item.hasStockRecord &&
                       <button type="button" className="btn btn-sm btn-outline-secondary me-2"
                         onClick={() => chooseOpening(item)}>Set opening</button>}
+                    {canOperate && item.isActive && item.hasStockRecord &&
+                      <button type="button" className="btn btn-sm btn-outline-secondary me-2"
+                        onClick={() => { setAdjusting(item); setOpening(null) }}>Adjust</button>}
                     {item.hasStockRecord &&
                       <button type="button" className="btn btn-sm btn-outline-secondary"
                         onClick={() => {
@@ -276,6 +284,11 @@ export default function RetailStock({ businessId, locations, canOperate }: {
             onClick={() => setPage(current => current + 1)}>Next</button>
         </div>
       </div>}
+
+      <RetailStockAdjustments key={locationId} businessId={businessId}
+        locationId={locationId} canOperate={canOperate} isOwner={isOwner}
+        selected={adjusting} onCancel={() => setAdjusting(null)}
+        onPosted={() => setReload(value => value + 1)} />
 
       {historyProductId !== null && <div className="product-form">
         <div className="masters-heading">

@@ -6,11 +6,12 @@ import RetailStock from './RetailStock'
 
 type CatalogTab = 'products' | 'masters' | 'suppliers' | 'customers' | 'stock'
 
-export default function RetailCatalog({ businessId, canOperate, currencyCode, locations }: {
+export default function RetailCatalog({ businessId, canOperate, currencyCode, locations, roleCode }: {
   businessId: number
   canOperate: boolean
   currencyCode: string
   locations: { id: number; name: string; code: string }[]
+  roleCode: 'Owner' | 'Manager'
 }) {
   const [tab, setTab] = useState<CatalogTab>('products')
 
@@ -34,7 +35,8 @@ export default function RetailCatalog({ businessId, canOperate, currencyCode, lo
         : tab === 'masters'
           ? <RetailMasters businessId={businessId} canOperate={canOperate} />
           : tab === 'stock'
-            ? <RetailStock businessId={businessId} canOperate={canOperate} locations={locations} />
+            ? <RetailStock businessId={businessId} canOperate={canOperate}
+                locations={locations} isOwner={roleCode === 'Owner'} />
             : <RetailContacts key={tab} type={tab} businessId={businessId} canOperate={canOperate} />}
     </>
   )
