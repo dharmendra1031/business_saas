@@ -44,6 +44,9 @@ public sealed class SqlServerTests
             var db = scope.ServiceProvider.GetRequiredService<AppDbContext>();
             Assert.Contains(await db.Database.GetAppliedMigrationsAsync(),
                 migration => migration.EndsWith("_InitialCreate"));
+            Assert.Contains(await db.Database.GetAppliedMigrationsAsync(),
+                migration => migration.EndsWith("_AddRetailCategoriesAndUnits"));
+            Assert.True(await db.Database.CanConnectAsync());
             Assert.True(await db.BusinessTypes.AnyAsync(x => x.Code == "RETAIL" && x.IsSupported));
         }
 
