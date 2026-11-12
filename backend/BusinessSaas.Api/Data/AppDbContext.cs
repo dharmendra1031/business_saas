@@ -72,6 +72,20 @@ public sealed class RetailUnit
     public bool IsActive { get; set; } = true;
 }
 
+public sealed class RetailProduct
+{
+    public long Id { get; set; }
+    public long BusinessId { get; set; }
+    public long CategoryId { get; set; }
+    public long UnitId { get; set; }
+    public string Name { get; set; } = "";
+    public string Sku { get; set; } = "";
+    public string? Barcode { get; set; }
+    public decimal SalePrice { get; set; }
+    public string TaxClassification { get; set; } = "";
+    public bool IsActive { get; set; } = true;
+}
+
 public sealed class AppDbContext(DbContextOptions<AppDbContext> options)
     : IdentityUserContext<AppUser, long>(options)
 {
@@ -83,6 +97,7 @@ public sealed class AppDbContext(DbContextOptions<AppDbContext> options)
 
     public DbSet<RetailCategory> RetailCategories => Set<RetailCategory>();
     public DbSet<RetailUnit> RetailUnits => Set<RetailUnit>();
+    public DbSet<RetailProduct> RetailProducts => Set<RetailProduct>();
 
     protected override void OnModelCreating(ModelBuilder builder)
     {
@@ -161,6 +176,24 @@ public sealed class AppDbContext(DbContextOptions<AppDbContext> options)
             entity.HasIndex(x => new { x.BusinessId, x.NameKey }).IsUnique();
             entity.HasOne<Business>().WithMany()
                 .HasForeignKey(x => x.BusinessId).OnDelete(DeleteBehavior.Cascade);
+        });
+
+        builder.Entity<RetailProduct>(entity =>
+        {
+            entity.Property(x => x.Name).HasMaxLength(150).IsRequired();
+            entity.Property(x => x.Sku).HasMaxLength(50).IsRequired();
+            entity.Property(x => x.Barcode).HasMaxLength(64);
+            entity.Property(x => x.SalePrice).HasPrecision(18, 2);
+            entity.Property(x => x.TaxClassification).HasMaxLength(30).IsRequired();
+            entity.HasIndex(x => new { x.BusinessId, x.Sku }).IsUnique();
+            entity.HasIndex(x => new { x.BusinessId, x.Barcode })
+                .IsUnique().HasFilter("[Barcode] IS NOT NULL");
+            entity.HasOne<Business>().WithMany()
+                .HasForeignKey(x => x.BusinessId).OnDelete(DeleteBehavior.Cascade);
+            entity.HasOne<RetailCategory>().WithMany()
+                .HasForeignKey(x => x.CategoryId).OnDelete(DeleteBehavior.Restrict);
+            entity.HasOne<RetailUnit>().WithMany()
+                .HasForeignKey(x => x.UnitId).OnDelete(DeleteBehavior.Restrict);
         });
 
     }
