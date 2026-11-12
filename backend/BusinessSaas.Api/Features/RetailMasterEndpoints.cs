@@ -14,12 +14,13 @@ public static class RetailMasterEndpoints
         var categories = app.MapGroup("/api/businesses/{businessId:long}/categories")
             .RequireAuthorization();
 
-        categories.MapGet("", async (long businessId, string? search, int page,
+        categories.MapGet("", async (long businessId, string? search, int? page,
             ClaimsPrincipal user, AppDbContext db) =>
         {
             var denied = await CheckAccess(db, user, businessId, false);
             if (denied is not null) return denied;
-            if (page is < 1 or > 100000) return Results.BadRequest(new { message = "Invalid page." });
+            var currentPage = page ?? 1;
+            if (currentPage is < 1 or > 100000) return Results.BadRequest(new { message = "Invalid page." });
 
             var term = search?.Trim().ToUpperInvariant() ?? "";
             if (term.Length > 80) return Results.BadRequest(new { message = "Search is too long." });
@@ -29,10 +30,10 @@ public static class RetailMasterEndpoints
 
             var total = await query.CountAsync();
             var items = await query.OrderBy(x => x.NameKey).ThenBy(x => x.Id)
-                .Skip((page - 1) * PageSize).Take(PageSize)
+                .Skip((currentPage - 1) * PageSize).Take(PageSize)
                 .Select(x => new { x.Id, x.Name, x.IsActive }).ToListAsync();
 
-            return Results.Ok(new { items, total, page, pageSize = PageSize });
+            return Results.Ok(new { items, total, page = currentPage, pageSize = PageSize });
         });
 
         categories.MapPost("", async (long businessId, CategoryRequest request,
@@ -94,12 +95,13 @@ public static class RetailMasterEndpoints
         var units = app.MapGroup("/api/businesses/{businessId:long}/units")
             .RequireAuthorization();
 
-        units.MapGet("", async (long businessId, string? search, int page,
+        units.MapGet("", async (long businessId, string? search, int? page,
             ClaimsPrincipal user, AppDbContext db) =>
         {
             var denied = await CheckAccess(db, user, businessId, false);
             if (denied is not null) return denied;
-            if (page is < 1 or > 100000) return Results.BadRequest(new { message = "Invalid page." });
+            var currentPage = page ?? 1;
+            if (currentPage is < 1 or > 100000) return Results.BadRequest(new { message = "Invalid page." });
 
             var term = search?.Trim().ToUpperInvariant() ?? "";
             if (term.Length > 60) return Results.BadRequest(new { message = "Search is too long." });
@@ -110,10 +112,10 @@ public static class RetailMasterEndpoints
 
             var total = await query.CountAsync();
             var items = await query.OrderBy(x => x.NameKey).ThenBy(x => x.Id)
-                .Skip((page - 1) * PageSize).Take(PageSize)
+                .Skip((currentPage - 1) * PageSize).Take(PageSize)
                 .Select(x => new { x.Id, x.Code, x.Name, x.IsActive }).ToListAsync();
 
-            return Results.Ok(new { items, total, page, pageSize = PageSize });
+            return Results.Ok(new { items, total, page = currentPage, pageSize = PageSize });
         });
 
         units.MapPost("", async (long businessId, UnitRequest request,
