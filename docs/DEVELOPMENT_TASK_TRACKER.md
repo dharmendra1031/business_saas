@@ -172,7 +172,7 @@
 
 | ID | Task / clear deliverable | Mandatory task-specific UI/UX check | Status |
 | --- | --- | --- | --- |
-| BS-071 | Add Category master and uniqueness rules | New/Edit/List compact हों | TODO |
+| BS-071 | Add Category master and uniqueness rules | New/Edit/List compact हों | UX REVIEW PENDING |
 | BS-072 | Add Unit master and validation | Unit selection unambiguous हो | TODO |
 | BS-073 | Add Product master with scoped SKU | Duplicate SKU inline message दे | TODO |
 | BS-074 | Add barcode field and lookup | Scanner/manual search दोनों सरल हों | TODO |
