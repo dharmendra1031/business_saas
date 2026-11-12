@@ -281,8 +281,8 @@ export default function App() {
                 <TeamMembers businessId={dashboard.business.id} />}
               <section className="next-steps">
                 <ShieldCheck size={22} />
-                <div><strong>Retail features are coming later</strong>
-                  <p>Product, Purchase, Stock and POS are not available yet. {dashboard.roleCode === 'Owner'
+                <div><strong>Next retail modules</strong>
+                  <p>Product, Purchase, Stock and POS are not available yet. Category and Unit setup is available to owners and managers. {dashboard.roleCode === 'Owner'
                     ? 'You can manage team access above.'
                     : 'Ask your business owner about access.'} No sample sales figures are shown.</p>
                 </div>
