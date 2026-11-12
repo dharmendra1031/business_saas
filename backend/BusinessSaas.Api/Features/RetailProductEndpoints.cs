@@ -28,7 +28,7 @@ public static class RetailProductEndpoints
             if (term.Length > 150 || status is not (null or "" or "all" or "active" or "inactive"))
                 return Results.BadRequest(new { message = "Invalid search or status filter." });
 
-            var query = Products(db, businessId);
+            var query = db.RetailProducts.AsNoTracking().Where(x => x.BusinessId == businessId);
             if (term.Length > 0)
                 query = query.Where(x => x.Name.ToUpper().Contains(term) ||
                     x.Sku.Contains(term) || x.Barcode != null && x.Barcode.Contains(term));
@@ -37,8 +37,9 @@ public static class RetailProductEndpoints
             if (status == "inactive") query = query.Where(x => !x.IsActive);
 
             var total = await query.CountAsync();
-            var items = await query.OrderBy(x => x.Name).ThenBy(x => x.Id)
-                .Skip((currentPage - 1) * PageSize).Take(PageSize).ToListAsync();
+            var pageQuery = query.OrderBy(x => x.Name).ThenBy(x => x.Id)
+                .Skip((currentPage - 1) * PageSize).Take(PageSize);
+            var items = await ProductDetails(db, pageQuery, businessId).ToListAsync();
 
             return Results.Ok(new { items, total, page = currentPage, pageSize = PageSize });
         });
@@ -71,8 +72,9 @@ public static class RetailProductEndpoints
             if (!ValidBarcode(code))
                 return Results.BadRequest(new { message = "Enter a valid barcode." });
 
-            var product = await Products(db, businessId)
-                .SingleOrDefaultAsync(x => x.Barcode == code && x.IsActive);
+            var matches = db.RetailProducts.AsNoTracking()
+                .Where(x => x.BusinessId == businessId && x.Barcode == code && x.IsActive);
+            var product = await ProductDetails(db, matches, businessId).SingleOrDefaultAsync();
             return product is null ? Results.NotFound() : Results.Ok(product);
         });
 
@@ -82,8 +84,9 @@ public static class RetailProductEndpoints
             var denied = await RetailMasterEndpoints.CheckAccess(db, user, businessId, false);
             if (denied is not null) return denied;
 
-            var product = await Products(db, businessId)
-                .SingleOrDefaultAsync(x => x.Id == productId);
+            var matches = db.RetailProducts.AsNoTracking()
+                .Where(x => x.BusinessId == businessId && x.Id == productId);
+            var product = await ProductDetails(db, matches, businessId).SingleOrDefaultAsync();
             return product is null ? Results.NotFound() : Results.Ok(product);
         });
 
@@ -172,8 +175,9 @@ public static class RetailProductEndpoints
         });
     }
 
-    private static IQueryable<ProductItem> Products(AppDbContext db, long businessId) =>
-        from product in db.RetailProducts.AsNoTracking()
+    private static IQueryable<ProductItem> ProductDetails(AppDbContext db,
+        IQueryable<RetailProduct> source, long businessId) =>
+        from product in source
         join category in db.RetailCategories.AsNoTracking()
             on product.CategoryId equals category.Id
         join unit in db.RetailUnits.AsNoTracking()
