@@ -131,6 +131,25 @@ public sealed class RetailStockMovement
     public DateTime PostedAtUtc { get; set; } = DateTime.UtcNow;
 }
 
+public sealed class RetailStockAdjustment
+{
+    public long Id { get; set; }
+    public long BusinessId { get; set; }
+    public long LocationId { get; set; }
+    public long ProductId { get; set; }
+    public long RequestedByUserId { get; set; }
+    public long? ReviewedByUserId { get; set; }
+    public long? PostedByUserId { get; set; }
+    public decimal SystemQuantity { get; set; }
+    public decimal CountedQuantity { get; set; }
+    public string Reason { get; set; } = "";
+    public string? Remarks { get; set; }
+    public string Status { get; set; } = "Pending Approval";
+    public DateTime RequestedAtUtc { get; set; } = DateTime.UtcNow;
+    public DateTime? ReviewedAtUtc { get; set; }
+    public DateTime? PostedAtUtc { get; set; }
+}
+
 public sealed class AppDbContext(DbContextOptions<AppDbContext> options)
     : IdentityUserContext<AppUser, long>(options)
 {
@@ -147,6 +166,7 @@ public sealed class AppDbContext(DbContextOptions<AppDbContext> options)
     public DbSet<RetailCustomer> RetailCustomers => Set<RetailCustomer>();
     public DbSet<RetailStockBalance> RetailStockBalances => Set<RetailStockBalance>();
     public DbSet<RetailStockMovement> RetailStockMovements => Set<RetailStockMovement>();
+    public DbSet<RetailStockAdjustment> RetailStockAdjustments => Set<RetailStockAdjustment>();
 
     protected override void OnModelCreating(ModelBuilder builder)
     {
@@ -297,6 +317,27 @@ public sealed class AppDbContext(DbContextOptions<AppDbContext> options)
                 .HasForeignKey(x => x.ProductId).OnDelete(DeleteBehavior.Restrict);
             entity.HasOne<AppUser>().WithMany()
                 .HasForeignKey(x => x.ActorUserId).OnDelete(DeleteBehavior.Restrict);
+        });
+        builder.Entity<RetailStockAdjustment>(entity =>
+        {
+            entity.Property(x => x.SystemQuantity).HasPrecision(18, 3);
+            entity.Property(x => x.CountedQuantity).HasPrecision(18, 3);
+            entity.Property(x => x.Reason).HasMaxLength(80).IsRequired();
+            entity.Property(x => x.Remarks).HasMaxLength(500);
+            entity.Property(x => x.Status).HasMaxLength(25).IsRequired();
+            entity.HasIndex(x => new { x.BusinessId, x.LocationId, x.Id });
+            entity.HasOne<Business>().WithMany()
+                .HasForeignKey(x => x.BusinessId).OnDelete(DeleteBehavior.Restrict);
+            entity.HasOne<BusinessLocation>().WithMany()
+                .HasForeignKey(x => x.LocationId).OnDelete(DeleteBehavior.Restrict);
+            entity.HasOne<RetailProduct>().WithMany()
+                .HasForeignKey(x => x.ProductId).OnDelete(DeleteBehavior.Restrict);
+            entity.HasOne<AppUser>().WithMany()
+                .HasForeignKey(x => x.RequestedByUserId).OnDelete(DeleteBehavior.Restrict);
+            entity.HasOne<AppUser>().WithMany()
+                .HasForeignKey(x => x.ReviewedByUserId).OnDelete(DeleteBehavior.Restrict);
+            entity.HasOne<AppUser>().WithMany()
+                .HasForeignKey(x => x.PostedByUserId).OnDelete(DeleteBehavior.Restrict);
         });
     }
 }

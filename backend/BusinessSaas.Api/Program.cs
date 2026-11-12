@@ -135,6 +135,7 @@ app.MapRetailMasterEndpoints();
 app.MapRetailProductEndpoints();
 app.MapRetailContactEndpoints();
 app.MapRetailStockEndpoints();
+app.MapRetailAdjustmentEndpoints();
 app.MapPlatformEndpoints();
 
 app.Run();

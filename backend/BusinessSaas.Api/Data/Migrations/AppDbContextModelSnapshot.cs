@@ -573,6 +573,64 @@ namespace BusinessSaas.Api.Data.Migrations
                     b.ToTable("RetailStockMovements");
                 });
 
+            modelBuilder.Entity("BusinessSaas.Api.Data.RetailStockAdjustment", b =>
+                {
+                    b.Property<long>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("bigint");
+
+                    SqlServerPropertyBuilderExtensions.UseIdentityColumn(b.Property<long>("Id"));
+
+                    b.Property<long>("BusinessId").HasColumnType("bigint");
+
+                    b.Property<decimal>("CountedQuantity")
+                        .HasPrecision(18, 3).HasColumnType("decimal(18,3)");
+
+                    b.Property<long>("LocationId").HasColumnType("bigint");
+
+                    b.Property<DateTime?>("PostedAtUtc").HasColumnType("datetime2");
+
+                    b.Property<long?>("PostedByUserId").HasColumnType("bigint");
+
+                    b.Property<long>("ProductId").HasColumnType("bigint");
+
+                    b.Property<string>("Reason")
+                        .IsRequired().HasMaxLength(80).HasColumnType("nvarchar(80)");
+
+                    b.Property<string>("Remarks")
+                        .HasMaxLength(500).HasColumnType("nvarchar(500)");
+
+                    b.Property<DateTime>("RequestedAtUtc").HasColumnType("datetime2");
+
+                    b.Property<long>("RequestedByUserId").HasColumnType("bigint");
+
+                    b.Property<DateTime?>("ReviewedAtUtc").HasColumnType("datetime2");
+
+                    b.Property<long?>("ReviewedByUserId").HasColumnType("bigint");
+
+                    b.Property<string>("Status")
+                        .IsRequired().HasMaxLength(25).HasColumnType("nvarchar(25)");
+
+                    b.Property<decimal>("SystemQuantity")
+                        .HasPrecision(18, 3).HasColumnType("decimal(18,3)");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("LocationId");
+
+                    b.HasIndex("PostedByUserId");
+
+                    b.HasIndex("ProductId");
+
+                    b.HasIndex("RequestedByUserId");
+
+                    b.HasIndex("ReviewedByUserId");
+
+                    b.HasIndex("BusinessId", "LocationId", "Id");
+
+                    b.ToTable("RetailStockAdjustments");
+                });
+
             modelBuilder.Entity("Microsoft.AspNetCore.Identity.IdentityUserClaim<long>", b =>
                 {
                     b.Property<int>("Id")
@@ -789,6 +847,27 @@ namespace BusinessSaas.Api.Data.Migrations
                         .HasForeignKey("ActorUserId")
                         .OnDelete(DeleteBehavior.Restrict)
                         .IsRequired();
+                });
+
+            modelBuilder.Entity("BusinessSaas.Api.Data.RetailStockAdjustment", b =>
+                {
+                    b.HasOne("BusinessSaas.Api.Data.Business", null).WithMany()
+                        .HasForeignKey("BusinessId").OnDelete(DeleteBehavior.Restrict).IsRequired();
+
+                    b.HasOne("BusinessSaas.Api.Data.BusinessLocation", null).WithMany()
+                        .HasForeignKey("LocationId").OnDelete(DeleteBehavior.Restrict).IsRequired();
+
+                    b.HasOne("BusinessSaas.Api.Data.RetailProduct", null).WithMany()
+                        .HasForeignKey("ProductId").OnDelete(DeleteBehavior.Restrict).IsRequired();
+
+                    b.HasOne("BusinessSaas.Api.Data.AppUser", null).WithMany()
+                        .HasForeignKey("RequestedByUserId").OnDelete(DeleteBehavior.Restrict).IsRequired();
+
+                    b.HasOne("BusinessSaas.Api.Data.AppUser", null).WithMany()
+                        .HasForeignKey("ReviewedByUserId").OnDelete(DeleteBehavior.Restrict);
+
+                    b.HasOne("BusinessSaas.Api.Data.AppUser", null).WithMany()
+                        .HasForeignKey("PostedByUserId").OnDelete(DeleteBehavior.Restrict);
                 });
 
             modelBuilder.Entity("Microsoft.AspNetCore.Identity.IdentityUserClaim<long>", b =>
