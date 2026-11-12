@@ -276,13 +276,14 @@ export default function App() {
               </div>
               {dashboard.roleCode !== 'Cashier' &&
                 <RetailCatalog key={dashboard.business.id} businessId={dashboard.business.id}
-                  canOperate={dashboard.canOperate} currencyCode={dashboard.business.currencyCode} />}
+                  canOperate={dashboard.canOperate} currencyCode={dashboard.business.currencyCode}
+                  locations={dashboard.locations} />}
               {dashboard.roleCode === 'Owner' &&
                 <TeamMembers businessId={dashboard.business.id} />}
               <section className="next-steps">
                 <ShieldCheck size={22} />
                 <div><strong>Next retail modules</strong>
-                  <p>Purchase, Stock and POS are not available yet. Retail Catalog setup is available to owners and managers. {dashboard.roleCode === 'Owner'
+                  <p>Purchase Receiving, Stock Adjustment and POS are not available yet. Catalog and initial Stock setup are available to owners and managers. {dashboard.roleCode === 'Owner'
                     ? 'You can manage team access above.'
                     : 'Ask your business owner about access.'} No sample sales figures are shown.</p>
                 </div>

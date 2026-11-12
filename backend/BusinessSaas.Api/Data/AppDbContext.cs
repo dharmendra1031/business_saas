@@ -108,6 +108,29 @@ public sealed class RetailCustomer
     public bool IsActive { get; set; } = true;
 }
 
+public sealed class RetailStockBalance
+{
+    public long Id { get; set; }
+    public long BusinessId { get; set; }
+    public long LocationId { get; set; }
+    public long ProductId { get; set; }
+    public decimal Quantity { get; set; }
+}
+
+public sealed class RetailStockMovement
+{
+    public long Id { get; set; }
+    public long BusinessId { get; set; }
+    public long LocationId { get; set; }
+    public long ProductId { get; set; }
+    public long ActorUserId { get; set; }
+    public string SourceType { get; set; } = "";
+    public long? SourceId { get; set; }
+    public decimal QuantityChange { get; set; }
+    public decimal BalanceAfter { get; set; }
+    public DateTime PostedAtUtc { get; set; } = DateTime.UtcNow;
+}
+
 public sealed class AppDbContext(DbContextOptions<AppDbContext> options)
     : IdentityUserContext<AppUser, long>(options)
 {
@@ -122,6 +145,8 @@ public sealed class AppDbContext(DbContextOptions<AppDbContext> options)
     public DbSet<RetailProduct> RetailProducts => Set<RetailProduct>();
     public DbSet<RetailSupplier> RetailSuppliers => Set<RetailSupplier>();
     public DbSet<RetailCustomer> RetailCustomers => Set<RetailCustomer>();
+    public DbSet<RetailStockBalance> RetailStockBalances => Set<RetailStockBalance>();
+    public DbSet<RetailStockMovement> RetailStockMovements => Set<RetailStockMovement>();
 
     protected override void OnModelCreating(ModelBuilder builder)
     {
@@ -240,6 +265,38 @@ public sealed class AppDbContext(DbContextOptions<AppDbContext> options)
             entity.HasIndex(x => new { x.BusinessId, x.NameKey });
             entity.HasOne<Business>().WithMany()
                 .HasForeignKey(x => x.BusinessId).OnDelete(DeleteBehavior.Cascade);
+        });
+        builder.Entity<RetailStockBalance>(entity =>
+        {
+            entity.ToTable(x => x.HasCheckConstraint("CK_RetailStockBalances_Quantity", "[Quantity] >= 0"));
+            entity.Property(x => x.Quantity).HasPrecision(18, 3);
+            entity.HasIndex(x => new { x.BusinessId, x.LocationId, x.ProductId }).IsUnique();
+            entity.HasOne<Business>().WithMany()
+                .HasForeignKey(x => x.BusinessId).OnDelete(DeleteBehavior.Restrict);
+            entity.HasOne<BusinessLocation>().WithMany()
+                .HasForeignKey(x => x.LocationId).OnDelete(DeleteBehavior.Restrict);
+            entity.HasOne<RetailProduct>().WithMany()
+                .HasForeignKey(x => x.ProductId).OnDelete(DeleteBehavior.Restrict);
+        });
+
+        builder.Entity<RetailStockMovement>(entity =>
+        {
+            entity.Property(x => x.SourceType).HasMaxLength(30).IsRequired();
+            entity.Property(x => x.QuantityChange).HasPrecision(18, 3);
+            entity.Property(x => x.BalanceAfter).HasPrecision(18, 3);
+            entity.HasIndex(x => new { x.BusinessId, x.LocationId, x.ProductId, x.Id });
+            entity.HasIndex(x => new { x.BusinessId, x.LocationId, x.ProductId, x.SourceType })
+                .IsUnique().HasFilter("[SourceType] = 'Opening'");
+            entity.HasIndex(x => new { x.BusinessId, x.SourceType, x.SourceId })
+                .IsUnique().HasFilter("[SourceId] IS NOT NULL");
+            entity.HasOne<Business>().WithMany()
+                .HasForeignKey(x => x.BusinessId).OnDelete(DeleteBehavior.Restrict);
+            entity.HasOne<BusinessLocation>().WithMany()
+                .HasForeignKey(x => x.LocationId).OnDelete(DeleteBehavior.Restrict);
+            entity.HasOne<RetailProduct>().WithMany()
+                .HasForeignKey(x => x.ProductId).OnDelete(DeleteBehavior.Restrict);
+            entity.HasOne<AppUser>().WithMany()
+                .HasForeignKey(x => x.ActorUserId).OnDelete(DeleteBehavior.Restrict);
         });
     }
 }

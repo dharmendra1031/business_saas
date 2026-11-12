@@ -487,6 +487,92 @@ namespace BusinessSaas.Api.Data.Migrations
                     b.ToTable("RetailCustomers");
                 });
 
+            modelBuilder.Entity("BusinessSaas.Api.Data.RetailStockBalance", b =>
+                {
+                    b.Property<long>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("bigint");
+
+                    SqlServerPropertyBuilderExtensions.UseIdentityColumn(b.Property<long>("Id"));
+
+                    b.Property<long>("BusinessId").HasColumnType("bigint");
+
+                    b.Property<long>("LocationId").HasColumnType("bigint");
+
+                    b.Property<long>("ProductId").HasColumnType("bigint");
+
+                    b.Property<decimal>("Quantity")
+                        .HasPrecision(18, 3)
+                        .HasColumnType("decimal(18,3)");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("LocationId");
+
+                    b.HasIndex("ProductId");
+
+                    b.HasIndex("BusinessId", "LocationId", "ProductId").IsUnique();
+
+                    b.ToTable("RetailStockBalances", t =>
+                        {
+                            t.HasCheckConstraint("CK_RetailStockBalances_Quantity", "[Quantity] >= 0");
+                        });
+                });
+
+            modelBuilder.Entity("BusinessSaas.Api.Data.RetailStockMovement", b =>
+                {
+                    b.Property<long>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("bigint");
+
+                    SqlServerPropertyBuilderExtensions.UseIdentityColumn(b.Property<long>("Id"));
+
+                    b.Property<long>("BusinessId").HasColumnType("bigint");
+
+                    b.Property<long>("LocationId").HasColumnType("bigint");
+
+                    b.Property<long>("ProductId").HasColumnType("bigint");
+
+                    b.Property<long>("ActorUserId").HasColumnType("bigint");
+
+                    b.Property<decimal>("BalanceAfter")
+                        .HasPrecision(18, 3)
+                        .HasColumnType("decimal(18,3)");
+
+                    b.Property<DateTime>("PostedAtUtc").HasColumnType("datetime2");
+
+                    b.Property<decimal>("QuantityChange")
+                        .HasPrecision(18, 3)
+                        .HasColumnType("decimal(18,3)");
+
+                    b.Property<long?>("SourceId").HasColumnType("bigint");
+
+                    b.Property<string>("SourceType")
+                        .IsRequired()
+                        .HasMaxLength(30)
+                        .HasColumnType("nvarchar(30)");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("ActorUserId");
+
+                    b.HasIndex("LocationId");
+
+                    b.HasIndex("ProductId");
+
+                    b.HasIndex("BusinessId", "SourceType", "SourceId")
+                        .IsUnique()
+                        .HasFilter("[SourceId] IS NOT NULL");
+
+                    b.HasIndex("BusinessId", "LocationId", "ProductId", "Id");
+
+                    b.HasIndex("BusinessId", "LocationId", "ProductId", "SourceType")
+                        .IsUnique()
+                        .HasFilter("[SourceType] = 'Opening'");
+
+                    b.ToTable("RetailStockMovements");
+                });
+
             modelBuilder.Entity("Microsoft.AspNetCore.Identity.IdentityUserClaim<long>", b =>
                 {
                     b.Property<int>("Id")
@@ -653,6 +739,55 @@ namespace BusinessSaas.Api.Data.Migrations
                         .WithMany()
                         .HasForeignKey("BusinessId")
                         .OnDelete(DeleteBehavior.Cascade)
+                        .IsRequired();
+                });
+
+            modelBuilder.Entity("BusinessSaas.Api.Data.RetailStockBalance", b =>
+                {
+                    b.HasOne("BusinessSaas.Api.Data.Business", null)
+                        .WithMany()
+                        .HasForeignKey("BusinessId")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .IsRequired();
+
+                    b.HasOne("BusinessSaas.Api.Data.BusinessLocation", null)
+                        .WithMany()
+                        .HasForeignKey("LocationId")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .IsRequired();
+
+                    b.HasOne("BusinessSaas.Api.Data.RetailProduct", null)
+                        .WithMany()
+                        .HasForeignKey("ProductId")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .IsRequired();
+
+                });
+
+            modelBuilder.Entity("BusinessSaas.Api.Data.RetailStockMovement", b =>
+                {
+                    b.HasOne("BusinessSaas.Api.Data.Business", null)
+                        .WithMany()
+                        .HasForeignKey("BusinessId")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .IsRequired();
+
+                    b.HasOne("BusinessSaas.Api.Data.BusinessLocation", null)
+                        .WithMany()
+                        .HasForeignKey("LocationId")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .IsRequired();
+
+                    b.HasOne("BusinessSaas.Api.Data.RetailProduct", null)
+                        .WithMany()
+                        .HasForeignKey("ProductId")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .IsRequired();
+
+                    b.HasOne("BusinessSaas.Api.Data.AppUser", null)
+                        .WithMany()
+                        .HasForeignKey("ActorUserId")
+                        .OnDelete(DeleteBehavior.Restrict)
                         .IsRequired();
                 });
 
