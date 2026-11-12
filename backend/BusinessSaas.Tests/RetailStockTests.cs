@@ -136,6 +136,133 @@ public sealed class RetailStockTests
                 x.BusinessId == businessId && x.ProductId == product));
         }
 
+        var adjustments = path + "/adjustments";
+        var adjustRequest = new
+        {
+            productId = product,
+            systemQuantity = 12.125m,
+            countedQuantity = 10m,
+            reason = "Damage",
+            remarks = "Physical damage confirmed"
+        };
+
+        Assert.Equal(HttpStatusCode.NotFound,
+            (await Send(other, HttpMethod.Post, adjustments, adjustRequest)).StatusCode);
+        Assert.Equal(HttpStatusCode.NotFound,
+            (await Send(cashier, HttpMethod.Post, adjustments, adjustRequest)).StatusCode);
+        Assert.Equal(HttpStatusCode.NotFound,
+            (await Send(owner, HttpMethod.Post, adjustments,
+                new { productId = foreignProduct, systemQuantity = 12.125m,
+                    countedQuantity = 10m, reason = "Damage" })).StatusCode);
+        Assert.Equal(HttpStatusCode.Conflict,
+            (await Send(owner, HttpMethod.Post, adjustments,
+                new { productId = product, systemQuantity = 99m,
+                    countedQuantity = 10m, reason = "Damage" })).StatusCode);
+        Assert.Equal(HttpStatusCode.BadRequest,
+            (await Send(owner, HttpMethod.Post, adjustments,
+                new { productId = product, systemQuantity = 12.125m,
+                    countedQuantity = -1m, reason = "Damage" })).StatusCode);
+        Assert.Equal(HttpStatusCode.BadRequest,
+            (await Send(owner, HttpMethod.Post, adjustments,
+                new { productId = product, systemQuantity = 12.125m,
+                    countedQuantity = 10m, reason = "Unknown Reason" })).StatusCode);
+
+        var submitted = await Send(manager, HttpMethod.Post, adjustments, adjustRequest);
+        Assert.Equal(HttpStatusCode.Created, submitted.StatusCode);
+        var adjustmentId = (await submitted.Content.ReadFromJsonAsync<JsonElement>())
+            .GetProperty("id").GetInt64();
+        Assert.True(adjustmentId > 0);
+
+        Assert.Equal(HttpStatusCode.NotFound,
+            (await Send(manager, HttpMethod.Post, adjustments + "/" + adjustmentId + "/review",
+                new { approve = true })).StatusCode);
+        Assert.Equal(HttpStatusCode.Conflict,
+            (await Send(owner, HttpMethod.Post, adjustments + "/" + adjustmentId + "/post",
+                new { })).StatusCode);
+
+        var rejection = await Send(owner, HttpMethod.Post, adjustments,
+            new { productId = product, systemQuantity = 12.125m,
+                countedQuantity = 8m, reason = "Loss" });
+        Assert.Equal(HttpStatusCode.Created, rejection.StatusCode);
+        var rejectedId = (await rejection.Content.ReadFromJsonAsync<JsonElement>())
+            .GetProperty("id").GetInt64();
+        Assert.Equal(HttpStatusCode.BadRequest,
+            (await Send(owner, HttpMethod.Post, adjustments + "/" + rejectedId + "/review",
+                new { approve = false })).StatusCode);
+        Assert.Equal(HttpStatusCode.OK,
+            (await Send(owner, HttpMethod.Post, adjustments + "/" + rejectedId + "/review",
+                new { approve = false, remarks = "Count was not verified" })).StatusCode);
+        Assert.Equal(HttpStatusCode.Conflict,
+            (await Send(owner, HttpMethod.Post, adjustments + "/" + rejectedId + "/post",
+                new { })).StatusCode);
+
+        var beforeApproval = await owner.GetFromJsonAsync<JsonElement>(path);
+        Assert.Equal(12.125m, beforeApproval.GetProperty("items")[0]
+            .GetProperty("quantity").GetDecimal());
+
+        Assert.Equal(HttpStatusCode.OK,
+            (await Send(owner, HttpMethod.Post, adjustments + "/" + adjustmentId + "/review",
+                new { approve = true, remarks = "Count verified" })).StatusCode);
+        Assert.Equal(HttpStatusCode.Conflict,
+            (await Send(owner, HttpMethod.Post, adjustments + "/" + adjustmentId + "/review",
+                new { approve = true })).StatusCode);
+
+        Assert.Equal(HttpStatusCode.OK,
+            (await Send(owner, HttpMethod.Post, adjustments + "/" + adjustmentId + "/post",
+                new { })).StatusCode);
+        Assert.Equal(HttpStatusCode.OK,
+            (await Send(owner, HttpMethod.Post, adjustments + "/" + adjustmentId + "/post",
+                new { })).StatusCode);
+
+        var afterPosting = await owner.GetFromJsonAsync<JsonElement>(path);
+        Assert.Equal(10m, afterPosting.GetProperty("items")[0]
+            .GetProperty("quantity").GetDecimal());
+
+        // Two approved vouchers against the same saved balance cannot both post.
+        var stale = await Send(owner, HttpMethod.Post, adjustments,
+            new { productId = product, systemQuantity = 10m,
+                countedQuantity = 7m, reason = "Physical Count" });
+        var fresh = await Send(owner, HttpMethod.Post, adjustments,
+            new { productId = product, systemQuantity = 10m,
+                countedQuantity = 8m, reason = "Physical Count" });
+        Assert.Equal(HttpStatusCode.Created, stale.StatusCode);
+        Assert.Equal(HttpStatusCode.Created, fresh.StatusCode);
+        var staleId = (await stale.Content.ReadFromJsonAsync<JsonElement>())
+            .GetProperty("id").GetInt64();
+        var freshId = (await fresh.Content.ReadFromJsonAsync<JsonElement>())
+            .GetProperty("id").GetInt64();
+        foreach (var id in new[] { staleId, freshId })
+            Assert.Equal(HttpStatusCode.OK,
+                (await Send(owner, HttpMethod.Post, adjustments + "/" + id + "/review",
+                    new { approve = true })).StatusCode);
+        Assert.Equal(HttpStatusCode.OK,
+            (await Send(owner, HttpMethod.Post, adjustments + "/" + freshId + "/post",
+                new { })).StatusCode);
+        Assert.Equal(HttpStatusCode.Conflict,
+            (await Send(owner, HttpMethod.Post, adjustments + "/" + staleId + "/post",
+                new { })).StatusCode);
+
+        var adjustmentsPage = await manager.GetFromJsonAsync<JsonElement>(adjustments + "?page=1");
+        Assert.Equal(4, adjustmentsPage.GetProperty("total").GetInt32());
+        Assert.Equal(HttpStatusCode.NotFound,
+            (await other.GetAsync(adjustments)).StatusCode);
+
+        var finalStock = await owner.GetFromJsonAsync<JsonElement>(path);
+        Assert.Equal(8m, finalStock.GetProperty("items")[0]
+            .GetProperty("quantity").GetDecimal());
+        using (var scope = factory.Services.CreateScope())
+        {
+            var db = scope.ServiceProvider.GetRequiredService<AppDbContext>();
+            Assert.Equal(3, await db.RetailStockMovements.CountAsync(x =>
+                x.BusinessId == businessId && x.ProductId == product));
+            Assert.Equal(2, await db.RetailStockAdjustments.CountAsync(x =>
+                x.BusinessId == businessId && x.Status == "Posted"));
+            Assert.Equal(1, await db.RetailStockAdjustments.CountAsync(x =>
+                x.BusinessId == businessId && x.Status == "Rejected"));
+            Assert.Equal(1, await db.RetailStockAdjustments.CountAsync(x =>
+                x.BusinessId == businessId && x.Status == "Approved"));
+        }
+
         using (var scope = factory.Services.CreateScope())
         {
             var db = scope.ServiceProvider.GetRequiredService<AppDbContext>();

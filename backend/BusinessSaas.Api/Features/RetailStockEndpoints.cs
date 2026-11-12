@@ -144,7 +144,7 @@ public static class RetailStockEndpoints
         });
     }
 
-    private static async Task<IResult?> CheckLocation(AppDbContext db,
+    internal static async Task<IResult?> CheckLocation(AppDbContext db,
         ClaimsPrincipal user, long businessId, long locationId, bool write)
     {
         var denied = await RetailMasterEndpoints.CheckAccess(db, user, businessId, write);

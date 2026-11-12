@@ -277,7 +277,7 @@ export default function App() {
               {dashboard.roleCode !== 'Cashier' &&
                 <RetailCatalog key={dashboard.business.id} businessId={dashboard.business.id}
                   canOperate={dashboard.canOperate} currencyCode={dashboard.business.currencyCode}
-                  locations={dashboard.locations} />}
+                  locations={dashboard.locations} roleCode={dashboard.roleCode} />}
               {dashboard.roleCode === 'Owner' &&
                 <TeamMembers businessId={dashboard.business.id} />}
               <section className="next-steps">
