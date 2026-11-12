@@ -132,6 +132,7 @@ app.MapAuthEndpoints();
 app.MapBusinessEndpoints();
 app.MapBusinessStaffEndpoints();
 app.MapRetailMasterEndpoints();
+app.MapRetailProductEndpoints();
 app.MapPlatformEndpoints();
 
 app.Run();
