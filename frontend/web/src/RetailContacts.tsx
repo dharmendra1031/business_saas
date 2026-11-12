@@ -36,6 +36,7 @@ export default function RetailContacts({ businessId, canOperate, type }: {
   const [loading, setLoading] = useState(true)
   const [saving, setSaving] = useState(false)
   const [error, setError] = useState('')
+  const [loadError, setLoadError] = useState('')
   const [notice, setNotice] = useState('')
   const nameInput = useRef<HTMLInputElement>(null)
   const basePath = `/businesses/${businessId}/${type}`
@@ -45,7 +46,7 @@ export default function RetailContacts({ businessId, canOperate, type }: {
   useEffect(() => {
     let active = true
     setLoading(true)
-    setError('')
+    setLoadError('')
     const params = new URLSearchParams({ search: query, page: String(page) })
     api<ContactPage>(basePath + '?' + params)
       .then(value => {
@@ -57,7 +58,7 @@ export default function RetailContacts({ businessId, canOperate, type }: {
         if (!active || cause instanceof SessionExpiredError) return
         setItems([])
         setTotal(0)
-        setError(cause instanceof Error ? cause.message : 'Unable to load records.')
+        setLoadError(cause instanceof Error ? cause.message : 'Unable to load records.')
       })
       .finally(() => { if (active) setLoading(false) })
     return () => { active = false }
@@ -123,10 +124,11 @@ export default function RetailContacts({ businessId, canOperate, type }: {
       {!canOperate && <div className="alert alert-warning" role="status">
         Your subscription is inactive. Records are read-only.
       </div>}
-      {error && <div className="alert alert-danger" role="alert">
-        {error} {loading ? null : <button type="button" className="btn btn-sm btn-outline-secondary ms-2"
-          onClick={() => setReload(value => value + 1)}>Retry</button>}
+      {loadError && <div className="alert alert-danger" role="alert">
+        {loadError} <button type="button" className="btn btn-sm btn-outline-secondary ms-2"
+          onClick={() => setReload(value => value + 1)}>Retry</button>
       </div>}
+      {error && <div className="alert alert-danger" role="alert">{error}</div>}
       {notice && <div className="alert alert-success" role="status">{notice}</div>}
 
       {canOperate && <form className="masters-form" onSubmit={event => void save(event)}>
@@ -177,7 +179,7 @@ export default function RetailContacts({ businessId, canOperate, type }: {
       </form>
 
       {loading ? <p className="text-secondary" role="status">Loading {type}…</p>
-        : error ? null
+        : loadError ? null
           : items.length === 0 ? <p className="masters-empty">
             {query ? 'No matching records.' : `No ${type} yet.`}
           </p>
@@ -201,7 +203,7 @@ export default function RetailContacts({ businessId, canOperate, type }: {
               </table>
             </div>}
 
-      {!loading && !error && total > 0 && <div className="masters-pages">
+      {!loading && !loadError && total > 0 && <div className="masters-pages">
         <span className="small text-secondary">Page {page} · {total} records</span>
         <div className="btn-group">
           <button type="button" className="btn btn-sm btn-outline-secondary"

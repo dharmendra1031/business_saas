@@ -45,6 +45,32 @@ public sealed class RetailContactTests
         await Register(cashier, "suppliers-cashier@example.test");
         var businessId = await CreateBusiness(owner, "Supplier Shop", "supplier-main-20261112");
         var otherId = await CreateBusiness(other, "Another Supplier Shop", "supplier-other-20261112");
+        // Retail APIs must reject a valid membership in a different business template.
+        long salonTypeId;
+        using (var scope = factory.Services.CreateScope())
+        {
+            var db = scope.ServiceProvider.GetRequiredService<AppDbContext>();
+            var salon = new BusinessType { Code = "SALON", Name = "Salon", IsSupported = true };
+            db.BusinessTypes.Add(salon);
+            await db.SaveChangesAsync();
+            salonTypeId = salon.Id;
+        }
+        var salonResponse = await Send(owner, HttpMethod.Post, "/api/businesses", new
+        {
+            name = "Separate Salon", businessTypeId = salonTypeId,
+            countryCode = "IN", currencyCode = "INR", timeZoneId = "Asia/Kolkata",
+            requestKey = "separate-salon-20261112"
+        });
+        Assert.Equal(HttpStatusCode.Created, salonResponse.StatusCode);
+        var salonId = (await salonResponse.Content.ReadFromJsonAsync<JsonElement>())
+            .GetProperty("id").GetInt64();
+        Assert.Equal(HttpStatusCode.NotFound,
+            (await owner.GetAsync($"/api/businesses/{salonId}/categories")).StatusCode);
+        Assert.Equal(HttpStatusCode.NotFound,
+            (await owner.GetAsync($"/api/businesses/{salonId}/products")).StatusCode);
+        Assert.Equal(HttpStatusCode.NotFound,
+            (await owner.GetAsync($"/api/businesses/{salonId}/suppliers")).StatusCode);
+
         var suppliers = $"/api/businesses/{businessId}/suppliers";
         var customers = $"/api/businesses/{businessId}/customers";
 
