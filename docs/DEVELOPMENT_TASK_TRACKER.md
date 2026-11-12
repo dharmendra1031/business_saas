@@ -57,6 +57,8 @@
 
 **Batch 05:** [BS-041–BS-050 UI/UX review](./BATCH_05_REVIEW.md). Static review and TypeScript CI are not a substitute for actual browser/role acceptance.
 
+**Batch 06:** [BS-051–BS-060 Platform Admin review](./BATCH_06_REVIEW.md). The read-only directory is implemented and CI checked; changes and privileged provisioning stay locked until separately audited. Actual browser UX remains pending.
+
 ## Detailed backlog
 
 ### A. Product scope & architecture — Now
@@ -139,15 +141,15 @@
 | ID | Task / clear deliverable | Mandatory task-specific UI/UX check | Status |
 | --- | --- | --- | --- |
 | BS-051 | Keep explicit Platform Admin permission gate | Business Owner को admin navigation न मिले | BASELINE |
-| BS-052 | Add secured Platform Admin layout | Admin vs shop workspace स्पष्ट हो | TODO |
-| BS-053 | Add business directory with paging | एक business ढूँढना आसान हो | TODO |
-| BS-054 | Add admin business detail summary | Subscription/owner/status अलग-अलग पढ़ें | TODO |
+| BS-052 | Add secured Platform Admin layout | Admin vs shop workspace स्पष्ट हो | UX REVIEW PENDING |
+| BS-053 | Add business directory with paging | एक business ढूँढना आसान हो | UX REVIEW PENDING |
+| BS-054 | Add admin business detail summary | Subscription/owner/status अलग-अलग पढ़ें | UX REVIEW PENDING |
 | BS-055 | Add supported business type toggles | Unsupported type का effect साफ दिखे | TODO |
 | BS-056 | Add simple plan and entitlement editor | Changes की effective date स्पष्ट हो | TODO |
 | BS-057 | Add trial status and authorized adjustments | Trial extension के reason दिखें | TODO |
 | BS-058 | Add platform audit history | Actor/time/change आसानी से दिखें | TODO |
 | BS-059 | Add platform admin account provisioning | किसे platform access है, स्पष्ट हो | TODO |
-| BS-060 | Test all platform API cross-role denials | Forbidden states में private details न leak हों | TODO |
+| BS-060 | Test all platform API cross-role denials | Forbidden states में private details न leak हों | UX REVIEW PENDING |
 
 ### G. Subscriptions & billing — Before paid launch
 
