@@ -606,6 +606,9 @@ namespace BusinessSaas.Api.Data.Migrations
 
                     b.Property<DateTime?>("ReviewedAtUtc").HasColumnType("datetime2");
 
+                    b.Property<string>("ReviewRemarks")
+                        .HasMaxLength(500).HasColumnType("nvarchar(500)");
+
                     b.Property<long?>("ReviewedByUserId").HasColumnType("bigint");
 
                     b.Property<string>("Status")

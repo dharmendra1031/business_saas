@@ -28,6 +28,7 @@ public sealed class AddRetailStockAdjustments : Migration
                 CountedQuantity = table.Column<decimal>(type: "decimal(18,3)", precision: 18, scale: 3, nullable: false),
                 Reason = table.Column<string>(type: "nvarchar(80)", maxLength: 80, nullable: false),
                 Remarks = table.Column<string>(type: "nvarchar(500)", maxLength: 500, nullable: true),
+                ReviewRemarks = table.Column<string>(type: "nvarchar(500)", maxLength: 500, nullable: true),
                 Status = table.Column<string>(type: "nvarchar(25)", maxLength: 25, nullable: false),
                 RequestedAtUtc = table.Column<DateTime>(type: "datetime2", nullable: false),
                 ReviewedAtUtc = table.Column<DateTime>(type: "datetime2", nullable: true),

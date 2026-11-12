@@ -144,6 +144,7 @@ public sealed class RetailStockAdjustment
     public decimal CountedQuantity { get; set; }
     public string Reason { get; set; } = "";
     public string? Remarks { get; set; }
+    public string? ReviewRemarks { get; set; }
     public string Status { get; set; } = "Pending Approval";
     public DateTime RequestedAtUtc { get; set; } = DateTime.UtcNow;
     public DateTime? ReviewedAtUtc { get; set; }
@@ -324,6 +325,7 @@ public sealed class AppDbContext(DbContextOptions<AppDbContext> options)
             entity.Property(x => x.CountedQuantity).HasPrecision(18, 3);
             entity.Property(x => x.Reason).HasMaxLength(80).IsRequired();
             entity.Property(x => x.Remarks).HasMaxLength(500);
+            entity.Property(x => x.ReviewRemarks).HasMaxLength(500);
             entity.Property(x => x.Status).HasMaxLength(25).IsRequired();
             entity.HasIndex(x => new { x.BusinessId, x.LocationId, x.Id });
             entity.HasOne<Business>().WithMany()
