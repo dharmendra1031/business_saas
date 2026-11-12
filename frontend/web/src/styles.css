@@ -132,3 +132,19 @@ button:focus-visible, a:focus-visible, input:focus-visible, select:focus-visible
   .content-section { padding: 18px; }
   .form-footer { justify-content: space-between; }
 }
+
+.retail-masters { margin-top: 20px; }
+.masters-heading { display: flex; align-items: flex-start; justify-content: space-between; gap: 15px; margin-bottom: 18px; }
+.masters-heading h2 { margin-bottom: 7px; }
+.masters-heading p { font-size: .9rem; color: var(--muted); margin: 0; }
+.masters-form { display: flex; flex-wrap: wrap; gap: 12px; align-items: end; padding: 14px 0; border-top: 1px solid var(--line); }
+.masters-form > div { flex: 1 1 180px; min-width: 0; }
+.masters-form > .btn { min-height: 38px; }
+.masters-search { display: flex; gap: 10px; max-width: 440px; margin: 16px 0; }
+.masters-search input { min-width: 0; }
+.masters-empty { padding: 16px 0; color: var(--muted); }
+.masters-pages { display: flex; justify-content: space-between; align-items: center; gap: 15px; padding-top: 10px; }
+@media (max-width: 600px) {
+  .masters-heading { flex-direction: column; }
+  .masters-form > div, .masters-form > .btn { flex: 1 1 100%; }
+}
