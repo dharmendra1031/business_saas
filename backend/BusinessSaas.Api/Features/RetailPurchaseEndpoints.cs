@@ -2,7 +2,6 @@ using System.Data;
 using System.Net;
 using System.Security.Claims;
 using BusinessSaas.Api.Data;
-using Microsoft.Data.SqlClient;
 using Microsoft.EntityFrameworkCore;
 
 namespace BusinessSaas.Api.Features;
@@ -303,15 +302,11 @@ public static class RetailPurchaseEndpoints
                 await transaction.CommitAsync();
                 return Results.Ok(new { receipt.Id, status = "Posted", orderClosed = completed });
             }
-            catch (SqlException error) when (error.Number is 1205 or 1222 or 3960 or 2601 or 2627)
+            catch (Exception error) when (StockPosting.IsSqlConflict(error))
             {
                 return Results.Conflict(new { message = "Another receiving updated this order. Refresh and retry." });
             }
-            catch (DbUpdateException error) when (
-                error.InnerException is SqlException { Number: 2601 or 2627 or 1205 })
-            {
-                return Results.Conflict(new { message = "Duplicate or conflicting stock posting." });
-            }
+
         });
     }
 

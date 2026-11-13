@@ -1,4 +1,5 @@
 using BusinessSaas.Api.Data;
+using Microsoft.Data.SqlClient;
 using Microsoft.EntityFrameworkCore;
 
 namespace BusinessSaas.Api.Features;
@@ -6,6 +7,14 @@ namespace BusinessSaas.Api.Features;
 public static class StockPosting
 {
     private const decimal MaxQuantity = 9999999999.999m;
+
+    public static bool IsSqlConflict(Exception error)
+    {
+        for (Exception? cause = error; cause is not null; cause = cause.InnerException)
+            if (cause is SqlException { Number: 1205 or 1222 or 3960 or 2601 or 2627 })
+                return true;
+        return false;
+    }
 
     // The caller owns the transaction, so the business document and stock post commit together.
     // A failed update leaves the balance and ledger untouched.

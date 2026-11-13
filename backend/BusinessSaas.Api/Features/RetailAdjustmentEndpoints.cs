@@ -1,7 +1,6 @@
 using System.Data;
 using System.Security.Claims;
 using BusinessSaas.Api.Data;
-using Microsoft.Data.SqlClient;
 using Microsoft.EntityFrameworkCore;
 
 namespace BusinessSaas.Api.Features;
@@ -179,14 +178,11 @@ public static class RetailAdjustmentEndpoints
                 return Results.Ok(new { adjustment.Id, status = "Posted",
                     adjustment.SystemQuantity, adjustment.CountedQuantity });
             }
-            catch (SqlException ex) when (ex.Number is 1205 or 1222 or 3960)
+            catch (Exception error) when (StockPosting.IsSqlConflict(error))
             {
                 return Results.Conflict(new { message = "Stock is being updated. Refresh and retry." });
             }
-            catch (DbUpdateException ex) when (ex.InnerException is SqlException { Number: 2601 or 2627 })
-            {
-                return Results.Conflict(new { message = "This stock movement was already posted." });
-            }
+
         });
     }
 
