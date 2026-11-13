@@ -297,14 +297,15 @@ export default function RetailPurchases({ businessId, canOperate, locations, rol
           </div>
           <div>
             <label className="form-label" htmlFor="purchase-supplier">Supplier *</label>
-            <form className="masters-search" onSubmit={event => {
-              event.preventDefault(); setSupplierQuery(supplierSearch.trim())
-            }}>
+            <div className="masters-search">
               <input className="form-control" aria-label="Find supplier" type="search"
                 placeholder="Supplier search" value={supplierSearch}
                 onChange={event => setSupplierSearch(event.target.value)} />
-              <button type="submit" className="btn btn-outline-secondary">Find</button>
-            </form>
+              <button type="button" className="btn btn-outline-secondary"
+                onClick={() => { setSupplierId(0); setSupplierQuery(supplierSearch.trim()) }}>
+                Find
+              </button>
+            </div>
             <select className="form-select" id="purchase-supplier" value={supplierId}
               onChange={event => setSupplierId(Number(event.target.value))} required>
               <option value={0}>Select supplier</option>
