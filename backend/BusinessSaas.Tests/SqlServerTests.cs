@@ -251,7 +251,8 @@ public sealed class SqlServerTests
             PostReceipt(receiptA), PostReceipt(receiptB));
         Assert.Equal(1, competingReceipts.Count(x => x.StatusCode == HttpStatusCode.OK));
         var rejected = competingReceipts.Single(x => x.StatusCode != HttpStatusCode.OK);
-        Assert.Equal(HttpStatusCode.Conflict, rejected.StatusCode);
+        Assert.True(rejected.StatusCode == HttpStatusCode.Conflict,
+            $"Expected 409; got {(int)rejected.StatusCode}: {await rejected.Content.ReadAsStringAsync()}");
 
         var finalOrder = await owner.GetFromJsonAsync<JsonElement>(orderPath);
         Assert.Equal(70m, finalOrder.GetProperty("lines")[0]
