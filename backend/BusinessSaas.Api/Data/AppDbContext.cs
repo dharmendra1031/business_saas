@@ -162,7 +162,6 @@ public sealed class RetailPurchaseOrder
     public string Status { get; set; } = "Draft";
     public DateTime CreatedAtUtc { get; set; } = DateTime.UtcNow;
     public DateTime? ApprovedAtUtc { get; set; }
-    public List<RetailPurchaseOrderLine> Lines { get; set; } = [];
 }
 
 public sealed class RetailPurchaseOrderLine
@@ -184,7 +183,6 @@ public sealed class RetailReceiving
     public string Status { get; set; } = "Draft";
     public DateTime CreatedAtUtc { get; set; } = DateTime.UtcNow;
     public DateTime? PostedAtUtc { get; set; }
-    public List<RetailReceivingLine> Lines { get; set; } = [];
 }
 
 public sealed class RetailReceivingLine
@@ -410,7 +408,7 @@ public sealed class AppDbContext(DbContextOptions<AppDbContext> options)
             entity.Property(x => x.OrderedQuantity).HasPrecision(18, 3);
             entity.Property(x => x.UnitCost).HasPrecision(18, 2);
             entity.HasIndex(x => new { x.PurchaseOrderId, x.ProductId }).IsUnique();
-            entity.HasOne<RetailPurchaseOrder>().WithMany(x => x.Lines)
+            entity.HasOne<RetailPurchaseOrder>().WithMany()
                 .HasForeignKey(x => x.PurchaseOrderId).OnDelete(DeleteBehavior.Restrict);
             entity.HasOne<RetailProduct>().WithMany()
                 .HasForeignKey(x => x.ProductId).OnDelete(DeleteBehavior.Restrict);
