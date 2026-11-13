@@ -100,6 +100,9 @@ export default function RetailPurchases({ businessId, canOperate, locations, rol
   const [receiving, setReceiving] = useState<Record<number, string>>({})
   const [receivingOpen, setReceivingOpen] = useState(false)
   const basePath = `/businesses/${businessId}/purchase-orders`
+  const money = (amount: number) =>
+    new Intl.NumberFormat('en-IN', { style: 'currency', currency: currencyCode }).format(amount)
+
 
   useEffect(() => {
     let active = true
@@ -355,6 +358,10 @@ export default function RetailPurchases({ businessId, canOperate, locations, rol
               </tr>)}</tbody>
             </table>
           </div>}
+          {lines.length > 0 && <p className="text-end mb-0">
+            <strong>Estimated order value: {money(lines.reduce((sum, line) =>
+              sum + Number(line.quantity || 0) * Number(line.unitCost || 0), 0))}</strong>
+          </p>}
         </div>
         <div className="form-footer">
           <button type="button" className="btn btn-outline-secondary"
@@ -421,6 +428,14 @@ export default function RetailPurchases({ businessId, canOperate, locations, rol
               </tr>)}</tbody>
             </table>
           </div>
+          <p className="text-end">
+            <strong>Ordered value: {money(detail.lines.reduce((sum, line) =>
+              sum + line.orderedQuantity * line.unitCost, 0))}</strong>
+            <span className="product-secondary">
+              Received value: {money(detail.lines.reduce((sum, line) =>
+                sum + line.receivedQuantity * line.unitCost, 0))}
+            </span>
+          </p>
           {canOperate && detail.status === 'Approved' &&
             <>
               <button type="button" className="btn btn-outline-primary"
