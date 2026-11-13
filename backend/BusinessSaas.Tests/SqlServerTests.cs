@@ -234,11 +234,24 @@ public sealed class SqlServerTests
 
         var receiptA = await DraftReceipt();
         var receiptB = await DraftReceipt();
+        var csrf = await owner.GetFromJsonAsync<JsonElement>("/api/auth/csrf");
+        var csrfToken = csrf.GetProperty("token").GetString()!;
+        async Task<HttpResponseMessage> PostReceipt(long receiptId)
+        {
+            using var request = new HttpRequestMessage(HttpMethod.Post,
+                orderPath + "/receivings/" + receiptId + "/post")
+            {
+                Content = JsonContent.Create(new { })
+            };
+            request.Headers.Add("X-CSRF-TOKEN", csrfToken);
+            return await owner.SendAsync(request);
+        }
+
         var competingReceipts = await Task.WhenAll(
-            Post(owner, orderPath + "/receivings/" + receiptA + "/post", new { }),
-            Post(owner, orderPath + "/receivings/" + receiptB + "/post", new { }));
+            PostReceipt(receiptA), PostReceipt(receiptB));
         Assert.Equal(1, competingReceipts.Count(x => x.StatusCode == HttpStatusCode.OK));
-        Assert.Equal(1, competingReceipts.Count(x => x.StatusCode == HttpStatusCode.Conflict));
+        var rejected = competingReceipts.Single(x => x.StatusCode != HttpStatusCode.OK);
+        Assert.Equal(HttpStatusCode.Conflict, rejected.StatusCode);
 
         var finalOrder = await owner.GetFromJsonAsync<JsonElement>(orderPath);
         Assert.Equal(70m, finalOrder.GetProperty("lines")[0]
