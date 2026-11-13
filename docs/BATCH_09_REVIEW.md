@@ -7,13 +7,28 @@
 | BS-081 — Stock movement ledger | UX REVIEW PENDING | `RetailStockMovements` stores BusinessId, LocationId, ProductId, actor, timestamp, source type/id, signed quantity change and balance after; readable history API/UI |
 | BS-082 — Opening stock once | UX REVIEW PENDING | `POST /api/businesses/{id}/stock/locations/{locationId}/opening` posts a balance and immutable opening movement atomically; duplicate protected by unique DB indexes |
 | BS-083 — Scoped stock view | UX REVIEW PENDING | Paginated product stock view with location selection, uninitialized vs zero quantities; only assigned primary location for Manager, Owner sees business locations |
-| BS-084 — Stock adjustment | TODO | No adjustment write implemented; policy, reason and approval pending |
+| BS-084 — Stock adjustment | UX REVIEW PENDING | Initial single-item voucher: Manager/Owner create with system/physical/delta/reason, Owner review and post, movement-backed balance update, backend tests; browser UX pending |
 | BS-085 — Concurrent non-negative stock | TODO | DB check and unique opening guard exist, but concurrent decrement/sale/receiving endpoints and tests do not |
 | BS-086 — Audited corrections | TODO | No corrections/reversals allowed until compensating movement workflow is designed |
 | BS-087 — Low stock | TODO | No thresholds or alerts |
 | BS-088 — Transfers | TODO | In-transit and location rules not designed |
 | BS-089 — Valuation | TODO | No cost or valuation posting; accounting policy pending |
 | BS-090 — Ledger reconciliation | TODO | Need real receipt/sale/adjustment transactions, automated totals reconciliation and drift detection |
+
+## Stock Adjustment reference and implementation (BS-084)
+
+**Read-only reference:** `dharmendra1031/CBK` `development` — `StockAdjustmentService`, `StockMovementService`, `ReceivingService`, `StockAdjustmentsController`, `StockAdjustmentForm`. No changes to CBK.
+
+- Adopted CBK's distinct **Pending Approval → Approved/Rejected → Posted** workflow. Creating and approving a voucher does not affect stock.
+- First SaaS slice is **one product per voucher**, not CBK's multi-line voucher. This deliberately avoids an extra detail table before the workflow is proven. Future multi-line count support requires separately tested transaction semantics.
+- All adjustment requests include BusinessId, LocationId, ProductId, numeric ID, requester, reason, optional remarks, expected system quantity, counted physical quantity, reviewer/poster IDs and timestamps.
+- Manager can request adjustments only for the authorized primary location; Owner can request/review/post within own business. Other tenants, Cashier and expired Trial writes are denied.
+- Posting checks product active state and **current quantity equals saved system count**. It updates balance with a conditional database update, changes voucher status, and records an `Adjustment` stock ledger entry in one serializable SQL transaction.
+- The existing unique `RetailStockMovements` index on (BusinessId, SourceType, SourceId) prevents a duplicate movement. Posting again returns existing Posted status without changing quantity.
+- Reject requires remarks and never changes stock. An outdated approved voucher remains unposted; the user must create a new one with the latest balance.
+- React Stock tab: Adjust action on initialized active products, physical count, visible signed Difference, reason, Manager/Owner request, Owner approval/rejection and confirm posting. Existing Opening Stock and History are preserved.
+- Tests cover tenant isolation, inactive subscription, Cashier/Manager role boundary, rejected voucher, stale stock, duplicate posting and exact movement/balance totals. CI is necessary but actual 360/768/1440px browser checks remain a release gate.
+- [Draft PR #6](https://github.com/dharmendra1031/business_saas/pull/6). Never mark BS-084 DONE merely because builds pass.
 
 ## Data rules
 
