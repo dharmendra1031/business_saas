@@ -198,6 +198,64 @@ public sealed class SqlServerTests
             Assert.Equal(0m, movements.OrderByDescending(x => x.Id)
                 .First().BalanceAfter);
         }
+
+        var ordersPath = $"/api/businesses/{ids[0]}/purchase-orders";
+        var supplier = await Post(owner, $"/api/businesses/{ids[0]}/suppliers",
+            new { name = "SQL Purchase Supplier", phone = "9999999988", email = "" });
+        Assert.Equal(HttpStatusCode.Created, supplier.StatusCode);
+        var supplierId = (await supplier.Content.ReadFromJsonAsync<JsonElement>())
+            .GetProperty("id").GetInt64();
+
+        var orderResponse = await Post(owner, ordersPath, new
+        {
+            locationId, supplierId,
+            lines = new[] { new { productId, quantity = 100m, unitCost = 1m } }
+        });
+        Assert.Equal(HttpStatusCode.Created, orderResponse.StatusCode);
+        var orderId = (await orderResponse.Content.ReadFromJsonAsync<JsonElement>())
+            .GetProperty("id").GetInt64();
+        var orderPath = ordersPath + "/" + orderId;
+        Assert.Equal(HttpStatusCode.OK,
+            (await Post(owner, orderPath + "/approve", new { })).StatusCode);
+
+        var orderData = await owner.GetFromJsonAsync<JsonElement>(orderPath);
+        var purchaseLineId = orderData.GetProperty("lines")[0].GetProperty("id").GetInt64();
+
+        async Task<long> DraftReceipt()
+        {
+            var response = await Post(owner, orderPath + "/receivings", new
+            {
+                lines = new[] { new { purchaseOrderLineId = purchaseLineId, quantity = 70m } }
+            });
+            Assert.Equal(HttpStatusCode.Created, response.StatusCode);
+            return (await response.Content.ReadFromJsonAsync<JsonElement>())
+                .GetProperty("id").GetInt64();
+        }
+
+        var receiptA = await DraftReceipt();
+        var receiptB = await DraftReceipt();
+        var competingReceipts = await Task.WhenAll(
+            Post(owner, orderPath + "/receivings/" + receiptA + "/post", new { }),
+            Post(owner, orderPath + "/receivings/" + receiptB + "/post", new { }));
+        Assert.Equal(1, competingReceipts.Count(x => x.StatusCode == HttpStatusCode.OK));
+        Assert.Equal(1, competingReceipts.Count(x => x.StatusCode == HttpStatusCode.Conflict));
+
+        var finalOrder = await owner.GetFromJsonAsync<JsonElement>(orderPath);
+        Assert.Equal(70m, finalOrder.GetProperty("lines")[0]
+            .GetProperty("receivedQuantity").GetDecimal());
+        Assert.Equal(30m, finalOrder.GetProperty("lines")[0]
+            .GetProperty("remainingQuantity").GetDecimal());
+
+        using (var scope = factory.Services.CreateScope())
+        {
+            var db = scope.ServiceProvider.GetRequiredService<AppDbContext>();
+            Assert.Equal(70m, await db.RetailStockBalances
+                .Where(x => x.BusinessId == ids[0] && x.LocationId == locationId &&
+                    x.ProductId == productId).Select(x => x.Quantity).SingleAsync());
+            Assert.Equal(1, await db.RetailStockMovements.CountAsync(x =>
+                x.BusinessId == ids[0] && x.ProductId == productId &&
+                x.SourceType == "Receiving"));
+        }
     }
 
     private static async Task RegisterAndLogin(HttpClient client, string email)
