@@ -432,7 +432,7 @@ public sealed class AppDbContext(DbContextOptions<AppDbContext> options)
         {
             entity.Property(x => x.Quantity).HasPrecision(18, 3);
             entity.HasIndex(x => new { x.ReceivingId, x.PurchaseOrderLineId }).IsUnique();
-            entity.HasOne<RetailReceiving>().WithMany(x => x.Lines)
+            entity.HasOne<RetailReceiving>().WithMany()
                 .HasForeignKey(x => x.ReceivingId).OnDelete(DeleteBehavior.Restrict);
             entity.HasOne<RetailPurchaseOrderLine>().WithMany()
                 .HasForeignKey(x => x.PurchaseOrderLineId).OnDelete(DeleteBehavior.Restrict);
