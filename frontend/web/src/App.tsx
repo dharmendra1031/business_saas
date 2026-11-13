@@ -283,7 +283,7 @@ export default function App() {
               <section className="next-steps">
                 <ShieldCheck size={22} />
                 <div><strong>Next retail modules</strong>
-                  <p>Purchase Receiving, Stock Adjustment and POS are not available yet. Catalog and initial Stock setup are available to owners and managers. {dashboard.roleCode === 'Owner'
+                  <p>POS and full accounting are not available yet. Purchase Order and partial Receiving are now available for pilot testing. Catalog and initial Stock setup are available to owners and managers. {dashboard.roleCode === 'Owner'
                     ? 'You can manage team access above.'
                     : 'Ask your business owner about access.'} No sample sales figures are shown.</p>
                 </div>

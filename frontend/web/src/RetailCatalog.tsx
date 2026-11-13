@@ -3,8 +3,9 @@ import RetailMasters from './RetailMasters'
 import RetailProducts from './RetailProducts'
 import RetailContacts from './RetailContacts'
 import RetailStock from './RetailStock'
+import RetailPurchases from './RetailPurchases'
 
-type CatalogTab = 'products' | 'masters' | 'suppliers' | 'customers' | 'stock'
+type CatalogTab = 'products' | 'masters' | 'suppliers' | 'customers' | 'stock' | 'purchases'
 
 export default function RetailCatalog({ businessId, canOperate, currencyCode, locations, roleCode }: {
   businessId: number
@@ -23,7 +24,8 @@ export default function RetailCatalog({ businessId, canOperate, currencyCode, lo
           ['masters', 'Categories & Units'],
           ['suppliers', 'Suppliers'],
           ['customers', 'Customers'],
-          ['stock', 'Stock']
+          ['stock', 'Stock'],
+          ['purchases', 'Purchase']
         ] as const).map(([key, name]) =>
           <button key={key} type="button"
             className={`btn ${tab === key ? 'btn-primary' : 'btn-outline-secondary'}`}
@@ -34,6 +36,9 @@ export default function RetailCatalog({ businessId, canOperate, currencyCode, lo
         ? <RetailProducts businessId={businessId} canOperate={canOperate} currencyCode={currencyCode} />
         : tab === 'masters'
           ? <RetailMasters businessId={businessId} canOperate={canOperate} />
+          : tab === 'purchases'
+            ? <RetailPurchases businessId={businessId} canOperate={canOperate}
+                locations={locations} roleCode={roleCode} currencyCode={currencyCode} />
           : tab === 'stock'
             ? <RetailStock businessId={businessId} canOperate={canOperate}
                 locations={locations} isOwner={roleCode === 'Owner'} />
