@@ -65,7 +65,7 @@
 
 **Batch 09:** [BS-081–BS-090 stock foundation review](./BATCH_09_REVIEW.md). Opening Stock and movement ledger merged; single-item Stock Adjustment under Draft PR #6. Guarded stock posting SQL contention test passed; UI acceptance remains pending.
 
-**Batch 10:** [BS-091–BS-100 purchase & receiving review](./BATCH_10_REVIEW.md). PO/Partial Receiving code under Draft PR #8; browser and concurrent SQL response tests remain release gates.
+**Batch 10:** [BS-091–BS-100 purchase & receiving review](./BATCH_10_REVIEW.md). PO/Partial Receiving code under Draft PR #8; SQL Server concurrent posting passed, real browser workflow remains a release gate.
 
 ## Detailed backlog
 
@@ -208,12 +208,12 @@
 
 | ID | Task / clear deliverable | Mandatory task-specific UI/UX check | Status |
 | --- | --- | --- | --- |
-| BS-091 | Build Purchase Order create/list | Supplier और items कम clicks में चुनें | BASELINE |
-| BS-092 | Add PO draft/approve states | Approval से stock बढ़ने का भ्रम न हो | BASELINE |
-| BS-093 | Implement PO item quantities and totals | Ordered/Received/Remaining अलग हों | BASELINE |
-| BS-094 | Build partial goods receiving | 40+60 flow स्पष्ट दिखे | BASELINE |
-| BS-095 | Block over-receiving | Exceeded quantity inline बताई जाए | BASELINE |
-| BS-096 | Post receiving to stock ledger | Posted receipt status unmistakable हो | BASELINE |
+| BS-091 | Build Purchase Order create/list | Supplier और items कम clicks में चुनें | UX REVIEW PENDING |
+| BS-092 | Add PO draft/approve states | Approval से stock बढ़ने का भ्रम न हो | UX REVIEW PENDING |
+| BS-093 | Implement PO item quantities and totals | Ordered/Received/Remaining अलग हों | UX REVIEW PENDING |
+| BS-094 | Build partial goods receiving | 40+60 flow स्पष्ट दिखे | UX REVIEW PENDING |
+| BS-095 | Block over-receiving | Exceeded quantity inline बताई जाए | UX REVIEW PENDING |
+| BS-096 | Post receiving to stock ledger | Posted receipt status unmistakable हो | UX REVIEW PENDING |
 | BS-097 | Add direct receiving only when authorized | Receiving type साफ लिखा हो | TODO |
 | BS-098 | Implement purchase return/reversal rules | Reversal purpose/amount visible हों | TODO |
 | BS-099 | Add supplier outstanding/payment view | Due vs paid स्पष्ट हो | TODO |
