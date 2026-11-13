@@ -158,15 +158,13 @@ public static class RetailAdjustmentEndpoints
                     x.Id == adjustment.ProductId && x.BusinessId == businessId && x.IsActive))
                     return Results.Conflict(new { message = "This product is no longer active." });
 
-                var changed = await db.RetailStockBalances.Where(x =>
-                    x.BusinessId == businessId && x.LocationId == locationId &&
-                    x.ProductId == adjustment.ProductId && x.Quantity == adjustment.SystemQuantity)
-                    .ExecuteUpdateAsync(set => set
-                        .SetProperty(x => x.Quantity, adjustment.CountedQuantity));
-                if (changed != 1)
+                var postedAt = DateTime.UtcNow;
+                var balanceAfter = await StockPosting.ApplyAsync(db, businessId, locationId,
+                    adjustment.ProductId, adjustment.CountedQuantity - adjustment.SystemQuantity,
+                    "Adjustment", adjustment.Id, UserId(user), adjustment.SystemQuantity);
+                if (balanceAfter is null)
                     return Results.Conflict(new { message = "Stock changed since the count. Create a new adjustment." });
 
-                var postedAt = DateTime.UtcNow;
                 var posted = await db.RetailStockAdjustments
                     .Where(x => x.Id == adjustmentId && x.BusinessId == businessId &&
                         x.LocationId == locationId && x.Status == "Approved")
@@ -177,19 +175,6 @@ public static class RetailAdjustmentEndpoints
                 if (posted != 1)
                     return Results.Conflict(new { message = "This adjustment was already processed." });
 
-                db.RetailStockMovements.Add(new RetailStockMovement
-                {
-                    BusinessId = businessId,
-                    LocationId = locationId,
-                    ProductId = adjustment.ProductId,
-                    ActorUserId = UserId(user),
-                    SourceType = "Adjustment",
-                    SourceId = adjustment.Id,
-                    QuantityChange = adjustment.CountedQuantity - adjustment.SystemQuantity,
-                    BalanceAfter = adjustment.CountedQuantity,
-                    PostedAtUtc = postedAt
-                });
-                await db.SaveChangesAsync();
                 await transaction.CommitAsync();
                 return Results.Ok(new { adjustment.Id, status = "Posted",
                     adjustment.SystemQuantity, adjustment.CountedQuantity });
