@@ -1,6 +1,6 @@
 # Business SaaS — Development Task Tracker (190 Tasks)
 
-**Updated:** 12 November 2026  
+**Updated:** 13 November 2026  
 **Repository:** `dharmendra1031/business_saas` · **Source of truth:** [Development Roadmap](./DEVELOPMENT_ROADMAP.md), [Master SRS](./BUSINESS_SAAS_MASTER_SRS.md), [UX Standards](./UX_STANDARDS.md)  
 **Scope:** Planning and acceptance tracking, not a claim of implementation. The platform is not production-ready.
 
@@ -63,7 +63,9 @@
 
 **Batch 08:** [BS-071–BS-080 retail master-data review](./BATCH_08_REVIEW.md). Category/Unit/Product implementations merged; Supplier/Customer under PR #4 review. Real browser UX verification remains pending.
 
-**Batch 09:** [BS-081–BS-090 stock foundation review](./BATCH_09_REVIEW.md). One-time Opening Stock and movement ledger are a draft slice; adjustments, deductions, concurrency consumption and browser verification remain pending.
+**Batch 09:** [BS-081–BS-090 stock foundation review](./BATCH_09_REVIEW.md). Opening Stock and movement ledger merged; single-item Stock Adjustment under Draft PR #6. Guarded stock posting SQL contention test passed; UI acceptance remains pending.
+
+**Batch 10:** [BS-091–BS-100 purchase & receiving review](./BATCH_10_REVIEW.md). PO/Partial Receiving code under Draft PR #8; SQL Server concurrent posting passed, real browser workflow remains a release gate.
 
 ## Detailed backlog
 
@@ -194,8 +196,8 @@
 | BS-081 | Create stock movement ledger design | Stock history user-readable हो | UX REVIEW PENDING |
 | BS-082 | Implement opening stock with one-time rules | Opening vs Adjustment अलग दिखें | UX REVIEW PENDING |
 | BS-083 | Implement branch-scoped stock balance view | Available quantity prominent हो | UX REVIEW PENDING |
-| BS-084 | Implement stock adjustment with reason | Old/New/Delta before save साफ हों | TODO |
-| BS-085 | Prevent negative stock under concurrency | Insufficient stock तुरंत दिखे | TODO |
+| BS-084 | Implement stock adjustment with reason | Old/New/Delta before save साफ हों | UX REVIEW PENDING |
+| BS-085 | Prevent negative stock under concurrency | Insufficient stock तुरंत दिखे | UX REVIEW PENDING |
 | BS-086 | Add audited inventory corrections | Correction किसने किया दिखे | TODO |
 | BS-087 | Add low-stock thresholds and list | Low vs out-of-stock अलग हों | TODO |
 | BS-088 | Add optional location transfer only when needed | Source/destination clearly labeled हों | TODO |
@@ -206,12 +208,12 @@
 
 | ID | Task / clear deliverable | Mandatory task-specific UI/UX check | Status |
 | --- | --- | --- | --- |
-| BS-091 | Build Purchase Order create/list | Supplier और items कम clicks में चुनें | TODO |
-| BS-092 | Add PO draft/approve states | Approval से stock बढ़ने का भ्रम न हो | TODO |
-| BS-093 | Implement PO item quantities and totals | Ordered/Received/Remaining अलग हों | TODO |
-| BS-094 | Build partial goods receiving | 40+60 flow स्पष्ट दिखे | TODO |
-| BS-095 | Block over-receiving | Exceeded quantity inline बताई जाए | TODO |
-| BS-096 | Post receiving to stock ledger | Posted receipt status unmistakable हो | TODO |
+| BS-091 | Build Purchase Order create/list | Supplier और items कम clicks में चुनें | UX REVIEW PENDING |
+| BS-092 | Add PO draft/approve states | Approval से stock बढ़ने का भ्रम न हो | UX REVIEW PENDING |
+| BS-093 | Implement PO item quantities and totals | Ordered/Received/Remaining अलग हों | UX REVIEW PENDING |
+| BS-094 | Build partial goods receiving | 40+60 flow स्पष्ट दिखे | UX REVIEW PENDING |
+| BS-095 | Block over-receiving | Exceeded quantity inline बताई जाए | UX REVIEW PENDING |
+| BS-096 | Post receiving to stock ledger | Posted receipt status unmistakable हो | UX REVIEW PENDING |
 | BS-097 | Add direct receiving only when authorized | Receiving type साफ लिखा हो | TODO |
 | BS-098 | Implement purchase return/reversal rules | Reversal purpose/amount visible हों | TODO |
 | BS-099 | Add supplier outstanding/payment view | Due vs paid स्पष्ट हो | TODO |
