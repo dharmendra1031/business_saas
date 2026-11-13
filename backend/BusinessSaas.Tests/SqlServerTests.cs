@@ -1,7 +1,9 @@
+using System.Data;
 using System.Net;
 using System.Net.Http.Json;
 using System.Text.Json;
 using BusinessSaas.Api.Data;
+using BusinessSaas.Api.Features;
 using Microsoft.AspNetCore.Hosting;
 using Microsoft.AspNetCore.Mvc.Testing;
 using Microsoft.Data.SqlClient;
@@ -109,6 +111,91 @@ public sealed class SqlServerTests
             requestKey = "same-request-20261109"
         });
         Assert.Equal(HttpStatusCode.Conflict, changedPayload.StatusCode);
+
+        long locationId;
+        long productId;
+        long actorId;
+        using (var scope = factory.Services.CreateScope())
+        {
+            var db = scope.ServiceProvider.GetRequiredService<AppDbContext>();
+            locationId = await db.BusinessLocations.Where(x => x.BusinessId == ids[0])
+                .Select(x => x.Id).SingleAsync();
+            actorId = await db.BusinessUsers.Where(x => x.BusinessId == ids[0])
+                .Select(x => x.UserId).SingleAsync();
+
+            var category = new RetailCategory
+            {
+                BusinessId = ids[0], Name = "Concurrency", NameKey = "CONCURRENCY"
+            };
+            var unit = new RetailUnit
+            {
+                BusinessId = ids[0], Name = "Pieces", NameKey = "PIECES", Code = "PCS"
+            };
+            db.RetailCategories.Add(category);
+            db.RetailUnits.Add(unit);
+            await db.SaveChangesAsync();
+
+            var product = new RetailProduct
+            {
+                BusinessId = ids[0],
+                CategoryId = category.Id,
+                UnitId = unit.Id,
+                Name = "Concurrent stock product",
+                Sku = "CONCURRENT-1",
+                TaxClassification = "NONE",
+                SalePrice = 1m
+            };
+            db.RetailProducts.Add(product);
+            await db.SaveChangesAsync();
+            productId = product.Id;
+            db.RetailStockBalances.Add(new RetailStockBalance
+            {
+                BusinessId = ids[0],
+                LocationId = locationId,
+                ProductId = productId,
+                Quantity = 90m
+            });
+            await db.SaveChangesAsync();
+        }
+
+        async Task<bool> PostMovement(long sourceId, decimal quantity)
+        {
+            await using var scope = factory.Services.CreateAsyncScope();
+            var db = scope.ServiceProvider.GetRequiredService<AppDbContext>();
+            await using var transaction =
+                await db.Database.BeginTransactionAsync(IsolationLevel.ReadCommitted);
+            var balance = await StockPosting.ApplyAsync(db, ids[0], locationId,
+                productId, quantity, "Sale", sourceId, actorId);
+            if (balance is null)
+                return false;
+            await transaction.CommitAsync();
+            return true;
+        }
+
+        // Two independent database connections try to sell 70 from an available 90.
+        // The guarded SQL UPDATE must let exactly one through.
+        var sales = await Task.WhenAll(PostMovement(1001, -70m), PostMovement(1002, -70m));
+        Assert.Equal(1, sales.Count(x => x));
+        Assert.False(await PostMovement(1001, -70m));
+        Assert.False(await PostMovement(1003, -30m));
+        Assert.True(await PostMovement(1004, -20m));
+        Assert.False(await PostMovement(1005, -1m));
+
+        using (var scope = factory.Services.CreateScope())
+        {
+            var db = scope.ServiceProvider.GetRequiredService<AppDbContext>();
+            Assert.Equal(0m, await db.RetailStockBalances
+                .Where(x => x.BusinessId == ids[0] && x.LocationId == locationId &&
+                    x.ProductId == productId)
+                .Select(x => x.Quantity).SingleAsync());
+            var movements = await db.RetailStockMovements.AsNoTracking()
+                .Where(x => x.BusinessId == ids[0] && x.LocationId == locationId &&
+                    x.ProductId == productId).ToListAsync();
+            Assert.Equal(2, movements.Count);
+            Assert.Equal(-90m, movements.Sum(x => x.QuantityChange));
+            Assert.Equal(0m, movements.OrderByDescending(x => x.Id)
+                .First().BalanceAfter);
+        }
     }
 
     private static async Task RegisterAndLogin(HttpClient client, string email)
