@@ -151,6 +151,50 @@ public sealed class RetailStockAdjustment
     public DateTime? PostedAtUtc { get; set; }
 }
 
+public sealed class RetailPurchaseOrder
+{
+    public long Id { get; set; }
+    public long BusinessId { get; set; }
+    public long LocationId { get; set; }
+    public long SupplierId { get; set; }
+    public long CreatedByUserId { get; set; }
+    public long? ApprovedByUserId { get; set; }
+    public string Status { get; set; } = "Draft";
+    public DateTime CreatedAtUtc { get; set; } = DateTime.UtcNow;
+    public DateTime? ApprovedAtUtc { get; set; }
+    public List<RetailPurchaseOrderLine> Lines { get; set; } = [];
+}
+
+public sealed class RetailPurchaseOrderLine
+{
+    public long Id { get; set; }
+    public long PurchaseOrderId { get; set; }
+    public long ProductId { get; set; }
+    public decimal OrderedQuantity { get; set; }
+    public decimal UnitCost { get; set; }
+}
+
+public sealed class RetailReceiving
+{
+    public long Id { get; set; }
+    public long BusinessId { get; set; }
+    public long PurchaseOrderId { get; set; }
+    public long CreatedByUserId { get; set; }
+    public long? PostedByUserId { get; set; }
+    public string Status { get; set; } = "Draft";
+    public DateTime CreatedAtUtc { get; set; } = DateTime.UtcNow;
+    public DateTime? PostedAtUtc { get; set; }
+    public List<RetailReceivingLine> Lines { get; set; } = [];
+}
+
+public sealed class RetailReceivingLine
+{
+    public long Id { get; set; }
+    public long ReceivingId { get; set; }
+    public long PurchaseOrderLineId { get; set; }
+    public decimal Quantity { get; set; }
+}
+
 public sealed class AppDbContext(DbContextOptions<AppDbContext> options)
     : IdentityUserContext<AppUser, long>(options)
 {
@@ -168,6 +212,10 @@ public sealed class AppDbContext(DbContextOptions<AppDbContext> options)
     public DbSet<RetailStockBalance> RetailStockBalances => Set<RetailStockBalance>();
     public DbSet<RetailStockMovement> RetailStockMovements => Set<RetailStockMovement>();
     public DbSet<RetailStockAdjustment> RetailStockAdjustments => Set<RetailStockAdjustment>();
+    public DbSet<RetailPurchaseOrder> RetailPurchaseOrders => Set<RetailPurchaseOrder>();
+    public DbSet<RetailPurchaseOrderLine> RetailPurchaseOrderLines => Set<RetailPurchaseOrderLine>();
+    public DbSet<RetailReceiving> RetailReceivings => Set<RetailReceiving>();
+    public DbSet<RetailReceivingLine> RetailReceivingLines => Set<RetailReceivingLine>();
 
     protected override void OnModelCreating(ModelBuilder builder)
     {
@@ -341,5 +389,56 @@ public sealed class AppDbContext(DbContextOptions<AppDbContext> options)
             entity.HasOne<AppUser>().WithMany()
                 .HasForeignKey(x => x.PostedByUserId).OnDelete(DeleteBehavior.Restrict);
         });
+        builder.Entity<RetailPurchaseOrder>(entity =>
+        {
+            entity.Property(x => x.Status).HasMaxLength(20).IsRequired();
+            entity.HasIndex(x => new { x.BusinessId, x.Status });
+            entity.HasOne<Business>().WithMany()
+                .HasForeignKey(x => x.BusinessId).OnDelete(DeleteBehavior.Restrict);
+            entity.HasOne<BusinessLocation>().WithMany()
+                .HasForeignKey(x => x.LocationId).OnDelete(DeleteBehavior.Restrict);
+            entity.HasOne<RetailSupplier>().WithMany()
+                .HasForeignKey(x => x.SupplierId).OnDelete(DeleteBehavior.Restrict);
+            entity.HasOne<AppUser>().WithMany()
+                .HasForeignKey(x => x.CreatedByUserId).OnDelete(DeleteBehavior.Restrict);
+            entity.HasOne<AppUser>().WithMany()
+                .HasForeignKey(x => x.ApprovedByUserId).OnDelete(DeleteBehavior.Restrict);
+        });
+
+        builder.Entity<RetailPurchaseOrderLine>(entity =>
+        {
+            entity.Property(x => x.OrderedQuantity).HasPrecision(18, 3);
+            entity.Property(x => x.UnitCost).HasPrecision(18, 2);
+            entity.HasIndex(x => new { x.PurchaseOrderId, x.ProductId }).IsUnique();
+            entity.HasOne<RetailPurchaseOrder>().WithMany(x => x.Lines)
+                .HasForeignKey(x => x.PurchaseOrderId).OnDelete(DeleteBehavior.Restrict);
+            entity.HasOne<RetailProduct>().WithMany()
+                .HasForeignKey(x => x.ProductId).OnDelete(DeleteBehavior.Restrict);
+        });
+
+        builder.Entity<RetailReceiving>(entity =>
+        {
+            entity.Property(x => x.Status).HasMaxLength(20).IsRequired();
+            entity.HasIndex(x => new { x.BusinessId, x.PurchaseOrderId, x.Status });
+            entity.HasOne<Business>().WithMany()
+                .HasForeignKey(x => x.BusinessId).OnDelete(DeleteBehavior.Restrict);
+            entity.HasOne<RetailPurchaseOrder>().WithMany()
+                .HasForeignKey(x => x.PurchaseOrderId).OnDelete(DeleteBehavior.Restrict);
+            entity.HasOne<AppUser>().WithMany()
+                .HasForeignKey(x => x.CreatedByUserId).OnDelete(DeleteBehavior.Restrict);
+            entity.HasOne<AppUser>().WithMany()
+                .HasForeignKey(x => x.PostedByUserId).OnDelete(DeleteBehavior.Restrict);
+        });
+
+        builder.Entity<RetailReceivingLine>(entity =>
+        {
+            entity.Property(x => x.Quantity).HasPrecision(18, 3);
+            entity.HasIndex(x => new { x.ReceivingId, x.PurchaseOrderLineId }).IsUnique();
+            entity.HasOne<RetailReceiving>().WithMany(x => x.Lines)
+                .HasForeignKey(x => x.ReceivingId).OnDelete(DeleteBehavior.Restrict);
+            entity.HasOne<RetailPurchaseOrderLine>().WithMany()
+                .HasForeignKey(x => x.PurchaseOrderLineId).OnDelete(DeleteBehavior.Restrict);
+        });
+
     }
 }
