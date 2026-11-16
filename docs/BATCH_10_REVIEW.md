@@ -1,6 +1,6 @@
 # Batch 10 — Retail Purchase and Receiving (BS-091–BS-100)
 
-**Reviewed:** 13 November 2026. **Branch:** `feature/retail-purchase-receiving` (Draft PR [#8](https://github.com/dharmendra1031/business_saas/pull/8)). The feature has not been merged or accepted as production-ready.
+**Reviewed:** 16 November 2026. **Branch:** `development`. Retail code was merged into `main` through PR [#9](https://github.com/dharmendra1031/business_saas/pull/9). UI acceptance and production readiness remain pending.
 
 | Task | Status | Evidence |
 | --- | --- | --- |
@@ -23,7 +23,9 @@
 - Receipt: Draft → Posted. Only final posting changes StockBalance and appends a StockMovement. Reposting the same numeric ReceiptId does not post stock again.
 - Posting checks remaining qty from **posted** receipts in a Serializable transaction. It posts stock and receipt status atomically. SQL Server deadlocks are translated to controlled HTTP 409 conflicts without swallowing unrelated programming exceptions.
 - Ordered, Received, Remaining and **estimated** order/received values are shown. Purchase accounting, supplier ledger, tax calculation, landed cost, cost valuation, returns and POS are **not** implemented.
-- A separate client idempotency mechanism for duplicate *creation* of drafts after network retry is outstanding. It is not enough to verify only idempotent posting of the same receipt.
+- Purchase Order and Receiving Draft creation support optional retry keys, checked against immutable requested lines and guarded by filtered unique SQL indexes. The React client reuses its key after failed responses and rotates it after successful creation. Older unkeyed API clients remain supported and still need to opt into retry keys. Receipt posting remains idempotent by numeric ReceiptId.
 - Tests: tenant denial, role restrictions, 100 → 40 + 60, over-receiving, posted movement counts, duplicate post and SQL Server concurrent 70+70 receiving from a 100-unit PO. Final CI succeeded on code commit `f305879`: [CI run 43360704315](https://github.com/dharmendra1031/business_saas/actions/runs/43360704315) — backend, SQL Server and React PASS. Browser usability at 360px/768px/1440px remains required before DONE.
 
-**Stacking:** [PR #6](https://github.com/dharmendra1031/business_saas/pull/6) Adjustment → [PR #7](https://github.com/dharmendra1031/business_saas/pull/7) safe posting → [PR #8](https://github.com/dharmendra1031/business_saas/pull/8) Purchase. Merge only in this order after acceptance.
+**Merge history:** The stacked PRs #6–#8 were integrated in PR #9. All new changes belong on `development`; `main` remains unchanged until separately approved.
+
+**Still required:** Real browser review of purchase/receiving flows and retry behavior, plus usability checks at 360/768/1440px.

@@ -155,6 +155,7 @@ public sealed class RetailStockAdjustment
 public sealed class RetailPurchaseOrder
 {
     public long Id { get; set; }
+    public string? CreationKey { get; set; }
     public long BusinessId { get; set; }
     public long LocationId { get; set; }
     public long SupplierId { get; set; }
@@ -177,6 +178,7 @@ public sealed class RetailPurchaseOrderLine
 public sealed class RetailReceiving
 {
     public long Id { get; set; }
+    public string? CreationKey { get; set; }
     public long BusinessId { get; set; }
     public long PurchaseOrderId { get; set; }
     public long CreatedByUserId { get; set; }
@@ -392,7 +394,10 @@ public sealed class AppDbContext(DbContextOptions<AppDbContext> options)
         builder.Entity<RetailPurchaseOrder>(entity =>
         {
             entity.Property(x => x.Status).HasMaxLength(20).IsRequired();
+            entity.Property(x => x.CreationKey).HasMaxLength(80);
             entity.HasIndex(x => new { x.BusinessId, x.Status });
+            entity.HasIndex(x => new { x.BusinessId, x.CreatedByUserId, x.CreationKey })
+                .IsUnique().HasFilter("[CreationKey] IS NOT NULL");
             entity.HasOne<Business>().WithMany()
                 .HasForeignKey(x => x.BusinessId).OnDelete(DeleteBehavior.Restrict);
             entity.HasOne<BusinessLocation>().WithMany()
@@ -419,7 +424,10 @@ public sealed class AppDbContext(DbContextOptions<AppDbContext> options)
         builder.Entity<RetailReceiving>(entity =>
         {
             entity.Property(x => x.Status).HasMaxLength(20).IsRequired();
+            entity.Property(x => x.CreationKey).HasMaxLength(80);
             entity.HasIndex(x => new { x.BusinessId, x.PurchaseOrderId, x.Status });
+            entity.HasIndex(x => new { x.BusinessId, x.PurchaseOrderId, x.CreatedByUserId, x.CreationKey })
+                .IsUnique().HasFilter("[CreationKey] IS NOT NULL");
             entity.HasOne<Business>().WithMany()
                 .HasForeignKey(x => x.BusinessId).OnDelete(DeleteBehavior.Restrict);
             entity.HasOne<RetailPurchaseOrder>().WithMany()

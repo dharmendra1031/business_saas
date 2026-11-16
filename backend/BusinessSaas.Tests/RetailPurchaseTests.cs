@@ -109,7 +109,23 @@ public sealed class RetailPurchaseTests
                 lines = new[] { new { productId, quantity = -1m, unitCost = 80m } }
             })).StatusCode);
 
-        var orderId = await CreateId(manager, orders, valid);
+        var keyedOrder = new
+        {
+            locationId, supplierId, requestKey = "purchase-order-retry-20261116",
+            lines = new[] { new { productId, quantity = 100m, unitCost = 80m } }
+        };
+        var orderId = await CreateId(manager, orders, keyedOrder);
+        var retryOrder = await Send(manager, orders, keyedOrder);
+        Assert.Equal(HttpStatusCode.OK, retryOrder.StatusCode);
+        Assert.Equal(orderId, (await retryOrder.Content.ReadFromJsonAsync<JsonElement>())
+            .GetProperty("id").GetInt64());
+        Assert.Equal(HttpStatusCode.Conflict,
+            (await Send(manager, orders, new
+            {
+                locationId, supplierId, requestKey = keyedOrder.requestKey,
+                lines = new[] { new { productId, quantity = 99m, unitCost = 80m } }
+            })).StatusCode);
+
         var orderPath = orders + "/" + orderId;
 
         Assert.Equal(HttpStatusCode.NotFound, (await other.GetAsync(orderPath)).StatusCode);
@@ -129,8 +145,22 @@ public sealed class RetailPurchaseTests
             (await Send(owner, orderPath + "/approve", new { })).StatusCode);
 
         var receipts = orderPath + "/receivings";
-        var receipt40 = await CreateId(manager, receipts,
-            new { lines = new[] { new { purchaseOrderLineId = orderLineId, quantity = 40m } } });
+        var keyedReceipt40 = new
+        {
+            requestKey = "purchase-receiving-retry-20261116",
+            lines = new[] { new { purchaseOrderLineId = orderLineId, quantity = 40m } }
+        };
+        var receipt40 = await CreateId(manager, receipts, keyedReceipt40);
+        var retryReceiving = await Send(manager, receipts, keyedReceipt40);
+        Assert.Equal(HttpStatusCode.OK, retryReceiving.StatusCode);
+        Assert.Equal(receipt40, (await retryReceiving.Content.ReadFromJsonAsync<JsonElement>())
+            .GetProperty("id").GetInt64());
+        Assert.Equal(HttpStatusCode.Conflict,
+            (await Send(manager, receipts, new
+            {
+                requestKey = keyedReceipt40.requestKey,
+                lines = new[] { new { purchaseOrderLineId = orderLineId, quantity = 41m } }
+            })).StatusCode);
 
         var beforePost = await owner.GetFromJsonAsync<JsonElement>(orderPath);
         Assert.Equal(0m, beforePost.GetProperty("lines")[0]
@@ -140,6 +170,8 @@ public sealed class RetailPurchaseTests
             (await Send(manager, receipts + "/" + receipt40 + "/post", new { })).StatusCode);
         Assert.Equal(HttpStatusCode.OK,
             (await Send(owner, receipts + "/" + receipt40 + "/post", new { })).StatusCode);
+        Assert.Equal(HttpStatusCode.OK,
+            (await Send(manager, receipts, keyedReceipt40)).StatusCode);
 
         var partial = await owner.GetFromJsonAsync<JsonElement>(orderPath);
         Assert.Equal("Approved", partial.GetProperty("status").GetString());

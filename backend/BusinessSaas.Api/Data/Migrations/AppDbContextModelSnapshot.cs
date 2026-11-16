@@ -655,6 +655,10 @@ namespace BusinessSaas.Api.Data.Migrations
                     b.Property<long>("BusinessId")
                         .HasColumnType("bigint");
 
+                    b.Property<string>("CreationKey")
+                        .HasMaxLength(80)
+                        .HasColumnType("nvarchar(80)");
+
                     b.Property<DateTime>("CreatedAtUtc")
                         .HasColumnType("datetime2");
 
@@ -683,6 +687,10 @@ namespace BusinessSaas.Api.Data.Migrations
                     b.HasIndex("SupplierId");
 
                     b.HasIndex("BusinessId", "Status");
+
+                    b.HasIndex("BusinessId", "CreatedByUserId", "CreationKey")
+                        .IsUnique()
+                        .HasFilter("[CreationKey] IS NOT NULL");
 
                     b.ToTable("RetailPurchaseOrders");
                 });
@@ -730,6 +738,10 @@ namespace BusinessSaas.Api.Data.Migrations
                     b.Property<long>("BusinessId")
                         .HasColumnType("bigint");
 
+                    b.Property<string>("CreationKey")
+                        .HasMaxLength(80)
+                        .HasColumnType("nvarchar(80)");
+
                     b.Property<DateTime>("CreatedAtUtc")
                         .HasColumnType("datetime2");
 
@@ -759,6 +771,10 @@ namespace BusinessSaas.Api.Data.Migrations
                     b.HasIndex("PurchaseOrderId");
 
                     b.HasIndex("BusinessId", "PurchaseOrderId", "Status");
+
+                    b.HasIndex("BusinessId", "PurchaseOrderId", "CreatedByUserId", "CreationKey")
+                        .IsUnique()
+                        .HasFilter("[CreationKey] IS NOT NULL");
 
                     b.ToTable("RetailReceivings");
                 });

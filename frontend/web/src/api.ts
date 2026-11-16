@@ -63,6 +63,12 @@ export function setSessionExpiredHandler(handler: (() => void) | null): void {
   sessionExpiredHandler = handler
 }
 
+// Client operation tokens are not database IDs. Entity IDs remain numeric identities.
+export function operationKey(): string {
+  const bytes = crypto.getRandomValues(new Uint8Array(16))
+  return Array.from(bytes, value => value.toString(16).padStart(2, '0')).join('')
+}
+
 export function resetCsrf(): void {
   csrfToken = null
 }

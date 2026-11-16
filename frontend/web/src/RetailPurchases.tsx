@@ -1,5 +1,5 @@
 import { useEffect, useState, type FormEvent } from 'react'
-import { api, post, SessionExpiredError } from './api'
+import { api, post, operationKey, SessionExpiredError } from './api'
 
 interface Supplier {
   id: number
@@ -84,6 +84,8 @@ export default function RetailPurchases({ businessId, canOperate, locations, rol
   const [notice, setNotice] = useState('')
   const [busy, setBusy] = useState(false)
   const [creating, setCreating] = useState(false)
+  const [orderKey, setOrderKey] = useState(operationKey)
+  const [receivingKey, setReceivingKey] = useState(operationKey)
   const [locationId, setLocationId] = useState(locations[0]?.id ?? 0)
   const [supplierSearch, setSupplierSearch] = useState('')
   const [supplierQuery, setSupplierQuery] = useState('')
@@ -185,9 +187,10 @@ export default function RetailPurchases({ businessId, canOperate, locations, rol
       const result = await post<{ id: number }>(basePath, {
         locationId, supplierId, lines: lines.map(x => ({
           productId: x.productId, quantity: Number(x.quantity), unitCost: Number(x.unitCost)
-        }))
+        })), requestKey: orderKey
       })
       setCreating(false)
+      setOrderKey(operationKey())
       setLines([])
       setSupplierId(0)
       setNotice('Purchase order saved as Draft. Owner approval is required.')
@@ -237,8 +240,12 @@ export default function RetailPurchases({ businessId, canOperate, locations, rol
     setNotice('')
     try {
       const receipt = await post<{ id: number }>(
-        basePath + '/' + detail.id + '/receivings', { lines: receivingLines })
+        basePath + '/' + detail.id + '/receivings',
+        { lines: receivingLines, requestKey: receivingKey })
       setNotice(`Receiving #${receipt.id} saved as Draft. Post it to update stock.`)
+      setReceivingKey(operationKey())
+      setReceiving({})
+      setReceivingOpen(false)
       setReload(value => value + 1)
     } catch (cause) {
       if (!(cause instanceof SessionExpiredError)) setError(message(cause))
@@ -276,7 +283,7 @@ export default function RetailPurchases({ businessId, canOperate, locations, rol
           <p>Create a supplier order, approve it, and receive goods in parts. Only posting updates stock.</p>
         </div>
         {canOperate && !creating && <button type="button" className="btn btn-primary"
-          onClick={() => { setCreating(true); setError(''); setNotice('') }}>New purchase order</button>}
+          onClick={() => { setOrderKey(operationKey()); setCreating(true); setError(''); setNotice('') }}>New purchase order</button>}
       </div>
       {!canOperate && <div className="alert alert-warning" role="status">
         Subscription is inactive. Purchase records are read-only.
@@ -385,7 +392,14 @@ export default function RetailPurchases({ businessId, canOperate, locations, rol
                     <td>#{order.id}</td><td>{order.supplierName}</td>
                     <td>{order.locationName}</td><td>{order.status}</td>
                     <td><button type="button" className="btn btn-sm btn-outline-secondary"
-                      onClick={() => { setSelectedId(order.id); setError(''); setNotice('') }}>
+                      onClick={() => {
+                setSelectedId(order.id)
+                setReceivingKey(operationKey())
+                setReceiving({})
+                setReceivingOpen(false)
+                setError('')
+                setNotice('')
+              }}>
                       Details</button></td>
                   </tr>)}</tbody>
                 </table>

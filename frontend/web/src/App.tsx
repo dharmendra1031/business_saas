@@ -356,7 +356,7 @@ function AuthPage({ mode, onChange, onSignedIn, sessionExpired, authNotice, onRe
       <aside className="auth-aside"><div className="brand"><span className="brand-mark">B</span><div>Business SaaS<small>Business Workspace</small></div></div>
         <div className="auth-intro"><div className="auth-overline">ONE ACCOUNT. MULTIPLE BUSINESSES.</div>
           <h1>One account for your businesses.</h1>
-          <p>Set up your Retail workspace today. Product, stock and billing features are still in development.</p>
+          <p>Set up your Retail workspace today. Product and stock tools are available; POS billing is still in development.</p>
         </div>
         <span className="auth-bottom">Business SaaS · Foundation Release</span>
       </aside>
