@@ -52,6 +52,8 @@ public sealed class SqlServerTests
                 migration => migration.EndsWith("_AddRetailContacts"));
             Assert.Contains(await db.Database.GetAppliedMigrationsAsync(),
                 migration => migration.EndsWith("_AddRetailStockLedger"));
+            Assert.Contains(await db.Database.GetAppliedMigrationsAsync(),
+                migration => migration.EndsWith("_AddStockAdjustmentReason"));
             Assert.True(await db.Database.CanConnectAsync());
             Assert.True(await db.BusinessTypes.AnyAsync(x => x.Code == "RETAIL" && x.IsSupported));
         }
@@ -107,6 +109,49 @@ public sealed class SqlServerTests
             requestKey = "same-request-20261109"
         });
         Assert.Equal(HttpStatusCode.Conflict, changedPayload.StatusCode);
+
+        var businessId = ids[0];
+        long locationId;
+        using (var scope = factory.Services.CreateScope())
+        {
+            var db = scope.ServiceProvider.GetRequiredService<AppDbContext>();
+            locationId = await db.BusinessLocations.Where(x => x.BusinessId == businessId)
+                .Select(x => x.Id).SingleAsync();
+        }
+        var category = await CreatedId(owner, $"/api/businesses/{businessId}/categories",
+            new { name = "SQL Test Category" });
+        var unit = await CreatedId(owner, $"/api/businesses/{businessId}/units",
+            new { code = "PCS", name = "Pieces" });
+        var product = await CreatedId(owner, $"/api/businesses/{businessId}/products",
+            new { name = "SQL Test Product", sku = "SQL-STOCK-001", categoryId = category,
+                unitId = unit, salePrice = 10m, taxClassification = "" });
+        var stockPath = $"/api/businesses/{businessId}/stock/locations/{locationId}";
+        Assert.Equal(HttpStatusCode.Created,
+            (await Post(owner, stockPath + "/opening", new { productId = product, quantity = 5m })).StatusCode);
+
+        var concurrentAdjustments = await Task.WhenAll(
+            Post(owner, stockPath + "/adjustments",
+                new { productId = product, expectedQuantity = 5m, quantity = 3m, reason = "Count A" }),
+            Post(owner, stockPath + "/adjustments",
+                new { productId = product, expectedQuantity = 5m, quantity = 4m, reason = "Count B" }));
+        Assert.Equal(1, concurrentAdjustments.Count(x => x.StatusCode == HttpStatusCode.Created));
+        Assert.Equal(1, concurrentAdjustments.Count(x => x.StatusCode == HttpStatusCode.Conflict));
+        using (var scope = factory.Services.CreateScope())
+        {
+            var db = scope.ServiceProvider.GetRequiredService<AppDbContext>();
+            var balance = await db.RetailStockBalances.SingleAsync(x => x.BusinessId == businessId &&
+                x.LocationId == locationId && x.ProductId == product);
+            Assert.Contains(balance.Quantity, new[] { 3m, 4m });
+            Assert.Equal(2, await db.RetailStockMovements.CountAsync(x => x.BusinessId == businessId &&
+                x.LocationId == locationId && x.ProductId == product));
+        }
+    }
+
+    private static async Task<long> CreatedId(HttpClient client, string path, object body)
+    {
+        var response = await Post(client, path, body);
+        Assert.Equal(HttpStatusCode.Created, response.StatusCode);
+        return (await response.Content.ReadFromJsonAsync<JsonElement>()).GetProperty("id").GetInt64();
     }
 
     private static async Task RegisterAndLogin(HttpClient client, string email)

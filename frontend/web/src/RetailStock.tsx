@@ -31,6 +31,7 @@ interface StockMovement {
   quantityChange: number
   balanceAfter: number
   sourceType: string
+  reason: string | null
   postedAtUtc: string
   actor: string | null
 }
@@ -61,6 +62,8 @@ export default function RetailStock({ businessId, locations, canOperate }: {
   const [error, setError] = useState('')
   const [reload, setReload] = useState(0)
   const [opening, setOpening] = useState<StockItem | null>(null)
+  const [adjusting, setAdjusting] = useState<StockItem | null>(null)
+  const [adjustmentReason, setAdjustmentReason] = useState('')
   const [quantity, setQuantity] = useState('')
   const [saving, setSaving] = useState(false)
   const [saveError, setSaveError] = useState('')
@@ -80,6 +83,7 @@ export default function RetailStock({ businessId, locations, canOperate }: {
     setSearch('')
     setQuery('')
     setOpening(null)
+    setAdjusting(null)
     setHistoryProductId(null)
     setNotice('')
   }, [locationId])
@@ -128,14 +132,54 @@ export default function RetailStock({ businessId, locations, canOperate }: {
   }, [basePath, historyProductId, historyPage, reload])
 
   useEffect(() => {
-    if (opening) quantityInput.current?.focus()
-  }, [opening])
+    if (opening || adjusting) quantityInput.current?.focus()
+  }, [opening, adjusting])
 
   function chooseOpening(item: StockItem) {
     setOpening(item)
     setQuantity('0')
     setSaveError('')
     setNotice('')
+  }
+
+  function chooseAdjustment(item: StockItem) {
+    setAdjusting(item)
+    setOpening(null)
+    setQuantity(item.quantity.toFixed(3))
+    setAdjustmentReason('')
+    setSaveError('')
+    setNotice('')
+  }
+
+  async function postAdjustment(event: FormEvent) {
+    event.preventDefault()
+    if (!adjusting || !canOperate || saving) return
+    const amount = Number(quantity)
+    const reason = adjustmentReason.trim()
+    if (!Number.isFinite(amount) || amount < 0 || amount > 9999999999.999 ||
+      Math.round(amount * 1000) / 1000 !== amount || amount === adjusting.quantity ||
+      reason.length < 3 || reason.length > 200) {
+      setSaveError('Change the quantity and enter a reason of 3–200 characters.')
+      return
+    }
+    if (!window.confirm(`Adjust ${adjusting.name} from ${adjusting.quantity.toFixed(3)} to ${amount.toFixed(3)}?`))
+      return
+
+    setSaving(true)
+    setSaveError('')
+    try {
+      await post(basePath + '/adjustments', {
+        productId: adjusting.id, expectedQuantity: adjusting.quantity,
+        quantity: amount, reason
+      })
+      setNotice(`Stock adjusted for ${adjusting.name}.`)
+      setAdjusting(null)
+      setReload(value => value + 1)
+    } catch (cause) {
+      if (!(cause instanceof SessionExpiredError)) setSaveError(message(cause))
+    } finally {
+      setSaving(false)
+    }
   }
 
   async function postOpening(event: FormEvent) {
@@ -175,7 +219,7 @@ export default function RetailStock({ businessId, locations, canOperate }: {
       <div className="masters-heading">
         <div>
           <h2>Stock</h2>
-          <p>View current quantities and record initial stock once per product and location.</p>
+          <p>View quantities, record opening stock, and correct counted stock with a reason.</p>
         </div>
         <div>
           <label className="form-label" htmlFor="stock-location">Location</label>
@@ -220,6 +264,37 @@ export default function RetailStock({ businessId, locations, canOperate }: {
         </div>
       </form>}
 
+      {adjusting && canOperate && <form className="product-form" onSubmit={event => void postAdjustment(event)}>
+        <h3>Adjust stock — {adjusting.name}</h3>
+        <p className="field-help">Current: {adjusting.quantity.toFixed(3)}. Enter the counted quantity and why it changed.</p>
+        {saveError && <div className="alert alert-danger" role="alert">{saveError} <button type="button"
+          className="btn btn-sm btn-outline-secondary ms-2"
+          onClick={() => { setAdjusting(null); setSaveError(''); setReload(value => value + 1) }}>
+          Refresh stock</button></div>}
+        <div className="form-grid">
+          <div>
+            <label className="form-label" htmlFor="stock-adjustment-quantity">New quantity *</label>
+            <input ref={quantityInput} id="stock-adjustment-quantity" className="form-control"
+              type="number" min="0" max="9999999999.999" step="0.001" required
+              value={quantity} onChange={event => setQuantity(event.target.value)} />
+          </div>
+          <div>
+            <label className="form-label" htmlFor="stock-adjustment-reason">Reason *</label>
+            <input id="stock-adjustment-reason" className="form-control" maxLength={200} required
+              value={adjustmentReason} onChange={event => setAdjustmentReason(event.target.value)} />
+          </div>
+        </div>
+        <p className="field-help">Change: {Number.isFinite(Number(quantity))
+          ? (Number(quantity) - adjusting.quantity).toFixed(3) : '—'}</p>
+        <div className="form-footer">
+          <button type="button" className="btn btn-outline-secondary"
+            onClick={() => { setAdjusting(null); setSaveError('') }}>Cancel</button>
+          <button type="submit" className="btn btn-primary" disabled={saving}>
+            {saving ? 'Saving…' : 'Save adjustment'}
+          </button>
+        </div>
+      </form>}
+
       <form className="masters-search" onSubmit={event => {
         event.preventDefault()
         setPage(1)
@@ -256,6 +331,9 @@ export default function RetailStock({ businessId, locations, canOperate }: {
                     {canOperate && item.isActive && !item.hasStockRecord &&
                       <button type="button" className="btn btn-sm btn-outline-secondary me-2"
                         onClick={() => chooseOpening(item)}>Set opening</button>}
+                    {canOperate && item.isActive && item.hasStockRecord &&
+                      <button type="button" className="btn btn-sm btn-outline-secondary me-2"
+                        onClick={() => chooseAdjustment(item)}>Adjust</button>}
                     {item.hasStockRecord &&
                       <button type="button" className="btn btn-sm btn-outline-secondary"
                         onClick={() => {
@@ -295,7 +373,8 @@ export default function RetailStock({ businessId, locations, canOperate }: {
                     <th scope="col">Posted by</th></tr></thead>
                   <tbody>{history.map(entry => <tr key={entry.id}>
                     <td>{new Date(entry.postedAtUtc + (entry.postedAtUtc.endsWith('Z') ? '' : 'Z')).toLocaleString()}</td>
-                    <td>{entry.sourceType}</td>
+                    <td>{entry.sourceType}{entry.reason &&
+                      <small className="product-secondary">{entry.reason}</small>}</td>
                     <td className="text-end">{entry.quantityChange.toFixed(3)}</td>
                     <td className="text-end">{entry.balanceAfter.toFixed(3)}</td>
                     <td>{entry.actor ?? '—'}</td>

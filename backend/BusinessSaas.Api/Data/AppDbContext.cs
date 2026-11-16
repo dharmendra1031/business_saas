@@ -126,6 +126,7 @@ public sealed class RetailStockMovement
     public long ActorUserId { get; set; }
     public string SourceType { get; set; } = "";
     public long? SourceId { get; set; }
+    public string? Reason { get; set; }
     public decimal QuantityChange { get; set; }
     public decimal BalanceAfter { get; set; }
     public DateTime PostedAtUtc { get; set; } = DateTime.UtcNow;
@@ -282,6 +283,7 @@ public sealed class AppDbContext(DbContextOptions<AppDbContext> options)
         builder.Entity<RetailStockMovement>(entity =>
         {
             entity.Property(x => x.SourceType).HasMaxLength(30).IsRequired();
+            entity.Property(x => x.Reason).HasMaxLength(200);
             entity.Property(x => x.QuantityChange).HasPrecision(18, 3);
             entity.Property(x => x.BalanceAfter).HasPrecision(18, 3);
             entity.HasIndex(x => new { x.BusinessId, x.LocationId, x.ProductId, x.Id });

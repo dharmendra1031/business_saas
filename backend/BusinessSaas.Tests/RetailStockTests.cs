@@ -127,12 +127,48 @@ public sealed class RetailStockTests
         Assert.Equal("Opening", history.GetProperty("items")[0].GetProperty("sourceType").GetString());
         Assert.Equal(12.125m, history.GetProperty("items")[0].GetProperty("quantityChange").GetDecimal());
 
+        var adjustment = path + "/adjustments";
+        Assert.Equal(HttpStatusCode.BadRequest,
+            (await Send(owner, HttpMethod.Post, adjustment,
+                new { productId = product, expectedQuantity = 12.125m, quantity = 9m, reason = " " })).StatusCode);
+        Assert.Equal(HttpStatusCode.BadRequest,
+            (await Send(owner, HttpMethod.Post, adjustment,
+                new { productId = product, expectedQuantity = 12.125m, quantity = -1m, reason = "Count correction" })).StatusCode);
+        Assert.Equal(HttpStatusCode.BadRequest,
+            (await Send(owner, HttpMethod.Post, adjustment,
+                new { productId = product, expectedQuantity = 12.125m, quantity = 12.125m, reason = "No change" })).StatusCode);
+        Assert.Equal(HttpStatusCode.NotFound,
+            (await Send(other, HttpMethod.Post, adjustment,
+                new { productId = product, expectedQuantity = 12.125m, quantity = 9m, reason = "Count correction" })).StatusCode);
+        Assert.Equal(HttpStatusCode.NotFound,
+            (await Send(owner, HttpMethod.Post, adjustment,
+                new { productId = foreignProduct, expectedQuantity = 12.125m, quantity = 9m, reason = "Count correction" })).StatusCode);
+        Assert.Equal(HttpStatusCode.NotFound,
+            (await Send(cashier, HttpMethod.Post, adjustment,
+                new { productId = product, expectedQuantity = 12.125m, quantity = 9m, reason = "Count correction" })).StatusCode);
+
+        var adjusted = await Send(manager, HttpMethod.Post, adjustment,
+            new { productId = product, expectedQuantity = 12.125m, quantity = 9m, reason = "Count correction" });
+        Assert.Equal(HttpStatusCode.Created, adjusted.StatusCode);
+        Assert.Equal(HttpStatusCode.Conflict,
+            (await Send(owner, HttpMethod.Post, adjustment,
+                new { productId = product, expectedQuantity = 12.125m, quantity = 8m, reason = "Stale count" })).StatusCode);
+
+        var afterAdjustment = await owner.GetFromJsonAsync<JsonElement>(path + "?search=stock-100");
+        Assert.Equal(9m, afterAdjustment.GetProperty("items")[0].GetProperty("quantity").GetDecimal());
+        var adjustedHistory = await owner.GetFromJsonAsync<JsonElement>(
+            path + $"/movements?productId={product}");
+        Assert.Equal(2, adjustedHistory.GetProperty("total").GetInt32());
+        Assert.Equal("Adjustment", adjustedHistory.GetProperty("items")[0].GetProperty("sourceType").GetString());
+        Assert.Equal("Count correction", adjustedHistory.GetProperty("items")[0].GetProperty("reason").GetString());
+        Assert.Equal(-3.125m, adjustedHistory.GetProperty("items")[0].GetProperty("quantityChange").GetDecimal());
+
         using (var scope = factory.Services.CreateScope())
         {
             var db = scope.ServiceProvider.GetRequiredService<AppDbContext>();
             Assert.Equal(1, await db.RetailStockBalances.CountAsync(x =>
                 x.BusinessId == businessId && x.ProductId == product));
-            Assert.Equal(1, await db.RetailStockMovements.CountAsync(x =>
+            Assert.Equal(2, await db.RetailStockMovements.CountAsync(x =>
                 x.BusinessId == businessId && x.ProductId == product));
         }
 
@@ -147,6 +183,9 @@ public sealed class RetailStockTests
             (await Send(owner, HttpMethod.Post,
                 $"/api/businesses/{businessId}/stock/locations/{secondLocationId}/opening",
                 new { productId = product, quantity = 1m })).StatusCode);
+        Assert.Equal(HttpStatusCode.Forbidden,
+            (await Send(owner, HttpMethod.Post, adjustment,
+                new { productId = product, expectedQuantity = 9m, quantity = 8m, reason = "Count correction" })).StatusCode);
         Assert.Equal(HttpStatusCode.OK, (await owner.GetAsync(path)).StatusCode);
     }
 

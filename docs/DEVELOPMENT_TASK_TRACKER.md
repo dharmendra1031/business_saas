@@ -194,7 +194,7 @@
 | BS-081 | Create stock movement ledger design | Stock history user-readable हो | UX REVIEW PENDING |
 | BS-082 | Implement opening stock with one-time rules | Opening vs Adjustment अलग दिखें | UX REVIEW PENDING |
 | BS-083 | Implement branch-scoped stock balance view | Available quantity prominent हो | UX REVIEW PENDING |
-| BS-084 | Implement stock adjustment with reason | Old/New/Delta before save साफ हों | TODO |
+| BS-084 | Implement stock adjustment with reason | Old/New/Delta before save साफ हों | UX REVIEW PENDING |
 | BS-085 | Prevent negative stock under concurrency | Insufficient stock तुरंत दिखे | TODO |
 | BS-086 | Add audited inventory corrections | Correction किसने किया दिखे | TODO |
 | BS-087 | Add low-stock thresholds and list | Low vs out-of-stock अलग हों | TODO |

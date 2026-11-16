@@ -7,8 +7,8 @@
 | BS-081 — Stock movement ledger | UX REVIEW PENDING | `RetailStockMovements` stores BusinessId, LocationId, ProductId, actor, timestamp, source type/id, signed quantity change and balance after; readable history API/UI |
 | BS-082 — Opening stock once | UX REVIEW PENDING | `POST /api/businesses/{id}/stock/locations/{locationId}/opening` posts a balance and immutable opening movement atomically; duplicate protected by unique DB indexes |
 | BS-083 — Scoped stock view | UX REVIEW PENDING | Paginated product stock view with location selection, uninitialized vs zero quantities; only assigned primary location for Manager, Owner sees business locations |
-| BS-084 — Stock adjustment | TODO | No adjustment write implemented; policy, reason and approval pending |
-| BS-085 — Concurrent non-negative stock | TODO | DB check and unique opening guard exist, but concurrent decrement/sale/receiving endpoints and tests do not |
+| BS-084 — Stock adjustment | UX REVIEW PENDING | Target quantity, expected current quantity and required reason; server updates the balance and appends an Adjustment movement in one transaction. Form shows old/new/delta, and history shows reason. Browser role/viewport review remains pending. |
+| BS-085 — Concurrent non-negative stock | TODO | Adjustment uses an atomic compare-and-update; SQL Server test shows two same-balance concurrent adjustments yield one success and one conflict. Sale/receiving decrements and their concurrency tests remain pending. |
 | BS-086 — Audited corrections | TODO | No corrections/reversals allowed until compensating movement workflow is designed |
 | BS-087 — Low stock | TODO | No thresholds or alerts |
 | BS-088 — Transfers | TODO | In-transit and location rules not designed |
@@ -33,4 +33,11 @@
 - GitHub Draft PR [#5](https://github.com/dharmendra1031/business_saas/pull/5) depends on unmerged Supplier/Customer Draft PR [#4](https://github.com/dharmendra1031/business_saas/pull/4). **Do not merge #5 before #4.**
 - Running browser acceptance at 360/768/1440px, keyboard/focus, confirmation, and SQL Server concurrency/reconciliation testing are still required before marking any task DONE.
 
-**Next:** Real browser verification and BS-084 adjusted stock with reason + BS-085 safe concurrent movement/posting service before enabling Purchase Receiving or POS.
+**Next:** Real browser verification, audited correction policy, then safe concurrent movement posting for Purchase Receiving and POS.
+
+## 16 November 2026 continuation
+
+- BS-084 now has a reason-bearing adjustment API and form. The API validates numeric precision, rejects no-op/negative stock, checks tenant/location/role and active subscription, and compares the client's expected quantity in the database update. A successful update and immutable movement share one transaction. The history API/UI exposes the reason.
+- The SQLite workflow test passes with invalid, foreign, cashier, stale and expired-trial cases. A fresh LocalDB integration run applied `AddStockAdjustmentReason` and verified that two concurrent adjustments from the same starting balance produce one success, one conflict, one balance and exactly two movements including Opening.
+- Release backend suite 12/12 and frontend production build pass. The running local `BusinessSaasTest` database applied the new migration; an authenticated adjustment changed the demo product from 10.000 to 9.000 and the Vite API proxy returned 200.
+- Interactive browser review remains pending because the browser access host was unavailable and Chrome control was denied. This is why BS-084 remains `UX REVIEW PENDING`. BS-085 remains `TODO` until purchase/sale outflows use the same atomic non-negative rule.
