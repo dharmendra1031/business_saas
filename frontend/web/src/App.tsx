@@ -308,7 +308,7 @@ export default function App() {
               {dashboard.canOperate && dashboard.roleCode !== 'Cashier' && (
                 <section className="content-section" aria-label="Shop setup guide">
                   <h2>Get your shop ready</h2>
-                  <p className="mb-2">Start with Products, then enter Opening Stock or receive a Purchase. You can find these tabs below.</p>
+                  <p className="mb-2">Start with Products, then enter Opening Stock or receive a Purchase. Use the buttons below or the sidebar.</p>
                   <p className="small text-secondary mb-0">For a new product, enter its name and sale price. Additional details are optional unless your shop needs them.</p>
                   <div className="d-flex flex-wrap gap-2 mt-3">
                     <button className="btn btn-primary" onClick={() => setRetailPage('products')}>Add Products</button>
@@ -342,14 +342,7 @@ export default function App() {
                 </section>
                 </div>
               </details>
-              <section className="next-steps">
-                <ShieldCheck size={22} />
-                <div><strong>Next retail modules</strong>
-                  <p>POS and full accounting are not available yet. Purchase Order and partial Receiving are now available for pilot testing. Catalog and initial Stock setup are available to owners and managers. {dashboard.roleCode === 'Owner'
-                    ? 'You can manage team access above.'
-                    : 'Ask your business owner about access.'} No sample sales figures are shown.</p>
-                </div>
-              </section>
+
               </>}
               {retailPage !== 'overview' && retailPage !== 'team' && dashboard.roleCode !== 'Cashier' &&
                 <RetailCatalog key={dashboard.business.id + '-' + retailPage} section={retailPage}
