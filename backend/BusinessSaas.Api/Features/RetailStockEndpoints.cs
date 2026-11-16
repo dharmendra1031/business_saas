@@ -143,56 +143,9 @@ public static class RetailStockEndpoints
                 $"/api/businesses/{businessId}/stock/locations/{locationId}/movements?productId={request.ProductId}",
                 new { movement.Id, movement.ProductId, movement.QuantityChange, movement.BalanceAfter });
         });
-
-        group.MapPost("/locations/{locationId:long}/adjustments", async (long businessId,
-            long locationId, StockAdjustmentRequest request, ClaimsPrincipal user, AppDbContext db) =>
-        {
-            var denied = await CheckLocation(db, user, businessId, locationId, true);
-            if (denied is not null) return denied;
-
-            var reason = request.Reason?.Trim() ?? "";
-            if (request.ProductId <= 0 || !ValidQuantity(request.ExpectedQuantity) ||
-                !ValidQuantity(request.Quantity) || request.Quantity == request.ExpectedQuantity ||
-                reason.Length is < 3 or > 200)
-                return Results.BadRequest(new { message = "Enter a changed quantity and a reason (3–200 characters)." });
-
-            if (!await db.RetailProducts.AnyAsync(x =>
-                x.BusinessId == businessId && x.Id == request.ProductId && x.IsActive))
-                return Results.NotFound();
-
-            var exists = await db.RetailStockBalances.AsNoTracking().AnyAsync(x =>
-                x.BusinessId == businessId && x.LocationId == locationId && x.ProductId == request.ProductId);
-            if (!exists)
-                return Results.Conflict(new { message = "Set opening stock before making an adjustment." });
-
-            await using var transaction = await db.Database.BeginTransactionAsync();
-            var changed = await db.RetailStockBalances
-                .Where(x => x.BusinessId == businessId && x.LocationId == locationId &&
-                    x.ProductId == request.ProductId && x.Quantity == request.ExpectedQuantity)
-                .ExecuteUpdateAsync(updates => updates.SetProperty(x => x.Quantity, request.Quantity));
-            if (changed != 1)
-                return Results.Conflict(new { message = "Stock changed. Refresh the quantity and try again." });
-
-            var movement = new RetailStockMovement
-            {
-                BusinessId = businessId, LocationId = locationId,
-                ProductId = request.ProductId,
-                ActorUserId = long.Parse(user.FindFirstValue(ClaimTypes.NameIdentifier)!),
-                SourceType = "Adjustment", Reason = reason,
-                QuantityChange = request.Quantity - request.ExpectedQuantity,
-                BalanceAfter = request.Quantity
-            };
-            db.RetailStockMovements.Add(movement);
-            await db.SaveChangesAsync();
-            await transaction.CommitAsync();
-            return Results.Created(
-                $"/api/businesses/{businessId}/stock/locations/{locationId}/movements?productId={request.ProductId}",
-                new { movement.Id, movement.ProductId, movement.Reason,
-                    movement.QuantityChange, movement.BalanceAfter });
-        });
     }
 
-    private static async Task<IResult?> CheckLocation(AppDbContext db,
+    internal static async Task<IResult?> CheckLocation(AppDbContext db,
         ClaimsPrincipal user, long businessId, long locationId, bool write)
     {
         var denied = await RetailMasterEndpoints.CheckAccess(db, user, businessId, write);
@@ -214,9 +167,4 @@ public static class RetailStockEndpoints
         ex.InnerException is DbException { ErrorCode: 19 };
 
     private sealed record OpeningStockRequest(long ProductId, decimal Quantity);
-    private sealed record StockAdjustmentRequest(long ProductId, decimal ExpectedQuantity,
-        decimal Quantity, string? Reason);
-
-    private static bool ValidQuantity(decimal value) =>
-        value is >= 0 and <= 9999999999.999m && decimal.Round(value, 3) == value;
 }
