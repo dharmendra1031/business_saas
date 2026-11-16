@@ -203,7 +203,7 @@ export default function App() {
               setMenuOpen(false)
               setRetailPage('team')
             }}><UserRound size={18} /> Team Access</button>}
-        </>
+        </>}
         {canViewPlatform && <button type="button"
           className={`nav-entry${page === 'platform' ? ' active' : ''}`}
           aria-current={page === 'platform' ? 'page' : undefined}

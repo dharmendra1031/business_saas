@@ -39,7 +39,7 @@ button:focus-visible, a:focus-visible, input:focus-visible, select:focus-visible
 .auth-switch { text-align: center; color: var(--muted); font-size: .9rem; margin-top: 24px; }
 .auth-switch button, .back-link { color: var(--brand); background: none; border: 0; font-weight: 600; padding: 0; }
 .app-shell { display: flex; min-height: 100vh; }
-.app-sidebar { position: sticky; top: 0; height: 100vh; width: 245px; flex: 0 0 245px; background: var(--sidebar); padding: 22px 15px; color: #dbeaf6; display: flex; flex-direction: column; }
+.app-sidebar { position: sticky; top: 0; height: 100vh; overflow-y: auto; width: 245px; flex: 0 0 245px; background: var(--sidebar); padding: 22px 15px; color: #dbeaf6; display: flex; flex-direction: column; }
 .app-sidebar .brand { padding: 0 12px 28px; border-bottom: 1px solid #ffffff1e; }
 .sidebar-heading { font-size: .72rem; letter-spacing: .1em; color: #a9c3d8; padding: 27px 12px 8px; }
 .nav-entry { width: 100%; display: flex; align-items: center; gap: 12px; padding: 12px 14px; border-radius: 6px; border: 0; color: #e3f0fa; background: none; text-align: left; font-size: .93rem; }
