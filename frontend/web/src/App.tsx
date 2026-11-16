@@ -1,11 +1,16 @@
 import { useEffect, useRef, useState, type FormEvent } from 'react'
-import { ArrowLeft, ArrowRight, Building2, CheckCircle2, LayoutDashboard, LogOut, Menu, Plus, ShieldCheck, Store, UserRound } from 'lucide-react'
+import { ArrowLeft, ArrowRight, Boxes, Building2, CheckCircle2, LayoutDashboard, LogOut, Menu, Package, Plus, ShieldCheck, ShoppingCart, Store, Tags, Truck, UserRound, Users } from 'lucide-react'
 import { api, post, resetCsrf, SessionExpiredError, setSessionExpiredHandler, type Business, type BusinessMarket, type BusinessType, type RetailDashboard, type User } from './api'
 import TeamMembers from './TeamMembers'
-import RetailCatalog from './RetailCatalog'
+import RetailCatalog, { type RetailSection } from './RetailCatalog'
 import PlatformAdmin from './PlatformAdmin'
 
 type Page = 'loading' | 'login' | 'register' | 'businesses' | 'create' | 'retail' | 'platform'
+type RetailPage = RetailSection | 'overview' | 'team'
+const retailTitles: Record<RetailPage, string> = {
+  overview: 'Dashboard', products: 'Products', stock: 'Stock', purchases: 'Purchase Orders',
+  masters: 'Categories & Units', suppliers: 'Suppliers', customers: 'Customers', team: 'Team Access'
+}
 
 function operationKey(): string {
   const bytes = crypto.getRandomValues(new Uint8Array(16))
@@ -18,6 +23,7 @@ export default function App() {
   const [businesses, setBusinesses] = useState<Business[]>([])
   const [canViewPlatform, setCanViewPlatform] = useState(false)
   const [dashboard, setDashboard] = useState<RetailDashboard | null>(null)
+  const [retailPage, setRetailPage] = useState<RetailPage>('overview')
   const [error, setError] = useState('')
   const [notice, setNotice] = useState('')
   const [menuOpen, setMenuOpen] = useState(false)
@@ -94,6 +100,7 @@ export default function App() {
     try {
       const details = await api<RetailDashboard>(`/businesses/${id}/dashboard`)
       setDashboard(details)
+      setRetailPage('overview')
       setPage('retail')
     } catch (cause) {
       if (!(cause instanceof SessionExpiredError)) {
@@ -157,9 +164,46 @@ export default function App() {
           }}>
           <Building2 size={18} /> My Businesses
         </button>
-        {page === 'retail' && <div className="nav-entry active" aria-current="page">
-          <LayoutDashboard size={18} /> Retail Dashboard
-        </div>}
+        {page === 'retail' && dashboard && <>
+          <div className="sidebar-heading">DAILY WORK</div>
+          {([
+            ['overview', 'Dashboard', LayoutDashboard],
+            ['products', 'Products', Package],
+            ['stock', 'Stock', Boxes],
+            ['purchases', 'Purchase', ShoppingCart]
+          ] as const).filter(([section]) => dashboard.roleCode !== 'Cashier' || section === 'overview')
+            .map(([section, label, Icon]) => <button key={section} type="button"
+              className={`nav-entry${retailPage === section ? ' active' : ''}`}
+              aria-current={retailPage === section ? 'page' : undefined}
+              onClick={() => {
+                if (menuOpen) menuToggle.current?.focus()
+                setMenuOpen(false)
+                setRetailPage(section)
+              }}><Icon size={18} /> {label}</button>)}
+          {dashboard.roleCode !== 'Cashier' && <>
+            <div className="sidebar-heading">SHOP SETUP</div>
+            {([
+              ['masters', 'Categories & Units', Tags],
+              ['suppliers', 'Suppliers', Truck],
+              ['customers', 'Customers', Users]
+            ] as const).map(([section, label, Icon]) => <button key={section} type="button"
+              className={`nav-entry${retailPage === section ? ' active' : ''}`}
+              aria-current={retailPage === section ? 'page' : undefined}
+              onClick={() => {
+                if (menuOpen) menuToggle.current?.focus()
+                setMenuOpen(false)
+                setRetailPage(section)
+              }}><Icon size={18} /> {label}</button>)}
+          </>}
+          {dashboard.roleCode === 'Owner' && <button type="button"
+            className={`nav-entry${retailPage === 'team' ? ' active' : ''}`}
+            aria-current={retailPage === 'team' ? 'page' : undefined}
+            onClick={() => {
+              if (menuOpen) menuToggle.current?.focus()
+              setMenuOpen(false)
+              setRetailPage('team')
+            }}><UserRound size={18} /> Team Access</button>}
+        </>
         {canViewPlatform && <button type="button"
           className={`nav-entry${page === 'platform' ? ' active' : ''}`}
           aria-current={page === 'platform' ? 'page' : undefined}
@@ -239,7 +283,7 @@ export default function App() {
             <>
               <div className="page-header">
                 <div><button className="back-link" onClick={() => { setNotice(''); void loadBusinesses() }}><ArrowLeft size={16} /> All businesses</button>
-                  <h1>Retail Dashboard</h1><p>{dashboard.business.name} · {dashboard.business.typeName}</p>
+                  <h1>{retailTitles[retailPage]}</h1><p>{dashboard.business.name} · {dashboard.business.typeName}</p>
                 </div>
                 {dashboard.canOperate
                   ? <span className="workspace-state"><CheckCircle2 size={16} /> {dashboard.accessStatus === 'Trial' ? 'Trial active' : 'Plan active'}</span>
@@ -260,11 +304,17 @@ export default function App() {
                     dateStyle: 'medium', timeStyle: 'short', timeZone: dashboard.business.timeZoneId
                   })}`}
               </p>}
+              {retailPage === 'overview' && <>
               {dashboard.canOperate && dashboard.roleCode !== 'Cashier' && (
                 <section className="content-section" aria-label="Shop setup guide">
                   <h2>Get your shop ready</h2>
                   <p className="mb-2">Start with Products, then enter Opening Stock or receive a Purchase. You can find these tabs below.</p>
                   <p className="small text-secondary mb-0">For a new product, enter its name and sale price. Additional details are optional unless your shop needs them.</p>
+                  <div className="d-flex flex-wrap gap-2 mt-3">
+                    <button className="btn btn-primary" onClick={() => setRetailPage('products')}>Add Products</button>
+                    <button className="btn btn-outline-secondary" onClick={() => setRetailPage('stock')}>View Stock</button>
+                    <button className="btn btn-outline-secondary" onClick={() => setRetailPage('purchases')}>Purchase Orders</button>
+                  </div>
                 </section>
               )}
               {dashboard.roleCode === 'Cashier' && <section className="content-section">
@@ -292,12 +342,6 @@ export default function App() {
                 </section>
                 </div>
               </details>
-              {dashboard.roleCode !== 'Cashier' &&
-                <RetailCatalog key={dashboard.business.id} businessId={dashboard.business.id}
-                  canOperate={dashboard.canOperate} currencyCode={dashboard.business.currencyCode}
-                  locations={dashboard.locations} roleCode={dashboard.roleCode} />}
-              {dashboard.roleCode === 'Owner' &&
-                <TeamMembers businessId={dashboard.business.id} />}
               <section className="next-steps">
                 <ShieldCheck size={22} />
                 <div><strong>Next retail modules</strong>
@@ -306,6 +350,14 @@ export default function App() {
                     : 'Ask your business owner about access.'} No sample sales figures are shown.</p>
                 </div>
               </section>
+              </>}
+              {retailPage !== 'overview' && retailPage !== 'team' && dashboard.roleCode !== 'Cashier' &&
+                <RetailCatalog key={dashboard.business.id + '-' + retailPage} section={retailPage}
+                  businessId={dashboard.business.id} canOperate={dashboard.canOperate}
+                  currencyCode={dashboard.business.currencyCode} locations={dashboard.locations}
+                  roleCode={dashboard.roleCode} />}
+              {retailPage === 'team' && dashboard.roleCode === 'Owner' &&
+                <TeamMembers businessId={dashboard.business.id} />}
             </>
           )}
         </main>
