@@ -260,6 +260,13 @@ export default function App() {
                     dateStyle: 'medium', timeStyle: 'short', timeZone: dashboard.business.timeZoneId
                   })}`}
               </p>}
+              {dashboard.canOperate && dashboard.roleCode !== 'Cashier' && (
+                <section className="content-section" aria-label="Shop setup guide">
+                  <h2>Get your shop ready</h2>
+                  <p className="mb-2">Start with Products, then enter Opening Stock or receive a Purchase. You can find these tabs below.</p>
+                  <p className="small text-secondary mb-0">For a new product, enter its name and sale price. Additional details are optional unless your shop needs them.</p>
+                </section>
+              )}
               {dashboard.roleCode === 'Cashier' && <section className="content-section">
                 <h2>Billing is coming soon</h2>
                 <p>Your account is ready, but POS billing is not available yet. Ask the owner to prepare products and stock.</p>
