@@ -94,7 +94,6 @@ export default function RetailPurchases({ businessId, canOperate, locations, rol
   const [productSearch, setProductSearch] = useState('')
   const [productQuery, setProductQuery] = useState('')
   const [products, setProducts] = useState<Product[]>([])
-  const [productId, setProductId] = useState(0)
   const [lines, setLines] = useState<NewLine[]>([])
   const [selectedId, setSelectedId] = useState<number | null>(null)
   const [detail, setDetail] = useState<OrderDetail | null>(null)
@@ -105,6 +104,16 @@ export default function RetailPurchases({ businessId, canOperate, locations, rol
   const money = (amount: number) =>
     new Intl.NumberFormat('en-IN', { style: 'currency', currency: currencyCode }).format(amount)
 
+
+  useEffect(() => {
+    const timer = setTimeout(() => setSupplierQuery(supplierSearch.trim()), 250)
+    return () => clearTimeout(timer)
+  }, [supplierSearch])
+
+  useEffect(() => {
+    const timer = setTimeout(() => setProductQuery(productSearch.trim()), 250)
+    return () => clearTimeout(timer)
+  }, [productSearch])
 
   useEffect(() => {
     let active = true
@@ -161,14 +170,26 @@ export default function RetailPurchases({ businessId, canOperate, locations, rol
     return () => { active = false }
   }, [basePath, selectedId, reload])
 
-  function addLine() {
-    const product = products.find(x => x.id === productId)
-    if (!product || lines.some(x => x.productId === productId)) return
+  function addLine(id: number) {
+    const product = products.find(x => x.id === id)
+    if (!product || lines.some(x => x.productId === id)) return
     setLines(value => [...value, {
       productId: product.id, name: product.name, sku: product.sku, quantity: '1', unitCost: '0'
     }])
-    setProductId(0)
     setError('')
+  }
+
+  function toggleReceiving() {
+    if (!detail) return
+    if (receivingOpen) {
+      setReceivingOpen(false)
+      setReceiving({})
+      return
+    }
+    setReceiving(Object.fromEntries(detail.lines
+      .filter(line => line.remainingQuantity > 0)
+      .map(line => [line.id, String(line.remainingQuantity)])))
+    setReceivingOpen(true)
   }
 
   async function createOrder(event: FormEvent) {
@@ -310,11 +331,10 @@ export default function RetailPurchases({ businessId, canOperate, locations, rol
             <div className="masters-search">
               <input className="form-control" aria-label="Find supplier" type="search"
                 placeholder="Supplier search" value={supplierSearch}
-                onChange={event => setSupplierSearch(event.target.value)} />
-              <button type="button" className="btn btn-outline-secondary"
-                onClick={() => { setSupplierId(0); setSupplierQuery(supplierSearch.trim()) }}>
-                Find
-              </button>
+                onChange={event => {
+                  setSupplierId(0)
+                  setSupplierSearch(event.target.value)
+                }} />
             </div>
             <select className="form-select" id="purchase-supplier" value={supplierId}
               onChange={event => setSupplierId(Number(event.target.value))} required>
@@ -329,21 +349,17 @@ export default function RetailPurchases({ businessId, canOperate, locations, rol
             <input type="search" className="form-control" aria-label="Find product"
               placeholder="Find product by name or SKU" value={productSearch}
               onChange={event => setProductSearch(event.target.value)} />
-            <button type="button" className="btn btn-outline-secondary"
-              onClick={() => setProductQuery(productSearch.trim())}>Find</button>
           </div>
           <div className="masters-form">
             <div>
               <label className="form-label" htmlFor="purchase-product">Product</label>
-              <select id="purchase-product" className="form-select" value={productId}
-                onChange={event => setProductId(Number(event.target.value))}>
-                <option value={0}>Select product</option>
+              <select id="purchase-product" className="form-select" value={0}
+                onChange={event => addLine(Number(event.target.value))}>
+                <option value={0}>Select a product to add</option>
                 {products.filter(x => !lines.some(line => line.productId === x.id))
                   .map(x => <option key={x.id} value={x.id}>{x.name} ({x.sku})</option>)}
               </select>
             </div>
-            <button className="btn btn-outline-secondary" type="button"
-              onClick={addLine} disabled={!productId}>Add product</button>
           </div>
           {lines.length > 0 && <div className="table-responsive">
             <table className="table table-sm align-middle">
@@ -453,13 +469,13 @@ export default function RetailPurchases({ businessId, canOperate, locations, rol
           {canOperate && detail.status === 'Approved' &&
             <>
               <button type="button" className="btn btn-outline-primary"
-                onClick={() => { setReceivingOpen(x => !x); setError('') }}>
+                onClick={() => { toggleReceiving(); setError('') }}>
                 {receivingOpen ? 'Close receiving form' : 'Create receiving draft'}
               </button>
               {receivingOpen && <form className="product-form"
                 onSubmit={event => void saveReceiving(event)}>
                 <h3>Goods received</h3>
-                <p className="field-help">Only enter quantities physically received now.</p>
+                <p className="field-help">Remaining quantities are filled in. Reduce them for partial deliveries. Saving a draft does not change stock.</p>
                 <div className="table-responsive">
                   <table className="table table-sm align-middle">
                     <thead><tr><th>Product</th><th className="text-end">Remaining</th>
