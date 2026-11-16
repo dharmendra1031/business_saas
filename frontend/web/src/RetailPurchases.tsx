@@ -374,7 +374,11 @@ export default function RetailPurchases({ businessId, canOperate, locations, rol
               onClick={() => setSupplierFormOpen(open => !open)}>
               {supplierFormOpen ? 'Cancel adding supplier' : '+ New supplier'}
             </button>
-            {supplierFormOpen && <div className="product-form">
+            {supplierFormOpen && <div className="product-form" role="group" aria-label="New supplier"
+              onKeyDown={event => {
+                if (event.key === 'Enter' && event.target instanceof HTMLInputElement)
+                  event.preventDefault()
+              }}>
               <div className="mb-2">
                 <label className="form-label" htmlFor="new-supplier-name">Supplier name *</label>
                 <input className="form-control" id="new-supplier-name" minLength={2} maxLength={120}
