@@ -117,8 +117,10 @@ public sealed class RetailMasterTests
         using (var scope = factory.Services.CreateScope())
         {
             var db = scope.ServiceProvider.GetRequiredService<AppDbContext>();
-            Assert.Equal(1, await db.RetailCategories.CountAsync(x => x.BusinessId == firstId));
-            Assert.Equal(1, await db.RetailCategories.CountAsync(x => x.BusinessId == secondId));
+            Assert.Equal(2, await db.RetailCategories.CountAsync(x => x.BusinessId == firstId));
+            Assert.Equal(2, await db.RetailCategories.CountAsync(x => x.BusinessId == secondId));
+            Assert.Equal(1, await db.RetailUnits.CountAsync(x =>
+                x.BusinessId == firstId && x.Code == "ITEM"));
             var subscription = await db.BusinessSubscriptions.SingleAsync(x => x.BusinessId == firstId);
             subscription.TrialEndsAtUtc = DateTime.UtcNow.AddMinutes(-1);
             await db.SaveChangesAsync();

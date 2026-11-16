@@ -61,6 +61,16 @@ public sealed class RetailProductTests
             await db.SaveChangesAsync();
         }
 
+        var defaultOptions = await owner.GetFromJsonAsync<JsonElement>(
+            $"/api/businesses/{businessId}/products/options");
+        var generalId = defaultOptions.GetProperty("categories").EnumerateArray()
+            .Single(x => x.GetProperty("name").GetString() == "General")
+            .GetProperty("id").GetInt64();
+        var itemId = defaultOptions.GetProperty("units").EnumerateArray()
+            .Single(x => x.GetProperty("code").GetString() == "ITEM")
+            .GetProperty("id").GetInt64();
+        Assert.True(generalId > 0 && itemId > 0);
+
         var categoryId = await CreateId(owner, $"/api/businesses/{businessId}/categories",
             new { name = "Stationery" });
         var unitId = await CreateId(owner, $"/api/businesses/{businessId}/units",
@@ -90,6 +100,20 @@ public sealed class RetailProductTests
             (await Post(owner, path, Product(category: foreignCategory))).StatusCode);
         Assert.Equal(HttpStatusCode.BadRequest,
             (await Post(owner, path, Product(unit: foreignUnit))).StatusCode);
+
+        var quick = await Post(owner, path, new
+        {
+            name = "Quick product", sku = "", barcode = (string?)null,
+            categoryId = generalId, unitId = itemId, salePrice = 20.50m,
+            taxClassification = ""
+        });
+        Assert.Equal(HttpStatusCode.Created, quick.StatusCode);
+        var quickId = (await quick.Content.ReadFromJsonAsync<JsonElement>())
+            .GetProperty("id").GetInt64();
+        var quickDetails = await owner.GetFromJsonAsync<JsonElement>(path + "/" + quickId);
+        Assert.Equal($"AUTO-{quickId}", quickDetails.GetProperty("sku").GetString());
+        Assert.Equal(generalId, quickDetails.GetProperty("categoryId").GetInt64());
+        Assert.Equal(itemId, quickDetails.GetProperty("unitId").GetInt64());
 
         var first = await Post(owner, path, Product());
         Assert.Equal(HttpStatusCode.Created, first.StatusCode);

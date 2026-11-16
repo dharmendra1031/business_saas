@@ -18,19 +18,22 @@ export default function RetailCatalog({ businessId, canOperate, currencyCode, lo
 
   return (
     <>
-      <nav className="catalog-navigation" aria-label="Retail catalog">
+      <nav className="catalog-navigation flex-column align-items-stretch" aria-label="Retail workspace">
         {([
-          ['products', 'Products'],
-          ['masters', 'Categories & Units'],
-          ['suppliers', 'Suppliers'],
-          ['customers', 'Customers'],
-          ['stock', 'Stock'],
-          ['purchases', 'Purchase']
-        ] as const).map(([key, name]) =>
-          <button key={key} type="button"
-            className={`btn ${tab === key ? 'btn-primary' : 'btn-outline-secondary'}`}
-            aria-pressed={tab === key} onClick={() => setTab(key)}>{name}</button>
-        )}
+          { title: 'Daily work', tabs: [
+            ['products', 'Products'], ['stock', 'Stock'], ['purchases', 'Purchase']
+          ] },
+          { title: 'Shop setup', tabs: [
+            ['masters', 'Categories & Units'], ['suppliers', 'Suppliers'], ['customers', 'Customers']
+          ] }
+        ] as const).map(section => <div key={section.title}>
+          <div className="small fw-semibold text-secondary mb-2">{section.title}</div>
+          <div className="d-flex flex-wrap gap-2">
+            {section.tabs.map(([key, name]) => <button key={key} type="button"
+              className={`btn ${tab === key ? 'btn-primary' : 'btn-outline-secondary'}`}
+              aria-pressed={tab === key} onClick={() => setTab(key)}>{name}</button>)}
+          </div>
+        </div>)}
       </nav>
       {tab === 'products'
         ? <RetailProducts businessId={businessId} canOperate={canOperate} currencyCode={currencyCode} />

@@ -45,7 +45,8 @@ export default function App() {
         setUser(me)
         const list = await api<Business[]>('/businesses')
         setBusinesses(list)
-        setPage('businesses')
+        if (list.length === 1) await openBusiness(list[0].id)
+        else setPage('businesses')
       })
       .catch(() => setPage('login'))
     return () => setSessionExpiredHandler(null)
@@ -95,8 +96,10 @@ export default function App() {
       setDashboard(details)
       setPage('retail')
     } catch (cause) {
-      if (!(cause instanceof SessionExpiredError))
+      if (!(cause instanceof SessionExpiredError)) {
         setError(message(cause))
+        setPage('businesses')
+      }
     }
   }
 
@@ -127,6 +130,7 @@ export default function App() {
     setAuthNotice('')
     setPage('businesses')
     setError('')
+    if (list.length === 1) void openBusiness(list[0].id)
   }
 
   if (page === 'loading')
@@ -256,7 +260,13 @@ export default function App() {
                     dateStyle: 'medium', timeStyle: 'short', timeZone: dashboard.business.timeZoneId
                   })}`}
               </p>}
-              <div className="detail-grid">
+              {dashboard.roleCode === 'Cashier' && <section className="content-section">
+                <h2>Billing is coming soon</h2>
+                <p>Your account is ready, but POS billing is not available yet. Ask the owner to prepare products and stock.</p>
+              </section>}
+              <details className="content-section">
+                <summary>Shop details and locations</summary>
+                <div className="detail-grid mt-3">
                 <section className="content-section">
                   <h2>Store Details</h2>
                   <dl className="detail-list">
@@ -273,7 +283,8 @@ export default function App() {
                     <div className="location-row" key={location.id}><Store size={18} /><div><strong>{location.name}</strong><small>{location.code}</small></div></div>
                   ))}
                 </section>
-              </div>
+                </div>
+              </details>
               {dashboard.roleCode !== 'Cashier' &&
                 <RetailCatalog key={dashboard.business.id} businessId={dashboard.business.id}
                   canOperate={dashboard.canOperate} currencyCode={dashboard.business.currencyCode}
@@ -487,7 +498,14 @@ function CreateBusiness({ onCancel, onCreated }: {
               </datalist>
               {countrySearch && !market && <div id="country-help" className="field-help text-danger">Select a country from the suggestions.</div>}
             </div>
-            <div>
+            <div className="form-wide">
+              <p className="small text-secondary mb-2">
+                Currency: <strong>{currency || '—'}</strong> · Timezone: <strong>{timeZone || '—'}</strong>
+              </p>
+              <details>
+                <summary>Change currency or timezone</summary>
+                <div className="form-grid mt-2">
+                  <div>
               <label className="form-label" htmlFor="currency">Currency *</label>
               <select id="currency" className="form-select" value={currency}
                 onChange={event => setSelectedCurrency(event.target.value)} disabled={!market} required>
@@ -500,6 +518,9 @@ function CreateBusiness({ onCancel, onCreated }: {
                 onChange={event => setSelectedTimeZone(event.target.value)} disabled={!market} required>
                 {market?.timeZones.map(zone => <option key={zone} value={zone}>{zone}</option>)}
               </select>
+                  </div>
+                </div>
+              </details>
             </div>
           </div>
           <div className="form-footer"><button type="button" className="btn btn-outline-secondary" onClick={onCancel}>Cancel</button>

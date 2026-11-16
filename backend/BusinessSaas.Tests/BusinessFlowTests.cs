@@ -131,6 +131,14 @@ public sealed class BusinessFlowTests
         Assert.True(first.StatusCode == HttpStatusCode.Created, await first.Content.ReadAsStringAsync());
         var firstId = (await first.Content.ReadFromJsonAsync<JsonElement>()).GetProperty("id").GetInt64();
         Assert.True(firstId > 0);
+        using (var scope = factory.Services.CreateScope())
+        {
+            var db = scope.ServiceProvider.GetRequiredService<AppDbContext>();
+            Assert.Equal(1, await db.RetailCategories.CountAsync(x =>
+                x.BusinessId == firstId && x.NameKey == "GENERAL"));
+            Assert.Equal(1, await db.RetailUnits.CountAsync(x =>
+                x.BusinessId == firstId && x.Code == "ITEM"));
+        }
 
         var retry = await Post(owner, "/api/businesses", creation);
         Assert.Equal(HttpStatusCode.OK, retry.StatusCode);

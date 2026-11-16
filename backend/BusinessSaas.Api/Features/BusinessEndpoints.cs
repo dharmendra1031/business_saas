@@ -77,9 +77,10 @@ public static class BusinessEndpoints
             if (trialDays is < 1 or > 90)
                 return Results.Problem("Trial duration must be between 1 and 90 days.", statusCode: 503);
 
-            var supported = await db.BusinessTypes.AnyAsync(x =>
-                x.Id == request.BusinessTypeId && x.IsSupported);
-            if (!supported)
+            var businessType = await db.BusinessTypes.AsNoTracking()
+                .Where(x => x.Id == request.BusinessTypeId && x.IsSupported)
+                .Select(x => x.Code).SingleOrDefaultAsync();
+            if (businessType is null)
                 return Results.BadRequest(new { message = "This business type is not available yet." });
 
             await using var transaction = await db.Database.BeginTransactionAsync();
@@ -117,6 +118,18 @@ public static class BusinessEndpoints
                     BusinessId = business.Id,
                     TrialEndsAtUtc = DateTime.UtcNow.AddDays(trialDays)
                 });
+
+                if (businessType == "RETAIL")
+                {
+                    db.RetailCategories.Add(new RetailCategory
+                    {
+                        BusinessId = business.Id, Name = "General", NameKey = "GENERAL"
+                    });
+                    db.RetailUnits.Add(new RetailUnit
+                    {
+                        BusinessId = business.Id, Name = "Item", NameKey = "ITEM", Code = "ITEM"
+                    });
+                }
 
                 await db.SaveChangesAsync();
                 await transaction.CommitAsync();

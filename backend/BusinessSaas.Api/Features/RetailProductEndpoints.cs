@@ -96,10 +96,11 @@ public static class RetailProductEndpoints
             var denied = await RetailMasterEndpoints.CheckAccess(db, user, businessId, true);
             if (denied is not null) return denied;
 
-            var error = Validate(request);
+            var autoSku = string.IsNullOrWhiteSpace(request.Sku);
+            var error = Validate(request, allowAutoSku: true);
             if (error is not null) return Results.BadRequest(new { message = error });
 
-            var sku = request.Sku!.Trim().ToUpperInvariant();
+            var sku = autoSku ? "" : request.Sku!.Trim().ToUpperInvariant();
             var barcode = NormalizeBarcode(request.Barcode);
             if (await db.RetailProducts.AnyAsync(x => x.BusinessId == businessId &&
                 (x.Sku == sku || barcode != null && x.Barcode == barcode)))
@@ -121,8 +122,18 @@ public static class RetailProductEndpoints
                 IsActive = request.IsActive ?? true
             };
 
+            await using var transaction = await db.Database.BeginTransactionAsync();
             db.RetailProducts.Add(product);
-            try { await db.SaveChangesAsync(); }
+            try
+            {
+                await db.SaveChangesAsync();
+                if (autoSku)
+                {
+                    product.Sku = $"AUTO-{product.Id}";
+                    await db.SaveChangesAsync();
+                }
+                await transaction.CommitAsync();
+            }
             catch (DbUpdateException exception) when (IsDuplicate(exception))
             {
                 return Results.Conflict(new { message = "SKU or barcode is already used in this business." });
@@ -201,7 +212,7 @@ public static class RetailProductEndpoints
             x.Id == unitId && x.BusinessId == businessId && (!requireActive || x.IsActive));
     }
 
-    private static string? Validate(ProductRequest request)
+    private static string? Validate(ProductRequest request, bool allowAutoSku = false)
     {
         var name = request.Name?.Trim() ?? "";
         var sku = NormalizeCode(request.Sku);
@@ -209,8 +220,9 @@ public static class RetailProductEndpoints
         var tax = NormalizeCode(request.TaxClassification);
 
         if (name.Length is < 2 or > 150) return "Product name must be 2–150 characters.";
-        if (sku.Length is < 2 or > 50 || !sku.All(ch =>
-            char.IsAsciiLetterOrDigit(ch) || ch is '-' or '_' or '.' or '/'))
+        if ((!allowAutoSku || sku.Length > 0) &&
+            (sku.Length is < 2 or > 50 || !sku.All(ch =>
+                char.IsAsciiLetterOrDigit(ch) || ch is '-' or '_' or '.' or '/')))
             return "SKU must contain 2–50 letters, numbers, dots, hyphens, underscores or slashes.";
         if (request.Barcode is not null && request.Barcode.Trim().Length > 0 && barcode is null)
             return "Barcode must contain 3–64 non-space characters.";

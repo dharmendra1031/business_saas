@@ -130,7 +130,13 @@ export default function RetailProducts({ businessId, canOperate, currencyCode }:
 
   function startCreate() {
     setEditingId(null)
-    setForm(initialForm)
+    setForm({
+      ...initialForm,
+      categoryId: options.categories.find(item => item.name === 'General')?.id
+        ?? options.categories[0]?.id ?? 0,
+      unitId: options.units.find(item => item.code === 'ITEM')?.id
+        ?? options.units[0]?.id ?? 0
+    })
     setSkuError('')
     setError('')
     setNotice('')
@@ -188,7 +194,9 @@ export default function RetailProducts({ businessId, canOperate, currencyCode }:
       setFormOpen(false)
       setEditingId(null)
       setForm(initialForm)
-      setNotice('Product saved successfully.')
+      setNotice(editingId === null
+        ? 'Product added. Set its opening quantity from Stock when ready.'
+        : 'Product updated successfully.')
       setReload(value => value + 1)
     } catch (cause) {
       if (!(cause instanceof SessionExpiredError)) {
@@ -208,7 +216,7 @@ export default function RetailProducts({ businessId, canOperate, currencyCode }:
   return (
     <section className="content-section retail-products" aria-label="Product master">
       <div className="masters-heading">
-        <div><h2>Products</h2><p>Manage sellable items, codes and prices. Stock and POS are not available yet.</p></div>
+        <div><h2>Products</h2><p>Add items for your shop. Opening stock is managed in Stock; POS billing is coming later.</p></div>
         {canOperate && !formOpen && <button type="button" className="btn btn-primary"
           disabled={!canCreate || optionsLoading} onClick={startCreate}>New product</button>}
       </div>
@@ -227,7 +235,7 @@ export default function RetailProducts({ businessId, canOperate, currencyCode }:
       </div>}
       {notice && <div className="alert alert-success" role="status">{notice}</div>}
       {!optionsLoading && !optionsError && !canCreate && <p className="alert alert-info" role="status">
-        Create at least one active Category and Unit in Catalog Setup before adding products.
+        No active category or unit found. Open Categories & Units to complete the shop setup.
       </p>}
 
       {formOpen && canOperate && <form className="product-form" onSubmit={event => void save(event)}>
@@ -240,8 +248,17 @@ export default function RetailProducts({ businessId, canOperate, currencyCode }:
               onChange={event => changeForm('name', event.target.value)} />
           </div>
           <div>
-            <label className="form-label" htmlFor="product-sku">SKU *</label>
-            <input id="product-sku" className="form-control" required maxLength={50}
+            <label className="form-label" htmlFor="product-price">Sale price ({currencyCode}) *</label>
+            <input id="product-price" className="form-control" type="number" min={0}
+              max={9999999999.99} step="0.01" inputMode="decimal" required
+              value={form.salePrice} onChange={event => changeForm('salePrice', event.target.value)} />
+          </div>
+          <details className="form-wide" key={editingId ?? 'new'} open={editingId !== null || !canCreate}>
+            <summary>More details (SKU, barcode, category, unit, tax)</summary>
+            <div className="form-grid mt-3">
+          <div>
+            <label className="form-label" htmlFor="product-sku">SKU {editingId === null ? '(auto if blank)' : '*'}</label>
+            <input id="product-sku" className="form-control" required={editingId !== null} maxLength={50}
               minLength={2} pattern="[a-zA-Z0-9._/-]{2,50}" autoComplete="off"
               aria-invalid={Boolean(skuError)} aria-describedby={skuError ? 'product-code-error' : undefined}
               value={form.sku} onChange={event => changeForm('sku', event.target.value.toUpperCase())} />
@@ -278,12 +295,6 @@ export default function RetailProducts({ businessId, canOperate, currencyCode }:
             </select>
           </div>
           <div>
-            <label className="form-label" htmlFor="product-price">Sale price ({currencyCode}) *</label>
-            <input id="product-price" className="form-control" type="number" min={0}
-              max={9999999999.99} step="0.01" inputMode="decimal" required
-              value={form.salePrice} onChange={event => changeForm('salePrice', event.target.value)} />
-          </div>
-          <div>
             <label className="form-label" htmlFor="product-tax">Tax classification (optional)</label>
             <input id="product-tax" className="form-control" maxLength={30}
               pattern="[A-Za-z0-9_-]{0,30}" value={form.taxClassification}
@@ -298,6 +309,8 @@ export default function RetailProducts({ businessId, canOperate, currencyCode }:
               <option value="inactive">Inactive (hide from barcode lookup)</option>
             </select>
           </div>}
+            </div>
+          </details>
         </div>
         <div className="form-footer">
           <button type="button" className="btn btn-outline-secondary"
