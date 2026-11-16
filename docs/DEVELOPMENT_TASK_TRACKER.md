@@ -80,7 +80,7 @@
 | BS-007 | Confirm payment and refund policies | Payment states स्पष्ट समझ आएँ | DECISION REQUIRED |
 | BS-008 | Confirm printer and barcode requirements | Cashier को scanner fallback दिखे | DECISION REQUIRED |
 | BS-009 | Define supported/unsupported business types | अधूरे templates selectable न हों | UX REVIEW PENDING |
-| BS-010 | Approve phase dependencies and no-overengineering rules | Menu सिर्फ usable features दिखाए | TODO |
+| BS-010 | Approve phase dependencies and no-overengineering rules | Menu सिर्फ usable features दिखाए | BASELINE |
 
 ### B. Core engineering foundation — Now
 
@@ -95,7 +95,7 @@
 | BS-017 | Run frontend typecheck and production build | हर existing screen render हो | BASELINE |
 | BS-018 | Add request error logging and correlation | User को readable error, internals नहीं | UX REVIEW PENDING |
 | BS-019 | Persist auth/data-protection keys for deployment | Restart पर user session predictable हो | UX REVIEW PENDING |
-| BS-020 | Document Windows local setup and clean deployment | Fresh installation का first-run सरल हो | TODO |
+| BS-020 | Document Windows local setup and clean deployment | Fresh installation का first-run सरल हो | UX REVIEW PENDING |
 
 ### C. Accounts and security — Now
 

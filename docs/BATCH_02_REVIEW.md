@@ -13,7 +13,7 @@
 | BS-017 | Existing React typecheck/build CI; require new run on this commit | BASELINE |
 | BS-018 | Added request ID response header and production Problem Details correlation; exception bodies remain generic | UX REVIEW PENDING |
 | BS-019 | Added certificate-encrypted, persistent Data Protection key-ring opt-in. IIS restart/multi-node/restore test still required | UX REVIEW PENDING |
-| BS-020 | Added secure Windows configuration notes to P1 implementation, but fresh installation walkthrough is pending | TODO |
+| BS-020 | Added [fresh Windows local setup walkthrough](WINDOWS_LOCAL_SETUP.md): separate LocalDB test database, API/web startup, health checks, isolated SQL integration test and deployment boundary. Executed locally on 16 November 2026: API and Vite proxy health returned 200, Release backend tests 12/12 pass, isolated SQL Server test 1/1 pass, frontend build passes. Browser UI host was unavailable, so interactive first-run UX review remains pending | UX REVIEW PENDING |
 
 ## Every-task UI/UX gate
 

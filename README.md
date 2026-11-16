@@ -6,6 +6,8 @@ A self-service multi-business SaaS platform. A person registers once, creates on
 
 ## Where to start
 
+For a fresh Windows development run with a separate test database, use the [local setup guide](docs/WINDOWS_LOCAL_SETUP.md).
+
 | Document | Purpose |
 | --- | --- |
 | [Business SaaS Master SRS](docs/BUSINESS_SAAS_MASTER_SRS.md) | **Authoritative** product requirements and the multi-business model |
