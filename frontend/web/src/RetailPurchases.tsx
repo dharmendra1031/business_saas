@@ -91,6 +91,9 @@ export default function RetailPurchases({ businessId, canOperate, locations, rol
   const [supplierQuery, setSupplierQuery] = useState('')
   const [suppliers, setSuppliers] = useState<Supplier[]>([])
   const [supplierId, setSupplierId] = useState(0)
+  const [supplierFormOpen, setSupplierFormOpen] = useState(false)
+  const [newSupplier, setNewSupplier] = useState({ name: '', phone: '', email: '' })
+  const [addingSupplier, setAddingSupplier] = useState(false)
   const [productSearch, setProductSearch] = useState('')
   const [productQuery, setProductQuery] = useState('')
   const [products, setProducts] = useState<Product[]>([])
@@ -169,6 +172,32 @@ export default function RetailPurchases({ businessId, canOperate, locations, rol
       })
     return () => { active = false }
   }, [basePath, selectedId, reload])
+
+  async function createSupplier() {
+    const name = newSupplier.name.trim()
+    const phone = newSupplier.phone.trim()
+    const email = newSupplier.email.trim()
+    if (!canOperate || addingSupplier || name.length < 2 || (!phone && !email)) {
+      setError('Enter a supplier name and at least a phone number or email.')
+      return
+    }
+    setAddingSupplier(true)
+    setError('')
+    try {
+      const added = await post<Supplier>(`/businesses/${businessId}/suppliers`, { name, phone, email })
+      setSuppliers([added])
+      setSupplierId(added.id)
+      setSupplierSearch(added.name)
+      setSupplierQuery(added.name)
+      setSupplierFormOpen(false)
+      setNewSupplier({ name: '', phone: '', email: '' })
+      setNotice('Supplier added to this order.')
+    } catch (cause) {
+      if (!(cause instanceof SessionExpiredError)) setError(message(cause))
+    } finally {
+      setAddingSupplier(false)
+    }
+  }
 
   function addLine(id: number) {
     const product = products.find(x => x.id === id)
@@ -341,6 +370,36 @@ export default function RetailPurchases({ businessId, canOperate, locations, rol
               <option value={0}>Select supplier</option>
               {suppliers.map(x => <option key={x.id} value={x.id}>{x.name}</option>)}
             </select>
+            <button type="button" className="btn btn-sm btn-outline-secondary mt-2"
+              onClick={() => setSupplierFormOpen(open => !open)}>
+              {supplierFormOpen ? 'Cancel adding supplier' : '+ New supplier'}
+            </button>
+            {supplierFormOpen && <div className="product-form">
+              <div className="mb-2">
+                <label className="form-label" htmlFor="new-supplier-name">Supplier name *</label>
+                <input className="form-control" id="new-supplier-name" minLength={2} maxLength={120}
+                  value={newSupplier.name} onChange={event =>
+                    setNewSupplier(value => ({ ...value, name: event.target.value }))} />
+              </div>
+              <div className="mb-2">
+                <label className="form-label" htmlFor="new-supplier-phone">Phone (or email)</label>
+                <input className="form-control" id="new-supplier-phone" type="tel" maxLength={25}
+                  value={newSupplier.phone} onChange={event =>
+                    setNewSupplier(value => ({ ...value, phone: event.target.value }))} />
+              </div>
+              <div className="mb-2">
+                <label className="form-label" htmlFor="new-supplier-email">Email (or phone)</label>
+                <input className="form-control" id="new-supplier-email" type="email" maxLength={160}
+                  value={newSupplier.email} onChange={event =>
+                    setNewSupplier(value => ({ ...value, email: event.target.value }))} />
+              </div>
+              <button type="button" className="btn btn-outline-primary"
+                disabled={addingSupplier || newSupplier.name.trim().length < 2 ||
+                  (!newSupplier.phone.trim() && !newSupplier.email.trim())}
+                onClick={() => void createSupplier()}>
+                {addingSupplier ? 'Saving supplier…' : 'Save supplier'}
+              </button>
+            </div>}
           </div>
         </div>
         <div className="product-form">
