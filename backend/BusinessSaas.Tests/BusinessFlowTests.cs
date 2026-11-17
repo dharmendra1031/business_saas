@@ -35,6 +35,8 @@ public sealed class BusinessFlowTests
         using var owner = factory.CreateClient();
         using var stranger = factory.CreateClient();
 
+        Assert.Equal(HttpStatusCode.OK, (await owner.GetAsync("/api/ready")).StatusCode);
+
         var unauthenticated = await stranger.GetAsync("/api/businesses");
         Assert.Equal(HttpStatusCode.Unauthorized, unauthenticated.StatusCode);
         Assert.False(string.IsNullOrWhiteSpace(

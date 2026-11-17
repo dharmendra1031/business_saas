@@ -40,6 +40,7 @@ public sealed class SqlServerTests
         using var stranger = factory.CreateClient();
 
         Assert.Equal(HttpStatusCode.OK, (await owner.GetAsync("/api/health")).StatusCode);
+        Assert.Equal(HttpStatusCode.OK, (await owner.GetAsync("/api/ready")).StatusCode);
 
         using (var scope = factory.Services.CreateScope())
         {
