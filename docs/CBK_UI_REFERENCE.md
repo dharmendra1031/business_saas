@@ -5,6 +5,8 @@
 **Target repository:** `dharmendra1031/business_saas` ONLY  
 **Reviewed reference:** Selected CBK theme, layout, item list, purchase order and stock transfer files (static code review only). No screenshots, browser session or runtime usability testing completed.
 
+> **Current approved visual target (17 Nov 2026):** The four Super Admin screenshots explicitly selected by the product owner supersede this older general CBK inspiration when styling Super Admin screens. See [Approved UI/UX Reference](./APPROVED_UI_UX.md) for the final target, navigation and feature behavior. This CBK document remains a supporting UX reference, not the authoritative appearance of the Super Admin UI.
+
 ## Decision
 
 Use the **CBK application's clear, compact, blue-and-white enterprise UI/UX as the primary visual and interaction reference** for Business SaaS. The business modules and customer-facing journeys remain specific to each industry. CBK's Razor files, assets, styles and private source history must **not be copied or mirrored** into the public `business_saas` repository. Reimplement approved principles using React, TypeScript and Bootstrap with our own components.
