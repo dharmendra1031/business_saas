@@ -419,7 +419,7 @@ public sealed class BusinessFlowTests
     }
 
     [Fact]
-    public async Task Platform_directory_requires_permission_and_respects_paging()
+    public async Task Platform_directory_requires_configured_owner_and_respects_paging()
     {
         using var database = new SqliteConnection("Data Source=:memory:");
         await database.OpenAsync();
@@ -481,24 +481,47 @@ public sealed class BusinessFlowTests
         Assert.False(access.GetProperty("canViewBusinesses").GetBoolean());
         Assert.False(access.GetProperty("canManageLicenses").GetBoolean());
 
+        long platformOwnerId;
         using (var scope = factory.Services.CreateScope())
         {
             var db = scope.ServiceProvider.GetRequiredService<AppDbContext>();
-            var user = await db.Users.SingleAsync(x => x.Email == "directory-admin@example.test");
+            platformOwnerId = await db.Users
+                .Where(x => x.Email == "directory-admin@example.test")
+                .Select(x => x.Id).SingleAsync();
+
+            // A legacy permission claim must not grant another customer platform access.
+            var outsiderId = await db.Users
+                .Where(x => x.Email == "directory-outsider@example.test")
+                .Select(x => x.Id).SingleAsync();
             db.Set<Microsoft.AspNetCore.Identity.IdentityUserClaim<long>>().Add(new()
             {
-                UserId = user.Id,
+                UserId = outsiderId,
                 ClaimType = "platform.permission",
                 ClaimValue = "businesses.view"
             });
             await db.SaveChangesAsync();
+            scope.ServiceProvider.GetRequiredService<IConfiguration>()["Platform:OwnerUserId"]
+                = platformOwnerId.ToString();
         }
 
         access = await admin.GetFromJsonAsync<JsonElement>("/api/platform/access");
+        Assert.True(access.GetProperty("isPlatformOwner").GetBoolean());
+        Assert.Equal("SuperAdmin", access.GetProperty("roleCode").GetString());
         Assert.True(access.GetProperty("canViewBusinesses").GetBoolean());
-        Assert.False(access.GetProperty("canManageLicenses").GetBoolean());
-        Assert.Equal(HttpStatusCode.Forbidden,
+        Assert.True(access.GetProperty("canManageLicenses").GetBoolean());
+        Assert.Equal(HttpStatusCode.OK,
             (await admin.GetAsync("/api/platform/license-access")).StatusCode);
+        Assert.Equal(HttpStatusCode.Forbidden,
+            (await outsider.GetAsync("/api/platform/businesses")).StatusCode);
+        Assert.Equal(HttpStatusCode.Forbidden,
+            (await admin.GetAsync("/api/businesses")).StatusCode);
+        Assert.Equal(HttpStatusCode.Forbidden,
+            (await Post(admin, "/api/businesses", new
+            {
+                name = "Forbidden Super Admin Shop",
+                businessTypeId = 1, countryCode = "IN", currencyCode = "INR",
+                timeZoneId = "Asia/Kolkata", requestKey = "platform-owner-denied-create"
+            })).StatusCode);
 
         var page = await admin.GetFromJsonAsync<JsonElement>(
             "/api/platform/businesses?page=1&pageSize=1");
@@ -523,24 +546,16 @@ public sealed class BusinessFlowTests
         Assert.Equal(HttpStatusCode.NotFound,
             (await admin.GetAsync("/api/platform/businesses/9999999")).StatusCode);
 
-        using (var scope = factory.Services.CreateScope())
-        {
-            var db = scope.ServiceProvider.GetRequiredService<AppDbContext>();
-            var user = await db.Users.SingleAsync(x => x.Email == "directory-admin@example.test");
-            var claim = await db.Set<Microsoft.AspNetCore.Identity.IdentityUserClaim<long>>()
-                .SingleAsync(x => x.UserId == user.Id &&
-                    x.ClaimType == "platform.permission" &&
-                    x.ClaimValue == "businesses.view");
-            db.Remove(claim);
-            await db.SaveChangesAsync();
-        }
-
+        // Removing the configured owner revokes platform access without a new login.
+        factory.Services.GetRequiredService<IConfiguration>()["Platform:OwnerUserId"] = "0";
         Assert.Equal(HttpStatusCode.Forbidden,
             (await admin.GetAsync("/api/platform/businesses")).StatusCode);
+        Assert.False((await admin.GetFromJsonAsync<JsonElement>("/api/platform/access"))
+            .GetProperty("isPlatformOwner").GetBoolean());
     }
 
     [Fact]
-    public async Task Platform_license_access_requires_explicit_permission()
+    public async Task Platform_license_access_requires_configured_owner()
     {
         using var database = new SqliteConnection("Data Source=:memory:");
         await database.OpenAsync();
@@ -567,28 +582,16 @@ public sealed class BusinessFlowTests
         using (var scope = factory.Services.CreateScope())
         {
             var db = scope.ServiceProvider.GetRequiredService<AppDbContext>();
-            var user = await db.Users.SingleAsync(x => x.Email == "license-admin@example.test");
-            db.Set<Microsoft.AspNetCore.Identity.IdentityUserClaim<long>>().Add(new()
-            {
-                UserId = user.Id,
-                ClaimType = "platform.permission",
-                ClaimValue = "licenses.manage"
-            });
-            await db.SaveChangesAsync();
+            var userId = await db.Users.Where(x => x.Email == "license-admin@example.test")
+                .Select(x => x.Id).SingleAsync();
+            scope.ServiceProvider.GetRequiredService<IConfiguration>()["Platform:OwnerUserId"]
+                = userId.ToString();
         }
 
         var granted = await owner.GetFromJsonAsync<JsonElement>("/api/platform/license-access");
         Assert.True(granted.GetProperty("canManageLicenses").GetBoolean());
 
-        using (var scope = factory.Services.CreateScope())
-        {
-            var db = scope.ServiceProvider.GetRequiredService<AppDbContext>();
-            var claim = await db.Set<Microsoft.AspNetCore.Identity.IdentityUserClaim<long>>()
-                .SingleAsync(x => x.ClaimType == "platform.permission" && x.ClaimValue == "licenses.manage");
-            db.Remove(claim);
-            await db.SaveChangesAsync();
-        }
-
+        factory.Services.GetRequiredService<IConfiguration>()["Platform:OwnerUserId"] = "0";
         Assert.Equal(HttpStatusCode.Forbidden,
             (await owner.GetAsync("/api/platform/license-access")).StatusCode);
     }
