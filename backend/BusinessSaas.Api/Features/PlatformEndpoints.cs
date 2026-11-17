@@ -40,7 +40,7 @@ public static class PlatformEndpoints
                 .Select(x => new
                 {
                     x.Id, x.ActorUserId, x.Action, x.TargetType,
-                    x.TargetId, x.Reason, x.CreatedAtUtc
+                    x.TargetId, x.Reason, x.PreviousValue, x.NewValue, x.CreatedAtUtc
                 }).ToListAsync();
 
             return Results.Ok(new { items, total, page, pageSize });

@@ -479,6 +479,16 @@ public sealed class BusinessFlowTests
             (await anonymous.GetAsync("/api/platform/customers")).StatusCode);
         Assert.Equal(HttpStatusCode.Unauthorized,
             (await anonymous.GetAsync("/api/platform/audit")).StatusCode);
+        Assert.Equal(HttpStatusCode.Unauthorized,
+            (await anonymous.GetAsync("/api/platform/plans")).StatusCode);
+        Assert.Equal(HttpStatusCode.Forbidden,
+            (await owner.GetAsync("/api/platform/plans")).StatusCode);
+        Assert.Equal(HttpStatusCode.Forbidden,
+            (await Post(owner, "/api/platform/businesses/1/extend-trial", new
+            {
+                additionalDays = 7, expectedTrialEndsAtUtc = DateTime.UtcNow,
+                reason = "Not allowed for tenant owner"
+            })).StatusCode);
         Assert.Equal(HttpStatusCode.Forbidden,
             (await owner.GetAsync("/api/platform/audit")).StatusCode);
         Assert.Equal(HttpStatusCode.Forbidden,
@@ -535,6 +545,14 @@ public sealed class BusinessFlowTests
             (await admin.GetAsync("/api/platform/businesses")).StatusCode);
         Assert.Equal(HttpStatusCode.Forbidden,
             (await admin.GetAsync("/api/platform/audit")).StatusCode);
+        Assert.Equal(HttpStatusCode.Forbidden,
+            (await admin.GetAsync("/api/platform/plans")).StatusCode);
+        Assert.Equal(HttpStatusCode.Forbidden,
+            (await Post(admin, $"/api/platform/businesses/{firstId}/extend-trial", new
+            {
+                additionalDays = 7, expectedTrialEndsAtUtc = DateTime.UtcNow,
+                reason = "MFA required before any change"
+            })).StatusCode);
 
         var ownerMfa = await EnableOwnerMfaAndSignIn(admin, "directory-admin@example.test");
         access = await admin.GetFromJsonAsync<JsonElement>("/api/platform/access");
@@ -678,6 +696,87 @@ public sealed class BusinessFlowTests
         Assert.Equal(HttpStatusCode.NotFound,
             (await admin.GetAsync("/api/platform/businesses/9999999")).StatusCode);
 
+        var plans = await admin.GetFromJsonAsync<JsonElement>("/api/platform/plans");
+        Assert.Equal(5, plans.GetProperty("items").GetArrayLength());
+        Assert.Equal("STARTER", plans.GetProperty("items")[0].GetProperty("code").GetString());
+        Assert.Equal(2, plans.GetProperty("items")[0]
+            .GetProperty("assignedBusinesses").GetInt32());
+        Assert.False(plans.GetProperty("items")[0].GetProperty("pricingConfigured").GetBoolean());
+        Assert.False(plans.GetProperty("items")[4].GetProperty("isPublic").GetBoolean());
+        Assert.Equal(0, plans.GetProperty("unknownPlanAssignments").GetInt32());
+
+        var originalEnd = overview.GetProperty("expiringTrials")[0]
+            .GetProperty("trialEndsAtUtc").GetDateTime();
+        var request = new
+        {
+            additionalDays = 7,
+            expectedTrialEndsAtUtc = originalEnd,
+            reason = "Customer requested extra time for retail setup"
+        };
+        Assert.Equal(HttpStatusCode.BadRequest,
+            (await Post(admin, $"/api/platform/businesses/{firstId}/extend-trial",
+                new { additionalDays = 7, expectedTrialEndsAtUtc = originalEnd, reason = "short" }))
+            .StatusCode);
+        Assert.Equal(HttpStatusCode.BadRequest,
+            (await Post(admin, $"/api/platform/businesses/{firstId}/extend-trial",
+                new { additionalDays = 31, expectedTrialEndsAtUtc = originalEnd,
+                    reason = "Exceeds approved extension limits" })).StatusCode);
+        Assert.Equal(HttpStatusCode.NotFound,
+            (await Post(admin, "/api/platform/businesses/99999999/extend-trial", request))
+            .StatusCode);
+        Assert.Equal(HttpStatusCode.Forbidden,
+            (await Post(outsider, $"/api/platform/businesses/{firstId}/extend-trial", request))
+            .StatusCode);
+
+        var extension = await Post(admin, $"/api/platform/businesses/{firstId}/extend-trial", request);
+        Assert.Equal(HttpStatusCode.OK, extension.StatusCode);
+        var extended = await extension.Content.ReadFromJsonAsync<JsonElement>();
+        var extendedEnd = extended.GetProperty("trialEndsAtUtc").GetDateTime();
+        Assert.True(extendedEnd > originalEnd.AddDays(6));
+        Assert.Equal(firstId, extended.GetProperty("businessId").GetInt64());
+        Assert.True(extended.GetProperty("auditId").GetInt64() > 0);
+        Assert.Equal(HttpStatusCode.Conflict,
+            (await Post(admin, $"/api/platform/businesses/{firstId}/extend-trial", request))
+            .StatusCode);
+
+        var afterExtension = await owner.GetFromJsonAsync<JsonElement>(
+            $"/api/businesses/{firstId}/dashboard");
+        Assert.Equal(extendedEnd, afterExtension.GetProperty("subscription")
+            .GetProperty("trialEndsAtUtc").GetDateTime());
+
+        var trialAudit = await admin.GetFromJsonAsync<JsonElement>("/api/platform/audit");
+        Assert.Equal(3, trialAudit.GetProperty("total").GetInt32());
+        Assert.Equal("Business.TrialExtended", trialAudit.GetProperty("items")[0]
+            .GetProperty("action").GetString());
+        Assert.Equal(firstId, trialAudit.GetProperty("items")[0]
+            .GetProperty("targetId").GetInt64());
+        Assert.Equal(request.reason, trialAudit.GetProperty("items")[0]
+            .GetProperty("reason").GetString());
+        Assert.Equal(originalEnd.ToString("O"), trialAudit.GetProperty("items")[0]
+            .GetProperty("previousValue").GetString());
+        Assert.Equal(extendedEnd.ToString("O"), trialAudit.GetProperty("items")[0]
+            .GetProperty("newValue").GetString());
+
+        // An active paid subscription must never accept a trial extension.
+        using (var scope = factory.Services.CreateScope())
+        {
+            var db = scope.ServiceProvider.GetRequiredService<AppDbContext>();
+            var secondTrial = await db.BusinessSubscriptions
+                .SingleAsync(x => x.BusinessId != firstId);
+            secondTrial.Status = "Active";
+            await db.SaveChangesAsync();
+        }
+        long activeBusinessId;
+        using (var scope = factory.Services.CreateScope())
+        {
+            var db = scope.ServiceProvider.GetRequiredService<AppDbContext>();
+            activeBusinessId = await db.BusinessSubscriptions
+                .Where(x => x.BusinessId != firstId).Select(x => x.BusinessId).SingleAsync();
+        }
+        Assert.Equal(HttpStatusCode.Conflict,
+            (await Post(admin, $"/api/platform/businesses/{activeBusinessId}/extend-trial",
+                request)).StatusCode);
+
         // A recovery code signs in once, but cannot be reused.
         Assert.Equal(HttpStatusCode.NoContent,
             (await Post(admin, "/api/auth/logout", new { })).StatusCode);
@@ -724,6 +823,11 @@ public sealed class BusinessFlowTests
             (await admin.GetAsync("/api/platform/overview")).StatusCode);
         Assert.Equal(HttpStatusCode.Forbidden,
             (await admin.GetAsync("/api/platform/audit")).StatusCode);
+        Assert.Equal(HttpStatusCode.Forbidden,
+            (await admin.GetAsync("/api/platform/plans")).StatusCode);
+        Assert.Equal(HttpStatusCode.Forbidden,
+            (await Post(admin, $"/api/platform/businesses/{firstId}/extend-trial", request))
+            .StatusCode);
         Assert.False((await admin.GetFromJsonAsync<JsonElement>("/api/platform/access"))
             .GetProperty("isPlatformOwner").GetBoolean());
     }
