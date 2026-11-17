@@ -500,6 +500,13 @@ public sealed class BusinessFlowTests
                 ClaimType = "platform.permission",
                 ClaimValue = "businesses.view"
             });
+            // Even an old tenant membership must not let the platform owner see shop data.
+            db.BusinessUsers.Add(new BusinessUser
+            {
+                BusinessId = firstId,
+                UserId = platformOwnerId,
+                RoleCode = "Manager"
+            });
             await db.SaveChangesAsync();
             scope.ServiceProvider.GetRequiredService<IConfiguration>()["Platform:OwnerUserId"]
                 = platformOwnerId.ToString();
@@ -516,6 +523,8 @@ public sealed class BusinessFlowTests
             (await outsider.GetAsync("/api/platform/businesses")).StatusCode);
         Assert.Equal(HttpStatusCode.Forbidden,
             (await admin.GetAsync("/api/businesses")).StatusCode);
+        Assert.Equal(HttpStatusCode.Forbidden,
+            (await admin.GetAsync($"/api/businesses/{firstId}/dashboard")).StatusCode);
         Assert.Equal(HttpStatusCode.Forbidden,
             (await Post(admin, "/api/businesses", new
             {
