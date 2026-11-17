@@ -23,6 +23,7 @@ For a fresh Windows development run with a separate test database, use the [loca
 | [UX Standards](docs/UX_STANDARDS.md) | User-friendly forms, keyboard/navigation, task-based UX testing |
 | [CBK UI Reference](docs/CBK_UI_REFERENCE.md) | Compact blue/white UI patterns from read-only CBK source |
 | [Engineering Guardrails](docs/ENGINEERING_GUARDRAILS.md) | Financial, tenancy, security, privacy and release safety |
+| [Platform Owner Setup](docs/PLATFORM_OWNER_SETUP.md) | Single Super Admin identity, customer boundaries and secure provisioning |
 | [P1 Implementation](docs/P1_IMPLEMENTATION.md) | Run guide, committed endpoints, tests and launch blockers |
 | [Production Database Safety](docs/PRODUCTION_DATABASE_SAFETY.md) | Backup, tested restore, migrations and readiness checks before deployment |
 | [API Performance Baseline](docs/PERFORMANCE_BASELINE.md) | Lightweight read-only smoke tool and measurement guidance |

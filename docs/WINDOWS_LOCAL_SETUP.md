@@ -37,7 +37,7 @@ This guide starts the existing API and web app against a new **disposable test d
    (Invoke-WebRequest http://127.0.0.1:5173/api/health -UseBasicParsing).StatusCode
    ```
 
-   All three should return `200`. `/api/health` checks the running API; `/api/ready` also requires a reachable database and, for SQL Server, no pending EF migrations. Register a development account, sign in, create a General Retail business, and open its dashboard. Local development has no seeded administrator password. Platform permission provisioning is a separate trusted-operator action; a normal business owner cannot grant it to themselves.
+   All three should return `200`. `/api/health` checks the running API; `/api/ready` also requires a reachable database and, for SQL Server, no pending EF migrations. Register a development account, sign in, create a General Retail business, and open its dashboard. Local development has no seeded administrator password. To configure the single Platform Super Admin account, follow [Platform Owner Setup](PLATFORM_OWNER_SETUP.md). A customer cannot promote themselves.
 
 5. Stop each server with `Ctrl+C`. The LocalDB database persists for the next run. For another clean test, use a **different new database name** in the connection string. Never delete an existing database just to repeat this walkthrough.
 
