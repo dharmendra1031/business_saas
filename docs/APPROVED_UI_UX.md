@@ -22,26 +22,26 @@ The four reference screenshots show the approved **dark-navy / royal-blue / whit
 
 **Styling implementation:** React + TypeScript + Bootstrap 5 + Lucide outline icons. Reuse the existing layout/styles; keep custom CSS minimal, clearly named and centralized. CBK remains a *general* read-only UX inspiration, but **these four screenshots are the approved Super Admin visual target**. Do not copy private CBK files or assets.
 
-## 2. Canonical Super Admin navigation
+## 2. Canonical Super Admin navigation — eight modules
 
-Present the following sections in this order. Planned sections must be labeled as unavailable/planned or hidden until working end-to-end; do not show clickable dead actions.
+Approved on 17 November 2026. The left sidebar has **exactly eight** main modules. Each action has one authoritative location. Planned modules remain disabled until implemented end-to-end, rather than displaying nonfunctional controls.
 
-| Section | Expected workflow | Current baseline (17 Nov 2026) |
+| Module | One authoritative workflow | Current implementation |
 | --- | --- | --- |
-| Overview | KPI cards, Business Growth, Businesses by Plan, trials expiring soon, recent activity, refresh/date scope | Summary KPI API/screen implemented; chart and expiring list planned |
-| Customers | Search email, verification/status filters, customer detail, all businesses owned | Basic read-only search/detail implemented; suspension/verification workflows planned |
-| Businesses | Business directory, owner/type/country/plan/status, read-only business detail | Basic read-only directory implemented |
-| Subscription Plans | Starter, Growth, Professional, Business, Enterprise; price, included features/modules, limits, create/edit/retire, plan version impacts | Planned |
-| Trials & Subscriptions | Trial list, status/expiry, extend trial with reason, assign/change plan, activate/renew/suspend/reactivate | Planned; initial trial state already exists |
-| Payments & Invoices | Platform subscription payments, paid/unpaid status, tax invoices, refunds and reconciliation | Planned |
-| License Management | Offline license create, activate, renew, revoke, transfer, history | Planned |
-| Module Management | Retail availability and future Salon/Repair eligibility per plan | Planned |
-| Platform Settings | Default trial rules, business types, country and account policies, language support | Planned |
-| Security & Audit Logs | MFA status, login audit events, administrative action history | Owner MFA and early read-only audit implemented |
-| System Health & Backups | API/DB readiness, error alerts, backup status and restore verification | Planned; basic health endpoints may exist but not the full screen |
-| Support | Customer tickets, status, issue history and bounded troubleshooting | Planned |
+| Dashboard | KPIs, growth and plan charts, expiring-trial alerts, recent activity, links to business details | Working overview with live data |
+| Customers | Customer search/details, verification and owned-business references | Read-only directory |
+| Businesses | Business directory/details, audited trial extensions and suspend/reactivate | Working core controls |
+| Plans & Billing | Plan drafts, immutable catalog publication, future billing, invoices and payments | Plan controls working; billing unavailable |
+| Licenses | Offline license lifecycle and history | Planned; sidebar disabled |
+| Platform Settings | Business types, modules, country/timezone rules, trial policy, languages | Planned; sidebar disabled |
+| Security & Audit | MFA, sign-in audit, administrative change history | Working foundation |
+| Operations | API/database readiness, future monitoring, backup/restore and support | Readiness working; other controls planned |
 
-**Security boundary:** Super Admin controls *the platform*—customers, subscriptions, licensing, settings—not customer shop operational records (products, stock, sales, returns). All server actions require owner authorization, MFA for privileged access, and audit when making sensitive changes.
+There are **no separate top-level** Trials, Subscriptions, Payments, Invoices, Modules, Support or System Health screens. Trials and subscription statuses are managed in Business Details, catalog/prices in Plans & Billing, licensing in Licenses, entitlement policies under Platform Settings, and monitoring/backups/support under Operations.
+
+Dashboard alerts only navigate to the existing business or audit details; Customers can link to owned businesses but cannot change operational records. Prices, payments, backup success, system health and support tickets must never use fabricated data.
+
+**Security boundary:** Super Admin controls the platform—not a shop's products, stock, sales or returns. Sensitive writes require MFA-authorized server checks, an explicit reason and transactional audit.
 
 ## 3. Approved Overview structure (match reference images)
 
@@ -100,24 +100,3 @@ Business creation should remain a short progressive wizard; switching must clear
 5. Subscription ledger, payments/invoices, licenses, modules, settings, support, monitoring and enterprise capabilities by product priority, with tests.
 
 **Source of truth:** This document records the user's approved screenshots and requirements. If a later design conflicts with the four supplied reference images, ask for or record an explicit design decision before replacing the agreed direction.
-
-## 8. Consolidated Super Admin navigation (approved 17 November 2026)
-
-The final Super Admin sidebar has **eight** module headings. Every control has one authoritative location; planned modules remain disabled until genuinely implemented.
-
-| Top-level module | Single source of truth | UI availability |
-| --- | --- | --- |
-| Dashboard | Live KPIs, growth, plan distribution, expiring trials, audit activity | Implemented |
-| Customers | Customer search/details; read-only owned business references | Implemented read-only |
-| Businesses | Business directory/detail; trial extension and suspension/reactivation actions | Implemented (only existing safe actions) |
-| Plans & Billing | Draft plans, immutable catalog publication; billing eventually lives here | Plans implemented, billing explicitly unavailable |
-| Licenses | Offline license lifecycle | Disabled / planned |
-| Platform Settings | Business types, modules, countries, trial policy, language settings | Disabled / planned |
-| Security & Audit | MFA and platform audit history | Implemented foundation |
-| Operations | Read-only API/database readiness; future health, backups, support | Readiness implemented, monitoring/backup/support planned |
-
-Do **not** introduce a separate top-level Trials, Subscriptions, Payments, Invoices, Support, Modules, or System Health menu. Trial changes belong to `Businesses`, plan catalog and paid billing belong to `Plans & Billing`, and backups/monitoring/support belong to `Operations`.
-
-Dashboard alerts only **navigate** to a business or event; they must not duplicate write controls. Customer Details links to Businesses but cannot mutate shop operational data. The nav must not have clickable placeholder buttons or made-up financial/health information. The new module grouping does **not** mean these incomplete features are production ready.
-
-Implementation stays within one .NET API and one React app, with numeric auto-increment database entity IDs.
