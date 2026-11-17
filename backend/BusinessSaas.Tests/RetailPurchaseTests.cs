@@ -167,6 +167,14 @@ public sealed class RetailPurchaseTests
             lines = new[] { new { purchaseOrderLineId = orderLineId, quantity = 40m } }
         };
         var receipt40 = await CreateId(manager, receipts, keyedReceipt40);
+        Assert.Equal(HttpStatusCode.NotFound,
+            (await Send(other, receipts, keyedReceipt40)).StatusCode);
+        Assert.Equal(HttpStatusCode.NotFound,
+            (await Send(cashier, receipts, keyedReceipt40)).StatusCode);
+        Assert.Equal(HttpStatusCode.NotFound,
+            (await Send(other, receipts + "/" + receipt40 + "/post", new { })).StatusCode);
+        Assert.Equal(HttpStatusCode.NotFound,
+            (await Send(cashier, receipts + "/" + receipt40 + "/post", new { })).StatusCode);
         var retryReceiving = await Send(manager, receipts, keyedReceipt40);
         Assert.Equal(HttpStatusCode.OK, retryReceiving.StatusCode);
         Assert.Equal(receipt40, (await retryReceiving.Content.ReadFromJsonAsync<JsonElement>())
