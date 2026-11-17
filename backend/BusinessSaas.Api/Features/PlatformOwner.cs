@@ -4,10 +4,14 @@ namespace BusinessSaas.Api.Features;
 
 public static class PlatformOwner
 {
-    public static bool IsOwner(ClaimsPrincipal principal, IConfiguration configuration) =>
+    public static bool IsConfiguredOwner(ClaimsPrincipal principal, IConfiguration configuration) =>
         principal.Identity?.IsAuthenticated == true &&
         long.TryParse(principal.FindFirstValue(ClaimTypes.NameIdentifier), out var userId) &&
         IsOwnerId(userId, configuration);
+
+    public static bool IsOwner(ClaimsPrincipal principal, IConfiguration configuration) =>
+        IsConfiguredOwner(principal, configuration) &&
+        principal.HasClaim("amr", "mfa");
 
     public static bool IsOwnerId(long userId, IConfiguration configuration) =>
         userId > 0 &&

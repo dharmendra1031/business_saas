@@ -41,7 +41,7 @@ builder.Services.AddIdentityCore<AppUser>(options =>
     options.Password.RequiredLength = 8;
     options.Lockout.DefaultLockoutTimeSpan = TimeSpan.FromMinutes(15);
     options.Lockout.MaxFailedAccessAttempts = 5;
-}).AddEntityFrameworkStores<AppDbContext>().AddSignInManager();
+}).AddEntityFrameworkStores<AppDbContext>().AddSignInManager().AddDefaultTokenProviders();
 
 builder.Services.AddAuthentication(IdentityConstants.ApplicationScheme)
     .AddIdentityCookies();
@@ -66,6 +66,16 @@ builder.Services.ConfigureApplicationCookie(options =>
     };
 });
 
+builder.Services.Configure<CookieAuthenticationOptions>(IdentityConstants.TwoFactorUserIdScheme, options =>
+{
+    options.Cookie.HttpOnly = true;
+    options.Cookie.SameSite = SameSiteMode.Strict;
+    options.Cookie.SecurePolicy = builder.Environment.IsDevelopment()
+        ? CookieSecurePolicy.SameAsRequest
+        : CookieSecurePolicy.Always;
+    options.ExpireTimeSpan = TimeSpan.FromMinutes(5);
+});
+
 builder.Services.AddAuthorization();
 builder.Services.AddRateLimiter(options =>
 {
@@ -84,6 +94,15 @@ builder.Services.AddRateLimiter(options =>
         _ => new FixedWindowRateLimiterOptions
         {
             PermitLimit = 10,
+            Window = TimeSpan.FromMinutes(1),
+            QueueLimit = 0,
+            AutoReplenishment = true
+        }));
+    options.AddPolicy("mfa", context => RateLimitPartition.GetFixedWindowLimiter(
+        context.Connection.RemoteIpAddress?.ToString() ?? "unknown",
+        _ => new FixedWindowRateLimiterOptions
+        {
+            PermitLimit = 15,
             Window = TimeSpan.FromMinutes(1),
             QueueLimit = 0,
             AutoReplenishment = true
@@ -144,7 +163,7 @@ app.UseAuthentication();
 app.Use(async (context, next) =>
 {
     if (context.Request.Path.StartsWithSegments("/api/businesses") &&
-        PlatformOwner.IsOwner(context.User, context.RequestServices.GetRequiredService<IConfiguration>()))
+        PlatformOwner.IsConfiguredOwner(context.User, context.RequestServices.GetRequiredService<IConfiguration>()))
     {
         context.Response.StatusCode = StatusCodes.Status403Forbidden;
         return;

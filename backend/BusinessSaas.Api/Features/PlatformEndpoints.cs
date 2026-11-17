@@ -12,13 +12,15 @@ public static class PlatformEndpoints
 
         group.MapGet("/access", (ClaimsPrincipal user, IConfiguration configuration) =>
         {
-            var isOwner = PlatformOwner.IsOwner(user, configuration);
+            var isConfiguredOwner = PlatformOwner.IsConfiguredOwner(user, configuration);
+            var isVerified = PlatformOwner.IsOwner(user, configuration);
             return Results.Ok(new
             {
-                roleCode = isOwner ? "SuperAdmin" : "Customer",
-                isPlatformOwner = isOwner,
-                canViewBusinesses = isOwner,
-                canManageLicenses = isOwner
+                roleCode = isConfiguredOwner ? "SuperAdmin" : "Customer",
+                isPlatformOwner = isConfiguredOwner,
+                mfaVerified = isVerified,
+                canViewBusinesses = isVerified,
+                canManageLicenses = isVerified
             });
         });
 
