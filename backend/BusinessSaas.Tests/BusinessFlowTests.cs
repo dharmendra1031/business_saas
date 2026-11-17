@@ -617,6 +617,8 @@ public sealed class BusinessFlowTests
         Assert.Equal(HttpStatusCode.ServiceUnavailable, response.StatusCode);
         var options = await client.GetFromJsonAsync<JsonElement>("/api/auth/options");
         Assert.False(options.GetProperty("canRegister").GetBoolean());
+        Assert.Equal(HttpStatusCode.ServiceUnavailable,
+            (await client.GetAsync("/api/ready")).StatusCode);
     }
 
     [Fact]

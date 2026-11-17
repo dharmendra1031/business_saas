@@ -162,6 +162,12 @@ app.UseAuthorization();
 app.MapGet("/api/health", () => Results.Ok(new { status = "ok" }));
 app.MapGet("/api/ready", async (AppDbContext db, ILogger<Program> logger) =>
 {
+    if (!app.Environment.IsDevelopment() && string.IsNullOrWhiteSpace(keyDirectory))
+    {
+        logger.LogError("Persistent encrypted Data Protection keys are required for readiness");
+        return Results.StatusCode(StatusCodes.Status503ServiceUnavailable);
+    }
+
     try
     {
         if (!await db.Database.CanConnectAsync() ||
