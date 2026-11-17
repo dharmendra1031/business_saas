@@ -471,6 +471,14 @@ public sealed class BusinessFlowTests
 
         Assert.Equal(HttpStatusCode.Unauthorized,
             (await anonymous.GetAsync("/api/platform/businesses")).StatusCode);
+        Assert.Equal(HttpStatusCode.Unauthorized,
+            (await anonymous.GetAsync("/api/platform/overview")).StatusCode);
+        Assert.Equal(HttpStatusCode.Unauthorized,
+            (await anonymous.GetAsync("/api/platform/customers")).StatusCode);
+        Assert.Equal(HttpStatusCode.Forbidden,
+            (await owner.GetAsync("/api/platform/overview")).StatusCode);
+        Assert.Equal(HttpStatusCode.Forbidden,
+            (await owner.GetAsync("/api/platform/customers")).StatusCode);
         Assert.Equal(HttpStatusCode.Forbidden,
             (await owner.GetAsync("/api/platform/businesses")).StatusCode);
         Assert.Equal(HttpStatusCode.Forbidden,
@@ -536,6 +544,48 @@ public sealed class BusinessFlowTests
                 timeZoneId = "Asia/Kolkata", requestKey = "platform-owner-denied-create"
             })).StatusCode);
 
+        Assert.Equal(HttpStatusCode.Forbidden,
+            (await outsider.GetAsync("/api/platform/overview")).StatusCode);
+        Assert.Equal(HttpStatusCode.Forbidden,
+            (await outsider.GetAsync("/api/platform/customers")).StatusCode);
+        Assert.Equal(HttpStatusCode.Forbidden,
+            (await outsider.GetAsync("/api/platform/customers/1")).StatusCode);
+
+        var overview = await admin.GetFromJsonAsync<JsonElement>("/api/platform/overview");
+        Assert.Equal(2, overview.GetProperty("totalCustomers").GetInt32());
+        Assert.Equal(2, overview.GetProperty("totalBusinesses").GetInt32());
+        Assert.Equal(0, overview.GetProperty("activeSubscriptions").GetInt32());
+        Assert.Equal(2, overview.GetProperty("activeTrials").GetInt32());
+        Assert.Equal(0, overview.GetProperty("expiredTrials").GetInt32());
+
+        var customers = await admin.GetFromJsonAsync<JsonElement>(
+            "/api/platform/customers?page=1&pageSize=1");
+        Assert.Equal(2, customers.GetProperty("total").GetInt32());
+        Assert.Single(customers.GetProperty("items").EnumerateArray());
+
+        var filteredCustomers = await admin.GetFromJsonAsync<JsonElement>(
+            "/api/platform/customers?search=directory-owner");
+        Assert.Equal(1, filteredCustomers.GetProperty("total").GetInt32());
+        var customerId = filteredCustomers.GetProperty("items")[0].GetProperty("id").GetInt64();
+        Assert.Equal("directory-owner@example.test",
+            filteredCustomers.GetProperty("items")[0].GetProperty("email").GetString());
+        Assert.Equal(1, filteredCustomers.GetProperty("items")[0]
+            .GetProperty("ownedBusinessCount").GetInt32());
+
+        var customerDetail = await admin.GetFromJsonAsync<JsonElement>(
+            $"/api/platform/customers/{customerId}");
+        Assert.Equal("directory-owner@example.test",
+            customerDetail.GetProperty("email").GetString());
+        Assert.Single(customerDetail.GetProperty("businesses").EnumerateArray());
+        Assert.Equal(firstId, customerDetail.GetProperty("businesses")[0]
+            .GetProperty("id").GetInt64());
+        Assert.Equal(HttpStatusCode.NotFound,
+            (await admin.GetAsync($"/api/platform/customers/{platformOwnerId}")).StatusCode);
+        Assert.Equal(HttpStatusCode.NotFound,
+            (await admin.GetAsync("/api/platform/customers/99999999")).StatusCode);
+        Assert.Equal(HttpStatusCode.BadRequest,
+            (await admin.GetAsync("/api/platform/customers?pageSize=100")).StatusCode);
+
         var page = await admin.GetFromJsonAsync<JsonElement>(
             "/api/platform/businesses?page=1&pageSize=1");
         Assert.Equal(2, page.GetProperty("total").GetInt32());
@@ -563,6 +613,10 @@ public sealed class BusinessFlowTests
         factory.Services.GetRequiredService<IConfiguration>()["Platform:OwnerUserId"] = "0";
         Assert.Equal(HttpStatusCode.Forbidden,
             (await admin.GetAsync("/api/platform/businesses")).StatusCode);
+        Assert.Equal(HttpStatusCode.Forbidden,
+            (await admin.GetAsync("/api/platform/customers")).StatusCode);
+        Assert.Equal(HttpStatusCode.Forbidden,
+            (await admin.GetAsync("/api/platform/overview")).StatusCode);
         Assert.False((await admin.GetFromJsonAsync<JsonElement>("/api/platform/access"))
             .GetProperty("isPlatformOwner").GetBoolean());
     }
