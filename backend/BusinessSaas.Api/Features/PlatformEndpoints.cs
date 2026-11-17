@@ -263,9 +263,14 @@ public static class PlatformEndpoints
             }
             catch (DbUpdateException) when (original is null)
             {
-                return Results.Conflict(new { message = "A plan draft already exists. Reload before saving." });
+                return Results.Conflict(new { message = "A plan draft could not be created. Reload before retrying." });
             }
 
+            if (original is null)
+            {
+                audit.TargetId = next.Id;
+                await db.SaveChangesAsync();
+            }
             await transaction.CommitAsync();
             return Results.Ok(new { code, revision = next.Revision, auditId = audit.Id });
         });
