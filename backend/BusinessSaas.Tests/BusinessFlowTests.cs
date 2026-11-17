@@ -882,11 +882,11 @@ public sealed class BusinessFlowTests
         BinaryPrimitives.WriteInt64BigEndian(counter, DateTimeOffset.UtcNow.ToUnixTimeSeconds() / 30);
         var digest = HMACSHA1.HashData(bytes.ToArray(), counter);
         var offset = digest[^1] & 0x0f;
-        var value = ((digest[offset] & 0x7f) << 24) |
+        var otpValue = ((digest[offset] & 0x7f) << 24) |
                     (digest[offset + 1] << 16) |
                     (digest[offset + 2] << 8) |
                     digest[offset + 3];
-        return (value % 1000000).ToString("D6");
+        return (otpValue % 1000000).ToString("D6");
     }
 
     private static async Task RegisterAndLogin(HttpClient client, string email)
