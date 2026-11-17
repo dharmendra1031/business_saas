@@ -60,3 +60,7 @@ Test access with a restricted staging account; compare business/member counts an
 - Confirm email verification, authorization, concurrent write tests, deployment rollback and production monitoring before allowing actual merchants.
 
 The repository CI proves database migrations/integration against disposable SQL Server, **not** a production backup or restore.
+
+## Staging measurement before deployment
+
+Use [API Performance Baseline](PERFORMANCE_BASELINE.md) on an isolated staging system with synthetic users and records. Capture the API commit and SQL Server environment. Do not use merchant credentials or point the smoke script at production; a passing localhost test is not a production load test.

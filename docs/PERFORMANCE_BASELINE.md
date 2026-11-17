@@ -21,3 +21,21 @@ The script makes **read-only** calls to `/api/health` or `/api/ready` only (50 r
 5. Get explicit operational approval before pointing a load test at production. This script has no built-in test-data creation or transaction replay.
 
 A passing CI build or a localhost smoke test is not a capacity certification.
+
+## Authenticated Retail read baseline
+
+The authenticated script signs into a **disposable staging account** once, then runs bounded read-only requests against either a business Dashboard or paged Product List:
+
+```powershell
+$env:BS_SMOKE_EMAIL = 'staging-owner@example.test'
+$env:BS_SMOKE_PASSWORD = '<staging-test-password>'
+$env:BS_SMOKE_BUSINESS_ID = '7' # Replace with the numeric ID of a disposable Retail business
+node scripts/auth-read-smoke.mjs http://127.0.0.1:5080 30 3 dashboard
+node scripts/auth-read-smoke.mjs http://127.0.0.1:5080 30 3 products
+```
+
+The script refuses remote targets by default. For a **controlled HTTPS staging endpoint only**, explicitly set `BS_SMOKE_REMOTE_STAGING=yes`. Do not run it against production or with a merchant account. Credentials come only from environment variables; they are not printed or stored. Clear the environment variables after testing.
+
+The tool obtains an antiforgery token, signs in once, and sends `GET` requests only for the measured endpoint. It measures p50/p95, failures and observed throughput, with hard limits of **200 requests and 10 concurrent workers**. It performs no database writes beyond normal login bookkeeping (such as login activity or lockout reset). The API and test business must already be provisioned.
+
+The CI test uses a local fake HTTP server to verify cookie and CSRF handling, read-only access and input safety. It does **not** measure real database speed or production capacity.
