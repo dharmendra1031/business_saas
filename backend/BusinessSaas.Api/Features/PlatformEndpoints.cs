@@ -151,27 +151,189 @@ public static class PlatformEndpoints
                 .Select(g => new { Code = g.Key, Count = g.Count() })
                 .ToListAsync();
 
-            var plans = new[]
-            {
-                new { Code = "STARTER", Name = "Starter", IsPublic = true },
-                new { Code = "GROWTH", Name = "Growth", IsPublic = true },
-                new { Code = "PROFESSIONAL", Name = "Professional", IsPublic = true },
-                new { Code = "BUSINESS", Name = "Business", IsPublic = true },
-                new { Code = "ENTERPRISE", Name = "Enterprise", IsPublic = false }
-            };
-
+            var drafts = await db.SubscriptionPlanDrafts.AsNoTracking().ToListAsync();
             return Results.Ok(new
             {
-                items = plans.Select(plan => new
+                items = Plans.Select(plan => new
                 {
                     plan.Code, plan.Name, plan.IsPublic,
                     assignedBusinesses = assigned.FirstOrDefault(x => x.Code == plan.Code)?.Count ?? 0,
-                    pricingConfigured = false
+                    pricingConfigured = false, // Drafts are never published or enforced.
+                    draft = drafts.Where(x => x.PlanCode == plan.Code)
+                        .Select(x => new
+                        {
+                            x.Id, x.Revision, x.CurrencyCode,
+                            x.MonthlyPrice, x.QuarterlyPrice, x.YearlyPrice,
+                            x.MaxLocations, x.MaxUsers, x.MaxProducts,
+                            x.UpdatedAtUtc
+                        }).SingleOrDefault()
                 }),
                 unknownPlanAssignments = assigned
-                    .Where(x => !plans.Any(plan => plan.Code == x.Code))
+                    .Where(x => !Plans.Any(plan => plan.Code == x.Code))
                     .Sum(x => x.Count)
             });
+        });
+
+        group.MapPost("/plans/{planCode}/draft", async (string planCode,
+            SavePlanDraftRequest request, ClaimsPrincipal user, AppDbContext db,
+            IConfiguration configuration) =>
+        {
+            if (!PlatformOwner.IsOwner(user, configuration))
+                return Results.Forbid();
+
+            var code = planCode.Trim().ToUpperInvariant();
+            if (!Plans.Any(plan => plan.Code == code))
+                return Results.NotFound();
+
+            var reason = request.Reason?.Trim() ?? "";
+            var currency = request.CurrencyCode?.Trim().ToUpperInvariant();
+            var hasPrice = request.MonthlyPrice.HasValue || request.QuarterlyPrice.HasValue ||
+                request.YearlyPrice.HasValue;
+            if (request.ExpectedRevision < 0 || reason.Length is < 10 or > 200 ||
+                (currency is not null && (currency.Length != 3 ||
+                    !currency.All(char.IsAsciiLetterUpper))) ||
+                (hasPrice && currency is null) ||
+                !ValidPrice(request.MonthlyPrice) ||
+                !ValidPrice(request.QuarterlyPrice) ||
+                !ValidPrice(request.YearlyPrice) ||
+                !ValidLimit(request.MaxLocations, 1000) ||
+                !ValidLimit(request.MaxUsers, 10000) ||
+                !ValidLimit(request.MaxProducts, 1000000))
+                return Results.BadRequest(new { message = "Check prices (non-negative, two decimals), currency, limits and the 10–200 character reason." });
+
+            var original = await db.SubscriptionPlanDrafts.AsNoTracking()
+                .SingleOrDefaultAsync(x => x.PlanCode == code);
+            if ((original?.Revision ?? 0) != request.ExpectedRevision)
+                return Results.Conflict(new { message = "Plan draft has changed. Reload before saving." });
+
+            var actorId = long.Parse(user.FindFirstValue(ClaimTypes.NameIdentifier)!);
+            var next = new SubscriptionPlanDraft
+            {
+                PlanCode = code,
+                Revision = request.ExpectedRevision + 1,
+                CurrencyCode = currency,
+                MonthlyPrice = request.MonthlyPrice,
+                QuarterlyPrice = request.QuarterlyPrice,
+                YearlyPrice = request.YearlyPrice,
+                MaxLocations = request.MaxLocations,
+                MaxUsers = request.MaxUsers,
+                MaxProducts = request.MaxProducts,
+                UpdatedByUserId = actorId,
+                UpdatedAtUtc = DateTime.UtcNow
+            };
+
+            await using var transaction = await db.Database.BeginTransactionAsync();
+            if (original is null)
+            {
+                db.SubscriptionPlanDrafts.Add(next);
+            }
+            else
+            {
+                var updated = await db.SubscriptionPlanDrafts
+                    .Where(x => x.Id == original.Id && x.Revision == request.ExpectedRevision)
+                    .ExecuteUpdateAsync(setters => setters
+                        .SetProperty(x => x.Revision, next.Revision)
+                        .SetProperty(x => x.CurrencyCode, next.CurrencyCode)
+                        .SetProperty(x => x.MonthlyPrice, next.MonthlyPrice)
+                        .SetProperty(x => x.QuarterlyPrice, next.QuarterlyPrice)
+                        .SetProperty(x => x.YearlyPrice, next.YearlyPrice)
+                        .SetProperty(x => x.MaxLocations, next.MaxLocations)
+                        .SetProperty(x => x.MaxUsers, next.MaxUsers)
+                        .SetProperty(x => x.MaxProducts, next.MaxProducts)
+                        .SetProperty(x => x.UpdatedByUserId, actorId)
+                        .SetProperty(x => x.UpdatedAtUtc, next.UpdatedAtUtc));
+                if (updated != 1)
+                    return Results.Conflict(new { message = "Plan draft was updated elsewhere. Reload." });
+            }
+
+            var audit = new PlatformAuditEvent
+            {
+                ActorUserId = actorId,
+                Action = "Plan.DraftSaved",
+                TargetType = "Plan",
+                TargetId = original?.Id,
+                Reason = reason,
+                PreviousValue = original is null ? null : DraftSummary(original),
+                NewValue = DraftSummary(next)
+            };
+            db.PlatformAuditEvents.Add(audit);
+            try
+            {
+                await db.SaveChangesAsync();
+            }
+            catch (DbUpdateException) when (original is null)
+            {
+                return Results.Conflict(new { message = "A plan draft already exists. Reload before saving." });
+            }
+
+            await transaction.CommitAsync();
+            return Results.Ok(new { code, revision = next.Revision, auditId = audit.Id });
+        });
+
+        group.MapPost("/businesses/{businessId:long}/subscription-status",
+            async (long businessId, ChangeSubscriptionStatusRequest request,
+                ClaimsPrincipal user, AppDbContext db, IConfiguration configuration) =>
+        {
+            if (!PlatformOwner.IsOwner(user, configuration))
+                return Results.Forbid();
+
+            var reason = request.Reason?.Trim() ?? "";
+            if (businessId <= 0 || reason.Length is < 10 or > 200 ||
+                request.Action is not ("Suspend" or "Reactivate") ||
+                request.ExpectedStatus is not ("Trial" or "Active" or "Suspended"))
+                return Results.BadRequest(new { message = "Choose Suspend or Reactivate, current status and a 10–200 character reason." });
+
+            var current = await db.BusinessSubscriptions.AsNoTracking()
+                .Where(x => x.BusinessId == businessId)
+                .Select(x => new { x.Status, x.StatusBeforeSuspension })
+                .SingleOrDefaultAsync();
+            if (current is null)
+                return Results.NotFound();
+            if (current.Status != request.ExpectedStatus)
+                return Results.Conflict(new { message = "Subscription status has changed. Reload." });
+
+            string newStatus;
+            string? priorStatus;
+            if (request.Action == "Suspend" && current.Status is "Trial" or "Active")
+            {
+                newStatus = "Suspended";
+                priorStatus = current.Status;
+            }
+            else if (request.Action == "Reactivate" && current.Status == "Suspended" &&
+                current.StatusBeforeSuspension is "Trial" or "Active")
+            {
+                newStatus = current.StatusBeforeSuspension;
+                priorStatus = null;
+            }
+            else
+                return Results.Conflict(new { message = "Subscription cannot make that transition." });
+
+            await using var transaction = await db.Database.BeginTransactionAsync();
+            var updated = await db.BusinessSubscriptions.Where(x =>
+                    x.BusinessId == businessId && x.Status == current.Status &&
+                    x.StatusBeforeSuspension == current.StatusBeforeSuspension)
+                .ExecuteUpdateAsync(setters => setters
+                    .SetProperty(x => x.Status, newStatus)
+                    .SetProperty(x => x.StatusBeforeSuspension, priorStatus));
+            if (updated != 1)
+                return Results.Conflict(new { message = "Subscription changed elsewhere. Reload." });
+
+            var audit = new PlatformAuditEvent
+            {
+                ActorUserId = long.Parse(user.FindFirstValue(ClaimTypes.NameIdentifier)!),
+                Action = request.Action == "Suspend"
+                    ? "Subscription.Suspended" : "Subscription.Reactivated",
+                TargetType = "Business",
+                TargetId = businessId,
+                Reason = reason,
+                PreviousValue = current.Status,
+                NewValue = newStatus
+            };
+            db.PlatformAuditEvents.Add(audit);
+            await db.SaveChangesAsync();
+            await transaction.CommitAsync();
+
+            return Results.Ok(new { businessId, status = newStatus, auditId = audit.Id });
         });
 
         group.MapPost("/businesses/{businessId:long}/extend-trial", async (long businessId,
@@ -367,6 +529,7 @@ public static class PlatformEndpoints
                                      OwnerEmail = owner.Email,
                                      PlanCode = subscription == null ? null : subscription.PlanCode,
                                      SubscriptionStatus = subscription == null ? null : subscription.Status,
+                                     StatusBeforeSuspension = subscription == null ? null : subscription.StatusBeforeSuspension,
                                      TrialEndsAtUtc = subscription == null
                                          ? (DateTime?)null : subscription.TrialEndsAtUtc
                                  }).SingleOrDefaultAsync();
@@ -375,5 +538,37 @@ public static class PlatformEndpoints
         });
     }
 
+    private static readonly PlanDefinition[] Plans =
+    [
+        new("STARTER", "Starter", true),
+        new("GROWTH", "Growth", true),
+        new("PROFESSIONAL", "Professional", true),
+        new("BUSINESS", "Business", true),
+        new("ENTERPRISE", "Enterprise", false)
+    ];
+
+    private static bool ValidPrice(decimal? value) =>
+        value is null || (value >= 0 && value <= 99999999m &&
+            decimal.Round(value.Value, 2) == value.Value);
+
+    private static bool ValidLimit(int? value, int maximum) =>
+        value is null || value is > 0 && value <= maximum;
+
+    private static string DraftSummary(SubscriptionPlanDraft value) =>
+        $"v{value.Revision} {value.CurrencyCode ?? "-"} " +
+        $"M:{value.MonthlyPrice?.ToString("0.00") ?? "-"} " +
+        $"Q:{value.QuarterlyPrice?.ToString("0.00") ?? "-"} " +
+        $"Y:{value.YearlyPrice?.ToString("0.00") ?? "-"} " +
+        $"L:{value.MaxLocations?.ToString() ?? "-"} " +
+        $"U:{value.MaxUsers?.ToString() ?? "-"} " +
+        $"P:{value.MaxProducts?.ToString() ?? "-"}";
+
+    private sealed record PlanDefinition(string Code, string Name, bool IsPublic);
+    private sealed record SavePlanDraftRequest(
+        int ExpectedRevision, string? CurrencyCode,
+        decimal? MonthlyPrice, decimal? QuarterlyPrice, decimal? YearlyPrice,
+        int? MaxLocations, int? MaxUsers, int? MaxProducts, string? Reason);
+    private sealed record ChangeSubscriptionStatusRequest(
+        string? Action, string? ExpectedStatus, string? Reason);
     private sealed record ExtendTrialRequest(int AdditionalDays, DateTime ExpectedTrialEndsAtUtc, string? Reason);
 }
