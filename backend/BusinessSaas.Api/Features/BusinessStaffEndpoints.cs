@@ -36,6 +36,10 @@ public static class BusinessStaffEndpoints
         {
             if (!await IsOwner(user, db, businessId))
                 return Results.NotFound();
+            if (!await CanEditSubscription(db, businessId))
+                return Results.Problem("Subscription is not active. Editing is unavailable.",
+                    statusCode: StatusCodes.Status403Forbidden);
+
 
             var role = request.RoleCode?.Trim() ?? "";
             var email = request.Email?.Trim() ?? "";
@@ -80,6 +84,10 @@ public static class BusinessStaffEndpoints
         {
             if (!await IsOwner(user, db, businessId))
                 return Results.NotFound();
+            if (!await CanEditSubscription(db, businessId))
+                return Results.Problem("Subscription is not active. Editing is unavailable.",
+                    statusCode: StatusCodes.Status403Forbidden);
+
 
             var staff = await db.BusinessUsers.SingleOrDefaultAsync(x =>
                 x.BusinessId == businessId && x.UserId == userId && x.RoleCode != "Owner");
@@ -91,6 +99,12 @@ public static class BusinessStaffEndpoints
             return Results.NoContent();
         });
     }
+
+    private static Task<bool> CanEditSubscription(AppDbContext db, long businessId) =>
+        db.BusinessSubscriptions.AsNoTracking().AnyAsync(x =>
+            x.BusinessId == businessId &&
+            (x.Status == "Active" || x.Status == "Trial" &&
+                x.TrialEndsAtUtc > DateTime.UtcNow));
 
     private static Task<bool> IsOwner(ClaimsPrincipal user, AppDbContext db, long businessId)
     {
