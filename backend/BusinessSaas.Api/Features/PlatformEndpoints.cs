@@ -27,6 +27,92 @@ public static class PlatformEndpoints
                 ? Results.Ok(new { canManageLicenses = true })
                 : Results.Forbid());
 
+        group.MapGet("/overview", async (ClaimsPrincipal user, AppDbContext db,
+            IConfiguration configuration) =>
+        {
+            if (!PlatformOwner.IsOwner(user, configuration))
+                return Results.Forbid();
+
+            var ownerId = long.Parse(configuration["Platform:OwnerUserId"]!);
+            var now = DateTime.UtcNow;
+            return Results.Ok(new
+            {
+                totalCustomers = await db.Users.CountAsync(x => x.Id != ownerId),
+                totalBusinesses = await db.Businesses.CountAsync(),
+                activeSubscriptions = await db.BusinessSubscriptions.CountAsync(x => x.Status == "Active"),
+                activeTrials = await db.BusinessSubscriptions.CountAsync(x =>
+                    x.Status == "Trial" && x.TrialEndsAtUtc > now),
+                expiredTrials = await db.BusinessSubscriptions.CountAsync(x =>
+                    x.Status == "Trial" && x.TrialEndsAtUtc <= now)
+            });
+        });
+
+        group.MapGet("/customers", async (ClaimsPrincipal user, AppDbContext db,
+            IConfiguration configuration, string? search, int page = 1, int pageSize = 20) =>
+        {
+            if (!PlatformOwner.IsOwner(user, configuration))
+                return Results.Forbid();
+
+            if (page is < 1 or > 100000 || pageSize is < 1 or > 50)
+                return Results.BadRequest(new { message = "Choose a valid page and page size (1–50)." });
+
+            var term = search?.Trim().ToUpperInvariant() ?? "";
+            if (term.Length > 100)
+                return Results.BadRequest(new { message = "Search must be 100 characters or less." });
+
+            var ownerId = long.Parse(configuration["Platform:OwnerUserId"]!);
+            var query = db.Users.AsNoTracking().Where(x => x.Id != ownerId);
+            if (term.Length > 0)
+                query = query.Where(x => x.NormalizedEmail != null &&
+                    x.NormalizedEmail.Contains(term));
+
+            var total = await query.CountAsync();
+            var items = await query.OrderBy(x => x.Id)
+                .Skip((page - 1) * pageSize).Take(pageSize)
+                .Select(x => new
+                {
+                    x.Id,
+                    x.Email,
+                    x.EmailConfirmed,
+                    ownedBusinessCount = db.Businesses.Count(b => b.CreatedByUserId == x.Id)
+                }).ToListAsync();
+
+            return Results.Ok(new { items, total, page, pageSize });
+        });
+
+        group.MapGet("/customers/{customerId:long}", async (long customerId,
+            ClaimsPrincipal user, AppDbContext db, IConfiguration configuration) =>
+        {
+            if (!PlatformOwner.IsOwner(user, configuration))
+                return Results.Forbid();
+
+            var ownerId = long.Parse(configuration["Platform:OwnerUserId"]!);
+            var customer = await db.Users.AsNoTracking()
+                .Where(x => x.Id == customerId && x.Id != ownerId)
+                .Select(x => new { x.Id, x.Email, x.EmailConfirmed })
+                .SingleOrDefaultAsync();
+            if (customer is null) return Results.NotFound();
+
+            var businesses = await (from business in db.Businesses.AsNoTracking()
+                                    join type in db.BusinessTypes.AsNoTracking()
+                                        on business.BusinessTypeId equals type.Id
+                                    join sub in db.BusinessSubscriptions.AsNoTracking()
+                                        on business.Id equals sub.BusinessId into subscriptions
+                                    from subscription in subscriptions.DefaultIfEmpty()
+                                    where business.CreatedByUserId == customerId
+                                    orderby business.Id descending
+                                    select new
+                                    {
+                                        business.Id,
+                                        business.Name,
+                                        TypeName = type.Name,
+                                        PlanCode = subscription == null ? null : subscription.PlanCode,
+                                        SubscriptionStatus = subscription == null ? null : subscription.Status
+                                    }).ToListAsync();
+
+            return Results.Ok(new { customer.Id, customer.Email, customer.EmailConfirmed, businesses });
+        });
+
         group.MapGet("/businesses", async (ClaimsPrincipal user, AppDbContext db, IConfiguration configuration,
             string? search, int page = 1, int pageSize = 20) =>
         {
