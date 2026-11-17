@@ -76,7 +76,12 @@ export function resetCsrf(): void {
 async function csrf(): Promise<string> {
   if (csrfToken) return csrfToken
 
-  const response = await fetch('/api/auth/csrf', { credentials: 'same-origin' })
+  let response: Response
+  try {
+    response = await fetch('/api/auth/csrf', { credentials: 'same-origin' })
+  } catch {
+    throw new Error('Unable to connect. Check your internet connection.')
+  }
   if (!response.ok) throw new Error('Unable to initialize a secure session.')
   const body = (await response.json()) as { token: string }
   csrfToken = body.token
@@ -91,12 +96,19 @@ export async function api<T>(path: string, options: RequestInit = {}): Promise<T
     if (options.body) headers.set('Content-Type', 'application/json')
   }
 
-  const response = await fetch('/api' + path, {
-    ...options,
-    method,
-    credentials: 'same-origin',
-    headers
-  })
+  let response: Response
+  try {
+    response = await fetch('/api' + path, {
+      ...options,
+      method,
+      credentials: 'same-origin',
+      headers
+    })
+  } catch {
+    throw new Error(method === 'GET' || method === 'HEAD'
+      ? 'Connection lost. Check your internet connection and try again.'
+      : 'Connection lost. The action may have completed. Check the record before retrying.')
+  }
 
   if (!response.ok) {
     if (response.status === 401 && path !== '/auth/login' && path !== '/auth/me') {
@@ -113,7 +125,14 @@ export async function api<T>(path: string, options: RequestInit = {}): Promise<T
       (response.status === 401 ? 'Please sign in to continue.' : 'Request failed.'))
   }
 
-  return response.status === 204 ? undefined as T : await response.json() as T
+  if (response.status === 204) return undefined as T
+  try {
+    return await response.json() as T
+  } catch {
+    throw new Error(method === 'GET' || method === 'HEAD'
+      ? 'The server returned an incomplete response. Please retry.'
+      : 'The server response was incomplete. Check the record before retrying.')
+  }
 }
 
 export function post<T>(path: string, data: unknown): Promise<T> {
