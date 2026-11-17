@@ -140,3 +140,16 @@ This section describes the current implemented slice; the commercial proposal ab
 - Regression tests cover MFA/tenant access, valid and invalid draft values, revision conflict, unchanged existing PlanCode, suspension/replay/reactivation, owner write denial and SQL migrations.
 
 **Still pending:** approved public rates; genuine published immutable plan versions, module/usage enforcement, subscription payment ledger, invoices, renewals, paid activation and grace/dunning policies; actual browser visual/interaction comparisons against approved screenshots.
+
+## 10. Immutable catalog publication (17 Nov 2026)
+
+The Super Admin can publish reviewed **public** plan drafts as immutable catalog versions. This is a catalog-recording capability, **not a public payment/checkout launch**.
+
+- A publish request requires an MFA-verified Super Admin, 10–200 character approval reason, exact expected draft revision and expected currently published version.
+- Starter, Growth, Professional and Business may be published only when the draft contains a three-letter currency, **positive** monthly/quarterly/yearly prices and all three positive quantity limits. Enterprise remains bespoke (contact sales) and cannot be published from this endpoint.
+- The new numeric-ID `PublishedPlanVersions` table stores a complete snapshot and `Version` per `PlanCode`; its unique `(PlanCode, Version)` constraint prevents duplicate version numbers. Previous versions remain immutable and queryable.
+- The `Plan.Published` audit event records the published snapshot's numeric ID and operator's reason in the same transaction. Repeated or stale publish attempts are rejected; no existing subscription terms are silently updated.
+- The Super Admin Plans screen shows `Published Catalog`, plus a review-and-confirm flow. It does not present catalog prices as a chargeable product until the payment/subscription lifecycle is delivered.
+- The schema migration is `20261117210000_AddPublishedPlanVersions`. Review the intended SQL Server environment and backup/restore plan before production migration.
+
+**Not implemented by catalog publication:** payment provider integration, tax invoice issuance, payment ledger, plan assignment/checkout, new customer paid activation, immutable plan-version binding on a business subscription, and server-enforced plan/module quota resolution. Until those are built and tested, customers retain the existing subscription behavior without commercial enforcement.
