@@ -31,7 +31,8 @@ public static class BusinessStaffEndpoints
         });
 
         group.MapPost("", async (long businessId, AddStaffRequest request,
-            ClaimsPrincipal user, AppDbContext db, UserManager<AppUser> users) =>
+            ClaimsPrincipal user, AppDbContext db, UserManager<AppUser> users,
+            IConfiguration configuration) =>
         {
             if (!await IsOwner(user, db, businessId))
                 return Results.NotFound();
@@ -50,6 +51,8 @@ public static class BusinessStaffEndpoints
                 {
                     message = "This account does not exist. Ask the user to register first."
                 });
+            if (PlatformOwner.IsOwnerId(account.Id, configuration))
+                return Results.BadRequest(new { message = "Platform owner cannot join a customer business." });
 
             if (await db.BusinessUsers.AnyAsync(x =>
                 x.BusinessId == businessId && x.UserId == account.Id))

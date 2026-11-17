@@ -525,6 +525,9 @@ public sealed class BusinessFlowTests
             (await admin.GetAsync("/api/businesses")).StatusCode);
         Assert.Equal(HttpStatusCode.Forbidden,
             (await admin.GetAsync($"/api/businesses/{firstId}/dashboard")).StatusCode);
+        Assert.Equal(HttpStatusCode.BadRequest,
+            (await Post(owner, $"/api/businesses/{firstId}/staff",
+                new { email = "directory-admin@example.test", roleCode = "Cashier" })).StatusCode);
         Assert.Equal(HttpStatusCode.Forbidden,
             (await Post(admin, "/api/businesses", new
             {
