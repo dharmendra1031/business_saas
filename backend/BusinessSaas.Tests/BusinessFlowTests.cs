@@ -475,6 +475,10 @@ public sealed class BusinessFlowTests
             (await anonymous.GetAsync("/api/platform/overview")).StatusCode);
         Assert.Equal(HttpStatusCode.Unauthorized,
             (await anonymous.GetAsync("/api/platform/customers")).StatusCode);
+        Assert.Equal(HttpStatusCode.Unauthorized,
+            (await anonymous.GetAsync("/api/platform/audit")).StatusCode);
+        Assert.Equal(HttpStatusCode.Forbidden,
+            (await owner.GetAsync("/api/platform/audit")).StatusCode);
         Assert.Equal(HttpStatusCode.Forbidden,
             (await owner.GetAsync("/api/platform/overview")).StatusCode);
         Assert.Equal(HttpStatusCode.Forbidden,
@@ -550,6 +554,27 @@ public sealed class BusinessFlowTests
             (await outsider.GetAsync("/api/platform/customers")).StatusCode);
         Assert.Equal(HttpStatusCode.Forbidden,
             (await outsider.GetAsync("/api/platform/customers/1")).StatusCode);
+        Assert.Equal(HttpStatusCode.Forbidden,
+            (await outsider.GetAsync("/api/platform/audit")).StatusCode);
+
+        // A configured owner sign-in is recorded; earlier ordinary logins are not.
+        Assert.Equal(HttpStatusCode.NoContent,
+            (await Post(admin, "/api/auth/login", new
+            {
+                email = "directory-admin@example.test",
+                password = "SecurePassword123!"
+            })).StatusCode);
+
+        var audit = await admin.GetFromJsonAsync<JsonElement>("/api/platform/audit");
+        Assert.Equal(1, audit.GetProperty("total").GetInt32());
+        Assert.Single(audit.GetProperty("items").EnumerateArray());
+        Assert.True(audit.GetProperty("items")[0].GetProperty("id").GetInt64() > 0);
+        Assert.Equal(platformOwnerId, audit.GetProperty("items")[0]
+            .GetProperty("actorUserId").GetInt64());
+        Assert.Equal("PlatformOwner.SignIn", audit.GetProperty("items")[0]
+            .GetProperty("action").GetString());
+        Assert.Equal(HttpStatusCode.BadRequest,
+            (await admin.GetAsync("/api/platform/audit?pageSize=100")).StatusCode);
 
         var overview = await admin.GetFromJsonAsync<JsonElement>("/api/platform/overview");
         Assert.Equal(2, overview.GetProperty("totalCustomers").GetInt32());
@@ -617,6 +642,8 @@ public sealed class BusinessFlowTests
             (await admin.GetAsync("/api/platform/customers")).StatusCode);
         Assert.Equal(HttpStatusCode.Forbidden,
             (await admin.GetAsync("/api/platform/overview")).StatusCode);
+        Assert.Equal(HttpStatusCode.Forbidden,
+            (await admin.GetAsync("/api/platform/audit")).StatusCode);
         Assert.False((await admin.GetFromJsonAsync<JsonElement>("/api/platform/access"))
             .GetProperty("isPlatformOwner").GetBoolean());
     }
