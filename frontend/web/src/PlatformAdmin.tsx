@@ -2,8 +2,9 @@ import { useEffect, useState, type FormEvent } from 'react'
 import { api, SessionExpiredError } from './api'
 import PlatformOverview from './PlatformOverview'
 import PlatformCustomers from './PlatformCustomers'
+import PlatformAudit from './PlatformAudit'
 
-export type PlatformSection = 'overview' | 'customers' | 'businesses'
+export type PlatformSection = 'overview' | 'customers' | 'businesses' | 'audit'
 
 interface BusinessRow {
   id: number
@@ -194,5 +195,6 @@ function PlatformBusinesses() {
 export default function PlatformAdmin({ section }: { section: PlatformSection }) {
   if (section === 'overview') return <PlatformOverview />
   if (section === 'customers') return <PlatformCustomers />
+  if (section === 'audit') return <PlatformAudit />
   return <PlatformBusinesses />
 }

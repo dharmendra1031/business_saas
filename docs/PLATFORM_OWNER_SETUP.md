@@ -53,3 +53,11 @@ For multi-instance deployment, the same reviewed owner ID must be configured on 
 ## Current scope and release limits
 
 The Platform Super Admin UI currently supports **read-only** Business Directory and subscription status. Actual license management actions, plan editing, trial extensions, platform audit logs, verified-email onboarding, privileged-account MFA and production readiness gates are **not implemented** by this change. Do not use this configuration alone as a production launch sign-off.
+
+## Platform Audit foundation
+
+The initial audit history records successful configured Super Admin sign-ins. Each event has a numeric identity ID, actor User ID, action, optional target/reason and UTC timestamp. Only the configured owner may read paginated history at `GET /api/platform/audit` and from **Security & Audit** in the Super Admin sidebar.
+
+The audit schema is intended for future transactional administrative changes. Trial extensions, plan updates, suspensions and payments are **not implemented** and therefore are **not yet logged**. The log is not cryptographically tamper-evident and must not be represented as a complete security audit or regulatory archive. Login failures and security-alert delivery are not recorded by this table.
+
+The `AddPlatformAuditEvents` migration must be applied as part of a reviewed deployment after backup. The view reports MFA as unavailable; privileged MFA, audit retention and monitoring remain production blockers.
