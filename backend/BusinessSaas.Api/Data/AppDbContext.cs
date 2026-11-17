@@ -291,6 +291,9 @@ public sealed class AppDbContext(DbContextOptions<AppDbContext> options)
             entity.HasIndex(x => x.BusinessId).IsUnique();
             entity.Property(x => x.PlanCode).HasMaxLength(30).IsRequired();
             entity.Property(x => x.Status).HasMaxLength(20).IsRequired();
+            // SQL Server datetime2 and SQLite do not store DateTimeKind. These values are UTC.
+            entity.Property(x => x.TrialEndsAtUtc).HasConversion(
+                value => value, value => DateTime.SpecifyKind(value, DateTimeKind.Utc));
             entity.HasOne<Business>().WithMany()
                 .HasForeignKey(x => x.BusinessId).OnDelete(DeleteBehavior.Restrict);
         });

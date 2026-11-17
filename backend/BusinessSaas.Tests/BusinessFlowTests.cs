@@ -707,6 +707,7 @@ public sealed class BusinessFlowTests
 
         var originalEnd = overview.GetProperty("expiringTrials")[0]
             .GetProperty("trialEndsAtUtc").GetDateTime();
+        Assert.Equal(DateTimeKind.Utc, originalEnd.Kind);
         var request = new
         {
             additionalDays = 7,
@@ -732,6 +733,7 @@ public sealed class BusinessFlowTests
         Assert.Equal(HttpStatusCode.OK, extension.StatusCode);
         var extended = await extension.Content.ReadFromJsonAsync<JsonElement>();
         var extendedEnd = extended.GetProperty("trialEndsAtUtc").GetDateTime();
+        Assert.Equal(DateTimeKind.Utc, extendedEnd.Kind);
         Assert.True(extendedEnd > originalEnd.AddDays(6));
         Assert.Equal(firstId, extended.GetProperty("businessId").GetInt64());
         Assert.True(extended.GetProperty("auditId").GetInt64() > 0);
