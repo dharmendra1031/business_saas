@@ -864,9 +864,12 @@ public sealed class BusinessFlowTests
             {
                 email = "directory-outsider@example.test", roleCode = "Cashier"
             })).StatusCode);
+        var staffCsrf = await owner.GetFromJsonAsync<JsonElement>("/api/auth/csrf");
+        using var staffDelete = new HttpRequestMessage(HttpMethod.Delete,
+            $"/api/businesses/{firstId}/staff/{platformOwnerId}");
+        staffDelete.Headers.Add("X-CSRF-TOKEN", staffCsrf.GetProperty("token").GetString());
         Assert.Equal(HttpStatusCode.Forbidden,
-            (await owner.DeleteAsync($"/api/businesses/{firstId}/staff/{platformOwnerId}"))
-            .StatusCode);
+            (await owner.SendAsync(staffDelete)).StatusCode);
 
         var reactivated = await Post(admin,
             $"/api/platform/businesses/{firstId}/subscription-status", new
