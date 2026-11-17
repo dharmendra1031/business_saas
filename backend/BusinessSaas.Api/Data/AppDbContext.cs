@@ -48,12 +48,29 @@ public sealed class BusinessUser
     public string RoleCode { get; set; } = "Owner";
 }
 
+public sealed class SubscriptionPlanDraft
+{
+    public long Id { get; set; }
+    public string PlanCode { get; set; } = "";
+    public int Revision { get; set; } = 1;
+    public string? CurrencyCode { get; set; }
+    public decimal? MonthlyPrice { get; set; }
+    public decimal? QuarterlyPrice { get; set; }
+    public decimal? YearlyPrice { get; set; }
+    public int? MaxLocations { get; set; }
+    public int? MaxUsers { get; set; }
+    public int? MaxProducts { get; set; }
+    public long UpdatedByUserId { get; set; }
+    public DateTime UpdatedAtUtc { get; set; } = DateTime.UtcNow;
+}
+
 public sealed class BusinessSubscription
 {
     public long Id { get; set; }
     public long BusinessId { get; set; }
     public string PlanCode { get; set; } = "STARTER";
     public string Status { get; set; } = "Trial";
+    public string? StatusBeforeSuspension { get; set; }
     public DateTime TrialEndsAtUtc { get; set; }
 }
 
@@ -217,6 +234,7 @@ public sealed class AppDbContext(DbContextOptions<AppDbContext> options)
     public DbSet<Business> Businesses => Set<Business>();
     public DbSet<BusinessUser> BusinessUsers => Set<BusinessUser>();
     public DbSet<BusinessSubscription> BusinessSubscriptions => Set<BusinessSubscription>();
+    public DbSet<SubscriptionPlanDraft> SubscriptionPlanDrafts => Set<SubscriptionPlanDraft>();
     public DbSet<BusinessLocation> BusinessLocations => Set<BusinessLocation>();
 
     public DbSet<RetailCategory> RetailCategories => Set<RetailCategory>();
@@ -286,11 +304,24 @@ public sealed class AppDbContext(DbContextOptions<AppDbContext> options)
                 .HasForeignKey(x => x.UserId).OnDelete(DeleteBehavior.Restrict);
         });
 
+        builder.Entity<SubscriptionPlanDraft>(entity =>
+        {
+            entity.HasIndex(x => x.PlanCode).IsUnique();
+            entity.Property(x => x.PlanCode).HasMaxLength(30).IsRequired();
+            entity.Property(x => x.CurrencyCode).HasMaxLength(3);
+            entity.Property(x => x.MonthlyPrice).HasPrecision(18, 2);
+            entity.Property(x => x.QuarterlyPrice).HasPrecision(18, 2);
+            entity.Property(x => x.YearlyPrice).HasPrecision(18, 2);
+            entity.HasOne<AppUser>().WithMany()
+                .HasForeignKey(x => x.UpdatedByUserId).OnDelete(DeleteBehavior.Restrict);
+        });
+
         builder.Entity<BusinessSubscription>(entity =>
         {
             entity.HasIndex(x => x.BusinessId).IsUnique();
             entity.Property(x => x.PlanCode).HasMaxLength(30).IsRequired();
             entity.Property(x => x.Status).HasMaxLength(20).IsRequired();
+            entity.Property(x => x.StatusBeforeSuspension).HasMaxLength(20);
             // SQL Server datetime2 and SQLite do not store DateTimeKind. These values are UTC.
             entity.Property(x => x.TrialEndsAtUtc).HasConversion(
                 value => value, value => DateTime.SpecifyKind(value, DateTimeKind.Utc));

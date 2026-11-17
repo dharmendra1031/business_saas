@@ -239,6 +239,10 @@ namespace BusinessSaas.Api.Data.Migrations
                         .HasMaxLength(20)
                         .HasColumnType("nvarchar(20)");
 
+                    b.Property<string>("StatusBeforeSuspension")
+                        .HasMaxLength(20)
+                        .HasColumnType("nvarchar(20)");
+
                     b.Property<DateTime>("TrialEndsAtUtc")
                         .HasColumnType("datetime2");
 
@@ -248,6 +252,43 @@ namespace BusinessSaas.Api.Data.Migrations
                         .IsUnique();
 
                     b.ToTable("BusinessSubscriptions");
+                });
+
+            modelBuilder.Entity("BusinessSaas.Api.Data.SubscriptionPlanDraft", b =>
+                {
+                    b.Property<long>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("bigint");
+
+                    SqlServerPropertyBuilderExtensions.UseIdentityColumn(b.Property<long>("Id"));
+
+                    b.Property<string>("PlanCode")
+                        .IsRequired()
+                        .HasMaxLength(30)
+                        .HasColumnType("nvarchar(30)");
+
+                    b.Property<int>("Revision").HasColumnType("int");
+                    b.Property<string>("CurrencyCode")
+                        .HasMaxLength(3)
+                        .HasColumnType("nvarchar(3)");
+                    b.Property<decimal?>("MonthlyPrice")
+                        .HasPrecision(18, 2)
+                        .HasColumnType("decimal(18,2)");
+                    b.Property<decimal?>("QuarterlyPrice")
+                        .HasPrecision(18, 2)
+                        .HasColumnType("decimal(18,2)");
+                    b.Property<decimal?>("YearlyPrice")
+                        .HasPrecision(18, 2)
+                        .HasColumnType("decimal(18,2)");
+                    b.Property<int?>("MaxLocations").HasColumnType("int");
+                    b.Property<int?>("MaxUsers").HasColumnType("int");
+                    b.Property<int?>("MaxProducts").HasColumnType("int");
+                    b.Property<DateTime>("UpdatedAtUtc").HasColumnType("datetime2");
+                    b.Property<long>("UpdatedByUserId").HasColumnType("bigint");
+                    b.HasKey("Id");
+                    b.HasIndex("PlanCode").IsUnique();
+                    b.HasIndex("UpdatedByUserId");
+                    b.ToTable("SubscriptionPlanDrafts");
                 });
 
             modelBuilder.Entity("BusinessSaas.Api.Data.BusinessType", b =>
@@ -968,6 +1009,15 @@ namespace BusinessSaas.Api.Data.Migrations
                     b.HasOne("BusinessSaas.Api.Data.AppUser", null)
                         .WithMany()
                         .HasForeignKey("UserId")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .IsRequired();
+                });
+
+            modelBuilder.Entity("BusinessSaas.Api.Data.SubscriptionPlanDraft", b =>
+                {
+                    b.HasOne("BusinessSaas.Api.Data.AppUser", null)
+                        .WithMany()
+                        .HasForeignKey("UpdatedByUserId")
                         .OnDelete(DeleteBehavior.Restrict)
                         .IsRequired();
                 });
