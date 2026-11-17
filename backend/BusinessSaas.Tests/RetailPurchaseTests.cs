@@ -88,9 +88,15 @@ public sealed class RetailPurchaseTests
         var orders = $"/api/businesses/{businessId}/purchase-orders";
         var valid = new
         {
-            locationId, supplierId,
+            locationId, supplierId, requestKey = "purchase-access-check-20261117",
             lines = new[] { new { productId, quantity = 100m, unitCost = 80m } }
         };
+        Assert.Equal(HttpStatusCode.BadRequest,
+            (await Send(owner, orders, new
+            {
+                locationId, supplierId,
+                lines = new[] { new { productId, quantity = 100m, unitCost = 80m } }
+            })).StatusCode);
 
         Assert.Equal(HttpStatusCode.NotFound,
             (await Send(other, orders, valid)).StatusCode);
@@ -100,6 +106,7 @@ public sealed class RetailPurchaseTests
             (await Send(owner, orders, new
             {
                 locationId, supplierId = otherSupplierId,
+                requestKey = "purchase-foreign-supplier-20261117",
                 lines = new[] { new { productId, quantity = 100m, unitCost = 80m } }
             })).StatusCode);
         Assert.Equal(HttpStatusCode.BadRequest,
@@ -133,7 +140,11 @@ public sealed class RetailPurchaseTests
             (await Send(manager, orderPath + "/approve", new { })).StatusCode);
         Assert.Equal(HttpStatusCode.Conflict,
             (await Send(manager, orderPath + "/receivings",
-                new { lines = new[] { new { purchaseOrderLineId = 1, quantity = 40m } } })).StatusCode);
+                new
+                {
+                    requestKey = "purchase-before-approval-20261117",
+                    lines = new[] { new { purchaseOrderLineId = 1, quantity = 40m } }
+                })).StatusCode);
 
         var before = await manager.GetFromJsonAsync<JsonElement>(orderPath);
         var orderLineId = before.GetProperty("lines")[0].GetProperty("id").GetInt64();
@@ -145,6 +156,11 @@ public sealed class RetailPurchaseTests
             (await Send(owner, orderPath + "/approve", new { })).StatusCode);
 
         var receipts = orderPath + "/receivings";
+        Assert.Equal(HttpStatusCode.BadRequest,
+            (await Send(manager, receipts, new
+            {
+                lines = new[] { new { purchaseOrderLineId = orderLineId, quantity = 40m } }
+            })).StatusCode);
         var keyedReceipt40 = new
         {
             requestKey = "purchase-receiving-retry-20261116",
@@ -180,10 +196,18 @@ public sealed class RetailPurchaseTests
 
         Assert.Equal(HttpStatusCode.Conflict,
             (await Send(owner, receipts,
-                new { lines = new[] { new { purchaseOrderLineId = orderLineId, quantity = 70m } } })).StatusCode);
+                new
+                {
+                    requestKey = "purchase-over-receiving-20261117",
+                    lines = new[] { new { purchaseOrderLineId = orderLineId, quantity = 70m } }
+                })).StatusCode);
 
         var receipt60 = await CreateId(owner, receipts,
-            new { lines = new[] { new { purchaseOrderLineId = orderLineId, quantity = 60m } } });
+            new
+            {
+                requestKey = "purchase-final-receiving-20261117",
+                lines = new[] { new { purchaseOrderLineId = orderLineId, quantity = 60m } }
+            });
         Assert.Equal(HttpStatusCode.OK,
             (await Send(owner, receipts + "/" + receipt60 + "/post", new { })).StatusCode);
         Assert.Equal(HttpStatusCode.OK,
@@ -196,7 +220,11 @@ public sealed class RetailPurchaseTests
 
         Assert.Equal(HttpStatusCode.Conflict,
             (await Send(owner, receipts,
-                new { lines = new[] { new { purchaseOrderLineId = orderLineId, quantity = 1m } } })).StatusCode);
+                new
+                {
+                    requestKey = "purchase-after-close-20261117",
+                    lines = new[] { new { purchaseOrderLineId = orderLineId, quantity = 1m } }
+                })).StatusCode);
 
         var stockPage = await owner.GetFromJsonAsync<JsonElement>(
             $"/api/businesses/{businessId}/stock/locations/{locationId}");
