@@ -14,6 +14,20 @@ interface PlanDraft {
   updatedAtUtc: string
 }
 
+interface PublishedVersion {
+  id: number
+  version: number
+  sourceDraftRevision: number
+  currencyCode: string
+  monthlyPrice: number
+  quarterlyPrice: number
+  yearlyPrice: number
+  maxLocations: number | null
+  maxUsers: number | null
+  maxProducts: number | null
+  publishedAtUtc: string
+}
+
 interface Plan {
   code: string
   name: string
@@ -21,6 +35,7 @@ interface Plan {
   assignedBusinesses: number
   pricingConfigured: boolean
   draft: PlanDraft | null
+  published: PublishedVersion | null
 }
 
 interface PlanResponse {
@@ -64,6 +79,8 @@ export default function PlatformPlans() {
   const [notice, setNotice] = useState('')
   const [reload, setReload] = useState(0)
   const [editing, setEditing] = useState<Plan | null>(null)
+  const [publishing, setPublishing] = useState<Plan | null>(null)
+  const [publishReason, setPublishReason] = useState('')
   const [form, setForm] = useState<DraftForm>(formFromDraft(null))
 
   useEffect(() => {
@@ -82,10 +99,54 @@ export default function PlatformPlans() {
   }, [reload])
 
   function openDraft(plan: Plan) {
+    setPublishing(null)
     setEditing(plan)
     setForm(formFromDraft(plan.draft))
     setError('')
     setNotice('')
+  }
+
+  function openPublish(plan: Plan) {
+    setEditing(null)
+    setPublishing(plan)
+    setPublishReason('')
+    setError('')
+    setNotice('')
+  }
+
+  async function publishPlan(event: FormEvent) {
+    event.preventDefault()
+    if (!publishing?.draft || !publishing.isPublic) return
+    setBusy(true)
+    setError('')
+    try {
+      const result = await post<{ version: number; auditId: number }>(
+        `/platform/plans/${publishing.code}/publish`, {
+          expectedDraftRevision: publishing.draft.revision,
+          expectedPublishedVersion: publishing.published?.version ?? 0,
+          reason: publishReason.trim()
+        })
+      setNotice(`${publishing.name} catalog version ${result.version} published. Audit #${result.auditId} recorded.`)
+      setPublishing(null)
+      setPublishReason('')
+      setReload(value => value + 1)
+    } catch (cause) {
+      if (!(cause instanceof SessionExpiredError))
+        setError(cause instanceof Error ? cause.message : 'Unable to publish the plan.')
+    } finally {
+      setBusy(false)
+    }
+  }
+
+  function isPublishable(plan: Plan) {
+    const draft = plan.draft
+    return plan.isPublic && !!draft && !!draft.currencyCode &&
+      draft.monthlyPrice !== null && draft.monthlyPrice > 0 &&
+      draft.quarterlyPrice !== null && draft.quarterlyPrice > 0 &&
+      draft.yearlyPrice !== null && draft.yearlyPrice > 0 &&
+      draft.maxLocations !== null && draft.maxUsers !== null &&
+      draft.maxProducts !== null &&
+      draft.revision !== plan.published?.sourceDraftRevision
   }
 
   function update(field: keyof DraftForm, value: string) {
@@ -124,14 +185,14 @@ export default function PlatformPlans() {
   return <>
     <div className="page-header">
       <div><h1>Subscription Plans</h1>
-        <p>Manage draft commercial terms without changing any active business subscriptions.</p>
+        <p>Review and publish versioned catalog terms without changing existing subscriptions or taking payments.</p>
       </div>
       <button type="button" className="btn btn-outline-secondary btn-sm"
         disabled={loading || busy} onClick={() => setReload(value => value + 1)}>Refresh</button>
     </div>
     {notice && <div className="alert alert-success" role="status">{notice}</div>}
     {error && <div className="alert alert-danger" role="alert">{error}
-      {!editing && <button type="button" className="btn btn-outline-secondary btn-sm ms-2"
+      {!editing && !publishing && <button type="button" className="btn btn-outline-secondary btn-sm ms-2"
         onClick={() => setReload(value => value + 1)}>Retry</button>}
     </div>}
     <section className="content-section">
@@ -140,17 +201,24 @@ export default function PlatformPlans() {
         <div className="table-responsive">
           <table className="table platform-table align-middle">
             <thead><tr><th>Plan</th><th>Visibility</th><th>Assigned Businesses</th>
-              <th>Draft</th><th>Live Pricing</th><th className="text-end">Action</th></tr></thead>
+              <th>Draft</th><th>Published Catalog</th><th className="text-end">Actions</th></tr></thead>
             <tbody>{data.items.map(plan => <tr key={plan.code}>
               <td><strong>{plan.name}</strong>
                 <small className="d-block text-secondary">{plan.code}</small></td>
               <td>{plan.isPublic ? 'Public plan' : 'Custom / Contact Sales'}</td>
               <td>{plan.assignedBusinesses.toLocaleString()}</td>
               <td>{plan.draft ? `Draft v${plan.draft.revision}` : 'Not created'}</td>
-              <td>{plan.pricingConfigured ? 'Configured' : 'Not published'}</td>
+              <td>{plan.published ? `Version ${plan.published.version}` : 'Not published'}</td>
               <td className="text-end">
-                <button className="btn btn-outline-primary btn-sm" type="button"
-                  onClick={() => openDraft(plan)}>Edit Draft</button>
+                <div className="d-flex justify-content-end gap-2 flex-wrap">
+                  <button className="btn btn-outline-primary btn-sm" type="button"
+                    disabled={busy} onClick={() => openDraft(plan)}>Edit Draft</button>
+                  {plan.isPublic && <button className="btn btn-primary btn-sm" type="button"
+                    disabled={busy || !isPublishable(plan)}
+                    title={isPublishable(plan) ? 'Review publication terms'
+                      : 'Complete draft prices/limits or create a new revision first'}
+                    onClick={() => openPublish(plan)}>Publish</button>}
+                </div>
               </td>
             </tr>)}</tbody>
           </table>
@@ -160,6 +228,44 @@ export default function PlatformPlans() {
         </div>}
       </>}
     </section>
+
+    {publishing?.draft && <section className="content-section mt-3" aria-label="Publish plan">
+      <h2>Publish {publishing.name} — Version {(publishing.published?.version ?? 0) + 1}</h2>
+      <p className="small text-secondary">
+        Review draft v{publishing.draft.revision}. Publication freezes these terms as a new
+        catalog version. Existing customers, entitlement rules and subscription charges are not changed.
+      </p>
+      <dl className="detail-list">
+        <div><dt>Currency</dt><dd>{publishing.draft.currencyCode}</dd></div>
+        <div><dt>Monthly</dt><dd>{publishing.draft.currencyCode} {publishing.draft.monthlyPrice}</dd></div>
+        <div><dt>Quarterly</dt><dd>{publishing.draft.currencyCode} {publishing.draft.quarterlyPrice}</dd></div>
+        <div><dt>Yearly</dt><dd>{publishing.draft.currencyCode} {publishing.draft.yearlyPrice}</dd></div>
+        <div><dt>Max locations</dt><dd>{publishing.draft.maxLocations}</dd></div>
+        <div><dt>Max users</dt><dd>{publishing.draft.maxUsers}</dd></div>
+        <div><dt>Max products</dt><dd>{publishing.draft.maxProducts}</dd></div>
+        <div><dt>Previous catalog version</dt>
+          <dd>{publishing.published?.version ?? 'None'}</dd></div>
+      </dl>
+      <form onSubmit={event => void publishPlan(event)} className="mt-3">
+        <label className="form-label" htmlFor="publish-reason">Approval reason</label>
+        <textarea id="publish-reason" className="form-control" rows={3}
+          minLength={10} maxLength={200} required value={publishReason}
+          onChange={event => setPublishReason(event.target.value)}
+          placeholder="Confirm the commercial approval for these published terms" />
+        <p className="small text-secondary mt-2">
+          Publishing is recorded in Security &amp; Audit. No checkout, payment capture,
+          paid activation or module entitlement is enabled by this action.
+        </p>
+        <div className="form-footer">
+          <button type="button" className="btn btn-outline-secondary" disabled={busy}
+            onClick={() => { setPublishing(null); setError('') }}>Cancel</button>
+          <button type="submit" className="btn btn-primary"
+            disabled={busy || publishReason.trim().length < 10}>
+            {busy ? 'Publishing…' : 'Confirm Catalog Publication'}
+          </button>
+        </div>
+      </form>
+    </section>}
 
     {editing && <section className="content-section mt-3" aria-label="Edit plan draft">
       <h2>{editing.name} — Draft Configuration</h2>
