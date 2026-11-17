@@ -51,9 +51,9 @@ export default function PlatformAudit() {
     </div>
     <section className="content-section mb-3">
       <h2>Security Status</h2>
-      <p className="mb-1">Super Admin MFA: <strong>Not configured</strong></p>
+      <p className="mb-1">Super Admin MFA: <strong>Enabled (Authenticator app)</strong></p>
       <p className="small text-secondary mb-0">
-        Multi-factor authentication is required before production launch. This screen is read-only.
+        Authenticator verification is required for platform access. Audit history is read-only.
       </p>
     </section>
     <section className="content-section">

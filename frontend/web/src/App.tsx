@@ -4,8 +4,9 @@ import { api, post, resetCsrf, SessionExpiredError, setSessionExpiredHandler, ty
 import TeamMembers from './TeamMembers'
 import RetailCatalog, { type RetailSection } from './RetailCatalog'
 import PlatformAdmin, { type PlatformSection } from './PlatformAdmin'
+import PlatformMfaSetup from './PlatformMfaSetup'
 
-type Page = 'loading' | 'login' | 'register' | 'businesses' | 'create' | 'retail' | 'platform'
+type Page = 'loading' | 'login' | 'register' | 'mfa-setup' | 'businesses' | 'create' | 'retail' | 'platform'
 type RetailPage = RetailSection | 'overview' | 'team'
 const retailTitles: Record<RetailPage, string> = {
   overview: 'Dashboard', products: 'Products', stock: 'Stock', purchases: 'Purchase Orders',
@@ -52,9 +53,9 @@ export default function App() {
         setUser(me)
         if (me.isPlatformOwner) {
           setBusinesses([])
-          setCanViewPlatform(true)
+          setCanViewPlatform(me.mfaVerified)
           setPlatformSection('overview')
-          setPage('platform')
+          setPage(me.mfaVerified ? 'platform' : 'mfa-setup')
           return
         }
         const list = await api<Business[]>('/businesses')
@@ -139,12 +140,12 @@ export default function App() {
   function onSignedIn(next: User, list: Business[]) {
     resetCsrf()
     setUser(next)
-    setCanViewPlatform(next.isPlatformOwner)
+    setCanViewPlatform(next.isPlatformOwner && next.mfaVerified)
     setBusinesses(next.isPlatformOwner ? [] : list)
     setSessionExpired(false)
     setAuthNotice('')
     setPlatformSection('overview')
-    setPage(next.isPlatformOwner ? 'platform' : 'businesses')
+    setPage(next.isPlatformOwner ? (next.mfaVerified ? 'platform' : 'mfa-setup') : 'businesses')
     setError('')
     if (!next.isPlatformOwner && list.length === 1) void openBusiness(list[0].id)
   }
@@ -155,6 +156,14 @@ export default function App() {
   if (page === 'login' || page === 'register')
     return <AuthPage key={page} mode={page} onChange={setPage} onSignedIn={onSignedIn}
       sessionExpired={sessionExpired} authNotice={authNotice} onRegistered={setAuthNotice} />
+
+  if (page === 'mfa-setup')
+    return <PlatformMfaSetup onFinished={() => {
+      resetCsrf()
+      setUser(null)
+      setCanViewPlatform(false)
+      setPage('login')
+    }} />
 
   return (
     <div className="app-shell">
@@ -388,6 +397,9 @@ function AuthPage({ mode, onChange, onSignedIn, sessionExpired, authNotice, onRe
 }) {
   const [email, setEmail] = useState('')
   const [password, setPassword] = useState('')
+  const [secondFactor, setSecondFactor] = useState(false)
+  const [usingRecovery, setUsingRecovery] = useState(false)
+  const [verificationCode, setVerificationCode] = useState('')
   const [busy, setBusy] = useState(false)
   const [error, setError] = useState('')
   const [registrationEnabled, setRegistrationEnabled] = useState<boolean | null>(null)
@@ -409,7 +421,20 @@ function AuthPage({ mode, onChange, onSignedIn, sessionExpired, authNotice, onRe
         onRegistered('Account created. Sign in to continue.')
         onChange('login')
       } else {
-        await post('/auth/login', { email, password })
+        if (secondFactor) {
+          await post<void>('/auth/mfa/verify', {
+            code: usingRecovery ? null : verificationCode,
+            recoveryCode: usingRecovery ? verificationCode : null
+          })
+        } else {
+          const result = await post<{ requiresTwoFactor: boolean } | undefined>('/auth/login', { email, password })
+          if (result?.requiresTwoFactor) {
+            setPassword('')
+            setVerificationCode('')
+            setSecondFactor(true)
+            return
+          }
+        }
         resetCsrf()
         const me = await api<User>('/auth/me')
         const list = me.isPlatformOwner ? [] : await api<Business[]>('/businesses')
@@ -434,22 +459,42 @@ function AuthPage({ mode, onChange, onSignedIn, sessionExpired, authNotice, onRe
       <main className="auth-content">
         <form className="auth-card" onSubmit={event => void submit(event)}>
           <span className="form-eyebrow">ACCOUNT ACCESS</span>
-          <h2>{mode === 'login' ? 'Sign in' : 'Create your account'}</h2>
-          <p className="form-hint">{mode === 'login' ? 'Access your business workspace.' : 'Start with your email and a secure password.'}</p>
+          <h2>{secondFactor ? 'Verify your sign in' : mode === 'login' ? 'Sign in' : 'Create your account'}</h2>
+          <p className="form-hint">{secondFactor
+            ? 'Enter the code from your authenticator app or a recovery code.'
+            : mode === 'login' ? 'Access your business workspace.' : 'Start with your email and a secure password.'}</p>
           {error && <div className="alert alert-danger" role="alert">{error}</div>}
           {sessionExpired && mode === 'login' && <div className="alert alert-warning" role="status">Your session expired. Please sign in again.</div>}
           {authNotice && mode === 'login' && <div className="alert alert-success" role="status">{authNotice}</div>}
-          <label className="form-label" htmlFor="email">Email address</label>
-          <input className="form-control" id="email" type="email" autoComplete="email" value={email}
-            onChange={event => setEmail(event.target.value)} required autoFocus />
-          <label className="form-label mt-3" htmlFor="password">Password</label>
-          <input className="form-control" id="password" type="password"
-            autoComplete={mode === 'login' ? 'current-password' : 'new-password'} minLength={8}
-            value={password} onChange={event => setPassword(event.target.value)} required />
+          {secondFactor ? <>
+            <label className="form-label" htmlFor="verification-code">
+              {usingRecovery ? 'Recovery code' : '6-digit authenticator code'}
+            </label>
+            <input className="form-control" id="verification-code" type="text"
+              inputMode={usingRecovery ? 'text' : 'numeric'} autoComplete="one-time-code"
+              maxLength={usingRecovery ? 32 : 6} value={verificationCode}
+              onChange={event => setVerificationCode(event.target.value)} required autoFocus />
+            <button type="button" className="btn btn-link btn-sm ps-0 mt-2"
+              onClick={() => { setUsingRecovery(value => !value); setVerificationCode(''); setError('') }}>
+              {usingRecovery ? 'Use authenticator app instead' : 'Use a recovery code'}
+            </button>
+          </> : <>
+            <label className="form-label" htmlFor="email">Email address</label>
+            <input className="form-control" id="email" type="email" autoComplete="email" value={email}
+              onChange={event => setEmail(event.target.value)} required autoFocus />
+            <label className="form-label mt-3" htmlFor="password">Password</label>
+            <input className="form-control" id="password" type="password"
+              autoComplete={mode === 'login' ? 'current-password' : 'new-password'} minLength={8}
+              value={password} onChange={event => setPassword(event.target.value)} required />
+          </>}
           <button className="btn btn-primary w-100 mt-4" type="submit" disabled={busy}>
-            {busy ? 'Please wait…' : mode === 'login' ? 'Sign in' : 'Create account'} <ArrowRight size={16} />
+            {busy ? 'Please wait…' : secondFactor ? 'Verify and sign in' : mode === 'login' ? 'Sign in' : 'Create account'} <ArrowRight size={16} />
           </button>
-          {registrationEnabled ? (
+          {secondFactor && <button type="button" className="btn btn-link w-100"
+            onClick={() => { setSecondFactor(false); setVerificationCode(''); setError('') }}>
+            Back to password sign in
+          </button>}
+          {!secondFactor && registrationEnabled ? (
             <p className="auth-switch">{mode === 'login' ? 'New to Business SaaS?' : 'Already have an account?'}{' '}
               <button type="button" onClick={() => { setError(''); onChange(mode === 'login' ? 'register' : 'login') }}>
                 {mode === 'login' ? 'Create account' : 'Sign in'}

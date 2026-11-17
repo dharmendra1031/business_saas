@@ -2,6 +2,7 @@ export interface User {
   id: number
   email: string
   isPlatformOwner: boolean
+  mfaVerified: boolean
 }
 
 export interface BusinessType {
@@ -112,7 +113,7 @@ export async function api<T>(path: string, options: RequestInit = {}): Promise<T
   }
 
   if (!response.ok) {
-    if (response.status === 401 && path !== '/auth/login' && path !== '/auth/me') {
+    if (response.status === 401 && !['/auth/login', '/auth/me', '/auth/mfa/verify', '/auth/mfa/setup', '/auth/mfa/enable'].includes(path)) {
       resetCsrf()
       sessionExpiredHandler?.()
       throw new SessionExpiredError()
@@ -120,6 +121,8 @@ export async function api<T>(path: string, options: RequestInit = {}): Promise<T
 
     if (response.status === 401 && path === '/auth/login')
       throw new Error('Incorrect email or password.')
+    if (response.status === 401 && path === '/auth/mfa/verify')
+      throw new Error('Invalid code or expired verification session. Please sign in again if needed.')
 
     const body = await response.json().catch(() => ({})) as { message?: string; detail?: string }
     throw new Error(body.message ?? body.detail ??
