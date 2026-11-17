@@ -210,15 +210,31 @@ public sealed class SqlServerTests
         var supplierId = (await supplier.Content.ReadFromJsonAsync<JsonElement>())
             .GetProperty("id").GetInt64();
 
-        var orderResponse = await Post(owner, ordersPath, new
+        var orderRequest = new
         {
             locationId, supplierId,
             requestKey = "sql-purchase-order-20261117",
             lines = new[] { new { productId, quantity = 100m, unitCost = 1m } }
-        });
-        Assert.Equal(HttpStatusCode.Created, orderResponse.StatusCode);
-        var orderId = (await orderResponse.Content.ReadFromJsonAsync<JsonElement>())
-            .GetProperty("id").GetInt64();
+        };
+        var orderResponses = await Task.WhenAll(
+            Post(owner, ordersPath, orderRequest),
+            Post(owner, ordersPath, orderRequest));
+        var orderIds = new List<long>();
+        foreach (var response in orderResponses)
+        {
+            Assert.True(response.StatusCode is HttpStatusCode.Created or HttpStatusCode.OK,
+                await response.Content.ReadAsStringAsync());
+            orderIds.Add((await response.Content.ReadFromJsonAsync<JsonElement>())
+                .GetProperty("id").GetInt64());
+        }
+        Assert.Equal(orderIds[0], orderIds[1]);
+        var orderId = orderIds[0];
+        using (var scope = factory.Services.CreateScope())
+        {
+            var db = scope.ServiceProvider.GetRequiredService<AppDbContext>();
+            Assert.Equal(1, await db.RetailPurchaseOrders.CountAsync(x =>
+                x.BusinessId == ids[0] && x.Id == orderId));
+        }
         var orderPath = ordersPath + "/" + orderId;
         Assert.Equal(HttpStatusCode.OK,
             (await Post(owner, orderPath + "/approve", new { })).StatusCode);
