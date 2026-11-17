@@ -548,6 +548,13 @@ public sealed class BusinessFlowTests
         Assert.Equal(HttpStatusCode.Forbidden,
             (await admin.GetAsync("/api/platform/plans")).StatusCode);
         Assert.Equal(HttpStatusCode.Forbidden,
+            (await Post(admin, "/api/platform/plans/STARTER/draft",
+                new { expectedRevision = 0 })).StatusCode);
+        Assert.Equal(HttpStatusCode.Forbidden,
+            (await Post(admin, $"/api/platform/businesses/{firstId}/subscription-status",
+                new { action = "Suspend", expectedStatus = "Trial", reason = "No MFA access to suspend" }))
+            .StatusCode);
+        Assert.Equal(HttpStatusCode.Forbidden,
             (await Post(admin, $"/api/platform/businesses/{firstId}/extend-trial", new
             {
                 additionalDays = 7, expectedTrialEndsAtUtc = DateTime.UtcNow,
@@ -758,6 +765,133 @@ public sealed class BusinessFlowTests
             .GetProperty("previousValue").GetString());
         Assert.Equal(extendedEnd.ToString("O"), trialAudit.GetProperty("items")[0]
             .GetProperty("newValue").GetString());
+
+        // Plan configuration is a revisioned draft only, never applied to current entitlements.
+        var draftRequest = new
+        {
+            expectedRevision = 0,
+            currencyCode = "INR",
+            monthlyPrice = 799.50m,
+            quarterlyPrice = 2099m,
+            yearlyPrice = 7999m,
+            maxLocations = 2,
+            maxUsers = 5,
+            maxProducts = 1000,
+            reason = "Draft commercial terms for internal review"
+        };
+        Assert.Equal(HttpStatusCode.Forbidden,
+            (await Post(outsider, "/api/platform/plans/STARTER/draft", draftRequest)).StatusCode);
+        Assert.Equal(HttpStatusCode.NotFound,
+            (await Post(admin, "/api/platform/plans/UNKNOWN/draft", draftRequest)).StatusCode);
+        Assert.Equal(HttpStatusCode.BadRequest,
+            (await Post(admin, "/api/platform/plans/STARTER/draft", new
+            {
+                expectedRevision = 0, currencyCode = "INR", monthlyPrice = 1.234m,
+                reason = "Invalid precision must be rejected"
+            })).StatusCode);
+        Assert.Equal(HttpStatusCode.BadRequest,
+            (await Post(admin, "/api/platform/plans/STARTER/draft", new
+            {
+                expectedRevision = 0, monthlyPrice = 199m,
+                reason = "Currency missing from draft pricing"
+            })).StatusCode);
+
+        var draftSave = await Post(admin, "/api/platform/plans/STARTER/draft", draftRequest);
+        Assert.Equal(HttpStatusCode.OK, draftSave.StatusCode);
+        var savedDraft = await draftSave.Content.ReadFromJsonAsync<JsonElement>();
+        Assert.Equal(1, savedDraft.GetProperty("revision").GetInt32());
+        Assert.True(savedDraft.GetProperty("auditId").GetInt64() > 0);
+        Assert.Equal(HttpStatusCode.Conflict,
+            (await Post(admin, "/api/platform/plans/STARTER/draft", draftRequest)).StatusCode);
+
+        var configuredPlans = await admin.GetFromJsonAsync<JsonElement>("/api/platform/plans");
+        Assert.Equal(1, configuredPlans.GetProperty("items")[0]
+            .GetProperty("draft").GetProperty("revision").GetInt32());
+        Assert.Equal(799.50m, configuredPlans.GetProperty("items")[0]
+            .GetProperty("draft").GetProperty("monthlyPrice").GetDecimal());
+        Assert.False(configuredPlans.GetProperty("items")[0]
+            .GetProperty("pricingConfigured").GetBoolean());
+
+        var revised = await Post(admin, "/api/platform/plans/STARTER/draft", new
+        {
+            expectedRevision = 1, currencyCode = "INR", monthlyPrice = 899.50m,
+            quarterlyPrice = 2199m, yearlyPrice = 8399m,
+            maxLocations = 3, maxUsers = 6, maxProducts = 1500,
+            reason = "Revise unpublished plan after review"
+        });
+        Assert.Equal(HttpStatusCode.OK, revised.StatusCode);
+        Assert.Equal(2, (await revised.Content.ReadFromJsonAsync<JsonElement>())
+            .GetProperty("revision").GetInt32());
+        using (var scope = factory.Services.CreateScope())
+        {
+            var db = scope.ServiceProvider.GetRequiredService<AppDbContext>();
+            Assert.All(await db.BusinessSubscriptions.ToListAsync(),
+                subscription => Assert.Equal("STARTER", subscription.PlanCode));
+        }
+
+        // Suspending a subscription blocks operations, replay is rejected and reactivation
+        // restores its prior state without extending its original trial.
+        var statusRequest = new
+        {
+            action = "Suspend", expectedStatus = "Trial",
+            reason = "Customer requested temporary platform access suspension"
+        };
+        Assert.Equal(HttpStatusCode.Forbidden,
+            (await Post(outsider, $"/api/platform/businesses/{firstId}/subscription-status",
+                statusRequest)).StatusCode);
+        Assert.Equal(HttpStatusCode.BadRequest,
+            (await Post(admin, $"/api/platform/businesses/{firstId}/subscription-status", new
+            {
+                action = "Suspend", expectedStatus = "Trial", reason = "short"
+            })).StatusCode);
+        var suspended = await Post(admin,
+            $"/api/platform/businesses/{firstId}/subscription-status", statusRequest);
+        Assert.Equal(HttpStatusCode.OK, suspended.StatusCode);
+        Assert.Equal("Suspended",
+            (await suspended.Content.ReadFromJsonAsync<JsonElement>())
+            .GetProperty("status").GetString());
+        Assert.Equal(HttpStatusCode.Conflict,
+            (await Post(admin, $"/api/platform/businesses/{firstId}/subscription-status",
+                statusRequest)).StatusCode);
+
+        var blocked = await owner.GetFromJsonAsync<JsonElement>(
+            $"/api/businesses/{firstId}/dashboard");
+        Assert.False(blocked.GetProperty("canOperate").GetBoolean());
+        Assert.Equal("Suspended", blocked.GetProperty("accessStatus").GetString());
+
+        var reactivated = await Post(admin,
+            $"/api/platform/businesses/{firstId}/subscription-status", new
+            {
+                action = "Reactivate", expectedStatus = "Suspended",
+                reason = "Customer confirmed they are ready to resume their trial"
+            });
+        Assert.Equal(HttpStatusCode.OK, reactivated.StatusCode);
+        Assert.Equal("Trial",
+            (await reactivated.Content.ReadFromJsonAsync<JsonElement>())
+            .GetProperty("status").GetString());
+        var resumed = await owner.GetFromJsonAsync<JsonElement>(
+            $"/api/businesses/{firstId}/dashboard");
+        Assert.True(resumed.GetProperty("canOperate").GetBoolean());
+        Assert.Equal(extendedEnd,
+            resumed.GetProperty("subscription").GetProperty("trialEndsAtUtc").GetDateTime());
+        Assert.Equal(HttpStatusCode.Conflict,
+            (await Post(admin, $"/api/platform/businesses/{firstId}/subscription-status", new
+            {
+                action = "Reactivate", expectedStatus = "Suspended",
+                reason = "Replay attempt must not reactivate twice"
+            })).StatusCode);
+
+        var lastAudit = await admin.GetFromJsonAsync<JsonElement>("/api/platform/audit");
+        Assert.Equal("Subscription.Reactivated", lastAudit.GetProperty("items")[0]
+            .GetProperty("action").GetString());
+        Assert.Equal("Suspended", lastAudit.GetProperty("items")[0]
+            .GetProperty("previousValue").GetString());
+        Assert.Equal("Trial", lastAudit.GetProperty("items")[0]
+            .GetProperty("newValue").GetString());
+        Assert.Equal("Subscription.Suspended", lastAudit.GetProperty("items")[1]
+            .GetProperty("action").GetString());
+        Assert.Equal("Plan.DraftSaved", lastAudit.GetProperty("items")[2]
+            .GetProperty("action").GetString());
 
         // An active paid subscription must never accept a trial extension.
         using (var scope = factory.Services.CreateScope())

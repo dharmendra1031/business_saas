@@ -194,6 +194,7 @@ public static class BusinessEndpoints
                 "Active" => "Active",
                 "Trial" when subscription.TrialEndsAtUtc > DateTime.UtcNow => "Trial",
                 "Trial" => "TrialExpired",
+                "Suspended" => "Suspended",
                 _ => "Inactive"
             };
             var canOperate = accessStatus is "Active" or "Trial";
