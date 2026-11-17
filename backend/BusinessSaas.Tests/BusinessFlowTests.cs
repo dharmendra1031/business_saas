@@ -859,6 +859,15 @@ public sealed class BusinessFlowTests
         Assert.False(blocked.GetProperty("canOperate").GetBoolean());
         Assert.Equal("Suspended", blocked.GetProperty("accessStatus").GetString());
 
+        Assert.Equal(HttpStatusCode.Forbidden,
+            (await Post(owner, $"/api/businesses/{firstId}/staff", new
+            {
+                email = "directory-outsider@example.test", roleCode = "Cashier"
+            })).StatusCode);
+        Assert.Equal(HttpStatusCode.Forbidden,
+            (await owner.DeleteAsync($"/api/businesses/{firstId}/staff/{platformOwnerId}"))
+            .StatusCode);
+
         var reactivated = await Post(admin,
             $"/api/platform/businesses/{firstId}/subscription-status", new
             {
