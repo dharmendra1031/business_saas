@@ -26,6 +26,7 @@ interface BusinessPage {
 }
 
 interface BusinessDetails extends BusinessRow {
+  statusBeforeSuspension: string | null
   currencyCode: string
   timeZoneId: string
   createdAtUtc: string
@@ -51,6 +52,9 @@ function PlatformBusinesses({ selectedBusinessId }: { selectedBusinessId: number
   const [extensionDays, setExtensionDays] = useState(7)
   const [extensionReason, setExtensionReason] = useState('')
   const [extensionBusy, setExtensionBusy] = useState(false)
+  const [statusAction, setStatusAction] = useState<'Suspend' | 'Reactivate' | null>(null)
+  const [statusReason, setStatusReason] = useState('')
+  const [statusBusy, setStatusBusy] = useState(false)
   const [notice, setNotice] = useState('')
 
   useEffect(() => {
@@ -81,6 +85,7 @@ function PlatformBusinesses({ selectedBusinessId }: { selectedBusinessId: number
     setError('')
     setNotice('')
     setExtending(false)
+    setStatusAction(null)
     setDetailLoading(true)
     try {
       const result = await api<BusinessDetails>(`/platform/businesses/${id}`)
@@ -119,6 +124,38 @@ function PlatformBusinesses({ selectedBusinessId }: { selectedBusinessId: number
     }
   }
 
+  async function changeSubscriptionStatus(event: FormEvent) {
+    event.preventDefault()
+    if (!details || !statusAction || !details.subscriptionStatus) return
+    setStatusBusy(true)
+    setError('')
+    try {
+      const result = await post<{ status: string; auditId: number }>(
+        `/platform/businesses/${details.id}/subscription-status`, {
+          action: statusAction,
+          expectedStatus: details.subscriptionStatus,
+          reason: statusReason.trim()
+        })
+      setDetails(current => current && current.id === details.id
+        ? {
+            ...current,
+            subscriptionStatus: result.status,
+            statusBeforeSuspension: statusAction === 'Suspend'
+              ? current.subscriptionStatus : null
+          } : current)
+      setStatusAction(null)
+      setStatusReason('')
+      setExtending(false)
+      setNotice(`Subscription ${result.status.toLowerCase()}. Audit event #${result.auditId} recorded.`)
+    } catch (cause) {
+      if (!(cause instanceof SessionExpiredError))
+        setError(cause instanceof Error ? cause.message :
+          'Unable to change subscription status. Reload and try again.')
+    } finally {
+      setStatusBusy(false)
+    }
+  }
+
   useEffect(() => {
     if (selectedBusinessId !== null) void openBusiness(selectedBusinessId)
   }, [selectedBusinessId])
@@ -132,7 +169,7 @@ function PlatformBusinesses({ selectedBusinessId }: { selectedBusinessId: number
               All businesses
             </button>
             <h1>{details.name}</h1>
-            <p>Read-only platform business summary</p>
+            <p>Platform subscription and business account controls. Shop operations remain private.</p>
           </div>
         </div>
         <section className="content-section" aria-label="Business details">
@@ -145,6 +182,8 @@ function PlatformBusinesses({ selectedBusinessId }: { selectedBusinessId: number
             <div><dt>Timezone</dt><dd>{details.timeZoneId}</dd></div>
             <div><dt>Plan</dt><dd>{details.planCode ?? 'Not assigned'}</dd></div>
             <div><dt>Subscription</dt><dd>{statusLabel(details.subscriptionStatus, details.trialEndsAtUtc)}</dd></div>
+            {details.subscriptionStatus === 'Suspended' && details.statusBeforeSuspension &&
+              <div><dt>Previous status</dt><dd>{details.statusBeforeSuspension}</dd></div>}
             {details.trialEndsAtUtc && <div><dt>Trial end</dt>
               <dd>{new Date(details.trialEndsAtUtc).toLocaleDateString()}</dd></div>}
           </dl>
@@ -203,8 +242,58 @@ function PlatformBusinesses({ selectedBusinessId }: { selectedBusinessId: number
             </form>
           </section>}
         </>}
+        {details.subscriptionStatus && ['Trial', 'Active', 'Suspended']
+          .includes(details.subscriptionStatus) && <>
+          <div className="d-flex gap-2 flex-wrap mt-3">
+            <button type="button" className={details.subscriptionStatus === 'Suspended'
+              ? 'btn btn-primary btn-sm' : 'btn btn-outline-danger btn-sm'}
+              disabled={statusBusy || extensionBusy}
+              onClick={() => {
+                setStatusAction(details.subscriptionStatus === 'Suspended'
+                  ? 'Reactivate' : 'Suspend')
+                setStatusReason('')
+                setExtending(false)
+                setError('')
+              }}>
+              {details.subscriptionStatus === 'Suspended' ? 'Reactivate Subscription' : 'Suspend Subscription'}
+            </button>
+            <button type="button" className="btn btn-outline-secondary btn-sm"
+              disabled={statusBusy || extensionBusy} onClick={() => void openBusiness(details.id)}>
+              Reload Details
+            </button>
+          </div>
+          {statusAction && <section className="content-section mt-3" aria-label="Confirm subscription status change">
+            <h2>{statusAction} Subscription — {details.name}</h2>
+            <p className="small text-secondary">
+              {statusAction === 'Suspend'
+                ? 'Suspension blocks business operations without deleting any business data.'
+                : `Reactivation restores the previous ${details.statusBeforeSuspension ?? 'subscription'} status. Expired trials remain expired.`}
+              {' '}Current status: {details.subscriptionStatus}. The action is audited and cannot be undone without a separate confirmed action.
+            </p>
+            <form onSubmit={event => void changeSubscriptionStatus(event)}>
+              <label className="form-label" htmlFor="subscription-action-reason">
+                Reason for {statusAction.toLowerCase()}
+              </label>
+              <textarea id="subscription-action-reason" className="form-control"
+                rows={3} minLength={10} maxLength={200} required
+                value={statusReason}
+                onChange={event => setStatusReason(event.target.value)}
+                placeholder="Explain the reason for this subscription change" />
+              {error && <div className="alert alert-danger mt-3" role="alert">{error}</div>}
+              <div className="form-footer">
+                <button type="button" className="btn btn-outline-secondary"
+                  disabled={statusBusy} onClick={() => { setStatusAction(null); setError('') }}>Cancel</button>
+                <button type="submit" className={statusAction === 'Suspend'
+                  ? 'btn btn-danger' : 'btn btn-primary'}
+                  disabled={statusBusy || statusReason.trim().length < 10}>
+                  {statusBusy ? 'Saving…' : `Confirm ${statusAction}`}
+                </button>
+              </div>
+            </form>
+          </section>}
+        </>}
         <p className="text-secondary small mt-3">
-          Subscription plan editing and business-type changes are not available yet.
+          Plan assignment, payment activation and business-type changes are not available yet.
         </p>
       </>
     )
