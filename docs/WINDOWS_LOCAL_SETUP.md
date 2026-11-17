@@ -23,7 +23,7 @@ This guide starts the existing API and web app against a new **disposable test d
 
    ```powershell
    cd frontend/web
-   npm install
+   npm ci
    npm run dev
    ```
 
@@ -33,10 +33,11 @@ This guide starts the existing API and web app against a new **disposable test d
 
    ```powershell
    (Invoke-WebRequest http://localhost:5080/api/health -UseBasicParsing).StatusCode
+   (Invoke-WebRequest http://localhost:5080/api/ready -UseBasicParsing).StatusCode
    (Invoke-WebRequest http://127.0.0.1:5173/api/health -UseBasicParsing).StatusCode
    ```
 
-   Both should return `200`. Register a development account, sign in, create a General Retail business, and open its dashboard. Local development has no seeded administrator password. Platform permission provisioning is a separate trusted-operator action; a normal business owner cannot grant it to themselves.
+   All three should return `200`. `/api/health` checks the running API; `/api/ready` also requires a reachable database and, for SQL Server, no pending EF migrations. Register a development account, sign in, create a General Retail business, and open its dashboard. Local development has no seeded administrator password. Platform permission provisioning is a separate trusted-operator action; a normal business owner cannot grant it to themselves.
 
 5. Stop each server with `Ctrl+C`. The LocalDB database persists for the next run. For another clean test, use a **different new database name** in the connection string. Never delete an existing database just to repeat this walkthrough.
 

@@ -1,6 +1,6 @@
 # Business SaaS
 
-**Status:** Phase 0 complete; P1 development slice committed. Build/tests and production readiness require independent verification.
+**Status:** Development foundation with Retail catalog, stock, purchase orders and receiving. Not production-ready; POS billing and production release checks are pending.
 
 A self-service multi-business SaaS platform. A person registers once, creates one or more independently managed businesses, selects a published business template and plan, configures a first location and begins operations in the workflow appropriate to that business.
 
@@ -24,6 +24,7 @@ For a fresh Windows development run with a separate test database, use the [loca
 | [CBK UI Reference](docs/CBK_UI_REFERENCE.md) | Compact blue/white UI patterns from read-only CBK source |
 | [Engineering Guardrails](docs/ENGINEERING_GUARDRAILS.md) | Financial, tenancy, security, privacy and release safety |
 | [P1 Implementation](docs/P1_IMPLEMENTATION.md) | Run guide, committed endpoints, tests and launch blockers |
+| [Production Database Safety](docs/PRODUCTION_DATABASE_SAFETY.md) | Backup, tested restore, migrations and readiness checks before deployment |
 
 ### Vertical-specific reference documents
 
@@ -56,4 +57,4 @@ The long-term goal of **1,000+ business categories** is a product coverage targe
 
 ## Work status
 
-The repository now contains a **development-only P1 foundation slice**: one API, one React app, numeric Identity IDs, Register/Login, Create Business, membership-scoped switching and Retail Dashboard shell. [Run instructions and limitations](docs/P1_IMPLEMENTATION.md). Retail transactions, verified email delivery, subscription payments and production security/scale testing remain pending. The InitialCreate EF migration is committed and SQL Server 2022 integration tests are passing; signup is intentionally disabled outside Development until verification is implemented.
+The development branch includes authentication, business/trial setup, tenant-scoped Retail masters, stock ledger and adjustment review, purchase orders and partial goods receiving. The CI covers backend, SQL Server migration/integration and a locked frontend build. **POS billing, returns, printing, reports, verified email signup, subscription payments, restore drills and production-scale security/load testing remain pending.** Production signup is disabled until email verification is implemented.
