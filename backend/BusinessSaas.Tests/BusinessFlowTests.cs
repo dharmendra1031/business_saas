@@ -1,4 +1,6 @@
+using System.Buffers.Binary;
 using System.Net;
+using System.Security.Cryptography;
 using System.Net.Http.Json;
 using System.Text.Json;
 using BusinessSaas.Api.Data;
@@ -526,6 +528,17 @@ public sealed class BusinessFlowTests
 
         access = await admin.GetFromJsonAsync<JsonElement>("/api/platform/access");
         Assert.True(access.GetProperty("isPlatformOwner").GetBoolean());
+        Assert.False(access.GetProperty("mfaVerified").GetBoolean());
+        Assert.Equal(HttpStatusCode.Forbidden,
+            (await admin.GetAsync("/api/platform/overview")).StatusCode);
+        Assert.Equal(HttpStatusCode.Forbidden,
+            (await admin.GetAsync("/api/platform/businesses")).StatusCode);
+        Assert.Equal(HttpStatusCode.Forbidden,
+            (await admin.GetAsync("/api/platform/audit")).StatusCode);
+
+        var ownerMfa = await EnableOwnerMfaAndSignIn(admin, "directory-admin@example.test");
+        access = await admin.GetFromJsonAsync<JsonElement>("/api/platform/access");
+        Assert.True(access.GetProperty("mfaVerified").GetBoolean());
         Assert.Equal("SuperAdmin", access.GetProperty("roleCode").GetString());
         Assert.True(access.GetProperty("canViewBusinesses").GetBoolean());
         Assert.True(access.GetProperty("canManageLicenses").GetBoolean());
@@ -557,17 +570,13 @@ public sealed class BusinessFlowTests
         Assert.Equal(HttpStatusCode.Forbidden,
             (await outsider.GetAsync("/api/platform/audit")).StatusCode);
 
-        // A configured owner sign-in is recorded; earlier ordinary logins are not.
-        Assert.Equal(HttpStatusCode.NoContent,
-            (await Post(admin, "/api/auth/login", new
-            {
-                email = "directory-admin@example.test",
-                password = "SecurePassword123!"
-            })).StatusCode);
-
+        // Only the verified MFA login grants platform access and produces a sign-in event.
         var audit = await admin.GetFromJsonAsync<JsonElement>("/api/platform/audit");
-        Assert.Equal(1, audit.GetProperty("total").GetInt32());
-        Assert.Single(audit.GetProperty("items").EnumerateArray());
+        Assert.Equal(2, audit.GetProperty("total").GetInt32());
+        Assert.Equal(2, audit.GetProperty("items").GetArrayLength());
+        Assert.Equal("PlatformOwner.MfaEnabled", audit.GetProperty("items")[1]
+            .GetProperty("action").GetString());
+        Assert.Equal(8, ownerMfa.recoveryCodes.Length);
         Assert.True(audit.GetProperty("items")[0].GetProperty("id").GetInt64() > 0);
         Assert.Equal(platformOwnerId, audit.GetProperty("items")[0]
             .GetProperty("actorUserId").GetInt64());
@@ -682,6 +691,7 @@ public sealed class BusinessFlowTests
                 = userId.ToString();
         }
 
+        await EnableOwnerMfaAndSignIn(owner, "license-admin@example.test");
         var granted = await owner.GetFromJsonAsync<JsonElement>("/api/platform/license-access");
         Assert.True(granted.GetProperty("canManageLicenses").GetBoolean());
 
@@ -796,6 +806,87 @@ public sealed class BusinessFlowTests
             password = "SecurePassword123!"
         });
         Assert.Equal(HttpStatusCode.BadRequest, response.StatusCode);
+    }
+
+    private static async Task<(string secret, string[] recoveryCodes)> EnableOwnerMfaAndSignIn(
+        HttpClient client, string email)
+    {
+        var start = await Post(client, "/api/auth/mfa/setup", new
+        {
+            password = "SecurePassword123!"
+        });
+        Assert.Equal(HttpStatusCode.OK, start.StatusCode);
+        var secret = (await start.Content.ReadFromJsonAsync<JsonElement>())
+            .GetProperty("secret").GetString()!;
+
+        Assert.Equal(HttpStatusCode.BadRequest,
+            (await Post(client, "/api/auth/mfa/enable", new
+            {
+                password = "SecurePassword123!", code = "0000000"
+            })).StatusCode);
+
+        var enabled = await Post(client, "/api/auth/mfa/enable", new
+        {
+            password = "SecurePassword123!", code = AuthenticatorCode(secret)
+        });
+        Assert.Equal(HttpStatusCode.OK, enabled.StatusCode);
+        var codes = (await enabled.Content.ReadFromJsonAsync<JsonElement>())
+            .GetProperty("recoveryCodes").EnumerateArray()
+            .Select(x => x.GetString()!).ToArray();
+        Assert.Equal(8, codes.Length);
+
+        var passwordLogin = await Post(client, "/api/auth/login", new
+        {
+            email, password = "SecurePassword123!"
+        });
+        Assert.Equal(HttpStatusCode.OK, passwordLogin.StatusCode);
+        Assert.True((await passwordLogin.Content.ReadFromJsonAsync<JsonElement>())
+            .GetProperty("requiresTwoFactor").GetBoolean());
+        Assert.Equal(HttpStatusCode.Unauthorized,
+            (await client.GetAsync("/api/auth/me")).StatusCode);
+        Assert.Equal(HttpStatusCode.Unauthorized,
+            (await client.GetAsync("/api/platform/businesses")).StatusCode);
+
+        Assert.Equal(HttpStatusCode.Unauthorized,
+            (await Post(client, "/api/auth/mfa/verify", new { code = "0000000" })).StatusCode);
+        Assert.Equal(HttpStatusCode.NoContent,
+            (await Post(client, "/api/auth/mfa/verify", new
+            {
+                code = AuthenticatorCode(secret)
+            })).StatusCode);
+        var me = await client.GetFromJsonAsync<JsonElement>("/api/auth/me");
+        Assert.True(me.GetProperty("mfaVerified").GetBoolean());
+        return (secret, codes);
+    }
+
+    // Compute a real RFC 6238 code so the integration test verifies the Identity token provider.
+    private static string AuthenticatorCode(string secret)
+    {
+        const string alphabet = "ABCDEFGHIJKLMNOPQRSTUVWXYZ234567";
+        var bytes = new List<byte>();
+        var buffer = 0;
+        var bits = 0;
+        foreach (var character in secret.ToUpperInvariant())
+        {
+            var value = alphabet.IndexOf(character);
+            if (value < 0) continue;
+            buffer = (buffer << 5) | value;
+            bits += 5;
+            if (bits < 8) continue;
+            bits -= 8;
+            bytes.Add((byte)(buffer >> bits));
+            buffer &= (1 << bits) - 1;
+        }
+
+        var counter = new byte[8];
+        BinaryPrimitives.WriteInt64BigEndian(counter, DateTimeOffset.UtcNow.ToUnixTimeSeconds() / 30);
+        var digest = HMACSHA1.HashData(bytes.ToArray(), counter);
+        var offset = digest[^1] & 0x0f;
+        var value = ((digest[offset] & 0x7f) << 24) |
+                    (digest[offset + 1] << 16) |
+                    (digest[offset + 2] << 8) |
+                    digest[offset + 3];
+        return (value % 1000000).ToString("D6");
     }
 
     private static async Task RegisterAndLogin(HttpClient client, string email)
