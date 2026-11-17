@@ -125,3 +125,18 @@ These are **design candidates**, not a migration request. Review duplicate entit
 - **SP-004:** Plan inclusions, prices and quotas are data-driven through Platform Super Admin, not hardcoded.
 - **SP-005:** Module visibility is not authorization; API, branch and tenant checks are mandatory.
 - **SP-006:** Any private Kaifac/CBK source remains read-only and is not copied to this public repository.
+
+## 9. Implemented Super Admin draft and suspension controls (17 Nov 2026)
+
+This section describes the current implemented slice; the commercial proposal above is not a declaration that every feature is live.
+
+- The **Subscription Plans** page lists five approved plan codes: STARTER, GROWTH, PROFESSIONAL, BUSINESS and ENTERPRISE, with real business-assignment counts. Enterprise remains custom / contact sales.
+- A verified Super Admin can save **draft** currency, monthly/quarterly/yearly prices, maximum locations, users and products. Blank fields remain unconfigured; numbers are not approved commercial rates. A numeric auto-increment `SubscriptionPlanDraft.Id` stores each plan's current draft and integer `Revision` prevents stale saves. Each revision requires a written reason and produces a numeric platform audit event, with a summary of old/new draft terms.
+- **Drafts do not publish, activate, charge or enforce prices, quotas or modules.** Existing `BusinessSubscription.PlanCode` records and contractual entitlements are not modified by draft changes. Do not advertise drafts as active pricing.
+- Only MFA-verified Super Admin may **Suspend** a Trial/Active subscription or **Reactivate** a Suspended subscription. Each transition requires the expected current status and a 10–200 character reason. A conditional SQL update and audit event are committed together. Stale or replayed status-change requests return a conflict.
+- `StatusBeforeSuspension` preserves the precise previous state. Reactivating a trial does **not** extend its expiry; an already expired trial remains expired. Read-only views remain scoped and available, while restricted writes, including shop staff-management writes, are denied during suspension.
+- Direct upgrade/activation of Trial to Active is **not implemented** without the future verified payment/subscription workflow. No subscription can be fabricated as paid through these controls.
+- SQL migration: `20261117200000_AddPlanDraftsAndSubscriptionSuspension`. Review/apply it against the intended SQL Server after an appropriate backup; do not claim that a local production database has already migrated.
+- Regression tests cover MFA/tenant access, valid and invalid draft values, revision conflict, unchanged existing PlanCode, suspension/replay/reactivation, owner write denial and SQL migrations.
+
+**Still pending:** approved public rates; genuine published immutable plan versions, module/usage enforcement, subscription payment ledger, invoices, renewals, paid activation and grace/dunning policies; actual browser visual/interaction comparisons against approved screenshots.
