@@ -1,10 +1,11 @@
 import { useEffect, useState, type FormEvent } from 'react'
-import { api, SessionExpiredError } from './api'
+import { api, post, SessionExpiredError } from './api'
 import PlatformOverview from './PlatformOverview'
 import PlatformCustomers from './PlatformCustomers'
 import PlatformAudit from './PlatformAudit'
+import PlatformPlans from './PlatformPlans'
 
-export type PlatformSection = 'overview' | 'customers' | 'businesses' | 'audit'
+export type PlatformSection = 'overview' | 'customers' | 'businesses' | 'plans' | 'audit'
 
 interface BusinessRow {
   id: number
@@ -46,6 +47,11 @@ function PlatformBusinesses({ selectedBusinessId }: { selectedBusinessId: number
   const [error, setError] = useState('')
   const [loading, setLoading] = useState(true)
   const [detailLoading, setDetailLoading] = useState(false)
+  const [extending, setExtending] = useState(false)
+  const [extensionDays, setExtensionDays] = useState(7)
+  const [extensionReason, setExtensionReason] = useState('')
+  const [extensionBusy, setExtensionBusy] = useState(false)
+  const [notice, setNotice] = useState('')
 
   useEffect(() => {
     let active = true
@@ -73,6 +79,8 @@ function PlatformBusinesses({ selectedBusinessId }: { selectedBusinessId: number
 
   async function openBusiness(id: number) {
     setError('')
+    setNotice('')
+    setExtending(false)
     setDetailLoading(true)
     try {
       const result = await api<BusinessDetails>(`/platform/businesses/${id}`)
@@ -82,6 +90,32 @@ function PlatformBusinesses({ selectedBusinessId }: { selectedBusinessId: number
         setError('Unable to open business details. Please retry.')
     } finally {
       setDetailLoading(false)
+    }
+  }
+
+  async function extendTrial(event: FormEvent) {
+    event.preventDefault()
+    if (!details?.trialEndsAtUtc || details.subscriptionStatus !== 'Trial') return
+    setError('')
+    setExtensionBusy(true)
+    try {
+      const result = await post<{ trialEndsAtUtc: string; auditId: number }>(
+        `/platform/businesses/${details.id}/extend-trial`, {
+          additionalDays: extensionDays,
+          expectedTrialEndsAtUtc: details.trialEndsAtUtc,
+          reason: extensionReason.trim()
+        })
+      setDetails(current => current && current.id === details.id
+        ? { ...current, trialEndsAtUtc: result.trialEndsAtUtc } : current)
+      setExtending(false)
+      setExtensionReason('')
+      setNotice(`Trial extended successfully. Audit event #${result.auditId} recorded.`)
+    } catch (cause) {
+      if (!(cause instanceof SessionExpiredError)) {
+        setError(cause instanceof Error ? cause.message : 'Unable to extend trial.')
+      }
+    } finally {
+      setExtensionBusy(false)
     }
   }
 
@@ -115,8 +149,62 @@ function PlatformBusinesses({ selectedBusinessId }: { selectedBusinessId: number
               <dd>{new Date(details.trialEndsAtUtc).toLocaleDateString()}</dd></div>}
           </dl>
         </section>
+        {notice && <div className="alert alert-success mt-3" role="status">{notice}</div>}
+        {details.subscriptionStatus === 'Trial' && details.trialEndsAtUtc && <>
+          <div className="mt-3 mb-2">
+            <button type="button" className="btn btn-primary btn-sm"
+              disabled={extensionBusy} onClick={() => { setExtending(true); setError('') }}>
+              Extend Trial
+            </button>
+          </div>
+          {extending && <section className="content-section mt-3" aria-label="Extend trial">
+            <h2>Extend Trial — {details.name}</h2>
+            <p className="text-secondary small">
+              Current expiry: {new Date(details.trialEndsAtUtc).toLocaleString()}.
+              This change affects only this business and is recorded in the platform audit log.
+            </p>
+            <form onSubmit={event => void extendTrial(event)}>
+              <div className="row g-3">
+                <div className="col-12 col-md-4">
+                  <label className="form-label" htmlFor="trial-extension-days">Additional days</label>
+                  <input id="trial-extension-days" className="form-control" type="number"
+                    min={1} max={30} required value={extensionDays}
+                    onChange={event => setExtensionDays(Number(event.target.value))} />
+                </div>
+                <div className="col-12">
+                  <label className="form-label" htmlFor="trial-extension-reason">
+                    Reason for extension
+                  </label>
+                  <textarea id="trial-extension-reason" className="form-control"
+                    rows={3} minLength={10} maxLength={200} required
+                    value={extensionReason}
+                    onChange={event => setExtensionReason(event.target.value)}
+                    placeholder="Explain why this business needs more trial time" />
+                </div>
+              </div>
+              <p className="small text-secondary mt-3">
+                Estimated new expiry: {new Date(
+                  Math.max(Date.now(), new Date(details.trialEndsAtUtc).getTime()) +
+                  extensionDays * 86400000).toLocaleString()}.
+                Maximum permitted expiry is 90 days from now.
+              </p>
+              {error && <div className="alert alert-danger" role="alert">{error}</div>}
+              <div className="form-footer">
+                <button type="button" className="btn btn-outline-secondary"
+                  disabled={extensionBusy} onClick={() => { setExtending(false); setError('') }}>
+                  Cancel
+                </button>
+                <button type="submit" className="btn btn-primary"
+                  disabled={extensionBusy || extensionDays < 1 || extensionDays > 30 ||
+                    extensionReason.trim().length < 10}>
+                  {extensionBusy ? 'Saving…' : 'Confirm Trial Extension'}
+                </button>
+              </div>
+            </form>
+          </section>}
+        </>}
         <p className="text-secondary small mt-3">
-          Plan editing, trial extensions and business-type changes are not available yet.
+          Subscription plan editing and business-type changes are not available yet.
         </p>
       </>
     )
@@ -203,6 +291,7 @@ export default function PlatformAdmin({ section, selectedBusinessId, onViewBusin
 }) {
   if (section === 'overview') return <PlatformOverview onViewBusiness={onViewBusiness} />
   if (section === 'customers') return <PlatformCustomers />
+  if (section === 'plans') return <PlatformPlans />
   if (section === 'audit') return <PlatformAudit />
   return <PlatformBusinesses selectedBusinessId={selectedBusinessId} />
 }

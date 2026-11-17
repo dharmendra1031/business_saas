@@ -1,5 +1,5 @@
 import { useEffect, useRef, useState, type FormEvent } from 'react'
-import { ArrowLeft, ArrowRight, Boxes, Building2, CheckCircle2, LayoutDashboard, LogOut, Menu, Package, Plus, ShieldCheck, ShoppingCart, Store, Tags, Truck, UserRound, Users } from 'lucide-react'
+import { ArrowLeft, ArrowRight, Boxes, Building2, CheckCircle2, BadgeCheck, LayoutDashboard, LogOut, Menu, Package, Plus, ShieldCheck, ShoppingCart, Store, Tags, Truck, UserRound, Users } from 'lucide-react'
 import { api, post, resetCsrf, SessionExpiredError, setSessionExpiredHandler, type Business, type BusinessMarket, type BusinessType, type RetailDashboard, type User } from './api'
 import TeamMembers from './TeamMembers'
 import RetailCatalog, { type RetailSection } from './RetailCatalog'
@@ -232,6 +232,7 @@ export default function App() {
             ['overview', 'Overview', LayoutDashboard],
             ['customers', 'Customers', Users],
             ['businesses', 'Businesses', Building2],
+            ['plans', 'Subscription Plans', BadgeCheck],
             ['audit', 'Security & Audit', ShieldCheck]
           ] as const).map(([section, label, Icon]) => <button
             key={section} ref={section === 'overview' && user?.isPlatformOwner ? businessNav : undefined}

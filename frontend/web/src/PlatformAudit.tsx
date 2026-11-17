@@ -8,6 +8,8 @@ interface AuditEvent {
   targetType: string
   targetId: number | null
   reason: string | null
+  previousValue: string | null
+  newValue: string | null
   createdAtUtc: string
 }
 
@@ -72,6 +74,10 @@ export default function PlatformAudit() {
                 <td>{new Date(event.createdAtUtc).toLocaleString()}</td>
                 <td>{event.action}<small className="d-block text-secondary">
                   {event.reason ?? ''}
+                  {event.previousValue && event.newValue &&
+                    <span className="d-block mt-1">
+                      {new Date(event.previousValue).toLocaleString()} → {new Date(event.newValue).toLocaleString()}
+                    </span>}
                 </small></td>
                 <td>#{event.actorUserId}</td>
                 <td>{event.targetType}{event.targetId === null ? '' : ` #${event.targetId}`}</td>
