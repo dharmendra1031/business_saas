@@ -1,6 +1,5 @@
 using System.Security.Claims;
 using BusinessSaas.Api.Data;
-using Microsoft.AspNetCore.Identity;
 using Microsoft.EntityFrameworkCore;
 
 namespace BusinessSaas.Api.Features;
@@ -11,30 +10,27 @@ public static class PlatformEndpoints
     {
         var group = app.MapGroup("/api/platform").RequireAuthorization();
 
-        group.MapGet("/access", async (ClaimsPrincipal user, AppDbContext db) =>
+        group.MapGet("/access", (ClaimsPrincipal user, IConfiguration configuration) =>
         {
-            var userId = CurrentUserId(user);
-            var permissions = await db.Set<IdentityUserClaim<long>>().AsNoTracking()
-                .Where(x => x.UserId == userId && x.ClaimType == "platform.permission")
-                .Select(x => x.ClaimValue)
-                .ToListAsync();
-
+            var isOwner = PlatformOwner.IsOwner(user, configuration);
             return Results.Ok(new
             {
-                canViewBusinesses = permissions.Contains("businesses.view"),
-                canManageLicenses = permissions.Contains("licenses.manage")
+                roleCode = isOwner ? "SuperAdmin" : "Customer",
+                isPlatformOwner = isOwner,
+                canViewBusinesses = isOwner,
+                canManageLicenses = isOwner
             });
         });
 
-        group.MapGet("/license-access", async (ClaimsPrincipal user, AppDbContext db) =>
-            await HasPermission(user, db, "licenses.manage")
+        group.MapGet("/license-access", (ClaimsPrincipal user, IConfiguration configuration) =>
+            PlatformOwner.IsOwner(user, configuration)
                 ? Results.Ok(new { canManageLicenses = true })
                 : Results.Forbid());
 
-        group.MapGet("/businesses", async (ClaimsPrincipal user, AppDbContext db,
+        group.MapGet("/businesses", async (ClaimsPrincipal user, AppDbContext db, IConfiguration configuration,
             string? search, int page = 1, int pageSize = 20) =>
         {
-            if (!await HasPermission(user, db, "businesses.view"))
+            if (!PlatformOwner.IsOwner(user, configuration))
                 return Results.Forbid();
 
             if (page is < 1 or > 100000 || pageSize is < 1 or > 50)
@@ -74,9 +70,9 @@ public static class PlatformEndpoints
         });
 
         group.MapGet("/businesses/{businessId:long}", async (
-            long businessId, ClaimsPrincipal user, AppDbContext db) =>
+            long businessId, ClaimsPrincipal user, AppDbContext db, IConfiguration configuration) =>
         {
-            if (!await HasPermission(user, db, "businesses.view"))
+            if (!PlatformOwner.IsOwner(user, configuration))
                 return Results.Forbid();
 
             var details = await (from business in db.Businesses.AsNoTracking()
@@ -108,11 +104,4 @@ public static class PlatformEndpoints
         });
     }
 
-    private static long CurrentUserId(ClaimsPrincipal user) =>
-        long.Parse(user.FindFirstValue(ClaimTypes.NameIdentifier)!);
-
-    private static Task<bool> HasPermission(ClaimsPrincipal user, AppDbContext db, string permission) =>
-        db.Set<IdentityUserClaim<long>>().AsNoTracking()
-            .AnyAsync(x => x.UserId == CurrentUserId(user) &&
-                x.ClaimType == "platform.permission" && x.ClaimValue == permission);
 }

@@ -69,11 +69,12 @@ public static class AuthEndpoints
             return Results.NoContent();
         }).RequireRateLimiting("login");
 
-        group.MapGet("/me", (ClaimsPrincipal principal) =>
+        group.MapGet("/me", (ClaimsPrincipal principal, IConfiguration configuration) =>
             Results.Ok(new
             {
                 id = long.Parse(principal.FindFirstValue(ClaimTypes.NameIdentifier)!),
-                email = principal.Identity?.Name
+                email = principal.Identity?.Name,
+                isPlatformOwner = PlatformOwner.IsOwner(principal, configuration)
             })).RequireAuthorization();
 
         group.MapPost("/logout", async (ClaimsPrincipal principal,

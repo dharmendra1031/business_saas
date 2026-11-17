@@ -130,6 +130,19 @@ app.UseRouting();
 app.UseRateLimiter();
 app.UseAuthentication();
 
+// The platform owner cannot access tenant operations, even with old business memberships.
+app.Use(async (context, next) =>
+{
+    if (context.Request.Path.StartsWithSegments("/api/businesses") &&
+        PlatformOwner.IsOwner(context.User, context.RequestServices.GetRequiredService<IConfiguration>()))
+    {
+        context.Response.StatusCode = StatusCodes.Status403Forbidden;
+        return;
+    }
+
+    await next();
+});
+
 // Browser sessions use HttpOnly cookies. Every write, including login/logout,
 // requires the CSRF token obtained from GET /api/auth/csrf.
 app.Use(async (context, next) =>
