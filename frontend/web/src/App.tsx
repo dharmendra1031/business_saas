@@ -1,9 +1,9 @@
 import { useEffect, useRef, useState, type FormEvent } from 'react'
-import { ArrowLeft, ArrowRight, Boxes, Building2, CheckCircle2, LayoutDashboard, LogOut, Menu, Package, Plus, ShieldCheck, ShoppingCart, Store, Tags, Truck, UserRound, Users } from 'lucide-react'
+import { ArrowLeft, ArrowRight, Boxes, Building2, CheckCircle2, LayoutDashboard, LogOut, Menu, Package, Plus, ShoppingCart, Store, Tags, Truck, UserRound, Users } from 'lucide-react'
 import { api, post, resetCsrf, SessionExpiredError, setSessionExpiredHandler, type Business, type BusinessMarket, type BusinessType, type RetailDashboard, type User } from './api'
 import TeamMembers from './TeamMembers'
 import RetailCatalog, { type RetailSection } from './RetailCatalog'
-import PlatformAdmin from './PlatformAdmin'
+import PlatformAdmin, { type PlatformSection } from './PlatformAdmin'
 
 type Page = 'loading' | 'login' | 'register' | 'businesses' | 'create' | 'retail' | 'platform'
 type RetailPage = RetailSection | 'overview' | 'team'
@@ -22,6 +22,7 @@ export default function App() {
   const [user, setUser] = useState<User | null>(null)
   const [businesses, setBusinesses] = useState<Business[]>([])
   const [canViewPlatform, setCanViewPlatform] = useState(false)
+  const [platformSection, setPlatformSection] = useState<PlatformSection>('overview')
   const [dashboard, setDashboard] = useState<RetailDashboard | null>(null)
   const [retailPage, setRetailPage] = useState<RetailPage>('overview')
   const [error, setError] = useState('')
@@ -52,6 +53,7 @@ export default function App() {
         if (me.isPlatformOwner) {
           setBusinesses([])
           setCanViewPlatform(true)
+          setPlatformSection('overview')
           setPage('platform')
           return
         }
@@ -141,6 +143,7 @@ export default function App() {
     setBusinesses(next.isPlatformOwner ? [] : list)
     setSessionExpired(false)
     setAuthNotice('')
+    setPlatformSection('overview')
     setPage(next.isPlatformOwner ? 'platform' : 'businesses')
     setError('')
     if (!next.isPlatformOwner && list.length === 1) void openBusiness(list[0].id)
@@ -211,19 +214,26 @@ export default function App() {
               setRetailPage('team')
             }}><UserRound size={18} /> Team Access</button>}
         </>}
-        {canViewPlatform && <button ref={user?.isPlatformOwner ? businessNav : undefined} type="button"
-          className={`nav-entry${page === 'platform' ? ' active' : ''}`}
-          aria-current={page === 'platform' ? 'page' : undefined}
-          onClick={() => {
-            if (menuOpen) menuToggle.current?.focus()
-            setMenuOpen(false)
-            setDashboard(null)
-            setError('')
-            setNotice('')
-            setPage('platform')
-          }}>
-          <ShieldCheck size={18} /> Super Admin
-        </button>}
+        {canViewPlatform && <>
+          <div className="sidebar-heading">PLATFORM CONTROL</div>
+          {([
+            ['overview', 'Overview', LayoutDashboard],
+            ['customers', 'Customers', Users],
+            ['businesses', 'Businesses', Building2]
+          ] as const).map(([section, label, Icon]) => <button
+            key={section} ref={section === 'overview' && user?.isPlatformOwner ? businessNav : undefined}
+            type="button" className={`nav-entry${page === 'platform' && platformSection === section ? ' active' : ''}`}
+            aria-current={page === 'platform' && platformSection === section ? 'page' : undefined}
+            onClick={() => {
+              if (menuOpen) menuToggle.current?.focus()
+              setMenuOpen(false)
+              setDashboard(null)
+              setError('')
+              setNotice('')
+              setPlatformSection(section)
+              setPage('platform')
+            }}><Icon size={18} /> {label}</button>)}
+        </>}
         <div className="sidebar-footer">A workspace for every business.</div>
       </aside>
 
@@ -248,7 +258,7 @@ export default function App() {
           {error && <div className="alert alert-danger" role="alert">{error}</div>}
           {notice && <div className="alert alert-success" role="status">{notice}</div>}
 
-          {page === 'platform' && canViewPlatform && <PlatformAdmin />}
+          {page === 'platform' && canViewPlatform && <PlatformAdmin section={platformSection} />}
 
           {page === 'businesses' && (
             <>

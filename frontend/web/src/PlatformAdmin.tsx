@@ -1,5 +1,9 @@
 import { useEffect, useState, type FormEvent } from 'react'
 import { api, SessionExpiredError } from './api'
+import PlatformOverview from './PlatformOverview'
+import PlatformCustomers from './PlatformCustomers'
+
+export type PlatformSection = 'overview' | 'customers' | 'businesses'
 
 interface BusinessRow {
   id: number
@@ -31,7 +35,7 @@ function statusLabel(status: string | null, trialEnds: string | null = null) {
   return status ?? 'No subscription'
 }
 
-export default function PlatformAdmin() {
+function PlatformBusinesses() {
   const [search, setSearch] = useState('')
   const [term, setTerm] = useState('')
   const [page, setPage] = useState(1)
@@ -185,4 +189,10 @@ export default function PlatformAdmin() {
       </section>
     </>
   )
+}
+
+export default function PlatformAdmin({ section }: { section: PlatformSection }) {
+  if (section === 'overview') return <PlatformOverview />
+  if (section === 'customers') return <PlatformCustomers />
+  return <PlatformBusinesses />
 }
