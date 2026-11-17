@@ -1,6 +1,7 @@
 export interface User {
   id: number
   email: string
+  isPlatformOwner: boolean
 }
 
 export interface BusinessType {

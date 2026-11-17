@@ -49,6 +49,12 @@ export default function App() {
     api<User>('/auth/me')
       .then(async me => {
         setUser(me)
+        if (me.isPlatformOwner) {
+          setBusinesses([])
+          setCanViewPlatform(true)
+          setPage('platform')
+          return
+        }
         const list = await api<Business[]>('/businesses')
         setBusinesses(list)
         if (list.length === 1) await openBusiness(list[0].id)
@@ -131,13 +137,13 @@ export default function App() {
   function onSignedIn(next: User, list: Business[]) {
     resetCsrf()
     setUser(next)
-    setCanViewPlatform(false)
-    setBusinesses(list)
+    setCanViewPlatform(next.isPlatformOwner)
+    setBusinesses(next.isPlatformOwner ? [] : list)
     setSessionExpired(false)
     setAuthNotice('')
-    setPage('businesses')
+    setPage(next.isPlatformOwner ? 'platform' : 'businesses')
     setError('')
-    if (list.length === 1) void openBusiness(list[0].id)
+    if (!next.isPlatformOwner && list.length === 1) void openBusiness(list[0].id)
   }
 
   if (page === 'loading')
@@ -154,7 +160,8 @@ export default function App() {
       <aside id="main-navigation" className={`app-sidebar${menuOpen ? ' is-open' : ''}`}>
         <div className="brand"><span className="brand-mark">B</span><div>Business SaaS<small>Business Workspace</small></div></div>
         <div className="sidebar-heading">WORKSPACE</div>
-        <button type="button" ref={businessNav} className={`nav-entry${page === 'businesses' || page === 'create' ? ' active' : ''}`}
+        {!user?.isPlatformOwner && <button type="button" ref={businessNav}
+          className={`nav-entry${page === 'businesses' || page === 'create' ? ' active' : ''}`}
           aria-current={page === 'businesses' || page === 'create' ? 'page' : undefined}
           onClick={() => {
             if (menuOpen) menuToggle.current?.focus()
@@ -163,7 +170,7 @@ export default function App() {
             void loadBusinesses()
           }}>
           <Building2 size={18} /> My Businesses
-        </button>
+        </button>}
         {page === 'retail' && dashboard && <>
           <div className="sidebar-heading">DAILY WORK</div>
           {([
@@ -204,7 +211,7 @@ export default function App() {
               setRetailPage('team')
             }}><UserRound size={18} /> Team Access</button>}
         </>}
-        {canViewPlatform && <button type="button"
+        {canViewPlatform && <button ref={user?.isPlatformOwner ? businessNav : undefined} type="button"
           className={`nav-entry${page === 'platform' ? ' active' : ''}`}
           aria-current={page === 'platform' ? 'page' : undefined}
           onClick={() => {
@@ -215,7 +222,7 @@ export default function App() {
             setNotice('')
             setPage('platform')
           }}>
-          <ShieldCheck size={18} /> Platform Admin
+          <ShieldCheck size={18} /> Super Admin
         </button>}
         <div className="sidebar-footer">A workspace for every business.</div>
       </aside>
@@ -229,9 +236,10 @@ export default function App() {
             </button>
             {page === 'retail' ? dashboard?.business.name
               : page === 'create' ? 'Create Business'
-              : page === 'platform' ? 'Platform Admin' : 'My Businesses'}
+              : page === 'platform' ? 'Super Admin' : 'My Businesses'}
           </div>
-          <div className="topbar-account"><UserRound size={17} /> <span className="account-email">{user?.email}</span>
+          <div className="topbar-account"><UserRound size={17} />
+            <span className="account-email">{user?.isPlatformOwner ? 'Platform Owner · ' : ''}{user?.email}</span>
             <button className="btn btn-outline-secondary btn-sm" onClick={() => void logout()}><LogOut size={15} /> Sign out</button>
           </div>
         </header>
@@ -393,7 +401,7 @@ function AuthPage({ mode, onChange, onSignedIn, sessionExpired, authNotice, onRe
         await post('/auth/login', { email, password })
         resetCsrf()
         const me = await api<User>('/auth/me')
-        const list = await api<Business[]>('/businesses')
+        const list = me.isPlatformOwner ? [] : await api<Business[]>('/businesses')
         onSignedIn(me, list)
       }
     } catch (cause) {

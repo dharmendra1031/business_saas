@@ -117,8 +117,8 @@ export default function PlatformAdmin() {
     <>
       <div className="page-header">
         <div>
-          <h1>Platform Businesses</h1>
-          <p>Find businesses and review their current subscription. No changes can be made here.</p>
+          <h1>Platform Super Admin</h1>
+          <p>All customer businesses and subscription status. Operational business data remains private.</p>
         </div>
       </div>
       <section className="content-section">
