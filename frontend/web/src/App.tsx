@@ -24,6 +24,7 @@ export default function App() {
   const [businesses, setBusinesses] = useState<Business[]>([])
   const [canViewPlatform, setCanViewPlatform] = useState(false)
   const [platformSection, setPlatformSection] = useState<PlatformSection>('overview')
+  const [platformBusinessId, setPlatformBusinessId] = useState<number | null>(null)
   const [dashboard, setDashboard] = useState<RetailDashboard | null>(null)
   const [retailPage, setRetailPage] = useState<RetailPage>('overview')
   const [error, setError] = useState('')
@@ -166,12 +167,14 @@ export default function App() {
     }} />
 
   return (
-    <div className="app-shell">
+    <div className={`app-shell${user?.isPlatformOwner ? ' platform-shell' : ''}`}>
       {menuOpen && <button type="button" className="sidebar-scrim" aria-label="Close navigation"
         onClick={() => { setMenuOpen(false); menuToggle.current?.focus() }} />}
       <aside id="main-navigation" className={`app-sidebar${menuOpen ? ' is-open' : ''}`}>
-        <div className="brand"><span className="brand-mark">B</span><div>Business SaaS<small>Business Workspace</small></div></div>
-        <div className="sidebar-heading">WORKSPACE</div>
+        <div className="brand"><span className="brand-mark">B</span>
+          <div>Business SaaS<small>{user?.isPlatformOwner ? 'Platform Super Admin' : 'Business Workspace'}</small></div>
+        </div>
+        {!user?.isPlatformOwner && <div className="sidebar-heading">WORKSPACE</div>}
         {!user?.isPlatformOwner && <button type="button" ref={businessNav}
           className={`nav-entry${page === 'businesses' || page === 'create' ? ' active' : ''}`}
           aria-current={page === 'businesses' || page === 'create' ? 'page' : undefined}
@@ -240,15 +243,18 @@ export default function App() {
               setDashboard(null)
               setError('')
               setNotice('')
+              setPlatformBusinessId(null)
               setPlatformSection(section)
               setPage('platform')
             }}><Icon size={18} /> {label}</button>)}
         </>}
-        <div className="sidebar-footer">A workspace for every business.</div>
+        <div className="sidebar-footer">{user?.isPlatformOwner
+          ? <>Platform Owner <small className="d-block mt-1">MFA-protected access</small></>
+          : 'A workspace for every business.'}</div>
       </aside>
 
       <div className="app-main">
-        <header className="app-topbar">
+        <header className={`app-topbar${user?.isPlatformOwner ? ' platform-topbar' : ''}`}>
           <div className="topbar-title">
             <button type="button" ref={menuToggle} className="mobile-menu-toggle" aria-label={menuOpen ? 'Close navigation' : 'Open navigation'}
               aria-controls="main-navigation" aria-expanded={menuOpen} onClick={() => setMenuOpen(open => !open)}>
@@ -268,7 +274,12 @@ export default function App() {
           {error && <div className="alert alert-danger" role="alert">{error}</div>}
           {notice && <div className="alert alert-success" role="status">{notice}</div>}
 
-          {page === 'platform' && canViewPlatform && <PlatformAdmin section={platformSection} />}
+          {page === 'platform' && canViewPlatform && <PlatformAdmin section={platformSection}
+            selectedBusinessId={platformBusinessId}
+            onViewBusiness={id => {
+              setPlatformBusinessId(id)
+              setPlatformSection('businesses')
+            }} />}
 
           {page === 'businesses' && (
             <>

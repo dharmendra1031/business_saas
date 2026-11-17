@@ -36,7 +36,7 @@ function statusLabel(status: string | null, trialEnds: string | null = null) {
   return status ?? 'No subscription'
 }
 
-function PlatformBusinesses() {
+function PlatformBusinesses({ selectedBusinessId }: { selectedBusinessId: number | null }) {
   const [search, setSearch] = useState('')
   const [term, setTerm] = useState('')
   const [page, setPage] = useState(1)
@@ -84,6 +84,10 @@ function PlatformBusinesses() {
       setDetailLoading(false)
     }
   }
+
+  useEffect(() => {
+    if (selectedBusinessId !== null) void openBusiness(selectedBusinessId)
+  }, [selectedBusinessId])
 
   if (details) {
     return (
@@ -192,9 +196,13 @@ function PlatformBusinesses() {
   )
 }
 
-export default function PlatformAdmin({ section }: { section: PlatformSection }) {
-  if (section === 'overview') return <PlatformOverview />
+export default function PlatformAdmin({ section, selectedBusinessId, onViewBusiness }: {
+  section: PlatformSection
+  selectedBusinessId: number | null
+  onViewBusiness: (id: number) => void
+}) {
+  if (section === 'overview') return <PlatformOverview onViewBusiness={onViewBusiness} />
   if (section === 'customers') return <PlatformCustomers />
   if (section === 'audit') return <PlatformAudit />
-  return <PlatformBusinesses />
+  return <PlatformBusinesses selectedBusinessId={selectedBusinessId} />
 }
