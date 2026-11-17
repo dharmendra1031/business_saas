@@ -1,63 +1,45 @@
-# Platform Owner and Customer Access
+# Super Admin Account and MFA Setup
 
-## Roles
+## Access rules
 
-- **Platform Super Admin:** One configured platform owner account. May open the read-only platform business directory and its subscription summaries, but cannot use customer business operational APIs.
-- **Customer:** Every other signed-in account. May create multiple independently managed businesses. Business creation grants the creator the **Owner** membership in that particular business.
-- **Business Owner / Manager / Cashier:** Roles are checked against each `BusinessId`. A business role never grants platform access.
+- The platform has **one configured Super Admin** identified by the positive numeric `Platform:OwnerUserId`.
+- A verified MFA session (`amr=mfa`) is required for all `/api/platform` read-only directory, overview, audit and license-access endpoints.
+- Before MFA enrollment, the configured owner can only use account-security setup actions, not platform management.
+- Customers may own multiple separate businesses, each restricted by `BusinessId` and membership. Platform Owner cannot access tenant operational APIs, even through an old membership.
+- Older `platform.permission` claims are not sufficient for Super Admin access. No public endpoint promotes an account.
+- Database entity IDs remain numeric auto-increment. No UUID/GUID IDs were introduced.
 
-All users and business records use numeric SQL identity IDs. Operation request keys are not entity IDs.
+## Dedicated account provisioning (trusted operator)
 
-## Create a dedicated Super Admin account (trusted operator only)
-
-The project includes an **offline one-time bootstrap command**, not a public API. It creates an Identity account with a strong hashed password, confirms its email only under trusted-operator responsibility, and prints its numeric User ID. No account or password is seeded in Git.
-
-1. Verify that the dedicated email inbox is controlled by the platform operator. Configure the intended SQL Server connection through `ConnectionStrings__Default` and apply the reviewed migrations first. **Back up an existing database before changing it.**
-2. From the repository root, run:
+1. Verify control of the dedicated operator email. Connect to the **intended SQL Server** through `ConnectionStrings__Default`; apply reviewed EF migrations after a verified backup.
+2. From the repo root on a trusted Windows host, run:
 
    ```powershell
    .\scripts\bootstrap-platform-owner.ps1 -Email "admin@your-company.example"
    ```
 
-   The script prompts for a password without displaying it and requires at least 16 characters. It passes the password temporarily to the offline process, clears the environment variables when finished and does not print or commit the password.
-3. The command prints the newly created numeric User ID, for example `42`. Set `Platform__OwnerUserId` to **that actual ID** using the API host's protected settings and restart the API.
-4. Login using the dedicated account and confirm the Super Admin dashboard is shown. Existing accounts are rejected by the bootstrap; it will not silently promote a Customer.
+   The script prompts for a password (16+ characters) and creates a **new** verified Identity account. It refuses an existing account. Nothing is seeded by default; the command has not been run against a production database by this implementation.
+3. Note the numeric User ID returned by the command. Configure `Platform__OwnerUserId` with the real ID in the API host's **protected environment**, not in source control, and restart the API. Example for disposable local development:
 
-**Do not** send the production admin password in chat, add it to command-line arguments or commit it to an appsettings file. The command must run in a trusted host with restricted console and environment access. A successful bootstrap does not mean a live account was created unless an operator actually ran it against the intended database.
-
-## Configure the single platform owner
-
-The API reads `Platform:OwnerUserId` through standard ASP.NET Core configuration. Only the authenticated user with this **numeric user ID** is the platform owner. The value must be positive. When it is absent or invalid, **no account has platform owner access**.
-
-1. Provision a **dedicated** account through a trusted operator process. In a disposable Development environment, create the account using the existing registration flow, sign in, then read its numeric `id` from `GET /api/auth/me`. **Do not use the account for customer business operations.**
-2. Set `Platform__OwnerUserId` in the API host's protected environment configuration to that exact numeric ID. For local PowerShell development only:
-   
    ```powershell
-   $env:Platform__OwnerUserId = '42' # Example only; use the actual numeric user ID
+   $env:Platform__OwnerUserId = '42' # Replace 42 with the actual ID
    ```
-3. Restart the API process with the setting loaded. Sign in with the dedicated owner account. It should open **Super Admin** rather than **My Businesses**.
-4. Confirm `GET /api/platform/access` returns `isPlatformOwner: true` for the owner and `false` for a customer. Confirm `GET /api/businesses` is forbidden for the platform owner and `GET /api/platform/businesses` is forbidden for customers.
 
-**Never** put a real owner ID, password, connection secret or production account details in source control. Do not seed a default admin password or automatically promote the first registered account. Provision and verify the account before enabling platform administration. Production public registration is still disabled pending verified email delivery.
+4. Sign in with the dedicated email and password. The application will require **Authenticator Setup** before opening Super Admin.
+5. Re-enter the password, copy the private setup key into a TOTP authenticator app, enter the current six-digit code, and securely store all **eight one-time recovery codes**. Enabling MFA signs the account out.
+6. Sign in again using password plus authenticator code (or one unused recovery code). Confirm `GET /api/platform/access` reports `mfaVerified: true`; the read-only Dashboard and Security & Audit will now open.
 
-For multi-instance deployment, the same reviewed owner ID must be configured on every API instance. Changing or clearing this setting revokes/reassigns platform access across instances after configuration reload or restart. Keep access to the host configuration restricted and auditable.
+**Never share passwords, TOTP setup keys or recovery codes in chat, logs, screenshots or git.** Recovery codes appear only once. If the authenticator and all recovery codes are lost, there is **no self-service reset** yet; an authenticated trusted-operator recovery procedure must be established before production.
 
-## Security boundaries
+## Security behavior
 
-- The only platform owner authority is `Platform:OwnerUserId`. Historical `platform.permission` database claims do **not** grant Super Admin access.
-- The platform owner can read the platform-wide business directory, but cannot open any `/api/businesses` customer data or perform tenant operations, **even if it previously had a business membership**.
-- Business Owners and staff are limited by server-side membership, role, business subscription and location rules.
-- No public endpoint can promote a user to Super Admin, change the owner ID or bypass the customer boundary.
-- Existing business users are unaffected and can create/manage multiple businesses through their membership.
+- A password-only session cannot access any Super Admin directory or audit data.
+- Identity's built-in TOTP provider and lockout rules validate authenticator codes; incorrect password during setup is also subject to account lockout.
+- The verification challenge uses a short-lived two-factor cookie. Recovery codes are single-use, and invalid recovery attempts increment the lockout counter.
+- Sensitive writes require CSRF validation; MFA endpoints also have IP-based request limits. Browser Auth cookies are HttpOnly and Secure in production.
+- Login and MFA enrollment actions have numeric platform audit events. Events are not cryptographically tamper-evident.
+- The owner ID must be consistently configured across API instances; removing it revokes platform access.
 
-## Current scope and release limits
+## Current limitations
 
-The Platform Super Admin UI currently supports **read-only** Business Directory and subscription status. Actual license management actions, plan editing, trial extensions, platform audit logs, verified-email onboarding, privileged-account MFA and production readiness gates are **not implemented** by this change. Do not use this configuration alone as a production launch sign-off.
-
-## Platform Audit foundation
-
-The initial audit history records successful configured Super Admin sign-ins. Each event has a numeric identity ID, actor User ID, action, optional target/reason and UTC timestamp. Only the configured owner may read paginated history at `GET /api/platform/audit` and from **Security & Audit** in the Super Admin sidebar.
-
-The audit schema is intended for future transactional administrative changes. Trial extensions, plan updates, suspensions and payments are **not implemented** and therefore are **not yet logged**. The log is not cryptographically tamper-evident and must not be represented as a complete security audit or regulatory archive. Login failures and security-alert delivery are not recorded by this table.
-
-The `AddPlatformAuditEvents` migration must be applied as part of a reviewed deployment after backup. The view reports MFA as unavailable; privileged MFA, audit retention and monitoring remain production blockers.
+The Super Admin UI includes **Overview, Customers, Businesses, and Security & Audit** (read-only). Subscription plan editing, trial extension, suspension/reactivation, payments, license operations, login-failure monitoring, audited recovery procedures, verified-email self-service registration, production restore drills and load/security hardening remain pending. The platform is **not yet production-ready**.

@@ -643,6 +643,42 @@ public sealed class BusinessFlowTests
         Assert.Equal(HttpStatusCode.NotFound,
             (await admin.GetAsync("/api/platform/businesses/9999999")).StatusCode);
 
+        // A recovery code signs in once, but cannot be reused.
+        Assert.Equal(HttpStatusCode.NoContent,
+            (await Post(admin, "/api/auth/logout", new { })).StatusCode);
+        var loginWithRecovery = await Post(admin, "/api/auth/login", new
+        {
+            email = "directory-admin@example.test", password = "SecurePassword123!"
+        });
+        Assert.True((await loginWithRecovery.Content.ReadFromJsonAsync<JsonElement>())
+            .GetProperty("requiresTwoFactor").GetBoolean());
+        Assert.Equal(HttpStatusCode.NoContent,
+            (await Post(admin, "/api/auth/mfa/verify", new
+            {
+                recoveryCode = ownerMfa.recoveryCodes[0]
+            })).StatusCode);
+        Assert.Equal(HttpStatusCode.OK,
+            (await admin.GetAsync("/api/platform/overview")).StatusCode);
+
+        Assert.Equal(HttpStatusCode.NoContent,
+            (await Post(admin, "/api/auth/logout", new { })).StatusCode);
+        await Post(admin, "/api/auth/login", new
+        {
+            email = "directory-admin@example.test", password = "SecurePassword123!"
+        });
+        Assert.Equal(HttpStatusCode.Unauthorized,
+            (await Post(admin, "/api/auth/mfa/verify", new
+            {
+                recoveryCode = ownerMfa.recoveryCodes[0]
+            })).StatusCode);
+        Assert.Equal(HttpStatusCode.Unauthorized,
+            (await admin.GetAsync("/api/platform/businesses")).StatusCode);
+        Assert.Equal(HttpStatusCode.NoContent,
+            (await Post(admin, "/api/auth/mfa/verify", new
+            {
+                code = AuthenticatorCode(ownerMfa.secret)
+            })).StatusCode);
+
         // Removing the configured owner revokes platform access without a new login.
         factory.Services.GetRequiredService<IConfiguration>()["Platform:OwnerUserId"] = "0";
         Assert.Equal(HttpStatusCode.Forbidden,
@@ -811,6 +847,9 @@ public sealed class BusinessFlowTests
     private static async Task<(string secret, string[] recoveryCodes)> EnableOwnerMfaAndSignIn(
         HttpClient client, string email)
     {
+        Assert.Equal(HttpStatusCode.Unauthorized,
+            (await Post(client, "/api/auth/mfa/setup", new { password = "wrong" })).StatusCode);
+
         var start = await Post(client, "/api/auth/mfa/setup", new
         {
             password = "SecurePassword123!"

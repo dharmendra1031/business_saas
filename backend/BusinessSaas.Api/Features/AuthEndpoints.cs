@@ -89,7 +89,8 @@ public static class AuthEndpoints
         }).RequireAuthorization();
 
         group.MapPost("/mfa/setup", async (MfaSetupRequest request,
-            ClaimsPrincipal principal, IConfiguration configuration, UserManager<AppUser> users) =>
+            ClaimsPrincipal principal, IConfiguration configuration, UserManager<AppUser> users,
+            SignInManager<AppUser> signIn) =>
         {
             if (!PlatformOwner.IsConfiguredOwner(principal, configuration))
                 return Results.Forbid();
@@ -98,7 +99,11 @@ public static class AuthEndpoints
             if (account is null) return Results.Unauthorized();
             if (await users.GetTwoFactorEnabledAsync(account))
                 return Results.Forbid();
-            if (!await users.CheckPasswordAsync(account, request.Password ?? ""))
+            var passwordCheck = await signIn.CheckPasswordSignInAsync(
+                account, request.Password ?? "", lockoutOnFailure: true);
+            if (passwordCheck.IsLockedOut)
+                return Results.Problem("Account temporarily locked.", statusCode: 429);
+            if (!passwordCheck.Succeeded)
                 return Results.Unauthorized();
 
             var secret = await users.GetAuthenticatorKeyAsync(account);
@@ -126,7 +131,11 @@ public static class AuthEndpoints
             if (account is null) return Results.Unauthorized();
             if (await users.GetTwoFactorEnabledAsync(account))
                 return Results.Forbid();
-            if (!await users.CheckPasswordAsync(account, request.Password ?? ""))
+            var passwordCheck = await signIn.CheckPasswordSignInAsync(
+                account, request.Password ?? "", lockoutOnFailure: true);
+            if (passwordCheck.IsLockedOut)
+                return Results.Problem("Account temporarily locked.", statusCode: 429);
+            if (!passwordCheck.Succeeded)
                 return Results.Unauthorized();
 
             var code = (request.Code ?? "").Replace(" ", "").Replace("-", "");
