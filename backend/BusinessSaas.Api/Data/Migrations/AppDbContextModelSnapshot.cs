@@ -90,6 +90,42 @@ namespace BusinessSaas.Api.Data.Migrations
                     b.ToTable("AspNetUsers", (string)null);
                 });
 
+            modelBuilder.Entity("BusinessSaas.Api.Data.PlatformAuditEvent", b =>
+                {
+                    b.Property<long>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("bigint");
+
+                    SqlServerPropertyBuilderExtensions.UseIdentityColumn(b.Property<long>("Id"));
+
+                    b.Property<string>("Action")
+                        .IsRequired()
+                        .HasMaxLength(60)
+                        .HasColumnType("nvarchar(60)");
+
+                    b.Property<long>("ActorUserId").HasColumnType("bigint");
+
+                    b.Property<DateTime>("CreatedAtUtc").HasColumnType("datetime2");
+
+                    b.Property<string>("Reason")
+                        .HasMaxLength(250)
+                        .HasColumnType("nvarchar(250)");
+
+                    b.Property<long?>("TargetId").HasColumnType("bigint");
+
+                    b.Property<string>("TargetType")
+                        .IsRequired()
+                        .HasMaxLength(40)
+                        .HasColumnType("nvarchar(40)");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("ActorUserId");
+                    b.HasIndex("CreatedAtUtc", "Id");
+
+                    b.ToTable("PlatformAuditEvents");
+                });
+
             modelBuilder.Entity("BusinessSaas.Api.Data.Business", b =>
                 {
                     b.Property<long>("Id")
@@ -869,6 +905,15 @@ namespace BusinessSaas.Api.Data.Migrations
                     b.HasKey("UserId", "LoginProvider", "Name");
 
                     b.ToTable("AspNetUserTokens", (string)null);
+                });
+
+            modelBuilder.Entity("BusinessSaas.Api.Data.PlatformAuditEvent", b =>
+                {
+                    b.HasOne("BusinessSaas.Api.Data.AppUser", null)
+                        .WithMany()
+                        .HasForeignKey("ActorUserId")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .IsRequired();
                 });
 
             modelBuilder.Entity("BusinessSaas.Api.Data.Business", b =>

@@ -47,7 +47,7 @@ public static class AuthEndpoints
 
         group.MapPost("/login", async (LoginRequest request,
             UserManager<AppUser> users, SignInManager<AppUser> signIn,
-            ILogger<Program> logger) =>
+            AppDbContext db, IConfiguration configuration, ILogger<Program> logger) =>
         {
             var user = await users.FindByEmailAsync(request.Email?.Trim() ?? "");
             if (user is null)
@@ -64,6 +64,18 @@ public static class AuthEndpoints
 
             if (!result.Succeeded)
                 return Results.Unauthorized();
+
+            if (PlatformOwner.IsOwnerId(user.Id, configuration))
+            {
+                db.PlatformAuditEvents.Add(new PlatformAuditEvent
+                {
+                    ActorUserId = user.Id,
+                    Action = "PlatformOwner.SignIn",
+                    TargetType = "User",
+                    TargetId = user.Id
+                });
+                await db.SaveChangesAsync();
+            }
 
             logger.LogInformation("User {UserId} signed in", user.Id);
             return Results.NoContent();

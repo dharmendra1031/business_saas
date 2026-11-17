@@ -22,6 +22,28 @@ public static class PlatformEndpoints
             });
         });
 
+        group.MapGet("/audit", async (ClaimsPrincipal user, AppDbContext db,
+            IConfiguration configuration, int page = 1, int pageSize = 20) =>
+        {
+            if (!PlatformOwner.IsOwner(user, configuration))
+                return Results.Forbid();
+
+            if (page is < 1 or > 100000 || pageSize is < 1 or > 50)
+                return Results.BadRequest(new { message = "Choose a valid page and page size (1–50)." });
+
+            var total = await db.PlatformAuditEvents.CountAsync();
+            var items = await db.PlatformAuditEvents.AsNoTracking()
+                .OrderByDescending(x => x.Id)
+                .Skip((page - 1) * pageSize).Take(pageSize)
+                .Select(x => new
+                {
+                    x.Id, x.ActorUserId, x.Action, x.TargetType,
+                    x.TargetId, x.Reason, x.CreatedAtUtc
+                }).ToListAsync();
+
+            return Results.Ok(new { items, total, page, pageSize });
+        });
+
         group.MapGet("/license-access", (ClaimsPrincipal user, IConfiguration configuration) =>
             PlatformOwner.IsOwner(user, configuration)
                 ? Results.Ok(new { canManageLicenses = true })

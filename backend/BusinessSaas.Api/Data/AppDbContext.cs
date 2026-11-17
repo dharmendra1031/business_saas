@@ -6,6 +6,17 @@ namespace BusinessSaas.Api.Data;
 
 public sealed class AppUser : IdentityUser<long>;
 
+public sealed class PlatformAuditEvent
+{
+    public long Id { get; set; }
+    public long ActorUserId { get; set; }
+    public string Action { get; set; } = "";
+    public string TargetType { get; set; } = "";
+    public long? TargetId { get; set; }
+    public string? Reason { get; set; }
+    public DateTime CreatedAtUtc { get; set; } = DateTime.UtcNow;
+}
+
 public sealed class BusinessType
 {
     public long Id { get; set; }
@@ -199,6 +210,7 @@ public sealed class RetailReceivingLine
 public sealed class AppDbContext(DbContextOptions<AppDbContext> options)
     : IdentityUserContext<AppUser, long>(options)
 {
+    public DbSet<PlatformAuditEvent> PlatformAuditEvents => Set<PlatformAuditEvent>();
     public DbSet<BusinessType> BusinessTypes => Set<BusinessType>();
     public DbSet<Business> Businesses => Set<Business>();
     public DbSet<BusinessUser> BusinessUsers => Set<BusinessUser>();
@@ -221,6 +233,16 @@ public sealed class AppDbContext(DbContextOptions<AppDbContext> options)
     protected override void OnModelCreating(ModelBuilder builder)
     {
         base.OnModelCreating(builder);
+
+        builder.Entity<PlatformAuditEvent>(entity =>
+        {
+            entity.Property(x => x.Action).HasMaxLength(60).IsRequired();
+            entity.Property(x => x.TargetType).HasMaxLength(40).IsRequired();
+            entity.Property(x => x.Reason).HasMaxLength(250);
+            entity.HasIndex(x => new { x.CreatedAtUtc, x.Id });
+            entity.HasOne<AppUser>().WithMany()
+                .HasForeignKey(x => x.ActorUserId).OnDelete(DeleteBehavior.Restrict);
+        });
 
         builder.Entity<BusinessType>(entity =>
         {
