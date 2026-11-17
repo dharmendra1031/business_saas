@@ -551,6 +551,10 @@ public sealed class BusinessFlowTests
             (await Post(admin, "/api/platform/plans/STARTER/draft",
                 new { expectedRevision = 0 })).StatusCode);
         Assert.Equal(HttpStatusCode.Forbidden,
+            (await Post(admin, "/api/platform/plans/STARTER/publish",
+                new { expectedDraftRevision = 1, expectedPublishedVersion = 0,
+                      reason = "Not authorized without verified MFA" })).StatusCode);
+        Assert.Equal(HttpStatusCode.Forbidden,
             (await Post(admin, $"/api/platform/businesses/{firstId}/subscription-status",
                 new { action = "Suspend", expectedStatus = "Trial", reason = "No MFA access to suspend" }))
             .StatusCode);
@@ -829,6 +833,82 @@ public sealed class BusinessFlowTests
                 subscription => Assert.Equal("STARTER", subscription.PlanCode));
         }
 
+        // Publishing snapshots a reviewed draft, but cannot activate paid subscribers.
+        var publish = new
+        {
+            expectedDraftRevision = 2,
+            expectedPublishedVersion = 0,
+            reason = "Commercial owner approved the complete plan terms"
+        };
+        Assert.Equal(HttpStatusCode.Forbidden,
+            (await Post(outsider, "/api/platform/plans/STARTER/publish", publish)).StatusCode);
+        Assert.Equal(HttpStatusCode.BadRequest,
+            (await Post(admin, "/api/platform/plans/ENTERPRISE/publish", publish)).StatusCode);
+        Assert.Equal(HttpStatusCode.Conflict,
+            (await Post(admin, "/api/platform/plans/STARTER/publish", new
+            {
+                expectedDraftRevision = 1,
+                expectedPublishedVersion = 0,
+                reason = "Trying to publish a stale draft revision"
+            })).StatusCode);
+        Assert.Equal(HttpStatusCode.BadRequest,
+            (await Post(admin, "/api/platform/plans/STARTER/publish", new
+            {
+                expectedDraftRevision = 2, expectedPublishedVersion = 0,
+                reason = "too short"
+            })).StatusCode);
+
+        var firstPublication = await Post(admin, "/api/platform/plans/STARTER/publish", publish);
+        Assert.Equal(HttpStatusCode.OK, firstPublication.StatusCode);
+        var published = await firstPublication.Content.ReadFromJsonAsync<JsonElement>();
+        var publishedId = published.GetProperty("planVersionId").GetInt64();
+        Assert.True(publishedId > 0);
+        Assert.Equal(1, published.GetProperty("version").GetInt32());
+        Assert.Equal(2, published.GetProperty("sourceDraftRevision").GetInt32());
+        Assert.Equal(HttpStatusCode.Conflict,
+            (await Post(admin, "/api/platform/plans/STARTER/publish", publish)).StatusCode);
+
+        var publishedPlans = await admin.GetFromJsonAsync<JsonElement>("/api/platform/plans");
+        Assert.True(publishedPlans.GetProperty("items")[0]
+            .GetProperty("pricingConfigured").GetBoolean());
+        Assert.Equal(publishedId, publishedPlans.GetProperty("items")[0]
+            .GetProperty("published").GetProperty("id").GetInt64());
+        Assert.Equal(899.50m, publishedPlans.GetProperty("items")[0]
+            .GetProperty("published").GetProperty("monthlyPrice").GetDecimal());
+
+        var thirdDraft = await Post(admin, "/api/platform/plans/STARTER/draft", new
+        {
+            expectedRevision = 2, currencyCode = "INR", monthlyPrice = 1099m,
+            quarterlyPrice = 3199m, yearlyPrice = 11999m,
+            maxLocations = 4, maxUsers = 7, maxProducts = 2000,
+            reason = "New commercial revision after first catalog publication"
+        });
+        Assert.Equal(HttpStatusCode.OK, thirdDraft.StatusCode);
+        Assert.Equal(HttpStatusCode.Conflict,
+            (await Post(admin, "/api/platform/plans/STARTER/publish", publish)).StatusCode);
+        var secondPublication = await Post(admin, "/api/platform/plans/STARTER/publish", new
+        {
+            expectedDraftRevision = 3, expectedPublishedVersion = 1,
+            reason = "Reviewed the next catalog price and limits"
+        });
+        Assert.Equal(HttpStatusCode.OK, secondPublication.StatusCode);
+        Assert.Equal(2, (await secondPublication.Content.ReadFromJsonAsync<JsonElement>())
+            .GetProperty("version").GetInt32());
+        using (var scope = factory.Services.CreateScope())
+        {
+            var db = scope.ServiceProvider.GetRequiredService<AppDbContext>();
+            var versions = await db.PublishedPlanVersions
+                .Where(x => x.PlanCode == "STARTER").OrderBy(x => x.Version).ToListAsync();
+            Assert.Equal(2, versions.Count);
+            Assert.Equal(899.50m, versions[0].MonthlyPrice);
+            Assert.Equal(1099m, versions[1].MonthlyPrice);
+            Assert.All(await db.BusinessSubscriptions.ToListAsync(), item =>
+            {
+                Assert.Equal("STARTER", item.PlanCode);
+                Assert.Equal("Trial", item.Status);
+            });
+        }
+
         // Suspending a subscription blocks operations, replay is rejected and reactivation
         // restores its prior state without extending its original trial.
         var statusRequest = new
@@ -902,7 +982,9 @@ public sealed class BusinessFlowTests
             .GetProperty("newValue").GetString());
         Assert.Equal("Subscription.Suspended", lastAudit.GetProperty("items")[1]
             .GetProperty("action").GetString());
-        Assert.Equal("Plan.DraftSaved", lastAudit.GetProperty("items")[2]
+        Assert.Equal("Plan.Published", lastAudit.GetProperty("items")[2]
+            .GetProperty("action").GetString());
+        Assert.Equal("Plan.DraftSaved", lastAudit.GetProperty("items")[3]
             .GetProperty("action").GetString());
 
         // An active paid subscription must never accept a trial extension.

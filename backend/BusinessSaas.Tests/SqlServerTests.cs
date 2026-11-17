@@ -69,6 +69,8 @@ public sealed class SqlServerTests
                 migration => migration.EndsWith("_AddPlatformAuditChangeValues"));
             Assert.Contains(await db.Database.GetAppliedMigrationsAsync(),
                 migration => migration.EndsWith("_AddPlanDraftsAndSubscriptionSuspension"));
+            Assert.Contains(await db.Database.GetAppliedMigrationsAsync(),
+                migration => migration.EndsWith("_AddPublishedPlanVersions"));
             Assert.True(await db.Database.CanConnectAsync());
             Assert.True(await db.BusinessTypes.AnyAsync(x => x.Code == "RETAIL" && x.IsSupported));
         }
