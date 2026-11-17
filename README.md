@@ -25,6 +25,7 @@ For a fresh Windows development run with a separate test database, use the [loca
 | [Engineering Guardrails](docs/ENGINEERING_GUARDRAILS.md) | Financial, tenancy, security, privacy and release safety |
 | [P1 Implementation](docs/P1_IMPLEMENTATION.md) | Run guide, committed endpoints, tests and launch blockers |
 | [Production Database Safety](docs/PRODUCTION_DATABASE_SAFETY.md) | Backup, tested restore, migrations and readiness checks before deployment |
+| [API Performance Baseline](docs/PERFORMANCE_BASELINE.md) | Lightweight read-only smoke tool and measurement guidance |
 
 ### Vertical-specific reference documents
 

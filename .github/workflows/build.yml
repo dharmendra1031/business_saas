@@ -73,5 +73,7 @@ jobs:
           cache-dependency-path: frontend/web/package-lock.json
       - name: Install locked dependencies
         run: npm ci --no-audit --no-fund
+      - name: Validate performance smoke script
+        run: node --check ../../scripts/api-load-smoke.mjs
       - name: Typecheck and production build
         run: npm run build
