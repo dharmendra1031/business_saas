@@ -55,6 +55,7 @@ Test access with a restricted staging account; compare business/member counts an
 - Assign a scheduled backup owner and define recovery-point/recovery-time objectives (RPO/RTO). A daily full backup alone can lose up to a day of transactions.
 - Encrypt and access-control backup storage, keep off-host copies and periodically rehearse restoration.
 - Configure HTTPS, protected secrets and a persistent encrypted ASP.NET Core Data Protection key ring.
+- Login is limited to 30 attempts/minute and development registration to 10 attempts/minute per server-observed remote IP. Limits are **per app instance**, not shared across servers. Behind a reverse proxy, configure an explicit trusted-proxy/forwarded-header policy before using client IPs; never trust arbitrary `X-Forwarded-For` request headers. Shared office/NAT IPs may also share a quota.
 - Monitor `/api/health` (process alive) separately from `/api/ready` (DB reachable; migrations applied).
 - Confirm email verification, authorization, concurrent write tests, deployment rollback and production monitoring before allowing actual merchants.
 

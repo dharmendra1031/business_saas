@@ -43,7 +43,7 @@ public static class AuthEndpoints
                 });
 
             return Results.Ok(new { message = "Account created. Sign in to continue." });
-        });
+        }).RequireRateLimiting("register");
 
         group.MapPost("/login", async (LoginRequest request,
             UserManager<AppUser> users, SignInManager<AppUser> signIn,
@@ -67,7 +67,7 @@ public static class AuthEndpoints
 
             logger.LogInformation("User {UserId} signed in", user.Id);
             return Results.NoContent();
-        });
+        }).RequireRateLimiting("login");
 
         group.MapGet("/me", (ClaimsPrincipal principal) =>
             Results.Ok(new

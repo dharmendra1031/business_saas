@@ -620,6 +620,60 @@ public sealed class BusinessFlowTests
     }
 
     [Fact]
+    public async Task Authentication_endpoints_are_rate_limited_per_remote_address()
+    {
+        using var database = new SqliteConnection("Data Source=:memory:");
+        await database.OpenAsync();
+        using var factory = new WebApplicationFactory<Program>().WithWebHostBuilder(builder =>
+        {
+            builder.UseEnvironment("Development");
+            builder.ConfigureServices(services =>
+            {
+                services.RemoveAll<DbContextOptions<AppDbContext>>();
+                services.RemoveAll<IDbContextOptionsConfiguration<AppDbContext>>();
+                services.AddDbContext<AppDbContext>(options => options.UseSqlite(database));
+            });
+        });
+
+        using var client = factory.CreateClient();
+        for (var attempt = 0; attempt < 30; attempt++)
+        {
+            var response = await Post(client, "/api/auth/login",
+                new { email = "unknown@example.test", password = "invalid" });
+            Assert.Equal(HttpStatusCode.Unauthorized, response.StatusCode);
+        }
+
+        using (var request = new HttpRequestMessage(HttpMethod.Post, "/api/auth/login"))
+        {
+            request.Headers.TryAddWithoutValidation("X-Forwarded-For", "203.0.113.99");
+            var csrf = await client.GetFromJsonAsync<JsonElement>("/api/auth/csrf");
+            request.Headers.Add("X-CSRF-TOKEN", csrf.GetProperty("token").GetString());
+            request.Content = JsonContent.Create(new
+            {
+                email = "another-unknown@example.test", password = "invalid"
+            });
+            var blocked = await client.SendAsync(request);
+            Assert.Equal(HttpStatusCode.TooManyRequests, blocked.StatusCode);
+        }
+
+        for (var attempt = 0; attempt < 10; attempt++)
+        {
+            var response = await Post(client, "/api/auth/register",
+                new { email = "not-an-email", password = "invalid" });
+            Assert.Equal(HttpStatusCode.BadRequest, response.StatusCode);
+        }
+        Assert.Equal(HttpStatusCode.TooManyRequests,
+            (await Post(client, "/api/auth/register",
+                new { email = "not-an-email", password = "invalid" })).StatusCode);
+
+        var health = await client.GetAsync("/api/health");
+        Assert.Equal(HttpStatusCode.OK, health.StatusCode);
+        Assert.Equal("no-store", health.Headers.CacheControl?.ToString());
+        Assert.Equal("nosniff", health.Headers.GetValues("X-Content-Type-Options").Single());
+        Assert.Equal("no-referrer", health.Headers.GetValues("Referrer-Policy").Single());
+    }
+
+    [Fact]
     public async Task Writes_require_an_antiforgery_token()
     {
         using var database = new SqliteConnection("Data Source=:memory:");
