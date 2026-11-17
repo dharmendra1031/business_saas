@@ -1,4 +1,6 @@
 using System.Security.Claims;
+using System.Data.Common;
+using Microsoft.Data.SqlClient;
 using BusinessSaas.Api.Data;
 using Microsoft.EntityFrameworkCore;
 
@@ -152,13 +154,23 @@ public static class PlatformEndpoints
                 .ToListAsync();
 
             var drafts = await db.SubscriptionPlanDrafts.AsNoTracking().ToListAsync();
+            var published = await db.PublishedPlanVersions.AsNoTracking()
+                .OrderByDescending(x => x.Version).ToListAsync();
             return Results.Ok(new
             {
                 items = Plans.Select(plan => new
                 {
                     plan.Code, plan.Name, plan.IsPublic,
                     assignedBusinesses = assigned.FirstOrDefault(x => x.Code == plan.Code)?.Count ?? 0,
-                    pricingConfigured = false, // Drafts are never published or enforced.
+                    pricingConfigured = published.Any(x => x.PlanCode == plan.Code),
+                    published = published.Where(x => x.PlanCode == plan.Code)
+                        .Select(x => new
+                        {
+                            x.Id, x.Version, x.SourceDraftRevision, x.CurrencyCode,
+                            x.MonthlyPrice, x.QuarterlyPrice, x.YearlyPrice,
+                            x.MaxLocations, x.MaxUsers, x.MaxProducts,
+                            x.PublishedAtUtc
+                        }).FirstOrDefault(),
                     draft = drafts.Where(x => x.PlanCode == plan.Code)
                         .Select(x => new
                         {
@@ -273,6 +285,102 @@ public static class PlatformEndpoints
             }
             await transaction.CommitAsync();
             return Results.Ok(new { code, revision = next.Revision, auditId = audit.Id });
+        });
+
+        group.MapPost("/plans/{planCode}/publish", async (string planCode,
+            PublishPlanRequest request, ClaimsPrincipal user, AppDbContext db,
+            IConfiguration configuration) =>
+        {
+            if (!PlatformOwner.IsOwner(user, configuration))
+                return Results.Forbid();
+
+            var code = planCode.Trim().ToUpperInvariant();
+            // Custom Enterprise prices require an approved contract workflow.
+            if (code == "ENTERPRISE" || !Plans.Any(plan => plan.Code == code))
+                return Results.BadRequest(new
+                {
+                    message = "Only the four public plans support catalog publication."
+                });
+
+            var reason = request.Reason?.Trim() ?? "";
+            if (request.ExpectedDraftRevision <= 0 || request.ExpectedPublishedVersion < 0 ||
+                reason.Length is < 10 or > 200)
+                return Results.BadRequest(new
+                {
+                    message = "Reload draft/version and provide a 10–200 character approval reason."
+                });
+
+            await using var transaction = await db.Database.BeginTransactionAsync();
+            var draft = await db.SubscriptionPlanDrafts.AsNoTracking()
+                .SingleOrDefaultAsync(x => x.PlanCode == code);
+            var current = await db.PublishedPlanVersions.AsNoTracking()
+                .Where(x => x.PlanCode == code)
+                .OrderByDescending(x => x.Version).FirstOrDefaultAsync();
+
+            if (draft is null || draft.Revision != request.ExpectedDraftRevision ||
+                (current?.Version ?? 0) != request.ExpectedPublishedVersion ||
+                current?.SourceDraftRevision == draft.Revision)
+                return Results.Conflict(new { message = "Draft or published plan has changed. Reload before publishing." });
+
+            if (draft.CurrencyCode is null ||
+                !ValidPublishedPrice(draft.MonthlyPrice) ||
+                !ValidPublishedPrice(draft.QuarterlyPrice) ||
+                !ValidPublishedPrice(draft.YearlyPrice) ||
+                !ValidLimit(draft.MaxLocations, 1000) ||
+                !ValidLimit(draft.MaxUsers, 10000) ||
+                !ValidLimit(draft.MaxProducts, 1000000) ||
+                draft.MaxLocations is null || draft.MaxUsers is null || draft.MaxProducts is null)
+                return Results.BadRequest(new
+                {
+                    message = "Complete positive prices in one currency and all three limits before publishing."
+                });
+
+            var next = new PublishedPlanVersion
+            {
+                PlanCode = code,
+                Version = (current?.Version ?? 0) + 1,
+                SourceDraftRevision = draft.Revision,
+                CurrencyCode = draft.CurrencyCode,
+                MonthlyPrice = draft.MonthlyPrice.Value,
+                QuarterlyPrice = draft.QuarterlyPrice.Value,
+                YearlyPrice = draft.YearlyPrice.Value,
+                MaxLocations = draft.MaxLocations,
+                MaxUsers = draft.MaxUsers,
+                MaxProducts = draft.MaxProducts,
+                PublishedByUserId = long.Parse(user.FindFirstValue(ClaimTypes.NameIdentifier)!),
+                PublishedAtUtc = DateTime.UtcNow
+            };
+            db.PublishedPlanVersions.Add(next);
+            try
+            {
+                // Database uniqueness prevents two concurrent requests from publishing the same version.
+                await db.SaveChangesAsync();
+            }
+            catch (DbUpdateException error) when (error.InnerException is
+                SqlException { Number: 2601 or 2627 } or DbException { ErrorCode: 19 })
+            {
+                return Results.Conflict(new { message = "Plan was published elsewhere. Reload before retrying." });
+            }
+
+            var audit = new PlatformAuditEvent
+            {
+                ActorUserId = next.PublishedByUserId,
+                Action = "Plan.Published",
+                TargetType = "PlanVersion",
+                TargetId = next.Id,
+                Reason = reason,
+                PreviousValue = current is null ? null : $"{code} v{current.Version}",
+                NewValue = $"{code} v{next.Version}"
+            };
+            db.PlatformAuditEvents.Add(audit);
+            await db.SaveChangesAsync();
+            await transaction.CommitAsync();
+
+            return Results.Ok(new
+            {
+                planVersionId = next.Id, code, next.Version,
+                sourceDraftRevision = next.SourceDraftRevision, auditId = audit.Id
+            });
         });
 
         group.MapPost("/businesses/{businessId:long}/subscription-status",
@@ -552,6 +660,9 @@ public static class PlatformEndpoints
         new("ENTERPRISE", "Enterprise", false)
     ];
 
+    private static bool ValidPublishedPrice(decimal? value) =>
+        value is > 0 and <= 99999999m && decimal.Round(value.Value, 2) == value.Value;
+
     private static bool ValidPrice(decimal? value) =>
         value is null || (value >= 0 && value <= 99999999m &&
             decimal.Round(value.Value, 2) == value.Value);
@@ -569,6 +680,8 @@ public static class PlatformEndpoints
         $"P:{value.MaxProducts?.ToString() ?? "-"}";
 
     private sealed record PlanDefinition(string Code, string Name, bool IsPublic);
+    private sealed record PublishPlanRequest(int ExpectedDraftRevision,
+        int ExpectedPublishedVersion, string? Reason);
     private sealed record SavePlanDraftRequest(
         int ExpectedRevision, string? CurrencyCode,
         decimal? MonthlyPrice, decimal? QuarterlyPrice, decimal? YearlyPrice,
