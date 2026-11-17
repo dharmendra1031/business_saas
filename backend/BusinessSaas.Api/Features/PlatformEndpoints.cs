@@ -140,6 +140,98 @@ public static class PlatformEndpoints
             });
         });
 
+        group.MapGet("/plans", async (ClaimsPrincipal user, AppDbContext db,
+            IConfiguration configuration) =>
+        {
+            if (!PlatformOwner.IsOwner(user, configuration))
+                return Results.Forbid();
+
+            var assigned = await db.BusinessSubscriptions.AsNoTracking()
+                .GroupBy(x => x.PlanCode)
+                .Select(g => new { Code = g.Key, Count = g.Count() })
+                .ToListAsync();
+
+            var plans = new[]
+            {
+                new { Code = "STARTER", Name = "Starter", IsPublic = true },
+                new { Code = "GROWTH", Name = "Growth", IsPublic = true },
+                new { Code = "PROFESSIONAL", Name = "Professional", IsPublic = true },
+                new { Code = "BUSINESS", Name = "Business", IsPublic = true },
+                new { Code = "ENTERPRISE", Name = "Enterprise", IsPublic = false }
+            };
+
+            return Results.Ok(new
+            {
+                items = plans.Select(plan => new
+                {
+                    plan.Code, plan.Name, plan.IsPublic,
+                    assignedBusinesses = assigned.FirstOrDefault(x => x.Code == plan.Code)?.Count ?? 0,
+                    pricingConfigured = false
+                }),
+                unknownPlanAssignments = assigned
+                    .Where(x => !plans.Any(plan => plan.Code == x.Code))
+                    .Sum(x => x.Count)
+            });
+        });
+
+        group.MapPost("/businesses/{businessId:long}/extend-trial", async (long businessId,
+            ExtendTrialRequest request, ClaimsPrincipal user, AppDbContext db,
+            IConfiguration configuration) =>
+        {
+            if (!PlatformOwner.IsOwner(user, configuration))
+                return Results.Forbid();
+
+            var reason = request.Reason?.Trim() ?? "";
+            if (businessId <= 0 || request.AdditionalDays is < 1 or > 30 ||
+                reason.Length is < 10 or > 200 || request.ExpectedTrialEndsAtUtc.Kind != DateTimeKind.Utc)
+                return Results.BadRequest(new
+                {
+                    message = "Enter 1–30 additional days, a 10–200 character reason, and the current UTC trial expiry."
+                });
+
+            var now = DateTime.UtcNow;
+            var current = await db.BusinessSubscriptions.AsNoTracking()
+                .Where(x => x.BusinessId == businessId)
+                .Select(x => new { x.Status, x.TrialEndsAtUtc })
+                .SingleOrDefaultAsync();
+            if (current is null) return Results.NotFound();
+            if (current.Status != "Trial")
+                return Results.Conflict(new { message = "Only trial subscriptions can be extended." });
+            if (current.TrialEndsAtUtc != request.ExpectedTrialEndsAtUtc)
+                return Results.Conflict(new { message = "Trial expiry has changed. Reload before extending." });
+
+            var newExpiry = (current.TrialEndsAtUtc > now ? current.TrialEndsAtUtc : now)
+                .AddDays(request.AdditionalDays);
+            if (newExpiry > now.AddDays(90))
+                return Results.BadRequest(new { message = "The new expiry must be within 90 days." });
+
+            await using var transaction = await db.Database.BeginTransactionAsync();
+            var updated = await db.BusinessSubscriptions.Where(x => x.BusinessId == businessId &&
+                    x.Status == "Trial" && x.TrialEndsAtUtc == request.ExpectedTrialEndsAtUtc)
+                .ExecuteUpdateAsync(setters => setters.SetProperty(x => x.TrialEndsAtUtc, newExpiry));
+            if (updated != 1)
+            {
+                await transaction.RollbackAsync();
+                return Results.Conflict(new { message = "Trial was updated elsewhere. Reload before extending." });
+            }
+
+            var audit = new PlatformAuditEvent
+            {
+                ActorUserId = long.Parse(user.FindFirstValue(ClaimTypes.NameIdentifier)!),
+                Action = "Business.TrialExtended",
+                TargetType = "Business",
+                TargetId = businessId,
+                Reason = reason,
+                PreviousValue = current.TrialEndsAtUtc.ToString("O"),
+                NewValue = newExpiry.ToString("O")
+            };
+            db.PlatformAuditEvents.Add(audit);
+            await db.SaveChangesAsync();
+            await transaction.CommitAsync();
+
+            return Results.Ok(new { businessId, trialEndsAtUtc = newExpiry, auditId = audit.Id });
+        });
+
         group.MapGet("/customers", async (ClaimsPrincipal user, AppDbContext db,
             IConfiguration configuration, string? search, int page = 1, int pageSize = 20) =>
         {
@@ -283,4 +375,5 @@ public static class PlatformEndpoints
         });
     }
 
+    private sealed record ExtendTrialRequest(int AdditionalDays, DateTime ExpectedTrialEndsAtUtc, string? Reason);
 }

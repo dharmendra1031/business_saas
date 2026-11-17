@@ -14,6 +14,8 @@ public sealed class PlatformAuditEvent
     public string TargetType { get; set; } = "";
     public long? TargetId { get; set; }
     public string? Reason { get; set; }
+    public string? PreviousValue { get; set; }
+    public string? NewValue { get; set; }
     public DateTime CreatedAtUtc { get; set; } = DateTime.UtcNow;
 }
 
@@ -239,6 +241,8 @@ public sealed class AppDbContext(DbContextOptions<AppDbContext> options)
             entity.Property(x => x.Action).HasMaxLength(60).IsRequired();
             entity.Property(x => x.TargetType).HasMaxLength(40).IsRequired();
             entity.Property(x => x.Reason).HasMaxLength(250);
+            entity.Property(x => x.PreviousValue).HasMaxLength(100);
+            entity.Property(x => x.NewValue).HasMaxLength(100);
             entity.HasIndex(x => new { x.CreatedAtUtc, x.Id });
             entity.HasOne<AppUser>().WithMany()
                 .HasForeignKey(x => x.ActorUserId).OnDelete(DeleteBehavior.Restrict);
