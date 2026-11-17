@@ -213,6 +213,7 @@ public sealed class SqlServerTests
         var orderResponse = await Post(owner, ordersPath, new
         {
             locationId, supplierId,
+            requestKey = "sql-purchase-order-20261117",
             lines = new[] { new { productId, quantity = 100m, unitCost = 1m } }
         });
         Assert.Equal(HttpStatusCode.Created, orderResponse.StatusCode);
@@ -225,10 +226,11 @@ public sealed class SqlServerTests
         var orderData = await owner.GetFromJsonAsync<JsonElement>(orderPath);
         var purchaseLineId = orderData.GetProperty("lines")[0].GetProperty("id").GetInt64();
 
-        async Task<long> DraftReceipt()
+        async Task<long> DraftReceipt(string requestKey)
         {
             var response = await Post(owner, orderPath + "/receivings", new
             {
+                requestKey,
                 lines = new[] { new { purchaseOrderLineId = purchaseLineId, quantity = 70m } }
             });
             Assert.Equal(HttpStatusCode.Created, response.StatusCode);
@@ -236,8 +238,8 @@ public sealed class SqlServerTests
                 .GetProperty("id").GetInt64();
         }
 
-        var receiptA = await DraftReceipt();
-        var receiptB = await DraftReceipt();
+        var receiptA = await DraftReceipt("sql-receipt-first-20261117");
+        var receiptB = await DraftReceipt("sql-receipt-second-20261117");
         var csrf = await owner.GetFromJsonAsync<JsonElement>("/api/auth/csrf");
         var csrfToken = csrf.GetProperty("token").GetString()!;
         async Task<HttpResponseMessage> PostReceipt(long receiptId)
