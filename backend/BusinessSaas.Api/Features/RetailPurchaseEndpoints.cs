@@ -72,9 +72,9 @@ public static class RetailPurchaseEndpoints
                     !ValidCost(x.UnitCost)))
                 return Results.BadRequest(new { message = "Enter 1–50 distinct products with valid quantities and costs." });
 
-            var requestKey = request.RequestKey?.Trim();
-            if (requestKey is not null && requestKey.Length is < 12 or > 80)
-                return Results.BadRequest(new { message = "Invalid request key." });
+            var requestKey = request.RequestKey?.Trim() ?? "";
+            if (requestKey.Length is < 12 or > 80)
+                return Results.BadRequest(new { message = "Request key must be 12–80 characters." });
 
             var userId = UserId(user);
             if (requestKey is not null)
@@ -236,9 +236,9 @@ public static class RetailPurchaseEndpoints
                 request.Lines.Select(x => x.PurchaseOrderLineId).Distinct().Count() != request.Lines.Count)
                 return Results.BadRequest(new { message = "Enter distinct PO lines with positive receiving quantities." });
 
-            var requestKey = request.RequestKey?.Trim();
-            if (requestKey is not null && requestKey.Length is < 12 or > 80)
-                return Results.BadRequest(new { message = "Invalid request key." });
+            var requestKey = request.RequestKey?.Trim() ?? "";
+            if (requestKey.Length is < 12 or > 80)
+                return Results.BadRequest(new { message = "Request key must be 12–80 characters." });
 
             var userId = UserId(user);
             if (requestKey is not null)
