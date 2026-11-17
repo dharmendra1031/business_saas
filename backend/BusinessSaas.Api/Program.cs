@@ -128,6 +128,22 @@ app.Use(async (context, next) =>
 app.UseAuthorization();
 
 app.MapGet("/api/health", () => Results.Ok(new { status = "ok" }));
+app.MapGet("/api/ready", async (AppDbContext db, ILogger<Program> logger) =>
+{
+    try
+    {
+        if (!await db.Database.CanConnectAsync() ||
+            db.Database.IsSqlServer() && (await db.Database.GetPendingMigrationsAsync()).Any())
+            return Results.StatusCode(StatusCodes.Status503ServiceUnavailable);
+
+        return Results.Ok(new { status = "ready" });
+    }
+    catch (Exception error)
+    {
+        logger.LogError(error, "Database readiness check failed");
+        return Results.StatusCode(StatusCodes.Status503ServiceUnavailable);
+    }
+});
 app.MapAuthEndpoints();
 app.MapBusinessEndpoints();
 app.MapBusinessStaffEndpoints();
