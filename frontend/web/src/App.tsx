@@ -1,5 +1,5 @@
 import { useEffect, useRef, useState, type FormEvent } from 'react'
-import { ArrowLeft, ArrowRight, Boxes, Building2, CheckCircle2, BadgeCheck, LayoutDashboard, LogOut, Menu, Package, Plus, ShieldCheck, ShoppingCart, Store, Tags, Truck, UserRound, Users } from 'lucide-react'
+import { Activity, ArrowLeft, ArrowRight, Boxes, Building2, CheckCircle2, CreditCard, KeyRound, LayoutDashboard, LogOut, Menu, Package, Plus, Settings2, ShieldCheck, ShoppingCart, Store, Tags, Truck, UserRound, Users } from 'lucide-react'
 import { api, post, resetCsrf, SessionExpiredError, setSessionExpiredHandler, type Business, type BusinessMarket, type BusinessType, type RetailDashboard, type User } from './api'
 import TeamMembers from './TeamMembers'
 import RetailCatalog, { type RetailSection } from './RetailCatalog'
@@ -229,25 +229,34 @@ export default function App() {
         {canViewPlatform && <>
           <div className="sidebar-heading">PLATFORM CONTROL</div>
           {([
-            ['overview', 'Overview', LayoutDashboard],
+            ['overview', 'Dashboard', LayoutDashboard],
             ['customers', 'Customers', Users],
             ['businesses', 'Businesses', Building2],
-            ['plans', 'Subscription Plans', BadgeCheck],
-            ['audit', 'Security & Audit', ShieldCheck]
-          ] as const).map(([section, label, Icon]) => <button
-            key={section} ref={section === 'overview' && user?.isPlatformOwner ? businessNav : undefined}
-            type="button" className={`nav-entry${page === 'platform' && platformSection === section ? ' active' : ''}`}
-            aria-current={page === 'platform' && platformSection === section ? 'page' : undefined}
-            onClick={() => {
-              if (menuOpen) menuToggle.current?.focus()
-              setMenuOpen(false)
-              setDashboard(null)
-              setError('')
-              setNotice('')
-              setPlatformBusinessId(null)
-              setPlatformSection(section)
-              setPage('platform')
-            }}><Icon size={18} /> {label}</button>)}
+            ['plans', 'Plans & Billing', CreditCard],
+            [null, 'Licenses', KeyRound],
+            [null, 'Platform Settings', Settings2],
+            ['audit', 'Security & Audit', ShieldCheck],
+            ['operations', 'Operations', Activity]
+          ] as const).map(([section, label, Icon]) => section === null
+            ? <button key={label} type="button" className="nav-entry nav-entry-planned"
+                disabled title={`${label} — planned, not yet implemented`}>
+                <Icon size={18} /> <span>{label}</span><small>Planned</small>
+              </button>
+            : <button key={section}
+                ref={section === 'overview' && user?.isPlatformOwner ? businessNav : undefined}
+                type="button"
+                className={`nav-entry${page === 'platform' && platformSection === section ? ' active' : ''}`}
+                aria-current={page === 'platform' && platformSection === section ? 'page' : undefined}
+                onClick={() => {
+                  if (menuOpen) menuToggle.current?.focus()
+                  setMenuOpen(false)
+                  setDashboard(null)
+                  setError('')
+                  setNotice('')
+                  setPlatformBusinessId(null)
+                  setPlatformSection(section)
+                  setPage('platform')
+                }}><Icon size={18} /> {label}</button>)}
         </>}
         <div className="sidebar-footer">{user?.isPlatformOwner
           ? <>Platform Owner <small className="d-block mt-1">MFA-protected access</small></>

@@ -213,3 +213,13 @@ button:focus-visible, a:focus-visible, input:focus-visible, select:focus-visible
   .platform-plan-chart { flex-wrap: wrap; gap: 15px; }
   .platform-plan-legend { flex-basis: 100%; }
 }
+
+/* Planned platform modules are visible but intentionally cannot be opened. */
+.platform-shell .nav-entry-planned,
+.platform-shell .nav-entry-planned:hover {
+  color: #91a3bc;
+  background: transparent;
+  cursor: not-allowed;
+  opacity: .8;
+}
+.nav-entry-planned small { margin-left: auto; font-size: .65rem; color: #c1cee1; }

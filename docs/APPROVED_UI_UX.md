@@ -100,3 +100,24 @@ Business creation should remain a short progressive wizard; switching must clear
 5. Subscription ledger, payments/invoices, licenses, modules, settings, support, monitoring and enterprise capabilities by product priority, with tests.
 
 **Source of truth:** This document records the user's approved screenshots and requirements. If a later design conflicts with the four supplied reference images, ask for or record an explicit design decision before replacing the agreed direction.
+
+## 8. Consolidated Super Admin navigation (approved 17 November 2026)
+
+The final Super Admin sidebar has **eight** module headings. Every control has one authoritative location; planned modules remain disabled until genuinely implemented.
+
+| Top-level module | Single source of truth | UI availability |
+| --- | --- | --- |
+| Dashboard | Live KPIs, growth, plan distribution, expiring trials, audit activity | Implemented |
+| Customers | Customer search/details; read-only owned business references | Implemented read-only |
+| Businesses | Business directory/detail; trial extension and suspension/reactivation actions | Implemented (only existing safe actions) |
+| Plans & Billing | Draft plans, immutable catalog publication; billing eventually lives here | Plans implemented, billing explicitly unavailable |
+| Licenses | Offline license lifecycle | Disabled / planned |
+| Platform Settings | Business types, modules, countries, trial policy, language settings | Disabled / planned |
+| Security & Audit | MFA and platform audit history | Implemented foundation |
+| Operations | Read-only API/database readiness; future health, backups, support | Readiness implemented, monitoring/backup/support planned |
+
+Do **not** introduce a separate top-level Trials, Subscriptions, Payments, Invoices, Support, Modules, or System Health menu. Trial changes belong to `Businesses`, plan catalog and paid billing belong to `Plans & Billing`, and backups/monitoring/support belong to `Operations`.
+
+Dashboard alerts only **navigate** to a business or event; they must not duplicate write controls. Customer Details links to Businesses but cannot mutate shop operational data. The nav must not have clickable placeholder buttons or made-up financial/health information. The new module grouping does **not** mean these incomplete features are production ready.
+
+Implementation stays within one .NET API and one React app, with numeric auto-increment database entity IDs.

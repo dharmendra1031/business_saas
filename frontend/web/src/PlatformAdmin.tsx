@@ -4,8 +4,9 @@ import PlatformOverview from './PlatformOverview'
 import PlatformCustomers from './PlatformCustomers'
 import PlatformAudit from './PlatformAudit'
 import PlatformPlans from './PlatformPlans'
+import PlatformOperations from './PlatformOperations'
 
-export type PlatformSection = 'overview' | 'customers' | 'businesses' | 'plans' | 'audit'
+export type PlatformSection = 'overview' | 'customers' | 'businesses' | 'plans' | 'audit' | 'operations'
 
 interface BusinessRow {
   id: number
@@ -382,5 +383,6 @@ export default function PlatformAdmin({ section, selectedBusinessId, onViewBusin
   if (section === 'customers') return <PlatformCustomers />
   if (section === 'plans') return <PlatformPlans />
   if (section === 'audit') return <PlatformAudit />
+  if (section === 'operations') return <PlatformOperations />
   return <PlatformBusinesses selectedBusinessId={selectedBusinessId} />
 }

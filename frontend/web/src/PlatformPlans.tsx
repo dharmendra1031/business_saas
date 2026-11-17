@@ -184,8 +184,8 @@ export default function PlatformPlans() {
 
   return <>
     <div className="page-header">
-      <div><h1>Subscription Plans</h1>
-        <p>Review and publish versioned catalog terms without changing existing subscriptions or taking payments.</p>
+      <div><h1>Plans & Billing</h1>
+        <p>Publish catalog terms. Subscription billing and payments are not available yet.</p>
       </div>
       <button type="button" className="btn btn-outline-secondary btn-sm"
         disabled={loading || busy} onClick={() => setReload(value => value + 1)}>Refresh</button>
@@ -196,7 +196,7 @@ export default function PlatformPlans() {
         onClick={() => setReload(value => value + 1)}>Retry</button>}
     </div>}
     <section className="content-section">
-      <h2>Plan Directory</h2>
+      <h2>Subscription Plans</h2>
       {loading ? <p role="status">Loading plans…</p> : data && <>
         <div className="table-responsive">
           <table className="table platform-table align-middle">
@@ -266,6 +266,14 @@ export default function PlatformPlans() {
         </div>
       </form>
     </section>}
+
+    <section className="content-section mt-3" aria-label="Subscription billing">
+      <h2>Subscription Billing</h2>
+      <p className="text-secondary mb-0">
+        Payment ledger, invoices, refunds and verified paid activation are not implemented.
+        Publishing a plan does not charge a customer or activate a subscription.
+      </p>
+    </section>
 
     {editing && <section className="content-section mt-3" aria-label="Edit plan draft">
       <h2>{editing.name} — Draft Configuration</h2>
