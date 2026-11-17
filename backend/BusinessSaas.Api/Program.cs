@@ -96,6 +96,16 @@ builder.Services.AddProblemDetails(options =>
 
 var app = builder.Build();
 
+if (args.Contains("--bootstrap-platform-owner", StringComparer.Ordinal))
+{
+    var userId = await PlatformOwnerBootstrap.CreateAsync(app.Services, app.Configuration,
+        Environment.GetEnvironmentVariable("PLATFORM_BOOTSTRAP_EMAIL"),
+        Environment.GetEnvironmentVariable("PLATFORM_BOOTSTRAP_PASSWORD"));
+    Console.WriteLine($"Platform owner created with numeric User ID {userId}.");
+    Console.WriteLine("Set Platform__OwnerUserId to this ID in the API host configuration and restart.");
+    return;
+}
+
 if (app.Environment.IsDevelopment())
 {
     // Local SQL Server databases use reviewed migrations; SQLite stays in-memory for tests.

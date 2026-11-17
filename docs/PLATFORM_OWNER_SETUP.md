@@ -8,6 +8,23 @@
 
 All users and business records use numeric SQL identity IDs. Operation request keys are not entity IDs.
 
+## Create a dedicated Super Admin account (trusted operator only)
+
+The project includes an **offline one-time bootstrap command**, not a public API. It creates an Identity account with a strong hashed password, confirms its email only under trusted-operator responsibility, and prints its numeric User ID. No account or password is seeded in Git.
+
+1. Verify that the dedicated email inbox is controlled by the platform operator. Configure the intended SQL Server connection through `ConnectionStrings__Default` and apply the reviewed migrations first. **Back up an existing database before changing it.**
+2. From the repository root, run:
+
+   ```powershell
+   .\scripts\bootstrap-platform-owner.ps1 -Email "admin@your-company.example"
+   ```
+
+   The script prompts for a password without displaying it and requires at least 16 characters. It passes the password temporarily to the offline process, clears the environment variables when finished and does not print or commit the password.
+3. The command prints the newly created numeric User ID, for example `42`. Set `Platform__OwnerUserId` to **that actual ID** using the API host's protected settings and restart the API.
+4. Login using the dedicated account and confirm the Super Admin dashboard is shown. Existing accounts are rejected by the bootstrap; it will not silently promote a Customer.
+
+**Do not** send the production admin password in chat, add it to command-line arguments or commit it to an appsettings file. The command must run in a trusted host with restricted console and environment access. A successful bootstrap does not mean a live account was created unless an operator actually ran it against the intended database.
+
 ## Configure the single platform owner
 
 The API reads `Platform:OwnerUserId` through standard ASP.NET Core configuration. Only the authenticated user with this **numeric user ID** is the platform owner. The value must be positive. When it is absent or invalid, **no account has platform owner access**.
