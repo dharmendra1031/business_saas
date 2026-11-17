@@ -585,12 +585,47 @@ public sealed class BusinessFlowTests
         Assert.Equal(HttpStatusCode.BadRequest,
             (await admin.GetAsync("/api/platform/audit?pageSize=100")).StatusCode);
 
+        // Seed a real soon-to-expire trial; business creation defaults to a later expiry.
+        using (var scope = factory.Services.CreateScope())
+        {
+            var db = scope.ServiceProvider.GetRequiredService<AppDbContext>();
+            var firstTrial = await db.BusinessSubscriptions.SingleAsync(x => x.BusinessId == firstId);
+            firstTrial.TrialEndsAtUtc = DateTime.UtcNow.AddDays(2);
+            await db.SaveChangesAsync();
+        }
+
+        Assert.Equal(HttpStatusCode.BadRequest,
+            (await admin.GetAsync("/api/platform/overview?months=13")).StatusCode);
+        Assert.Equal(HttpStatusCode.Forbidden,
+            (await outsider.GetAsync("/api/platform/overview?months=12")).StatusCode);
+        var annual = await admin.GetFromJsonAsync<JsonElement>("/api/platform/overview?months=12");
+        Assert.Equal(12, annual.GetProperty("businessGrowth").GetArrayLength());
+
         var overview = await admin.GetFromJsonAsync<JsonElement>("/api/platform/overview");
         Assert.Equal(2, overview.GetProperty("totalCustomers").GetInt32());
         Assert.Equal(2, overview.GetProperty("totalBusinesses").GetInt32());
         Assert.Equal(0, overview.GetProperty("activeSubscriptions").GetInt32());
         Assert.Equal(2, overview.GetProperty("activeTrials").GetInt32());
         Assert.Equal(0, overview.GetProperty("expiredTrials").GetInt32());
+        var growth = overview.GetProperty("businessGrowth");
+        Assert.Equal(6, growth.GetArrayLength());
+        Assert.Equal(2, growth.EnumerateArray().Sum(x =>
+            x.GetProperty("businessesCreated").GetInt32()));
+        Assert.Equal(1, overview.GetProperty("businessesByPlan").GetArrayLength());
+        Assert.Equal("STARTER", overview.GetProperty("businessesByPlan")[0]
+            .GetProperty("planCode").GetString());
+        Assert.Equal(2, overview.GetProperty("businessesByPlan")[0]
+            .GetProperty("businessCount").GetInt32());
+        Assert.Equal(0, overview.GetProperty("unassignedBusinesses").GetInt32());
+        Assert.Equal(1, overview.GetProperty("expiringTrialCount").GetInt32());
+        Assert.Single(overview.GetProperty("expiringTrials").EnumerateArray());
+        Assert.Equal(firstId, overview.GetProperty("expiringTrials")[0]
+            .GetProperty("businessId").GetInt64());
+        Assert.Equal("directory-owner@example.test", overview.GetProperty("expiringTrials")[0]
+            .GetProperty("ownerEmail").GetString());
+        Assert.Equal(2, overview.GetProperty("recentActivity").GetArrayLength());
+        Assert.Equal("PlatformOwner.SignIn", overview.GetProperty("recentActivity")[0]
+            .GetProperty("action").GetString());
 
         var customers = await admin.GetFromJsonAsync<JsonElement>(
             "/api/platform/customers?page=1&pageSize=1");

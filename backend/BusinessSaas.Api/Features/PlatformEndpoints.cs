@@ -52,22 +52,91 @@ public static class PlatformEndpoints
                 : Results.Forbid());
 
         group.MapGet("/overview", async (ClaimsPrincipal user, AppDbContext db,
-            IConfiguration configuration) =>
+            IConfiguration configuration, int months = 6) =>
         {
             if (!PlatformOwner.IsOwner(user, configuration))
                 return Results.Forbid();
+            if (months is not (6 or 12))
+                return Results.BadRequest(new { message = "Choose 6 or 12 months." });
 
             var ownerId = long.Parse(configuration["Platform:OwnerUserId"]!);
             var now = DateTime.UtcNow;
+            var periodStart = new DateTime(now.Year, now.Month, 1, 0, 0, 0, DateTimeKind.Utc)
+                .AddMonths(1 - months);
+            var periodEnd = periodStart.AddMonths(months);
+
+            var totalCustomers = await db.Users.CountAsync(x => x.Id != ownerId);
+            var totalBusinesses = await db.Businesses.CountAsync();
+            var activeSubscriptions = await db.BusinessSubscriptions.CountAsync(x => x.Status == "Active");
+            var activeTrials = await db.BusinessSubscriptions.CountAsync(x =>
+                x.Status == "Trial" && x.TrialEndsAtUtc > now);
+            var expiredTrials = await db.BusinessSubscriptions.CountAsync(x =>
+                x.Status == "Trial" && x.TrialEndsAtUtc <= now);
+
+            var growthCounts = await db.Businesses.AsNoTracking()
+                .Where(x => x.CreatedAtUtc >= periodStart && x.CreatedAtUtc < periodEnd)
+                .GroupBy(x => new { x.CreatedAtUtc.Year, x.CreatedAtUtc.Month })
+                .Select(group => new
+                {
+                    group.Key.Year,
+                    group.Key.Month,
+                    Count = group.Count()
+                }).ToListAsync();
+
+            var businessGrowth = Enumerable.Range(0, months).Select(index =>
+            {
+                var month = periodStart.AddMonths(index);
+                return new
+                {
+                    year = month.Year,
+                    month = month.Month,
+                    businessesCreated = growthCounts.FirstOrDefault(x =>
+                        x.Year == month.Year && x.Month == month.Month)?.Count ?? 0
+                };
+            }).ToArray();
+
+            var businessesByPlan = await db.BusinessSubscriptions.AsNoTracking()
+                .GroupBy(x => x.PlanCode)
+                .Select(group => new { planCode = group.Key, businessCount = group.Count() })
+                .OrderByDescending(x => x.businessCount).ThenBy(x => x.planCode)
+                .ToListAsync();
+
+            var expiringUntil = now.AddDays(7);
+            var expiringQuery = db.BusinessSubscriptions.AsNoTracking().Where(x =>
+                x.Status == "Trial" &&
+                x.TrialEndsAtUtc > now && x.TrialEndsAtUtc <= expiringUntil);
+            var expiringTrialCount = await expiringQuery.CountAsync();
+            var expiringTrials = await (from trial in expiringQuery
+                                       join business in db.Businesses.AsNoTracking()
+                                           on trial.BusinessId equals business.Id
+                                       join owner in db.Users.AsNoTracking()
+                                           on business.CreatedByUserId equals owner.Id
+                                       join type in db.BusinessTypes.AsNoTracking()
+                                           on business.BusinessTypeId equals type.Id
+                                       orderby trial.TrialEndsAtUtc, business.Id
+                                       select new
+                                       {
+                                           businessId = business.Id,
+                                           businessName = business.Name,
+                                           ownerEmail = owner.Email,
+                                           businessType = type.Name,
+                                           trialEndsAtUtc = trial.TrialEndsAtUtc
+                                       }).Take(8).ToListAsync();
+
+            var recentActivity = await db.PlatformAuditEvents.AsNoTracking()
+                .OrderByDescending(x => x.Id).Take(8)
+                .Select(x => new
+                {
+                    x.Id, x.ActorUserId, x.Action, x.TargetType,
+                    x.TargetId, x.CreatedAtUtc
+                }).ToListAsync();
+
             return Results.Ok(new
             {
-                totalCustomers = await db.Users.CountAsync(x => x.Id != ownerId),
-                totalBusinesses = await db.Businesses.CountAsync(),
-                activeSubscriptions = await db.BusinessSubscriptions.CountAsync(x => x.Status == "Active"),
-                activeTrials = await db.BusinessSubscriptions.CountAsync(x =>
-                    x.Status == "Trial" && x.TrialEndsAtUtc > now),
-                expiredTrials = await db.BusinessSubscriptions.CountAsync(x =>
-                    x.Status == "Trial" && x.TrialEndsAtUtc <= now)
+                totalCustomers, totalBusinesses, activeSubscriptions, activeTrials, expiredTrials,
+                businessGrowth, businessesByPlan,
+                unassignedBusinesses = Math.Max(0, totalBusinesses - businessesByPlan.Sum(x => x.businessCount)),
+                expiringTrialCount, expiringTrials, recentActivity
             });
         });
 
