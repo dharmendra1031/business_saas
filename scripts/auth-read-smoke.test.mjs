@@ -8,6 +8,15 @@ const exec = promisify(execFile)
 const requests = []
 const server = createServer(async (req, res) => {
   requests.push({ method: req.method, url: req.url })
+  if (req.method === 'GET' && ['/api/health', '/api/ready', '/api/auth/options'].includes(req.url)) {
+    res.setHeader('Content-Type', 'application/json')
+    res.setHeader('Cache-Control', 'no-store')
+    res.setHeader('X-Content-Type-Options', 'nosniff')
+    res.setHeader('Referrer-Policy', 'no-referrer')
+    res.end(JSON.stringify(req.url === '/api/auth/options' ? { canRegister: false }
+      : { status: req.url === '/api/health' ? 'ok' : 'ready' }))
+    return
+  }
   if (req.url === '/api/auth/csrf' && req.method === 'GET') {
     res.setHeader('Set-Cookie', 'test-csrf=first; Path=/; HttpOnly')
     res.setHeader('Content-Type', 'application/json')
@@ -70,4 +79,10 @@ test('rejects remote HTTP and invalid numeric business ID', async () => {
     }),
     /numeric BS_SMOKE_BUSINESS_ID/
   )
+})
+
+test('staging preflight validates health and production guards', async () => {
+  const check = new URL('./staging-preflight.mjs', import.meta.url).pathname
+  const { stdout } = await exec(process.execPath, [check, target], { env })
+  assert.match(stdout, /Staging preflight passed/)
 })

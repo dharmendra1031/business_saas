@@ -64,3 +64,13 @@ The repository CI proves database migrations/integration against disposable SQL 
 ## Staging measurement before deployment
 
 Use [API Performance Baseline](PERFORMANCE_BASELINE.md) on an isolated staging system with synthetic users and records. Capture the API commit and SQL Server environment. Do not use merchant credentials or point the smoke script at production; a passing localhost test is not a production load test.
+
+## Read-only staging preflight
+
+When the API is deployed as `Production` or another non-development environment **against an isolated staging SQL Server**, run:
+
+```powershell
+node scripts/staging-preflight.mjs http://127.0.0.1:5080
+```
+
+For a remote **HTTPS staging** hostname, set `BS_SMOKE_REMOTE_STAGING=yes` and pass the staging base URL. Never use a production hostname without operational approval. The script checks `/api/health`, `/api/ready`, no-store and browser security headers, and that `/api/auth/options` reports signup disabled. It does **not** confirm backup durability, restore success, IIS permissions, HTTPS certificate renewal, or real-world capacity.

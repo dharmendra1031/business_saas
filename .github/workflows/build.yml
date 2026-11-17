@@ -76,6 +76,7 @@ jobs:
       - name: Validate performance smoke scripts
         run: |
           node --check ../../scripts/api-load-smoke.mjs
+          node --check ../../scripts/staging-preflight.mjs
           node --test ../../scripts/auth-read-smoke.test.mjs
       - name: Typecheck and production build
         run: npm run build
