@@ -122,7 +122,8 @@ export async function api<T>(path: string, options: RequestInit = {}): Promise<T
 
     const body = await response.json().catch(() => ({})) as { message?: string; detail?: string }
     throw new Error(body.message ?? body.detail ??
-      (response.status === 401 ? 'Please sign in to continue.' : 'Request failed.'))
+      (response.status === 429 ? 'Too many requests. Wait a minute and try again.'
+        : response.status === 401 ? 'Please sign in to continue.' : 'Request failed.'))
   }
 
   if (response.status === 204) return undefined as T
