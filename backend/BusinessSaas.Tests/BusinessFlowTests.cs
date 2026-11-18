@@ -953,8 +953,8 @@ public sealed class BusinessFlowTests
             .StatusCode);
         var preview = await admin.GetFromJsonAsync<JsonElement>(
             $"/api/platform/billing/businesses/{firstId}/preview?cycle=Monthly&periodStartDate={periodStart:yyyy-MM-dd}");
-        Assert.Equal(periodStart, preview.GetProperty("periodStartDate").GetDateOnly());
-        Assert.Equal(periodEnd, preview.GetProperty("periodEndDate").GetDateOnly());
+        Assert.Equal(periodStart, DateOnly.Parse(preview.GetProperty("periodStartDate").GetString()!));
+        Assert.Equal(periodEnd, DateOnly.Parse(preview.GetProperty("periodEndDate").GetString()!));
         Assert.Equal("Alpha Retail", preview.GetProperty("businessName").GetString());
         Assert.Equal(1099m, preview.GetProperty("amount").GetDecimal());
         Assert.Equal("INR", preview.GetProperty("currencyCode").GetString());
@@ -995,8 +995,8 @@ public sealed class BusinessFlowTests
         Assert.True(billingId > 0);
         Assert.False(billingResult.GetProperty("alreadyExists").GetBoolean());
         Assert.Equal(1099m, billingResult.GetProperty("amount").GetDecimal());
-        Assert.Equal(periodStart, billingResult.GetProperty("periodStartDate").GetDateOnly());
-        Assert.Equal(periodEnd, billingResult.GetProperty("periodEndDate").GetDateOnly());
+        Assert.Equal(periodStart, DateOnly.Parse(billingResult.GetProperty("periodStartDate").GetString()!));
+        Assert.Equal(periodEnd, DateOnly.Parse(billingResult.GetProperty("periodEndDate").GetString()!));
 
         var billingAgain = await Post(admin, "/api/platform/billing/drafts", billingRequest);
         Assert.Equal(HttpStatusCode.OK, billingAgain.StatusCode);
@@ -1036,7 +1036,7 @@ public sealed class BusinessFlowTests
         var nextPeriodPreview = await admin.GetFromJsonAsync<JsonElement>(
             $"/api/platform/billing/businesses/{firstId}/preview?cycle=Monthly&periodStartDate={periodEnd:yyyy-MM-dd}");
         Assert.Equal(periodEnd,
-            nextPeriodPreview.GetProperty("periodStartDate").GetDateOnly());
+            DateOnly.Parse(nextPeriodPreview.GetProperty("periodStartDate").GetString()!));
 
         var billingHistory = await admin.GetFromJsonAsync<JsonElement>(
             "/api/platform/billing/drafts?page=1&pageSize=10");
