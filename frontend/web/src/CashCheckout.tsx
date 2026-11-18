@@ -14,11 +14,27 @@ interface Receipt {
 function restore(key: string): SaleRequest | null {
   const raw = sessionStorage.getItem(key)
   if (!raw) return null
-  const saved = JSON.parse(raw)
-  if (Array.isArray(saved.lines)) return saved
-  // Recover a single-product checkout started before baskets were introduced.
-  return { ...saved, lines: [{ productId: saved.productId, name: 'Product #' + saved.productId,
-    quantity: saved.quantity, expectedUnitPrice: saved.expectedUnitPrice }] }
+  try {
+    const saved = JSON.parse(raw)
+    if (!saved || !Number.isSafeInteger(saved.locationId) || saved.locationId < 1 ||
+      typeof saved.requestKey !== 'string' || !saved.requestKey ||
+      !Number.isFinite(saved.tendered) || saved.tendered < 0) throw new Error('Invalid checkout')
+    // Recover a single-product checkout started before baskets were introduced.
+    const lines = Array.isArray(saved.lines) ? saved.lines : [{
+      productId: saved.productId, name: 'Product #' + saved.productId,
+      quantity: saved.quantity, expectedUnitPrice: saved.expectedUnitPrice
+    }]
+    if (!lines.length || lines.length > 100 || lines.some((line: Line) =>
+      !Number.isSafeInteger(line.productId) || line.productId < 1 ||
+      typeof line.name !== 'string' || !Number.isSafeInteger(line.quantity) ||
+      line.quantity < 1 || line.quantity > 1000000 ||
+      !Number.isFinite(line.expectedUnitPrice) || line.expectedUnitPrice < 0))
+      throw new Error('Invalid checkout lines')
+    return { locationId: saved.locationId, requestKey: saved.requestKey, tendered: saved.tendered, lines }
+  } catch {
+    sessionStorage.removeItem(key)
+    return null
+  }
 }
 
 export default function CashCheckout({ userId, dashboard }: { userId: number; dashboard: RetailDashboard }) {
