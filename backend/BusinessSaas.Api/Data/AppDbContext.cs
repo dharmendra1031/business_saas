@@ -106,8 +106,30 @@ public sealed class SubscriptionPaymentRequest
     public decimal Amount { get; set; }
     public string RequestKey { get; set; } = "";
     public string Status { get; set; } = "AwaitingGateway";
+    public string? ProviderOrderId { get; set; }
+    public DateTime? OrderCreatedAtUtc { get; set; }
     public long CreatedByUserId { get; set; }
     public DateTime CreatedAtUtc { get; set; } = DateTime.UtcNow;
+}
+
+public sealed class SubscriptionPayment
+{
+    public long Id { get; set; }
+    public long PaymentRequestId { get; set; }
+    public string ProviderPaymentId { get; set; } = "";
+    public string ProviderOrderId { get; set; } = "";
+    public string CurrencyCode { get; set; } = "";
+    public decimal Amount { get; set; }
+    public string ActivationStatus { get; set; } = "Review";
+    public DateTime CapturedAtUtc { get; set; } = DateTime.UtcNow;
+}
+
+public sealed class RazorpayWebhookEvent
+{
+    public long Id { get; set; }
+    public string EventId { get; set; } = "";
+    public long SubscriptionPaymentId { get; set; }
+    public DateTime ReceivedAtUtc { get; set; } = DateTime.UtcNow;
 }
 
 public sealed class BusinessSubscription
@@ -118,6 +140,9 @@ public sealed class BusinessSubscription
     public string Status { get; set; } = "Trial";
     public string? StatusBeforeSuspension { get; set; }
     public DateTime TrialEndsAtUtc { get; set; }
+    public DateTime? PaidStartsAtUtc { get; set; }
+    public DateTime? PaidEndsAtUtc { get; set; }
+    public long? PaidPlanVersionId { get; set; }
 }
 
 public sealed class BusinessLocation
@@ -284,6 +309,8 @@ public sealed class AppDbContext(DbContextOptions<AppDbContext> options)
     public DbSet<PublishedPlanVersion> PublishedPlanVersions => Set<PublishedPlanVersion>();
     public DbSet<SubscriptionBillingDraft> SubscriptionBillingDrafts => Set<SubscriptionBillingDraft>();
     public DbSet<SubscriptionPaymentRequest> SubscriptionPaymentRequests => Set<SubscriptionPaymentRequest>();
+    public DbSet<SubscriptionPayment> SubscriptionPayments => Set<SubscriptionPayment>();
+    public DbSet<RazorpayWebhookEvent> RazorpayWebhookEvents => Set<RazorpayWebhookEvent>();
     public DbSet<BusinessLocation> BusinessLocations => Set<BusinessLocation>();
 
     public DbSet<RetailCategory> RetailCategories => Set<RetailCategory>();
@@ -404,6 +431,9 @@ public sealed class AppDbContext(DbContextOptions<AppDbContext> options)
             entity.Property(x => x.Amount).HasPrecision(18, 2);
             entity.Property(x => x.RequestKey).HasMaxLength(80).IsRequired();
             entity.Property(x => x.Status).HasMaxLength(24).IsRequired();
+            entity.Property(x => x.ProviderOrderId).HasMaxLength(80);
+            entity.HasIndex(x => x.ProviderOrderId).IsUnique()
+                .HasFilter("[ProviderOrderId] IS NOT NULL");
             entity.HasIndex(x => x.BillingDraftId).IsUnique();
             entity.HasIndex(x => new { x.BusinessId, x.RequestKey }).IsUnique();
             entity.HasIndex(x => new { x.CreatedAtUtc, x.Id });
@@ -415,6 +445,27 @@ public sealed class AppDbContext(DbContextOptions<AppDbContext> options)
                 .HasForeignKey(x => x.CreatedByUserId).OnDelete(DeleteBehavior.Restrict);
         });
 
+        builder.Entity<SubscriptionPayment>(entity =>
+        {
+            entity.Property(x => x.ProviderPaymentId).HasMaxLength(80).IsRequired();
+            entity.Property(x => x.ProviderOrderId).HasMaxLength(80).IsRequired();
+            entity.Property(x => x.CurrencyCode).HasMaxLength(3).IsRequired();
+            entity.Property(x => x.Amount).HasPrecision(18, 2);
+            entity.Property(x => x.ActivationStatus).HasMaxLength(24).IsRequired();
+            entity.HasIndex(x => x.PaymentRequestId).IsUnique();
+            entity.HasIndex(x => x.ProviderPaymentId).IsUnique();
+            entity.HasOne<SubscriptionPaymentRequest>().WithMany()
+                .HasForeignKey(x => x.PaymentRequestId).OnDelete(DeleteBehavior.Restrict);
+        });
+
+        builder.Entity<RazorpayWebhookEvent>(entity =>
+        {
+            entity.Property(x => x.EventId).HasMaxLength(100).IsRequired();
+            entity.HasIndex(x => x.EventId).IsUnique();
+            entity.HasOne<SubscriptionPayment>().WithMany()
+                .HasForeignKey(x => x.SubscriptionPaymentId).OnDelete(DeleteBehavior.Restrict);
+        });
+
         builder.Entity<BusinessSubscription>(entity =>
         {
             entity.HasIndex(x => x.BusinessId).IsUnique();
@@ -424,6 +475,14 @@ public sealed class AppDbContext(DbContextOptions<AppDbContext> options)
             // SQL Server datetime2 and SQLite do not store DateTimeKind. These values are UTC.
             entity.Property(x => x.TrialEndsAtUtc).HasConversion(
                 value => value, value => DateTime.SpecifyKind(value, DateTimeKind.Utc));
+            entity.Property(x => x.PaidStartsAtUtc).HasConversion(
+                value => value, value => value.HasValue
+                    ? DateTime.SpecifyKind(value.Value, DateTimeKind.Utc) : null);
+            entity.Property(x => x.PaidEndsAtUtc).HasConversion(
+                value => value, value => value.HasValue
+                    ? DateTime.SpecifyKind(value.Value, DateTimeKind.Utc) : null);
+            entity.HasOne<PublishedPlanVersion>().WithMany()
+                .HasForeignKey(x => x.PaidPlanVersionId).OnDelete(DeleteBehavior.Restrict);
             entity.HasOne<Business>().WithMany()
                 .HasForeignKey(x => x.BusinessId).OnDelete(DeleteBehavior.Restrict);
         });

@@ -239,6 +239,11 @@ namespace BusinessSaas.Api.Data.Migrations
                         .HasMaxLength(20)
                         .HasColumnType("nvarchar(20)");
 
+                    b.Property<DateTime?>("PaidStartsAtUtc").HasColumnType("datetime2");
+                    b.Property<DateTime?>("PaidEndsAtUtc").HasColumnType("datetime2");
+                    b.Property<long?>("PaidPlanVersionId").HasColumnType("bigint");
+                    b.HasIndex("PaidPlanVersionId");
+
                     b.Property<string>("StatusBeforeSuspension")
                         .HasMaxLength(20)
                         .HasColumnType("nvarchar(20)");
@@ -312,14 +317,46 @@ namespace BusinessSaas.Api.Data.Migrations
                     b.Property<decimal>("Amount").HasPrecision(18, 2).HasColumnType("decimal(18,2)");
                     b.Property<string>("RequestKey").IsRequired().HasMaxLength(80).HasColumnType("nvarchar(80)");
                     b.Property<string>("Status").IsRequired().HasMaxLength(24).HasColumnType("nvarchar(24)");
+                    b.Property<string>("ProviderOrderId").HasMaxLength(80).HasColumnType("nvarchar(80)");
                     b.Property<long>("CreatedByUserId").HasColumnType("bigint");
                     b.Property<DateTime>("CreatedAtUtc").HasColumnType("datetime2");
                     b.HasKey("Id");
                     b.HasIndex("BillingDraftId").IsUnique();
+                    b.HasIndex("ProviderOrderId").IsUnique().HasFilter("[ProviderOrderId] IS NOT NULL");
                     b.HasIndex("BusinessId", "RequestKey").IsUnique();
                     b.HasIndex("CreatedAtUtc", "Id");
                     b.HasIndex("CreatedByUserId");
                     b.ToTable("SubscriptionPaymentRequests");
+                });
+
+            modelBuilder.Entity("BusinessSaas.Api.Data.SubscriptionPayment", b =>
+                {
+                    b.Property<long>("Id").ValueGeneratedOnAdd().HasColumnType("bigint");
+                    SqlServerPropertyBuilderExtensions.UseIdentityColumn(b.Property<long>("Id"));
+                    b.Property<long>("PaymentRequestId").HasColumnType("bigint");
+                    b.Property<string>("ProviderPaymentId").IsRequired().HasMaxLength(80).HasColumnType("nvarchar(80)");
+                    b.Property<string>("ProviderOrderId").IsRequired().HasMaxLength(80).HasColumnType("nvarchar(80)");
+                    b.Property<string>("CurrencyCode").IsRequired().HasMaxLength(3).HasColumnType("nvarchar(3)");
+                    b.Property<decimal>("Amount").HasPrecision(18, 2).HasColumnType("decimal(18,2)");
+                    b.Property<string>("ActivationStatus").IsRequired().HasMaxLength(24).HasColumnType("nvarchar(24)");
+                    b.Property<DateTime>("CapturedAtUtc").HasColumnType("datetime2");
+                    b.HasKey("Id");
+                    b.HasIndex("PaymentRequestId").IsUnique();
+                    b.HasIndex("ProviderPaymentId").IsUnique();
+                    b.ToTable("SubscriptionPayments");
+                });
+
+            modelBuilder.Entity("BusinessSaas.Api.Data.RazorpayWebhookEvent", b =>
+                {
+                    b.Property<long>("Id").ValueGeneratedOnAdd().HasColumnType("bigint");
+                    SqlServerPropertyBuilderExtensions.UseIdentityColumn(b.Property<long>("Id"));
+                    b.Property<string>("EventId").IsRequired().HasMaxLength(100).HasColumnType("nvarchar(100)");
+                    b.Property<long>("SubscriptionPaymentId").HasColumnType("bigint");
+                    b.Property<DateTime>("ReceivedAtUtc").HasColumnType("datetime2");
+                    b.HasKey("Id");
+                    b.HasIndex("EventId").IsUnique();
+                    b.HasIndex("SubscriptionPaymentId");
+                    b.ToTable("RazorpayWebhookEvents");
                 });
 
             modelBuilder.Entity("BusinessSaas.Api.Data.SubscriptionPlanDraft", b =>
@@ -1064,6 +1101,10 @@ namespace BusinessSaas.Api.Data.Migrations
                         .HasForeignKey("BusinessId")
                         .OnDelete(DeleteBehavior.Restrict)
                         .IsRequired();
+                    b.HasOne("BusinessSaas.Api.Data.PublishedPlanVersion", null)
+                        .WithMany()
+                        .HasForeignKey("PaidPlanVersionId")
+                        .OnDelete(DeleteBehavior.Restrict);
                 });
 
             modelBuilder.Entity("BusinessSaas.Api.Data.BusinessUser", b =>
@@ -1118,6 +1159,24 @@ namespace BusinessSaas.Api.Data.Migrations
                     b.HasOne("BusinessSaas.Api.Data.AppUser", null)
                         .WithMany()
                         .HasForeignKey("CreatedByUserId")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .IsRequired();
+                });
+
+            modelBuilder.Entity("BusinessSaas.Api.Data.SubscriptionPayment", b =>
+                {
+                    b.HasOne("BusinessSaas.Api.Data.SubscriptionPaymentRequest", null)
+                        .WithMany()
+                        .HasForeignKey("PaymentRequestId")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .IsRequired();
+                });
+
+            modelBuilder.Entity("BusinessSaas.Api.Data.RazorpayWebhookEvent", b =>
+                {
+                    b.HasOne("BusinessSaas.Api.Data.SubscriptionPayment", null)
+                        .WithMany()
+                        .HasForeignKey("SubscriptionPaymentId")
                         .OnDelete(DeleteBehavior.Restrict)
                         .IsRequired();
                 });
