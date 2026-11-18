@@ -1262,6 +1262,46 @@ public sealed class BusinessFlowTests
             .GetProperty("orderId").GetString());
         Assert.Equal(1, gateway.OrderCalls);
 
+        // A timeout may leave the external order created but its local mapping uncertain.
+        // Recovery must verify Razorpay receipt/amount before binding the existing order.
+        using (var scope = factory.Services.CreateScope())
+        {
+            var db = scope.ServiceProvider.GetRequiredService<AppDbContext>();
+            var payment = await db.SubscriptionPaymentRequests.SingleAsync(x => x.Id == paymentRequestId);
+            payment.Status = "OrderUncertain";
+            payment.ProviderOrderId = null;
+            await db.SaveChangesAsync();
+        }
+        var pending = await admin.GetFromJsonAsync<JsonElement>(
+            "/api/platform/billing/reconciliation");
+        Assert.Equal(0, pending.GetProperty("total").GetInt32());
+        Assert.Single(pending.GetProperty("unresolvedOrders").EnumerateArray());
+        Assert.Equal(HttpStatusCode.Forbidden,
+            (await outsider.GetAsync("/api/platform/billing/reconciliation")).StatusCode);
+        Assert.Equal(HttpStatusCode.Forbidden,
+            (await Post(outsider,
+                $"/api/platform/billing/payment-requests/{paymentRequestId}/reconcile-order",
+                new { orderId, reason = "Unauthorised attempted gateway mapping" })).StatusCode);
+        gateway.OrderReceiptOverride = "bs_invalid";
+        Assert.Equal(HttpStatusCode.Conflict,
+            (await Post(admin,
+                $"/api/platform/billing/payment-requests/{paymentRequestId}/reconcile-order",
+                new { orderId, reason = "The provider receipt must match this request" })).StatusCode);
+        gateway.OrderReceiptOverride = null;
+        var recovered = await Post(admin,
+            $"/api/platform/billing/payment-requests/{paymentRequestId}/reconcile-order",
+            new { orderId, reason = "Verified external order after an uncertain response" });
+        Assert.Equal(HttpStatusCode.OK, recovered.StatusCode);
+        Assert.False((await recovered.Content.ReadFromJsonAsync<JsonElement>())
+            .GetProperty("alreadyReconciled").GetBoolean());
+        var recoveredAgain = await Post(admin,
+            $"/api/platform/billing/payment-requests/{paymentRequestId}/reconcile-order",
+            new { orderId, reason = "Verified external order after an uncertain response" });
+        Assert.Equal(HttpStatusCode.OK, recoveredAgain.StatusCode);
+        Assert.True((await recoveredAgain.Content.ReadFromJsonAsync<JsonElement>())
+            .GetProperty("alreadyReconciled").GetBoolean());
+        Assert.Equal(1, gateway.OrderCalls);
+
         const string providerPaymentId = "pay_test_capture_0123";
         var webhookBody = JsonSerializer.Serialize(new
         {
@@ -1359,6 +1399,60 @@ public sealed class BusinessFlowTests
             $"/api/businesses/{firstId}/dashboard");
         Assert.Equal("Active", paidDashboard.GetProperty("accessStatus").GetString());
         Assert.True(paidDashboard.GetProperty("canOperate").GetBoolean());
+
+        // Refunds are observed, verified and deduplicated. This API never issues refunds.
+        const string providerRefundId = "rfnd_test_partial_001";
+        var refundBody = JsonSerializer.Serialize(new
+        {
+            @event = "refund.processed",
+            payload = new
+            {
+                refund = new
+                {
+                    entity = new
+                    {
+                        id = providerRefundId, payment_id = providerPaymentId,
+                        amount = 50000, currency = "INR", status = "processed"
+                    }
+                }
+            }
+        });
+        Assert.Equal(HttpStatusCode.Unauthorized,
+            (await Webhook("evt_refund_unsigned_001", refundBody, false)).StatusCode);
+        gateway.RefundAmountOverride = 20000;
+        Assert.Equal(HttpStatusCode.Conflict,
+            (await Webhook("evt_refund_wrong_amount_001", refundBody)).StatusCode);
+        gateway.RefundAmountOverride = null;
+        var refund = await Webhook("evt_refund_processed_001", refundBody);
+        Assert.Equal(HttpStatusCode.OK, refund.StatusCode);
+        Assert.True((await refund.Content.ReadFromJsonAsync<JsonElement>())
+            .GetProperty("refundRecorded").GetBoolean());
+        var refundReplay = await Webhook("evt_refund_processed_001", refundBody);
+        Assert.Equal(HttpStatusCode.OK, refundReplay.StatusCode);
+        Assert.True((await refundReplay.Content.ReadFromJsonAsync<JsonElement>())
+            .GetProperty("alreadyProcessed").GetBoolean());
+        var refundOtherEvent = await Webhook("evt_refund_duplicate_002", refundBody);
+        Assert.Equal(HttpStatusCode.OK, refundOtherEvent.StatusCode);
+        Assert.True((await refundOtherEvent.Content.ReadFromJsonAsync<JsonElement>())
+            .GetProperty("alreadyRecorded").GetBoolean());
+
+        var reconciliation = await admin.GetFromJsonAsync<JsonElement>(
+            "/api/platform/billing/reconciliation");
+        Assert.Equal(1, reconciliation.GetProperty("total").GetInt32());
+        var row = reconciliation.GetProperty("items")[0];
+        Assert.Equal(1099m, row.GetProperty("amount").GetDecimal());
+        Assert.Equal(500m, row.GetProperty("refundedAmount").GetDecimal());
+        Assert.Equal(599m, row.GetProperty("netAmount").GetDecimal());
+        Assert.Equal("RefundReview", row.GetProperty("activationStatus").GetString());
+        Assert.Equal(HttpStatusCode.BadRequest,
+            (await admin.GetAsync("/api/platform/billing/reconciliation?pageSize=51")).StatusCode);
+        using (var scope = factory.Services.CreateScope())
+        {
+            var db = scope.ServiceProvider.GetRequiredService<AppDbContext>();
+            Assert.Equal(1, await db.SubscriptionRefunds.CountAsync());
+            Assert.Equal(4, await db.RazorpayWebhookEvents.CountAsync());
+            Assert.True((await db.SubscriptionRefunds.SingleAsync()).Id > 0);
+        }
 
         // A cached Active status must not outlive its paid period.
         using (var scope = factory.Services.CreateScope())
@@ -1609,6 +1703,8 @@ public sealed class BusinessFlowTests
     {
         public int OrderCalls { get; private set; }
         public long? FetchAmountOverride { get; set; }
+        public long? RefundAmountOverride { get; set; }
+        public string? OrderReceiptOverride { get; set; }
         private string orderId = "";
         private long amount;
 
@@ -1625,6 +1721,14 @@ public sealed class BusinessFlowTests
             CancellationToken cancellationToken) =>
             Task.FromResult(new GatewayPayment(paymentId, orderId,
                 FetchAmountOverride ?? amount, "INR", "captured"));
+
+        public Task<GatewayOrder> FetchOrder(string id, CancellationToken cancellationToken) =>
+            Task.FromResult(new GatewayOrder(id, amount, "INR", "created",
+                OrderReceiptOverride ?? $"bs_{id.Replace("order_test_request_", "")}"));
+
+        public Task<GatewayRefund> FetchRefund(string id, CancellationToken cancellationToken) =>
+            Task.FromResult(new GatewayRefund(id, "pay_test_capture_0123",
+                RefundAmountOverride ?? 50000, "INR", "processed"));
     }
 
     private static async Task<(string secret, string[] recoveryCodes)> EnableOwnerMfaAndSignIn(
