@@ -234,6 +234,7 @@ app.MapRetailStockEndpoints();
 app.MapRetailAdjustmentEndpoints();
 app.MapRetailPurchaseEndpoints();
 app.MapPlatformEndpoints();
+app.MapPlatformBillingEndpoints();
 
 app.Run();
 
