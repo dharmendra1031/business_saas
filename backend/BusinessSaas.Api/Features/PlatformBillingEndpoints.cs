@@ -42,6 +42,136 @@ public static class PlatformBillingEndpoints
             return Results.Ok(new { items, total, page, pageSize });
         });
 
+        group.MapGet("/payment-requests", async (ClaimsPrincipal user,
+            IConfiguration configuration, AppDbContext db, int page = 1, int pageSize = 20) =>
+        {
+            if (!PlatformOwner.IsOwner(user, configuration))
+                return Results.Forbid();
+            if (page is < 1 or > 100000 || pageSize is < 1 or > 50)
+                return Results.BadRequest(new { message = "Choose a valid page and page size (1–50)." });
+
+            var total = await db.SubscriptionPaymentRequests.CountAsync();
+            var items = await (from request in db.SubscriptionPaymentRequests.AsNoTracking()
+                               join business in db.Businesses.AsNoTracking()
+                                   on request.BusinessId equals business.Id
+                               orderby request.Id descending
+                               select new
+                               {
+                                   request.Id, request.BillingDraftId, request.BusinessId,
+                                   businessName = business.Name, request.CurrencyCode,
+                                   request.Amount, request.Status, request.CreatedAtUtc
+                               }).Skip((page - 1) * pageSize).Take(pageSize).ToListAsync();
+            return Results.Ok(new { items, total, page, pageSize });
+        });
+
+        group.MapPost("/drafts/{id:long}/payment-requests", async (long id,
+            PreparePaymentRequest input, ClaimsPrincipal user, IConfiguration configuration,
+            AppDbContext db) =>
+        {
+            if (!PlatformOwner.IsOwner(user, configuration))
+                return Results.Forbid();
+
+            var key = input.RequestKey?.Trim() ?? "";
+            var reason = input.Reason?.Trim() ?? "";
+            if (id <= 0 || key.Length is < 12 or > 80 ||
+                !key.All(ch => char.IsAsciiLetterOrDigit(ch) || ch == '-') ||
+                reason.Length is < 10 or > 200)
+                return Results.BadRequest(new
+                {
+                    message = "Valid draft ID, request key and a 10–200 character reason are required."
+                });
+
+            await using var transaction =
+                await db.Database.BeginTransactionAsync(IsolationLevel.Serializable);
+
+            var draft = await db.SubscriptionBillingDrafts.AsNoTracking()
+                .SingleOrDefaultAsync(x => x.Id == id);
+            if (draft is null)
+                return Results.NotFound();
+            if (draft.Amount <= 0 || draft.CurrencyCode.Length != 3 ||
+                draft.PeriodStartDate is null || draft.PeriodEndDate is null ||
+                draft.PeriodEndDate <= draft.PeriodStartDate)
+                return Results.Conflict(new
+                {
+                    message = "This draft has no valid amount or billing period."
+                });
+
+            var existing = await db.SubscriptionPaymentRequests.AsNoTracking()
+                .SingleOrDefaultAsync(x => x.BillingDraftId == id);
+            if (existing is not null)
+                return existing.RequestKey == key
+                    ? Results.Ok(new
+                    {
+                        id = existing.Id, existing.BillingDraftId, existing.Status,
+                        existing.Amount, existing.CurrencyCode, alreadyExists = true
+                    })
+                    : Results.Conflict(new
+                    {
+                        message = "A payment request already exists for this billing draft."
+                    });
+
+            var keyUsed = await db.SubscriptionPaymentRequests.AnyAsync(x =>
+                x.BusinessId == draft.BusinessId && x.RequestKey == key);
+            if (keyUsed)
+                return Results.Conflict(new { message = "Request key belongs to another draft." });
+
+            var actorId = long.Parse(user.FindFirstValue(ClaimTypes.NameIdentifier)!);
+            var request = new SubscriptionPaymentRequest
+            {
+                BillingDraftId = draft.Id,
+                BusinessId = draft.BusinessId,
+                Amount = draft.Amount,
+                CurrencyCode = draft.CurrencyCode,
+                RequestKey = key,
+                CreatedByUserId = actorId
+            };
+            db.SubscriptionPaymentRequests.Add(request);
+
+            try
+            {
+                await db.SaveChangesAsync();
+            }
+            catch (DbUpdateException error) when (error.InnerException is
+                SqlException { Number: 2601 or 2627 } or DbException { ErrorCode: 19 })
+            {
+                return Results.Conflict(new { message = "Payment request already exists. Refresh the list." });
+            }
+
+            db.PlatformAuditEvents.Add(new PlatformAuditEvent
+            {
+                ActorUserId = actorId,
+                Action = "Billing.PaymentPrepared",
+                TargetType = "PaymentRequest",
+                TargetId = request.Id,
+                Reason = reason,
+                NewValue = $"Draft {draft.Id} {request.CurrencyCode} {request.Amount:0.00}"
+            });
+            await db.SaveChangesAsync();
+            await transaction.CommitAsync();
+
+            return Results.Created($"/api/platform/billing/payment-requests/{request.Id}", new
+            {
+                id = request.Id, request.BillingDraftId, request.BusinessId,
+                request.CurrencyCode, request.Amount, request.Status,
+                alreadyExists = false
+            });
+        });
+
+        group.MapGet("/payment-requests/{id:long}", async (long id,
+            ClaimsPrincipal user, IConfiguration configuration, AppDbContext db) =>
+        {
+            if (!PlatformOwner.IsOwner(user, configuration))
+                return Results.Forbid();
+            var request = await db.SubscriptionPaymentRequests.AsNoTracking()
+                .Where(x => x.Id == id)
+                .Select(x => new
+                {
+                    x.Id, x.BillingDraftId, x.BusinessId, x.CurrencyCode,
+                    x.Amount, x.Status, x.CreatedAtUtc
+                }).SingleOrDefaultAsync();
+            return request is null ? Results.NotFound() : Results.Ok(request);
+        });
+
         group.MapGet("/drafts/{id:long}", async (long id, ClaimsPrincipal user,
             IConfiguration configuration, AppDbContext db) =>
         {
@@ -243,6 +373,8 @@ public static class PlatformBillingEndpoints
         return new BillingTerms(subscription.Name, subscription.PlanCode,
             published.Id, published.Version, published.CurrencyCode, amount);
     }
+
+    private sealed record PreparePaymentRequest(string? RequestKey, string? Reason);
 
     private sealed record CreateBillingDraftRequest(long BusinessId,
         long ExpectedPlanVersionId, string? BillingCycle, DateOnly? PeriodStartDate,
