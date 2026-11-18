@@ -81,6 +81,20 @@ public sealed class PublishedPlanVersion
     public DateTime PublishedAtUtc { get; set; } = DateTime.UtcNow;
 }
 
+public sealed class SubscriptionBillingDraft
+{
+    public long Id { get; set; }
+    public long BusinessId { get; set; }
+    public long PublishedPlanVersionId { get; set; }
+    public string PlanCode { get; set; } = "";
+    public string BillingCycle { get; set; } = "";
+    public string CurrencyCode { get; set; } = "";
+    public decimal Amount { get; set; }
+    public string RequestKey { get; set; } = "";
+    public long CreatedByUserId { get; set; }
+    public DateTime CreatedAtUtc { get; set; } = DateTime.UtcNow;
+}
+
 public sealed class BusinessSubscription
 {
     public long Id { get; set; }
@@ -253,6 +267,7 @@ public sealed class AppDbContext(DbContextOptions<AppDbContext> options)
     public DbSet<BusinessSubscription> BusinessSubscriptions => Set<BusinessSubscription>();
     public DbSet<SubscriptionPlanDraft> SubscriptionPlanDrafts => Set<SubscriptionPlanDraft>();
     public DbSet<PublishedPlanVersion> PublishedPlanVersions => Set<PublishedPlanVersion>();
+    public DbSet<SubscriptionBillingDraft> SubscriptionBillingDrafts => Set<SubscriptionBillingDraft>();
     public DbSet<BusinessLocation> BusinessLocations => Set<BusinessLocation>();
 
     public DbSet<RetailCategory> RetailCategories => Set<RetailCategory>();
@@ -344,6 +359,23 @@ public sealed class AppDbContext(DbContextOptions<AppDbContext> options)
             entity.Property(x => x.YearlyPrice).HasPrecision(18, 2);
             entity.HasOne<AppUser>().WithMany()
                 .HasForeignKey(x => x.PublishedByUserId).OnDelete(DeleteBehavior.Restrict);
+        });
+
+        builder.Entity<SubscriptionBillingDraft>(entity =>
+        {
+            entity.Property(x => x.PlanCode).HasMaxLength(30).IsRequired();
+            entity.Property(x => x.BillingCycle).HasMaxLength(12).IsRequired();
+            entity.Property(x => x.CurrencyCode).HasMaxLength(3).IsRequired();
+            entity.Property(x => x.RequestKey).HasMaxLength(80).IsRequired();
+            entity.Property(x => x.Amount).HasPrecision(18, 2);
+            entity.HasIndex(x => new { x.BusinessId, x.RequestKey }).IsUnique();
+            entity.HasIndex(x => new { x.CreatedAtUtc, x.Id });
+            entity.HasOne<Business>().WithMany()
+                .HasForeignKey(x => x.BusinessId).OnDelete(DeleteBehavior.Restrict);
+            entity.HasOne<PublishedPlanVersion>().WithMany()
+                .HasForeignKey(x => x.PublishedPlanVersionId).OnDelete(DeleteBehavior.Restrict);
+            entity.HasOne<AppUser>().WithMany()
+                .HasForeignKey(x => x.CreatedByUserId).OnDelete(DeleteBehavior.Restrict);
         });
 
         builder.Entity<BusinessSubscription>(entity =>
