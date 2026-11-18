@@ -925,21 +925,36 @@ public sealed class BusinessFlowTests
             });
         }
 
+        // Internal billing drafts must cover an explicit calendar period.
+        var periodStart = new DateOnly(DateTime.UtcNow.Year, DateTime.UtcNow.Month, 1);
+        var periodEnd = periodStart.AddMonths(1);
+        Assert.Equal(HttpStatusCode.BadRequest,
+            (await admin.GetAsync(
+                $"/api/platform/billing/businesses/{firstId}/preview?cycle=Monthly"))
+            .StatusCode);
+        Assert.Equal(HttpStatusCode.BadRequest,
+            (await admin.GetAsync(
+                $"/api/platform/billing/businesses/{firstId}/preview?cycle=Monthly&periodStartDate={periodStart.AddDays(1):yyyy-MM-dd}"))
+            .StatusCode);
+
         // Internal billing drafts use the immutable published price, never mark a payment.
         var draftListBefore = await admin.GetFromJsonAsync<JsonElement>(
             "/api/platform/billing/drafts");
         Assert.Equal(0, draftListBefore.GetProperty("total").GetInt32());
         Assert.Equal(HttpStatusCode.Forbidden,
-            (await outsider.GetAsync($"/api/platform/billing/businesses/{firstId}/preview?cycle=Monthly"))
+            (await outsider.GetAsync(
+                $"/api/platform/billing/businesses/{firstId}/preview?cycle=Monthly&periodStartDate={periodStart:yyyy-MM-dd}"))
             .StatusCode);
         Assert.Equal(HttpStatusCode.BadRequest,
-            (await admin.GetAsync($"/api/platform/billing/businesses/{firstId}/preview?cycle=Weekly"))
+            (await admin.GetAsync($"/api/platform/billing/businesses/{firstId}/preview?cycle=Weekly&periodStartDate={periodStart:yyyy-MM-dd}"))
             .StatusCode);
         Assert.Equal(HttpStatusCode.Conflict,
-            (await admin.GetAsync("/api/platform/billing/businesses/999999/preview?cycle=Monthly"))
+            (await admin.GetAsync($"/api/platform/billing/businesses/999999/preview?cycle=Monthly&periodStartDate={periodStart:yyyy-MM-dd}"))
             .StatusCode);
         var preview = await admin.GetFromJsonAsync<JsonElement>(
-            $"/api/platform/billing/businesses/{firstId}/preview?cycle=Monthly");
+            $"/api/platform/billing/businesses/{firstId}/preview?cycle=Monthly&periodStartDate={periodStart:yyyy-MM-dd}");
+        Assert.Equal(periodStart, preview.GetProperty("periodStartDate").GetDateOnly());
+        Assert.Equal(periodEnd, preview.GetProperty("periodEndDate").GetDateOnly());
         Assert.Equal("Alpha Retail", preview.GetProperty("businessName").GetString());
         Assert.Equal(1099m, preview.GetProperty("amount").GetDecimal());
         Assert.Equal("INR", preview.GetProperty("currencyCode").GetString());
@@ -951,6 +966,7 @@ public sealed class BusinessFlowTests
             businessId = firstId,
             expectedPlanVersionId = planVersionId,
             billingCycle = "Monthly",
+            periodStartDate = periodStart,
             requestKey = "billing-first-request-20261118",
             reason = "Internal price record for a trial business"
         };
@@ -960,13 +976,15 @@ public sealed class BusinessFlowTests
             (await Post(admin, "/api/platform/billing/drafts", new
             {
                 businessId = firstId, expectedPlanVersionId = planVersionId,
-                billingCycle = "Monthly", requestKey = "bad", reason = "Too short"
+                billingCycle = "Monthly", periodStartDate = periodStart,
+                requestKey = "bad", reason = "Too short"
             })).StatusCode);
         Assert.Equal(HttpStatusCode.Conflict,
             (await Post(admin, "/api/platform/billing/drafts", new
             {
                 businessId = firstId, expectedPlanVersionId = publishedId,
-                billingCycle = "Monthly", requestKey = "billing-old-plan-version-20261118",
+                billingCycle = "Monthly", periodStartDate = periodStart,
+                requestKey = "billing-old-plan-version-20261118",
                 reason = "Old plan version must not be used for new drafts"
             })).StatusCode);
 
@@ -977,6 +995,8 @@ public sealed class BusinessFlowTests
         Assert.True(billingId > 0);
         Assert.False(billingResult.GetProperty("alreadyExists").GetBoolean());
         Assert.Equal(1099m, billingResult.GetProperty("amount").GetDecimal());
+        Assert.Equal(periodStart, billingResult.GetProperty("periodStartDate").GetDateOnly());
+        Assert.Equal(periodEnd, billingResult.GetProperty("periodEndDate").GetDateOnly());
 
         var billingAgain = await Post(admin, "/api/platform/billing/drafts", billingRequest);
         Assert.Equal(HttpStatusCode.OK, billingAgain.StatusCode);
@@ -987,9 +1007,36 @@ public sealed class BusinessFlowTests
             (await Post(admin, "/api/platform/billing/drafts", new
             {
                 businessId = firstId, expectedPlanVersionId = planVersionId,
-                billingCycle = "Yearly", requestKey = billingRequest.requestKey,
+                billingCycle = "Yearly", periodStartDate = periodStart,
+                requestKey = billingRequest.requestKey,
                 reason = billingRequest.reason
             })).StatusCode);
+
+        // Different keys and cycles cannot create overlapping charges.
+        Assert.Equal(HttpStatusCode.Conflict,
+            (await Post(admin, "/api/platform/billing/drafts", new
+            {
+                businessId = firstId, expectedPlanVersionId = planVersionId,
+                billingCycle = "Quarterly", periodStartDate = periodStart,
+                requestKey = "billing-overlap-quarter-20261118",
+                reason = "Overlapping billing period should be rejected"
+            })).StatusCode);
+        Assert.Equal(HttpStatusCode.Conflict,
+            (await Post(admin, "/api/platform/billing/drafts", new
+            {
+                businessId = firstId, expectedPlanVersionId = planVersionId,
+                billingCycle = "Monthly", periodStartDate = periodStart,
+                requestKey = "billing-duplicate-month-20261118",
+                reason = "Second charge for same period should fail"
+            })).StatusCode);
+        Assert.Equal(HttpStatusCode.Conflict,
+            (await admin.GetAsync(
+                $"/api/platform/billing/businesses/{firstId}/preview?cycle=Monthly&periodStartDate={periodStart:yyyy-MM-dd}"))
+            .StatusCode);
+        var nextPeriodPreview = await admin.GetFromJsonAsync<JsonElement>(
+            $"/api/platform/billing/businesses/{firstId}/preview?cycle=Monthly&periodStartDate={periodEnd:yyyy-MM-dd}");
+        Assert.Equal(periodEnd,
+            nextPeriodPreview.GetProperty("periodStartDate").GetDateOnly());
 
         var billingHistory = await admin.GetFromJsonAsync<JsonElement>(
             "/api/platform/billing/drafts?page=1&pageSize=10");
@@ -997,6 +1044,8 @@ public sealed class BusinessFlowTests
         Assert.Single(billingHistory.GetProperty("items").EnumerateArray());
         Assert.Equal(1099m, billingHistory.GetProperty("items")[0]
             .GetProperty("amount").GetDecimal());
+        Assert.Equal(periodStart, billingHistory.GetProperty("items")[0]
+            .GetProperty("periodStartDate").GetDateOnly());
         Assert.Equal("Draft", billingHistory.GetProperty("items")[0]
             .GetProperty("status").GetString());
         Assert.Equal(HttpStatusCode.BadRequest,
@@ -1012,7 +1061,10 @@ public sealed class BusinessFlowTests
             Assert.Equal(1, await db.SubscriptionBillingDrafts.CountAsync());
             Assert.Equal("Trial", (await db.BusinessSubscriptions
                 .SingleAsync(x => x.BusinessId == firstId)).Status);
-            Assert.Equal(1099m, (await db.SubscriptionBillingDrafts.SingleAsync()).Amount);
+            var billingDraft = await db.SubscriptionBillingDrafts.SingleAsync();
+            Assert.Equal(1099m, billingDraft.Amount);
+            Assert.Equal(periodStart, billingDraft.PeriodStartDate);
+            Assert.Equal(periodEnd, billingDraft.PeriodEndDate);
         }
 
         // Suspending a subscription blocks operations, replay is rejected and reactivation
