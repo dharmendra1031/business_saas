@@ -302,6 +302,26 @@ namespace BusinessSaas.Api.Data.Migrations
                     b.ToTable("SubscriptionBillingDrafts");
                 });
 
+            modelBuilder.Entity("BusinessSaas.Api.Data.SubscriptionPaymentRequest", b =>
+                {
+                    b.Property<long>("Id").ValueGeneratedOnAdd().HasColumnType("bigint");
+                    SqlServerPropertyBuilderExtensions.UseIdentityColumn(b.Property<long>("Id"));
+                    b.Property<long>("BillingDraftId").HasColumnType("bigint");
+                    b.Property<long>("BusinessId").HasColumnType("bigint");
+                    b.Property<string>("CurrencyCode").IsRequired().HasMaxLength(3).HasColumnType("nvarchar(3)");
+                    b.Property<decimal>("Amount").HasPrecision(18, 2).HasColumnType("decimal(18,2)");
+                    b.Property<string>("RequestKey").IsRequired().HasMaxLength(80).HasColumnType("nvarchar(80)");
+                    b.Property<string>("Status").IsRequired().HasMaxLength(24).HasColumnType("nvarchar(24)");
+                    b.Property<long>("CreatedByUserId").HasColumnType("bigint");
+                    b.Property<DateTime>("CreatedAtUtc").HasColumnType("datetime2");
+                    b.HasKey("Id");
+                    b.HasIndex("BillingDraftId").IsUnique();
+                    b.HasIndex("BusinessId", "RequestKey").IsUnique();
+                    b.HasIndex("CreatedAtUtc", "Id");
+                    b.HasIndex("CreatedByUserId");
+                    b.ToTable("SubscriptionPaymentRequests");
+                });
+
             modelBuilder.Entity("BusinessSaas.Api.Data.SubscriptionPlanDraft", b =>
                 {
                     b.Property<long>("Id")
@@ -1081,6 +1101,25 @@ namespace BusinessSaas.Api.Data.Migrations
                     b.HasOne("BusinessSaas.Api.Data.PublishedPlanVersion", null)
                         .WithMany()
                         .HasForeignKey("PublishedPlanVersionId").OnDelete(DeleteBehavior.Restrict).IsRequired();
+                });
+
+            modelBuilder.Entity("BusinessSaas.Api.Data.SubscriptionPaymentRequest", b =>
+                {
+                    b.HasOne("BusinessSaas.Api.Data.SubscriptionBillingDraft", null)
+                        .WithMany()
+                        .HasForeignKey("BillingDraftId")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .IsRequired();
+                    b.HasOne("BusinessSaas.Api.Data.Business", null)
+                        .WithMany()
+                        .HasForeignKey("BusinessId")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .IsRequired();
+                    b.HasOne("BusinessSaas.Api.Data.AppUser", null)
+                        .WithMany()
+                        .HasForeignKey("CreatedByUserId")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .IsRequired();
                 });
 
             modelBuilder.Entity("BusinessSaas.Api.Data.SubscriptionPlanDraft", b =>
