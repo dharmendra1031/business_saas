@@ -208,3 +208,11 @@ The Razorpay backend/owner-checkout integration is now implemented behind **disa
 - Integration, configuration, test-mode setup, reconciliation and outstanding controls: [RAZORPAY_PAYMENT_INTEGRATION.md](RAZORPAY_PAYMENT_INTEGRATION.md).
 
 **Not finished:** merchant credential configuration, real Razorpay sandbox webhook/E2E testing, live payment authorisation, legal tax invoice issuance, refunds, settlement reconciliation, and final production payments approval. No GST or other tax is assumed by this batch.
+
+## 15. Reconciliation and refund observation (18 November 2026)
+
+The payment reconciliation batch provides an MFA-only report of captured payments, verified processed refunds and remaining amounts, plus recovery of an uncertain Razorpay order **only after** server-side verification of its ID, receipt, amount, currency and order status. Recovery cannot issue a new charge.
+
+Signed `refund.processed` webhooks are verified against an independent Razorpay Refund API fetch. Numeric-ID `SubscriptionRefunds` records, unique provider refund references and existing event deduplication prevent duplicates and over-refunds. Refunds flag `RefundReview`; there is no automatic account suspension, provider-side refund creation, credit note or tax invoice.
+
+The financial/release boundaries, review workflow and test checklist are in [PAYMENT_RECONCILIATION.md](PAYMENT_RECONCILIATION.md). Migration `20261118170000_AddVerifiedSubscriptionRefunds` must be reviewed and backed up before production application. Tax issue details and refund/credit-note policy remain unapproved.
