@@ -97,6 +97,19 @@ public sealed class SubscriptionBillingDraft
     public DateTime CreatedAtUtc { get; set; } = DateTime.UtcNow;
 }
 
+public sealed class SubscriptionPaymentRequest
+{
+    public long Id { get; set; }
+    public long BillingDraftId { get; set; }
+    public long BusinessId { get; set; }
+    public string CurrencyCode { get; set; } = "";
+    public decimal Amount { get; set; }
+    public string RequestKey { get; set; } = "";
+    public string Status { get; set; } = "AwaitingGateway";
+    public long CreatedByUserId { get; set; }
+    public DateTime CreatedAtUtc { get; set; } = DateTime.UtcNow;
+}
+
 public sealed class BusinessSubscription
 {
     public long Id { get; set; }
@@ -270,6 +283,7 @@ public sealed class AppDbContext(DbContextOptions<AppDbContext> options)
     public DbSet<SubscriptionPlanDraft> SubscriptionPlanDrafts => Set<SubscriptionPlanDraft>();
     public DbSet<PublishedPlanVersion> PublishedPlanVersions => Set<PublishedPlanVersion>();
     public DbSet<SubscriptionBillingDraft> SubscriptionBillingDrafts => Set<SubscriptionBillingDraft>();
+    public DbSet<SubscriptionPaymentRequest> SubscriptionPaymentRequests => Set<SubscriptionPaymentRequest>();
     public DbSet<BusinessLocation> BusinessLocations => Set<BusinessLocation>();
 
     public DbSet<RetailCategory> RetailCategories => Set<RetailCategory>();
@@ -380,6 +394,23 @@ public sealed class AppDbContext(DbContextOptions<AppDbContext> options)
                 .HasForeignKey(x => x.BusinessId).OnDelete(DeleteBehavior.Restrict);
             entity.HasOne<PublishedPlanVersion>().WithMany()
                 .HasForeignKey(x => x.PublishedPlanVersionId).OnDelete(DeleteBehavior.Restrict);
+            entity.HasOne<AppUser>().WithMany()
+                .HasForeignKey(x => x.CreatedByUserId).OnDelete(DeleteBehavior.Restrict);
+        });
+
+        builder.Entity<SubscriptionPaymentRequest>(entity =>
+        {
+            entity.Property(x => x.CurrencyCode).HasMaxLength(3).IsRequired();
+            entity.Property(x => x.Amount).HasPrecision(18, 2);
+            entity.Property(x => x.RequestKey).HasMaxLength(80).IsRequired();
+            entity.Property(x => x.Status).HasMaxLength(24).IsRequired();
+            entity.HasIndex(x => x.BillingDraftId).IsUnique();
+            entity.HasIndex(x => new { x.BusinessId, x.RequestKey }).IsUnique();
+            entity.HasIndex(x => new { x.CreatedAtUtc, x.Id });
+            entity.HasOne<SubscriptionBillingDraft>().WithMany()
+                .HasForeignKey(x => x.BillingDraftId).OnDelete(DeleteBehavior.Restrict);
+            entity.HasOne<Business>().WithMany()
+                .HasForeignKey(x => x.BusinessId).OnDelete(DeleteBehavior.Restrict);
             entity.HasOne<AppUser>().WithMany()
                 .HasForeignKey(x => x.CreatedByUserId).OnDelete(DeleteBehavior.Restrict);
         });
