@@ -191,7 +191,8 @@ public sealed class BusinessFlowTests
 
         foreach (var (status, expectedAccess, canOperate) in new[]
         {
-            ("Active", "Active", true),
+            // Status alone never proves payment or grants paid access.
+            ("Active", "Inactive", false),
             ("Suspended", "Suspended", false),
             ("PastDue", "Inactive", false),
             ("Grace", "Inactive", false),

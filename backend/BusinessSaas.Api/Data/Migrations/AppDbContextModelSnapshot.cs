@@ -318,6 +318,7 @@ namespace BusinessSaas.Api.Data.Migrations
                     b.Property<string>("RequestKey").IsRequired().HasMaxLength(80).HasColumnType("nvarchar(80)");
                     b.Property<string>("Status").IsRequired().HasMaxLength(24).HasColumnType("nvarchar(24)");
                     b.Property<string>("ProviderOrderId").HasMaxLength(80).HasColumnType("nvarchar(80)");
+                    b.Property<DateTime?>("OrderCreatedAtUtc").HasColumnType("datetime2");
                     b.Property<long>("CreatedByUserId").HasColumnType("bigint");
                     b.Property<DateTime>("CreatedAtUtc").HasColumnType("datetime2");
                     b.HasKey("Id");
