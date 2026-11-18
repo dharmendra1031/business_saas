@@ -2,6 +2,7 @@ import { useEffect, useRef, useState, type FormEvent } from 'react'
 import { Activity, ArrowLeft, ArrowRight, Boxes, Building2, CheckCircle2, CreditCard, KeyRound, LayoutDashboard, LogOut, Menu, Package, Plus, Settings2, ShieldCheck, ShoppingCart, Store, Tags, Truck, UserRound, Users } from 'lucide-react'
 import { api, post, resetCsrf, SessionExpiredError, setSessionExpiredHandler, type Business, type BusinessMarket, type BusinessType, type RetailDashboard, type User } from './api'
 import TeamMembers from './TeamMembers'
+import SubscriptionCheckout from './SubscriptionCheckout'
 import RetailCatalog, { type RetailSection } from './RetailCatalog'
 import PlatformAdmin, { type PlatformSection } from './PlatformAdmin'
 import PlatformMfaSetup from './PlatformMfaSetup'
@@ -342,7 +343,7 @@ export default function App() {
               </div>
               {!dashboard.canOperate && <div className="alert alert-warning" role="status">
                 {dashboard.accessStatus === 'TrialExpired'
-                  ? 'Your free trial has ended. Subscription activation is not available yet. Contact the platform administrator.'
+                  ? 'Your free trial has ended. Ask the platform administrator to prepare a subscription payment request.'
                   : 'This business has no active subscription. Contact the platform administrator for help.'}
               </div>}
               {dashboard.subscription && <p className="small text-secondary">
@@ -352,8 +353,14 @@ export default function App() {
                   ` · ${dashboard.accessStatus === 'TrialExpired' ? 'Ended' : 'Ends'} ${new Date(dashboard.subscription.trialEndsAtUtc).toLocaleString(undefined, {
                     dateStyle: 'medium', timeStyle: 'short', timeZone: dashboard.business.timeZoneId
                   })}`}
+                {dashboard.subscription.paidEndsAtUtc &&
+                  ` · Paid through ${new Date(dashboard.subscription.paidEndsAtUtc).toLocaleString(undefined, {
+                    dateStyle: 'medium', timeStyle: 'short', timeZone: dashboard.business.timeZoneId
+                  })}`}
               </p>}
               {retailPage === 'overview' && <>
+              {dashboard.roleCode === 'Owner' &&
+                <SubscriptionCheckout key={dashboard.business.id} businessId={dashboard.business.id} />}
               {dashboard.canOperate && dashboard.roleCode !== 'Cashier' && (
                 <section className="content-section" aria-label="Shop setup guide">
                   <h2>Get your shop ready</h2>
