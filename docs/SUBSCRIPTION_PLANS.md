@@ -168,3 +168,17 @@ The `Plans & Billing` screen now has **Plan Catalog** and **Billing Drafts** tab
 - Tests cover anonymous and customer denial, MFA-only access, preview validation, stale published version, replay request key, unmodified Trial subscription and SQL migration.
 
 **Next safe slice:** Confirm pricing/tax requirements, add period-specific invoices and immutable verified payment events, integrate a trusted payment provider/webhook, and only then introduce paid activation and revenue totals. Never use a draft amount as collected revenue.
+
+## 12. Billing period integrity (18 November 2026)
+
+The internal draft workflow now records explicit **start-inclusive / end-exclusive** subscription service dates. This correction prepares the existing billing foundation for later invoice safety, without creating another billing module.
+
+- On preview, the admin supplies the business, selected published plan cycle and intended start date; the end date is derived by adding 1, 3 or 12 calendar months. Any valid start day is accepted, including anniversary dates; there is no unsupported first-of-month rule.
+- The draft persists nullable `PeriodStartDate` and `PeriodEndDate` (SQL `date`). Existing historical drafts keep null dates rather than receiving invented periods.
+- Existing drafts with known dates must **not overlap** another draft for the same business, even if request keys or cycles differ. The API checks interval overlap with a serializable transaction; a unique filtered index on `(BusinessId, PeriodStartDate)` also guards simultaneous same-start attempts.
+- Replayed request keys return the original draft only if business, published plan version, cycle and period start match; otherwise they fail with a conflict.
+- The Super Admin preview, confirmation and draft history display the service dates. There is still no payment collection, tax invoice, statutory invoice number, automatic recurring charge or paid activation.
+- SQL migration: `20261118113000_AddBillingDraftPeriods`. Apply with the intended environment's standard backup and deployment review.
+- Regression coverage includes valid anniversary starts, invalid date/missing period, duplicate overlapping cycles, unchanged trial status and SQL Server migration/model snapshot parity.
+
+Before introducing real invoices, confirm issuer tax jurisdiction, invoicing/tax rules and payment gateway. Period-aware drafts are **not** legal or tax invoices.
