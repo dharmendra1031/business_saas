@@ -46,6 +46,34 @@ interface PaymentPage {
   pageSize: number
 }
 
+interface ReconciliationRow {
+  id: number
+  paymentRequestId: number
+  providerPaymentId: string
+  businessId: number
+  businessName: string
+  amount: number
+  currencyCode: string
+  refundedAmount: number
+  netAmount: number
+  activationStatus: string
+}
+
+interface PendingGatewayOrder {
+  id: number
+  businessId: number
+  businessName: string
+  amount: number
+  currencyCode: string
+  status: string
+}
+
+interface ReconciliationPage {
+  items: ReconciliationRow[]
+  total: number
+  unresolvedOrders: PendingGatewayOrder[]
+}
+
 interface BillingPage {
   items: BillingDraft[]
   total: number
@@ -75,6 +103,10 @@ export default function PlatformBilling() {
   const [reload, setReload] = useState(0)
   const [records, setRecords] = useState<BillingPage | null>(null)
   const [payments, setPayments] = useState<PaymentPage | null>(null)
+  const [reconciliation, setReconciliation] = useState<ReconciliationPage | null>(null)
+  const [reconcileRequestId, setReconcileRequestId] = useState<number | null>(null)
+  const [reconcileOrderId, setReconcileOrderId] = useState('')
+  const [reconcileReason, setReconcileReason] = useState('')
   const [selectedDraftId, setSelectedDraftId] = useState<number | null>(null)
   const [paymentReason, setPaymentReason] = useState('')
   const [paymentKey, setPaymentKey] = useState('')
@@ -88,15 +120,21 @@ export default function PlatformBilling() {
     setLoading(true)
     Promise.all([
       api<BillingPage>(`/platform/billing/drafts?page=${page}`),
-      api<PaymentPage>('/platform/billing/payment-requests')
+      api<PaymentPage>('/platform/billing/payment-requests'),
+      api<ReconciliationPage>('/platform/billing/reconciliation')
     ])
-      .then(([drafts, requests]) => {
-        if (active) { setRecords(drafts); setPayments(requests) }
+      .then(([drafts, requests, summary]) => {
+        if (active) {
+          setRecords(drafts)
+          setPayments(requests)
+          setReconciliation(summary)
+        }
       })
       .catch(cause => {
         if (!active || cause instanceof SessionExpiredError) return
         setRecords(null)
         setPayments(null)
+        setReconciliation(null)
         setError('Unable to load billing records.')
       })
       .finally(() => { if (active) setLoading(false) })
@@ -187,6 +225,29 @@ export default function PlatformBilling() {
     } catch (cause) {
       if (!(cause instanceof SessionExpiredError))
         setError(cause instanceof Error ? cause.message : 'Unable to prepare payment request.')
+    } finally {
+      setBusy(false)
+    }
+  }
+
+  async function reconcileOrder(event: FormEvent) {
+    event.preventDefault()
+    if (!reconcileRequestId || !reconcileOrderId.trim()) return
+    setBusy(true)
+    setError('')
+    try {
+      await post(`/platform/billing/payment-requests/${reconcileRequestId}/reconcile-order`, {
+        orderId: reconcileOrderId.trim(),
+        reason: reconcileReason.trim()
+      })
+      setNotice(`Order verified and linked to request #${reconcileRequestId}. No money was collected by this action.`)
+      setReconcileRequestId(null)
+      setReconcileOrderId('')
+      setReconcileReason('')
+      setReload(value => value + 1)
+    } catch (cause) {
+      if (!(cause instanceof SessionExpiredError))
+        setError(cause instanceof Error ? cause.message : 'Unable to reconcile order.')
     } finally {
       setBusy(false)
     }
@@ -347,12 +408,75 @@ export default function PlatformBilling() {
           </table>
         </div>}
     </section>
+    <section className="content-section mt-3">
+      <div className="d-flex justify-content-between align-items-center gap-2 mb-3">
+        <h2 className="mb-0">Payment Reconciliation</h2>
+        <button className="btn btn-outline-secondary btn-sm" type="button"
+          disabled={busy || loading} onClick={() => setReload(value => value + 1)}>Refresh</button>
+      </div>
+      <p className="small text-secondary">
+        Recorded captured payments, processed refunds and remaining amounts. These totals
+        are not settlement, revenue, or tax invoice totals.
+      </p>
+      {reconciliation?.items.length === 0
+        ? <p className="text-secondary">No verified captures recorded.</p>
+        : reconciliation && <div className="table-responsive">
+            <table className="table platform-table align-middle">
+              <thead><tr><th>Payment</th><th>Business</th><th>Captured</th>
+                <th>Refunded</th><th>Remaining</th><th>Review</th></tr></thead>
+              <tbody>{reconciliation.items.map(item => <tr key={item.id}>
+                <td>#{item.id}<small className="d-block text-secondary">{item.providerPaymentId}</small></td>
+                <td>{item.businessName}<small className="d-block text-secondary">#{item.businessId}</small></td>
+                <td>{money(item.amount, item.currencyCode)}</td>
+                <td>{money(item.refundedAmount, item.currencyCode)}</td>
+                <td>{money(item.netAmount, item.currencyCode)}</td>
+                <td>{item.activationStatus}</td>
+              </tr>)}</tbody>
+            </table>
+          </div>}
+      {reconciliation && <p className="small text-secondary">
+        Showing {reconciliation.items.length} of {reconciliation.total} captured payments.
+      </p>}
+      <h3 className="h6 mt-4">Orders requiring reconciliation</h3>
+      {reconciliation?.unresolvedOrders.length === 0
+        ? <p className="small text-secondary">No uncertain gateway orders.</p>
+        : reconciliation?.unresolvedOrders.map(item => <div key={item.id}
+            className="d-flex justify-content-between align-items-center gap-2 border-bottom py-2">
+            <span><strong>Request #{item.id}</strong> · {item.businessName} · {item.status}</span>
+            <button type="button" className="btn btn-outline-primary btn-sm" disabled={busy}
+              onClick={() => {
+                setReconcileRequestId(item.id)
+                setReconcileOrderId('')
+                setReconcileReason('')
+              }}>Verify Order</button>
+          </div>)}
+      {reconcileRequestId !== null && <form className="border rounded p-3 mt-3"
+        onSubmit={event => void reconcileOrder(event)}>
+        <h3 className="h6">Verify existing order for request #{reconcileRequestId}</h3>
+        <p className="small text-secondary">
+          Find the existing order in Razorpay by receipt bs_{reconcileRequestId}.
+          This checks the provider; it never creates another order or captures money.
+        </p>
+        <label htmlFor="reconcile-order-id" className="form-label">Razorpay Order ID</label>
+        <input id="reconcile-order-id" className="form-control" required
+          placeholder="order_..." value={reconcileOrderId}
+          onChange={event => setReconcileOrderId(event.target.value)} />
+        <label htmlFor="reconcile-reason" className="form-label mt-2">Reason</label>
+        <textarea id="reconcile-reason" className="form-control" required
+          minLength={10} maxLength={200} rows={2} value={reconcileReason}
+          onChange={event => setReconcileReason(event.target.value)} />
+        <div className="form-footer">
+          <button type="button" className="btn btn-outline-secondary" disabled={busy}
+            onClick={() => setReconcileRequestId(null)}>Cancel</button>
+          <button type="submit" className="btn btn-primary"
+            disabled={busy || reconcileReason.trim().length < 10}>Verify with Razorpay</button>
+        </div>
+      </form>}
+    </section>
     <p className="small text-secondary mt-3">
-      Billing period dates are derived from the chosen start date and cycle.
-      Overlapping internal drafts are blocked.
-      Payment preparation requests are unpaid internal records, not gateway orders.
-      Gateway verification, tax invoices, payment ledger and paid activation remain disabled
-      until payment and tax requirements are approved.
+      Billing periods remain immutable. Gateway checkout requires configuration;
+      refunds are only recorded after independent provider verification.
+      Tax invoices and refund issuance are not enabled.
     </p>
   </>
 }
