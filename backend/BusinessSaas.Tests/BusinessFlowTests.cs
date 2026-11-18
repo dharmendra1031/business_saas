@@ -1154,6 +1154,72 @@ public sealed class BusinessFlowTests
         Assert.Equal("Plan.DraftSaved", lastAudit.GetProperty("items")[4]
             .GetProperty("action").GetString());
 
+        // Payment preparation snapshots the draft without capturing money.
+        Assert.Equal(HttpStatusCode.Unauthorized,
+            (await anonymous.GetAsync("/api/platform/billing/payment-requests")).StatusCode);
+        Assert.Equal(HttpStatusCode.Forbidden,
+            (await outsider.GetAsync("/api/platform/billing/payment-requests")).StatusCode);
+        Assert.Equal(HttpStatusCode.Forbidden,
+            (await Post(outsider, $"/api/platform/billing/drafts/{billingId}/payment-requests",
+                new { requestKey = "outsider-payment-request-001", reason = "Not authorized" }))
+            .StatusCode);
+        Assert.Equal(HttpStatusCode.BadRequest,
+            (await Post(admin, $"/api/platform/billing/drafts/{billingId}/payment-requests",
+                new { requestKey = "bad", reason = "short" })).StatusCode);
+        Assert.Equal(HttpStatusCode.NotFound,
+            (await Post(admin, "/api/platform/billing/drafts/999999/payment-requests",
+                new { requestKey = "payment-notfound-draft-001", reason = "Missing billing draft" }))
+            .StatusCode);
+        var preparePayment = new
+        {
+            requestKey = "prepare-billing-payment-20261118",
+            reason = "Prepare payment request without collecting money"
+        };
+        var paymentPrepared = await Post(admin,
+            $"/api/platform/billing/drafts/{billingId}/payment-requests", preparePayment);
+        Assert.Equal(HttpStatusCode.Created, paymentPrepared.StatusCode);
+        var paymentJson = await paymentPrepared.Content.ReadFromJsonAsync<JsonElement>();
+        var paymentRequestId = paymentJson.GetProperty("id").GetInt64();
+        Assert.True(paymentRequestId > 0);
+        Assert.Equal("AwaitingGateway", paymentJson.GetProperty("status").GetString());
+        Assert.Equal(1099m, paymentJson.GetProperty("amount").GetDecimal());
+        Assert.Equal("INR", paymentJson.GetProperty("currencyCode").GetString());
+
+        var replay = await Post(admin,
+            $"/api/platform/billing/drafts/{billingId}/payment-requests", preparePayment);
+        Assert.Equal(HttpStatusCode.OK, replay.StatusCode);
+        var replayResult = await replay.Content.ReadFromJsonAsync<JsonElement>();
+        Assert.True(replayResult.GetProperty("alreadyExists").GetBoolean());
+        Assert.Equal(paymentRequestId, replayResult.GetProperty("id").GetInt64());
+        Assert.Equal(HttpStatusCode.Conflict,
+            (await Post(admin, $"/api/platform/billing/drafts/{billingId}/payment-requests",
+                new
+                {
+                    requestKey = "another-payment-request-20261118",
+                    reason = "Duplicate payment request must be rejected"
+                })).StatusCode);
+        var paymentHistory = await admin.GetFromJsonAsync<JsonElement>(
+            "/api/platform/billing/payment-requests");
+        Assert.Equal(1, paymentHistory.GetProperty("total").GetInt32());
+        Assert.Equal(paymentRequestId,
+            paymentHistory.GetProperty("items")[0].GetProperty("id").GetInt64());
+        Assert.Equal(HttpStatusCode.BadRequest,
+            (await admin.GetAsync("/api/platform/billing/payment-requests?pageSize=51")).StatusCode);
+        Assert.Equal(HttpStatusCode.NotFound,
+            (await admin.GetAsync("/api/platform/billing/payment-requests/999999")).StatusCode);
+        Assert.Equal(HttpStatusCode.OK,
+            (await admin.GetAsync($"/api/platform/billing/payment-requests/{paymentRequestId}"))
+            .StatusCode);
+        using (var scope = factory.Services.CreateScope())
+        {
+            var db = scope.ServiceProvider.GetRequiredService<AppDbContext>();
+            Assert.Single(await db.SubscriptionPaymentRequests.ToListAsync());
+            Assert.Equal("Trial", (await db.BusinessSubscriptions
+                .SingleAsync(x => x.BusinessId == firstId)).Status);
+            Assert.Equal("Billing.PaymentPrepared", (await db.PlatformAuditEvents
+                .OrderByDescending(x => x.Id).FirstAsync()).Action);
+        }
+
         // An active paid subscription must never accept a trial extension.
         using (var scope = factory.Services.CreateScope())
         {
@@ -1222,6 +1288,8 @@ public sealed class BusinessFlowTests
             (await admin.GetAsync("/api/platform/audit")).StatusCode);
         Assert.Equal(HttpStatusCode.Forbidden,
             (await admin.GetAsync("/api/platform/plans")).StatusCode);
+        Assert.Equal(HttpStatusCode.Forbidden,
+            (await admin.GetAsync("/api/platform/billing/payment-requests")).StatusCode);
         Assert.Equal(HttpStatusCode.Forbidden,
             (await Post(admin, $"/api/platform/businesses/{firstId}/extend-trial", request))
             .StatusCode);
