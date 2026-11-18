@@ -1,7 +1,7 @@
 import { useEffect, useState, type FormEvent } from 'react'
 import { api, post, SessionExpiredError, type StaffMember } from './api'
 
-export default function TeamMembers({ businessId }: { businessId: number }) {
+export default function TeamMembers({ businessId, canOperate, cashSaleEnabled }: { businessId: number; canOperate: boolean; cashSaleEnabled: boolean }) {
   const [members, setMembers] = useState<StaffMember[]>([])
   const [email, setEmail] = useState('')
   const [role, setRole] = useState<'Manager' | 'Cashier'>('Manager')
@@ -71,10 +71,11 @@ export default function TeamMembers({ businessId }: { businessId: number }) {
     <section className="content-section mt-3" aria-labelledby="team-heading">
       <h2 id="team-heading">Team Access</h2>
       <p className="text-secondary small mb-3">
-        Only existing accounts can be added. Team members currently see the primary location; POS access is not available yet. Email invitations will come later.
+        Only existing accounts can be added. Team members work at the primary location. {cashSaleEnabled ? "Cashiers can record cash sales." : "Cash checkout is unavailable."}
       </p>
       {error && <div className="alert alert-danger" role="alert">{error}</div>}
       {notice && <div className="alert alert-success" role="status">{notice}</div>}
+      {!canOperate && <p role="status">Team access is read-only while the subscription is inactive.</p>}
       <form onSubmit={event => void add(event)} className="team-form mb-4">
         <div>
           <label className="form-label" htmlFor="staff-email">Account email</label>
@@ -90,7 +91,7 @@ export default function TeamMembers({ businessId }: { businessId: number }) {
             <option value="Cashier">Cashier</option>
           </select>
         </div>
-        <button className="btn btn-primary" type="submit" disabled={busy || loading || loadFailed}>
+        <button className="btn btn-primary" type="submit" disabled={!canOperate || busy || loading || loadFailed}>
           {busy ? 'Saving…' : 'Add Team Member'}
         </button>
       </form>
@@ -110,7 +111,7 @@ export default function TeamMembers({ businessId }: { businessId: number }) {
                     <td className="text-end">
                       {member.roleCode !== 'Owner' &&
                         <button type="button" className="btn btn-outline-danger btn-sm"
-                          disabled={busy} onClick={() => void remove(member)}
+                          disabled={!canOperate || busy} onClick={() => void remove(member)}
                           aria-label={`Remove ${member.email}`}>Remove</button>}
                     </td>
                   </tr>

@@ -83,6 +83,7 @@ public sealed class SqlServerTests
                 migration => migration.EndsWith("_AddVerifiedSubscriptionRefunds"));
             Assert.Contains(await db.Database.GetAppliedMigrationsAsync(),
                 name => name.EndsWith("_AddBillingTaxDocumentDrafts"));
+            Assert.Contains("20261118210000_RetailCashBasket", await db.Database.GetAppliedMigrationsAsync());
             Assert.True(await db.Database.CanConnectAsync());
             Assert.True(await db.BusinessTypes.AnyAsync(x => x.Code == "RETAIL" && x.IsSupported));
         }

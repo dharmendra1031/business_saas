@@ -72,8 +72,8 @@ function numberOrNull(value: string): number | null {
   return value.trim() === '' ? null : Number(value)
 }
 
-export default function PlatformPlans() {
-  const [activeTab, setActiveTab] = useState<'catalog' | 'billing'>('catalog')
+export default function PlatformPlans({ business, onChooseBusiness }: { business: { id: number; name: string } | null; onChooseBusiness: () => void }) {
+  const [activeTab, setActiveTab] = useState<'catalog' | 'billing'>(business ? 'billing' : 'catalog')
   const [data, setData] = useState<PlanResponse | null>(null)
   const [loading, setLoading] = useState(true)
   const [busy, setBusy] = useState(false)
@@ -207,7 +207,7 @@ export default function PlatformPlans() {
         Billing Drafts
       </button>
     </div>
-    {activeTab === 'billing' ? <PlatformBilling /> : <>
+    {activeTab === 'billing' ? <PlatformBilling business={business} onChooseBusiness={onChooseBusiness} /> : <>
     <section className="content-section">
       <h2>Subscription Plans</h2>
       {loading ? <p role="status">Loading plans…</p> : data && <>

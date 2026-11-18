@@ -309,7 +309,7 @@ export default function RetailStock({ businessId, locations, canOperate, isOwner
                     <th scope="col">Posted by</th></tr></thead>
                   <tbody>{history.map(entry => <tr key={entry.id}>
                     <td>{new Date(entry.postedAtUtc + (entry.postedAtUtc.endsWith('Z') ? '' : 'Z')).toLocaleString()}</td>
-                    <td>{entry.sourceType}{entry.reason &&
+                    <td>{entry.sourceType === 'CashSaleLine' || entry.sourceType === 'CashSale' ? 'Cash sale' : entry.sourceType}{entry.reason &&
                       <small className="product-secondary">{entry.reason}</small>}</td>
                     <td className="text-end">{entry.quantityChange.toFixed(3)}</td>
                     <td className="text-end">{entry.balanceAfter.toFixed(3)}</td>

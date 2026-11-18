@@ -39,7 +39,7 @@ function statusLabel(status: string | null, trialEnds: string | null = null) {
   return status ?? 'No subscription'
 }
 
-function PlatformBusinesses({ selectedBusinessId }: { selectedBusinessId: number | null }) {
+function PlatformBusinesses({ selectedBusinessId, onBilling }: { selectedBusinessId: number | null; onBilling: (business: BusinessRow) => void }) {
   const [search, setSearch] = useState('')
   const [term, setTerm] = useState('')
   const [page, setPage] = useState(1)
@@ -170,6 +170,7 @@ function PlatformBusinesses({ selectedBusinessId }: { selectedBusinessId: number
               All businesses
             </button>
             <h1>{details.name}</h1>
+            <button type="button" className="btn btn-outline-primary" onClick={() => onBilling(details)}>Prepare subscription payment</button>
             <p>Platform subscription and business account controls. Shop operations remain private.</p>
           </div>
         </div>
@@ -374,15 +375,18 @@ function PlatformBusinesses({ selectedBusinessId }: { selectedBusinessId: number
   )
 }
 
-export default function PlatformAdmin({ section, selectedBusinessId, onViewBusiness }: {
+export default function PlatformAdmin({ section, selectedBusinessId, onViewBusiness, onBilling, billingBusiness, onChooseBusiness }: {
+  billingBusiness: { id: number; name: string } | null
+  onBilling: (business: BusinessRow) => void
+  onChooseBusiness: () => void
   section: PlatformSection
   selectedBusinessId: number | null
   onViewBusiness: (id: number) => void
 }) {
   if (section === 'overview') return <PlatformOverview onViewBusiness={onViewBusiness} />
   if (section === 'customers') return <PlatformCustomers />
-  if (section === 'plans') return <PlatformPlans />
+  if (section === 'plans') return <PlatformPlans business={billingBusiness} onChooseBusiness={onChooseBusiness} />
   if (section === 'audit') return <PlatformAudit />
   if (section === 'operations') return <PlatformOperations />
-  return <PlatformBusinesses selectedBusinessId={selectedBusinessId} />
+  return <PlatformBusinesses onBilling={onBilling} selectedBusinessId={selectedBusinessId} />
 }

@@ -41,6 +41,7 @@ interface OrderLine {
 }
 
 interface Receipt {
+  lines: { purchaseOrderLineId: number; quantity: number }[]
   id: number
   status: string
   createdAtUtc: string
@@ -67,13 +68,15 @@ function message(error: unknown): string {
   return error instanceof Error ? error.message : 'Unable to complete the request.'
 }
 
-export default function RetailPurchases({ businessId, canOperate, locations, roleCode, currencyCode }: {
+export default function RetailPurchases({ businessId, canOperate, locations, roleCode, currencyCode, initialApprovalsOnly }: {
+  initialApprovalsOnly: boolean
   businessId: number
   canOperate: boolean
   locations: { id: number; name: string; code: string }[]
   roleCode: 'Owner' | 'Manager'
   currencyCode: string
 }) {
+  const [approvalsOnly, setApprovalsOnly] = useState(initialApprovalsOnly)
   const [orders, setOrders] = useState<OrderRow[]>([])
   const [total, setTotal] = useState(0)
   const [page, setPage] = useState(1)
@@ -102,6 +105,7 @@ export default function RetailPurchases({ businessId, canOperate, locations, rol
   const [detail, setDetail] = useState<OrderDetail | null>(null)
   const [detailError, setDetailError] = useState('')
   const [receiving, setReceiving] = useState<Record<number, string>>({})
+  const [reviewReceipt, setReviewReceipt] = useState<number | null>(null)
   const [receivingOpen, setReceivingOpen] = useState(false)
   const basePath = `/businesses/${businessId}/purchase-orders`
   const money = (amount: number) =>
@@ -124,7 +128,7 @@ export default function RetailPurchases({ businessId, canOperate, locations, rol
     setLoadError('')
     setOrders([])
     setTotal(0)
-    api<Page<OrderRow>>(basePath + '?page=' + page)
+    api<Page<OrderRow>>(basePath + '?page=' + page + (approvalsOnly ? '&draftOnly=true' : ''))
       .then(data => {
         if (!active) return
         setOrders(data.items)
@@ -135,7 +139,7 @@ export default function RetailPurchases({ businessId, canOperate, locations, rol
       })
       .finally(() => { if (active) setLoading(false) })
     return () => { active = false }
-  }, [basePath, page, reload])
+  }, [basePath, page, reload, approvalsOnly])
 
   useEffect(() => {
     let active = true
@@ -159,6 +163,7 @@ export default function RetailPurchases({ businessId, canOperate, locations, rol
     if (selectedId === null) return
     let active = true
     setDetail(null)
+    setReviewReceipt(null)
     setDetailError('')
     api<OrderDetail>(basePath + '/' + selectedId)
       .then(value => {
@@ -215,9 +220,7 @@ export default function RetailPurchases({ businessId, canOperate, locations, rol
       setReceiving({})
       return
     }
-    setReceiving(Object.fromEntries(detail.lines
-      .filter(line => line.remainingQuantity > 0)
-      .map(line => [line.id, String(line.remainingQuantity)])))
+    setReceiving({})
     setReceivingOpen(true)
   }
 
@@ -306,8 +309,6 @@ export default function RetailPurchases({ businessId, canOperate, locations, rol
 
   async function postReceiving(receivingId: number) {
     if (!detail || busy || !canOperate) return
-    if (!window.confirm('Post this receiving to stock? The movement will be recorded in the Stock Ledger.'))
-      return
     setBusy(true)
     setError('')
     setNotice('')
@@ -461,6 +462,8 @@ export default function RetailPurchases({ businessId, canOperate, locations, rol
 
       <div className="product-form">
         <h3>Purchase order list</h3>
+        {roleCode === 'Owner' && <label><input type="checkbox" checked={approvalsOnly}
+          onChange={e => { setApprovalsOnly(e.target.checked); setPage(1) }} /> Awaiting approval only</label>}
         {loading ? <p role="status">Loading purchase orders…</p>
           : loadError ? null
             : !orders.length ? <p className="masters-empty">No purchase orders yet.</p>
@@ -503,7 +506,7 @@ export default function RetailPurchases({ businessId, canOperate, locations, rol
         {detailError && <div className="alert alert-danger">{detailError}</div>}
         {!detail && !detailError && <p role="status">Loading order…</p>}
         {detail && <>
-          <p>Status: <strong>{detail.status}</strong></p>
+          <p>Status: <strong>{detail.status === 'Draft' && roleCode === 'Manager' ? 'Awaiting owner approval' : detail.status}</strong></p>
           {canOperate && roleCode === 'Owner' && detail.status === 'Draft' &&
             <button type="button" className="btn btn-primary mb-3" disabled={busy}
               onClick={() => void approve()}>{busy ? 'Saving…' : 'Approve purchase order'}</button>}
@@ -538,7 +541,10 @@ export default function RetailPurchases({ businessId, canOperate, locations, rol
               {receivingOpen && <form className="product-form"
                 onSubmit={event => void saveReceiving(event)}>
                 <h3>Goods received</h3>
-                <p className="field-help">Remaining quantities are filled in. Reduce them for partial deliveries. Saving a draft does not change stock.</p>
+                <button className="btn btn-outline-secondary" type="button" onClick={() => setReceiving(
+                  Object.fromEntries(detail.lines.filter(x => x.remainingQuantity > 0).map(x => [x.id, String(x.remainingQuantity)]))
+                )}>Receive all remaining</button>
+                <p className="field-help">Enter only the quantities delivered. Saving a draft does not change stock.</p>
                 <div className="table-responsive">
                   <table className="table table-sm align-middle">
                     <thead><tr><th>Product</th><th className="text-end">Remaining</th>
@@ -547,7 +553,7 @@ export default function RetailPurchases({ businessId, canOperate, locations, rol
                       <td>{line.name}</td><td className="text-end">{line.remainingQuantity.toFixed(3)}</td>
                       <td><input className="form-control" type="number" step="0.001" min="0"
                         max={line.remainingQuantity} aria-label={`Receive ${line.name}`}
-                        value={receiving[line.id] ?? '0'}
+                        value={receiving[line.id] ?? ''}
                         onChange={event => setReceiving(value =>
                           ({ ...value, [line.id]: event.target.value }))} /></td>
                     </tr>)}</tbody>
@@ -567,10 +573,21 @@ export default function RetailPurchases({ businessId, canOperate, locations, rol
                   <tbody>{detail.receivings.map(receipt => <tr key={receipt.id}>
                     <td>#{receipt.id}</td><td>{receipt.status}</td>
                     <td>{canOperate && receipt.status === 'Draft' &&
-                      <button type="button" className="btn btn-sm btn-outline-primary"
-                        disabled={busy} onClick={() => void postReceiving(receipt.id)}>
-                        Post to stock
-                      </button>}</td>
+                      (reviewReceipt === receipt.id ? <section aria-label="Confirm stock posting">
+                        <strong>PO #{detail.id} · {locations.find(l => l.id === detail.locationId)?.name}</strong>
+                        <ul>{receipt.lines.map(item => {
+                          const line = detail.lines.find(x => x.id === item.purchaseOrderLineId)!
+                          const left = line.remainingQuantity - item.quantity
+                          return <li key={line.id}>{line.name}: +{item.quantity} · {left < 0 ?
+                            'Exceeds current remaining quantity' : `PO remaining after posting: ${left}`}</li>
+                        })}</ul>
+                        <button type="button" className="btn btn-sm btn-primary" disabled={busy || receipt.lines.some(item =>
+                          item.quantity > (detail.lines.find(x => x.id === item.purchaseOrderLineId)?.remainingQuantity ?? 0))}
+                          onClick={() => void postReceiving(receipt.id)}>Confirm stock posting</button>
+                        <button type="button" className="btn btn-sm btn-link" disabled={busy}
+                          onClick={() => setReviewReceipt(null)}>Cancel</button>
+                      </section> : <button type="button" className="btn btn-sm btn-outline-primary"
+                        disabled={busy} onClick={() => setReviewReceipt(receipt.id)}>Review and post</button>)}</td>
                   </tr>)}</tbody>
                 </table>
               </div>}

@@ -89,8 +89,8 @@ function money(amount: number, currency: string) {
   }).format(amount)
 }
 
-export default function PlatformBilling() {
-  const [businessId, setBusinessId] = useState('')
+export default function PlatformBilling({ business, onChooseBusiness }: { business: { id: number; name: string } | null; onChooseBusiness: () => void }) {
+  const businessId = business?.id
   const [cycle, setCycle] = useState('Monthly')
   const [periodStart, setPeriodStart] = useState(() => {
     const today = new Date()
@@ -149,6 +149,7 @@ export default function PlatformBilling() {
 
   async function loadPreview(event: FormEvent) {
     event.preventDefault()
+    if (!businessId) return
     setError('')
     setNotice('')
     setPreview(null)
@@ -265,11 +266,9 @@ export default function PlatformBilling() {
       <form onSubmit={event => void loadPreview(event)}>
         <div className="row g-3 align-items-end">
           <div className="col-12 col-sm-4">
-            <label className="form-label" htmlFor="billing-business-id">Business ID</label>
-            <input className="form-control" id="billing-business-id" type="number"
-              min="1" step="1" required value={businessId}
-              onChange={event => { setBusinessId(event.target.value); clearPreview() }}
-              placeholder="Numeric business ID" />
+            <p className="mb-1">{business?.name ?? 'Select a business to prepare billing.'}</p>
+            <button className="btn btn-outline-secondary" type="button" onClick={onChooseBusiness}>
+              {business ? 'Change business' : 'Find business by name'}</button>
           </div>
           <div className="col-12 col-sm-3">
             <label className="form-label" htmlFor="billing-cycle">Billing cycle</label>
@@ -289,7 +288,7 @@ export default function PlatformBilling() {
               }} />
           </div>
           <div className="col-12 col-sm-2">
-            <button className="btn btn-outline-primary w-100" type="submit" disabled={busy}>
+            <button className="btn btn-outline-primary w-100" type="submit" disabled={busy || !businessId}>
               {busy ? 'Loading…' : 'Preview Terms'}
             </button>
           </div>

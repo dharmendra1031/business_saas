@@ -648,16 +648,21 @@ public sealed class AppDbContext(DbContextOptions<AppDbContext> options)
         builder.Entity<RetailCashSale>(entity =>
         {
             entity.Property(x => x.RequestKey).HasMaxLength(80);
-            entity.Property(x => x.ProductName).HasMaxLength(200);
             entity.Property(x => x.CurrencyCode).HasMaxLength(3);
-            entity.Property(x => x.UnitPrice).HasPrecision(18, 2);
             entity.Property(x => x.Total).HasPrecision(18, 2);
             entity.Property(x => x.Tendered).HasPrecision(18, 2);
             entity.HasIndex(x => new { x.BusinessId, x.CashierId, x.RequestKey }).IsUnique();
             entity.HasOne<Business>().WithMany().HasForeignKey(x => x.BusinessId).OnDelete(DeleteBehavior.Restrict);
             entity.HasOne<BusinessLocation>().WithMany().HasForeignKey(x => x.LocationId).OnDelete(DeleteBehavior.Restrict);
-            entity.HasOne<RetailProduct>().WithMany().HasForeignKey(x => x.ProductId).OnDelete(DeleteBehavior.Restrict);
             entity.HasOne<AppUser>().WithMany().HasForeignKey(x => x.CashierId).OnDelete(DeleteBehavior.Restrict);
+        });
+
+        builder.Entity<RetailCashSaleLine>(entity =>
+        {
+            entity.Property(x => x.ProductName).HasMaxLength(200);
+            entity.Property(x => x.UnitPrice).HasPrecision(18, 2);
+            entity.HasOne<RetailProduct>().WithMany().HasForeignKey(x => x.ProductId).OnDelete(DeleteBehavior.Restrict);
+            entity.HasOne<RetailCashSale>().WithMany(x => x.Lines).HasForeignKey(x => x.SaleId);
         });
 
         builder.Entity<RetailStockMovement>(entity =>

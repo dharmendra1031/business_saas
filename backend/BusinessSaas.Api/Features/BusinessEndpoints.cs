@@ -194,7 +194,10 @@ public static class BusinessEndpoints
             };
             var canOperate = accessStatus is "Active" or "Trial";
 
-            return Results.Ok(new { business = details, roleCode, locations, subscription, accessStatus, canOperate, cashSaleEnabled = environment.IsDevelopment() });
+            var hasProducts = roleCode != "Cashier" && await db.RetailProducts.AnyAsync(x => x.BusinessId == businessId);
+            var pendingApprovals = roleCode == "Owner" ? await db.RetailPurchaseOrders.CountAsync(x =>
+                x.BusinessId == businessId && x.Status == "Draft") : 0;
+            return Results.Ok(new { hasProducts, pendingApprovals, business = details, roleCode, locations, subscription, accessStatus, canOperate, cashSaleEnabled = environment.IsDevelopment() });
         });
     }
 

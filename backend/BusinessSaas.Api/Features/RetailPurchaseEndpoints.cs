@@ -17,7 +17,7 @@ public static class RetailPurchaseEndpoints
         var group = app.MapGroup("/api/businesses/{businessId:long}/purchase-orders")
             .RequireAuthorization();
 
-        group.MapGet("", async (long businessId, int? page,
+        group.MapGet("", async (long businessId, int? page, bool? draftOnly,
             ClaimsPrincipal user, AppDbContext db) =>
         {
             var denied = await RetailMasterEndpoints.CheckAccess(db, user, businessId, false);
@@ -36,7 +36,7 @@ public static class RetailPurchaseEndpoints
                             on order.SupplierId equals supplier.Id
                         join location in db.BusinessLocations.AsNoTracking()
                             on order.LocationId equals location.Id
-                        where order.BusinessId == businessId &&
+                        where order.BusinessId == businessId && (draftOnly != true || order.Status == "Draft") &&
                               supplier.BusinessId == businessId &&
                               location.BusinessId == businessId &&
                               (role == "Owner" || location.IsPrimary)
@@ -176,7 +176,9 @@ public static class RetailPurchaseEndpoints
             var receipts = await db.RetailReceivings.AsNoTracking()
                 .Where(x => x.BusinessId == businessId && x.PurchaseOrderId == orderId)
                 .OrderByDescending(x => x.Id)
-                .Select(x => new { x.Id, x.Status, x.CreatedAtUtc, x.PostedAtUtc })
+                .Select(x => new { x.Id, x.Status, x.CreatedAtUtc, x.PostedAtUtc,
+                    Lines = db.RetailReceivingLines.Where(l => l.ReceivingId == x.Id)
+                        .OrderBy(l => l.Id).Select(l => new { l.PurchaseOrderLineId, l.Quantity }).ToList() })
                 .ToListAsync();
             return Results.Ok(new
             {

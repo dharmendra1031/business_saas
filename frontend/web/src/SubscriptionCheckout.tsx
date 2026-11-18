@@ -27,6 +27,7 @@ interface RazorpayWindow extends Window {
     order_id: string
     name: string
     description: string
+    modal: { ondismiss: () => void }
     handler: () => void
   }) => { open: () => void }
 }
@@ -48,22 +49,30 @@ async function loadCheckoutScript() {
 export default function SubscriptionCheckout({ businessId }: { businessId: number }) {
   const [payment, setPayment] = useState<CheckoutSummary | null>(null)
   const [busy, setBusy] = useState(false)
+  const [open, setOpen] = useState(false)
   const [error, setError] = useState('')
   const [notice, setNotice] = useState('')
 
+  const [refresh, setRefresh] = useState(0)
   useEffect(() => {
+    setError('')
+    setPayment(null)
     let active = true
     api<CheckoutSummary>(`/businesses/${businessId}/billing/checkout`)
-      .then(result => { if (active) setPayment(result) })
+      .then(result => {
+        if (!active) return
+        setPayment(result)
+        if (result.status === 'Captured') setNotice('Payment verified by the server.')
+      })
       .catch(cause => {
         if (active && !(cause instanceof SessionExpiredError))
           setError('Unable to load subscription payment details.')
       })
     return () => { active = false }
-  }, [businessId])
+  }, [businessId, refresh])
 
   async function pay() {
-    if (!payment?.paymentRequestId || busy) return
+    if (!payment?.paymentRequestId || busy || open) return
     setBusy(true)
     setError('')
     setNotice('')
@@ -81,8 +90,14 @@ export default function SubscriptionCheckout({ businessId }: { businessId: numbe
         order_id: order.orderId,
         name: 'Business SaaS',
         description: `Subscription request #${order.paymentRequestId}`,
-        handler: () => setNotice('Payment response received. Access changes only after server verification. Refresh to check status.')
+        modal: { ondismiss: () => setOpen(false) },
+        handler: () => {
+          setOpen(false)
+          setNotice('Payment submitted. Checking server verification.')
+          setRefresh(n => n + 1)
+        }
       }).open()
+      setOpen(true)
     } catch (cause) {
       if (!(cause instanceof SessionExpiredError))
         setError(cause instanceof Error ? cause.message : 'Unable to open checkout.')
@@ -91,7 +106,14 @@ export default function SubscriptionCheckout({ businessId }: { businessId: numbe
     }
   }
 
-  if (!payment?.enabled || !payment.available) return null
+  if (payment && !payment.enabled) return null
+  if (!payment || !payment.available) return <section className="content-section" aria-label="Subscription payment">
+    <h2>Subscription payment</h2>
+    {error ? <p role="alert">{error}</p> : <p role="status">{!payment ? 'Checking payment status…' :
+      'No current subscription payment request.'}</p>}
+    <button className="btn btn-outline-secondary" disabled={!payment && !error}
+      onClick={() => setRefresh(n => n + 1)}>{error ? 'Retry' : 'Refresh status'}</button>
+  </section>
 
   return <section className="content-section" aria-label="Subscription payment">
     <h2>Subscription payment</h2>
@@ -101,11 +123,13 @@ export default function SubscriptionCheckout({ businessId }: { businessId: numbe
     </p>
     {error && <p className="alert alert-danger" role="alert">{error}</p>}
     {notice && <p className="alert alert-info" role="status">{notice}</p>}
-    {payment.canPay
-      ? <button className="btn btn-primary" type="button" disabled={busy}
+    <button className="btn btn-link" type="button" onClick={() => setRefresh(n => n + 1)}>Refresh status</button>
+    {payment.canPay && !notice
+      ? <button className="btn btn-primary" type="button" disabled={busy || open}
           onClick={() => void pay()}>{busy ? 'Opening checkout…' : 'Pay securely'}</button>
       : <p className="small text-secondary">
-          Payment is being processed or requires support review. Do not create another payment.
+          Status: {payment.status}. {payment.status === 'Captured' ? 'Payment verified.' :
+            'Check status again or contact support before starting another payment.'}
         </p>}
   </section>
 }

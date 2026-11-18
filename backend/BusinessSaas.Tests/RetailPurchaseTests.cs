@@ -187,6 +187,9 @@ public sealed class RetailPurchaseTests
             })).StatusCode);
 
         var beforePost = await owner.GetFromJsonAsync<JsonElement>(orderPath);
+        var draftLine = beforePost.GetProperty("receivings")[0].GetProperty("lines")[0];
+        Assert.Equal(orderLineId, draftLine.GetProperty("purchaseOrderLineId").GetInt64());
+        Assert.Equal(40m, draftLine.GetProperty("quantity").GetDecimal());
         Assert.Equal(0m, beforePost.GetProperty("lines")[0]
             .GetProperty("receivedQuantity").GetDecimal());
 
@@ -276,7 +279,43 @@ public sealed class RetailPurchaseTests
             Assert.Equal(97m, await db.RetailStockBalances.Where(x => x.BusinessId == businessId &&
                 x.LocationId == locationId && x.ProductId == productId).Select(x => x.Quantity).SingleAsync());
             Assert.Equal(1, await db.RetailStockMovements.CountAsync(x =>
-                x.BusinessId == businessId && x.SourceType == "CashSale"));
+                x.BusinessId == businessId && x.SourceType == "CashSaleLine"));
+        }
+
+        var oilId = await CreateId(owner, $"/api/businesses/{businessId}/products", new
+        {
+            name = "Cooking oil", sku = "OIL-01", categoryId, unitId, salePrice = 40m, taxClassification = ""
+        });
+        var basket = new { locationId, requestKey = "cash-two-products-001", tendered = 400m,
+            lines = new[] { new { productId, quantity = 2, expectedUnitPrice = 150m },
+                            new { productId = oilId, quantity = 1, expectedUnitPrice = 40m } } };
+        Assert.Equal(HttpStatusCode.BadRequest, (await Send(cashier, sales, basket)).StatusCode);
+        using (var scope = factory.Services.CreateScope())
+        {
+            var db = scope.ServiceProvider.GetRequiredService<AppDbContext>();
+            Assert.Equal(97m, await db.RetailStockBalances.Where(x => x.BusinessId == businessId &&
+                x.ProductId == productId).Select(x => x.Quantity).SingleAsync());
+            Assert.False(await db.RetailCashSales.AnyAsync(x => x.RequestKey == basket.requestKey));
+        }
+        var opening = await Send(owner, $"/api/businesses/{businessId}/stock/locations/{locationId}/opening",
+            new { productId = oilId, quantity = 10m });
+        opening.EnsureSuccessStatusCode();
+        var basketResult = await Send(cashier, sales, basket);
+        basketResult.EnsureSuccessStatusCode();
+        var basketReceipt = await basketResult.Content.ReadFromJsonAsync<JsonElement>();
+        Assert.Equal(340m, basketReceipt.GetProperty("total").GetDecimal());
+        Assert.Equal(2, basketReceipt.GetProperty("lines").GetArrayLength());
+        (await Send(cashier, sales, basket)).EnsureSuccessStatusCode();
+        var last = await cashier.GetFromJsonAsync<JsonElement>($"{sales}/latest?locationId={locationId}");
+        Assert.Equal(basketReceipt.GetProperty("id").GetInt64(), last.GetProperty("id").GetInt64());
+        Assert.Equal(HttpStatusCode.NotFound, (await manager.GetAsync($"{sales}/latest?locationId={locationId}")).StatusCode);
+        using (var scope = factory.Services.CreateScope())
+        {
+            var db = scope.ServiceProvider.GetRequiredService<AppDbContext>();
+            Assert.Equal(95m, await db.RetailStockBalances.Where(x => x.ProductId == productId)
+                .Select(x => x.Quantity).SingleAsync());
+            Assert.Equal(9m, await db.RetailStockBalances.Where(x => x.ProductId == oilId)
+                .Select(x => x.Quantity).SingleAsync());
         }
 
         using (var scope = factory.Services.CreateScope())

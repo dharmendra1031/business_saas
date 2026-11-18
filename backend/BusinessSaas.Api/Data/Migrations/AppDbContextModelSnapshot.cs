@@ -1549,6 +1549,7 @@ namespace BusinessSaas.Api.Data.Migrations
                         .OnDelete(DeleteBehavior.Cascade)
                         .IsRequired();
                 });
+
             modelBuilder.Entity("BusinessSaas.Api.Data.RetailCashSale", b =>
                 {
                     b.Property<long>("Id")
@@ -1574,17 +1575,6 @@ namespace BusinessSaas.Api.Data.Migrations
                     b.Property<DateTime>("PostedAtUtc")
                         .HasColumnType("datetime2");
 
-                    b.Property<long>("ProductId")
-                        .HasColumnType("bigint");
-
-                    b.Property<string>("ProductName")
-                        .IsRequired()
-                        .HasMaxLength(200)
-                        .HasColumnType("nvarchar(200)");
-
-                    b.Property<int>("Quantity")
-                        .HasColumnType("int");
-
                     b.Property<string>("RequestKey")
                         .IsRequired()
                         .HasMaxLength(80)
@@ -1598,22 +1588,51 @@ namespace BusinessSaas.Api.Data.Migrations
                         .HasPrecision(18, 2)
                         .HasColumnType("decimal(18,2)");
 
-                    b.Property<decimal>("UnitPrice")
-                        .HasPrecision(18, 2)
-                        .HasColumnType("decimal(18,2)");
-
                     b.HasKey("Id");
 
                     b.HasIndex("CashierId");
 
                     b.HasIndex("LocationId");
 
-                    b.HasIndex("ProductId");
-
                     b.HasIndex("BusinessId", "CashierId", "RequestKey")
                         .IsUnique();
 
                     b.ToTable("RetailCashSales");
+                });
+
+            modelBuilder.Entity("BusinessSaas.Api.Data.RetailCashSaleLine", b =>
+                {
+                    b.Property<long>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("bigint");
+
+                    SqlServerPropertyBuilderExtensions.UseIdentityColumn(b.Property<long>("Id"));
+
+                    b.Property<long>("ProductId")
+                        .HasColumnType("bigint");
+
+                    b.Property<string>("ProductName")
+                        .IsRequired()
+                        .HasMaxLength(200)
+                        .HasColumnType("nvarchar(200)");
+
+                    b.Property<int>("Quantity")
+                        .HasColumnType("int");
+
+                    b.Property<long>("SaleId")
+                        .HasColumnType("bigint");
+
+                    b.Property<decimal>("UnitPrice")
+                        .HasPrecision(18, 2)
+                        .HasColumnType("decimal(18,2)");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("ProductId");
+
+                    b.HasIndex("SaleId");
+
+                    b.ToTable("RetailCashSaleLine");
                 });
 
             modelBuilder.Entity("BusinessSaas.Api.Data.RetailCashSale", b =>
@@ -1635,12 +1654,26 @@ namespace BusinessSaas.Api.Data.Migrations
                         .HasForeignKey("LocationId")
                         .OnDelete(DeleteBehavior.Restrict)
                         .IsRequired();
+                });
 
+            modelBuilder.Entity("BusinessSaas.Api.Data.RetailCashSaleLine", b =>
+                {
                     b.HasOne("BusinessSaas.Api.Data.RetailProduct", null)
                         .WithMany()
                         .HasForeignKey("ProductId")
                         .OnDelete(DeleteBehavior.Restrict)
                         .IsRequired();
+
+                    b.HasOne("BusinessSaas.Api.Data.RetailCashSale", null)
+                        .WithMany("Lines")
+                        .HasForeignKey("SaleId")
+                        .OnDelete(DeleteBehavior.Cascade)
+                        .IsRequired();
+                });
+
+            modelBuilder.Entity("BusinessSaas.Api.Data.RetailCashSale", b =>
+                {
+                    b.Navigation("Lines");
                 });
 #pragma warning restore 612, 618
         }

@@ -6,7 +6,8 @@ import RetailPurchases from './RetailPurchases'
 
 export type RetailSection = 'products' | 'masters' | 'suppliers' | 'customers' | 'stock' | 'purchases'
 
-export default function RetailCatalog({ section, businessId, canOperate, currencyCode, locations, roleCode }: {
+export default function RetailCatalog({ section, businessId, canOperate, currencyCode, locations, roleCode, approvalsOnly }: {
+  approvalsOnly: boolean
   section: RetailSection
   businessId: number
   canOperate: boolean
@@ -23,7 +24,7 @@ export default function RetailCatalog({ section, businessId, canOperate, currenc
       return <RetailStock businessId={businessId} canOperate={canOperate}
         locations={locations} isOwner={roleCode === 'Owner'} />
     case 'purchases':
-      return <RetailPurchases businessId={businessId} canOperate={canOperate}
+      return <RetailPurchases initialApprovalsOnly={approvalsOnly} businessId={businessId} canOperate={canOperate}
         locations={locations} roleCode={roleCode} currencyCode={currencyCode} />
     case 'suppliers':
     case 'customers':

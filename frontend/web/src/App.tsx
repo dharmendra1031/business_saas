@@ -23,6 +23,8 @@ export default function App() {
   const [platformSection, setPlatformSection] = useState<PlatformSection>('overview')
   const [platformBusinessId, setPlatformBusinessId] = useState<number | null>(null)
   const [dashboard, setDashboard] = useState<RetailDashboard | null>(null)
+  const [approvalList, setApprovalList] = useState(false)
+  const [billingBusiness, setBillingBusiness] = useState<{ id: number; name: string } | null>(null)
   const [retailPage, setRetailPage] = useState<RetailPage>('overview')
   const [error, setError] = useState('')
   const [notice, setNotice] = useState('')
@@ -102,7 +104,7 @@ export default function App() {
     }
   }
 
-  async function openBusiness(id: number) {
+  async function openBusiness(id: number, showOverview = false) {
     setError('')
     try {
       const details = await api<RetailDashboard>(`/businesses/${id}/dashboard`)
@@ -112,8 +114,9 @@ export default function App() {
         setError(`${details.business.typeName} workspace is not available yet.`)
         return
       }
+      setApprovalList(false)
       setDashboard(details)
-      setRetailPage(details.cashSaleEnabled && details.roleCode === 'Cashier' ? 'cash' : 'overview')
+      setRetailPage(!showOverview && details.cashSaleEnabled && details.roleCode === 'Cashier' ? 'cash' : 'overview')
       setPage('retail')
     } catch (cause) {
       if (!(cause instanceof SessionExpiredError)) {
@@ -204,7 +207,9 @@ export default function App() {
               onClick={() => {
                 if (menuOpen) menuToggle.current?.focus()
                 setMenuOpen(false)
-                setRetailPage(section)
+                setApprovalList(false)
+                if (section === 'overview') void openBusiness(dashboard.business.id, true)
+                else setRetailPage(section)
               }}><Icon size={18} /> {label}</button>)}
           {dashboard.roleCode !== 'Cashier' && <>
             <div className="sidebar-heading">SHOP SETUP</div>
@@ -257,6 +262,7 @@ export default function App() {
                   setDashboard(null)
                   setError('')
                   setNotice('')
+                  setBillingBusiness(null)
                   setPlatformBusinessId(null)
                   setPlatformSection(section)
                   setPage('platform')
@@ -289,7 +295,9 @@ export default function App() {
           {notice && <div className="alert alert-success" role="status">{notice}</div>}
 
           {page === 'platform' && canViewPlatform && <PlatformAdmin section={platformSection}
-            selectedBusinessId={platformBusinessId}
+            selectedBusinessId={platformBusinessId} billingBusiness={billingBusiness}
+            onBilling={business => { setBillingBusiness(business); setPlatformSection('plans') }}
+            onChooseBusiness={() => { setPlatformBusinessId(null); setPlatformSection('businesses') }}
             onViewBusiness={id => {
               setPlatformBusinessId(id)
               setPlatformSection('businesses')
@@ -308,6 +316,8 @@ export default function App() {
                   <Store size={32} />
                   <h2>Set up your first business</h2>
                   <p>Create a retail workspace to manage your shop. No sample transactions will be added.</p>
+                  <p>Joining a shop? Ask the owner to add {user?.email} under Team Access.</p>
+                  <button className="btn btn-outline-secondary me-2" onClick={() => void loadBusinesses()}>Refresh access</button>
                   <button className="btn btn-primary" onClick={() => setPage('create')}>Create Business <ArrowRight size={16} /></button>
                 </section>
               ) : (
@@ -364,15 +374,19 @@ export default function App() {
               {retailPage === 'overview' && <>
               {dashboard.roleCode === 'Owner' &&
                 <SubscriptionCheckout key={dashboard.business.id} businessId={dashboard.business.id} />}
+              {dashboard.canOperate && dashboard.pendingApprovals > 0 && <button className="btn btn-primary mb-2"
+                onClick={() => { setApprovalList(true); setRetailPage('purchases') }}>
+                Review pending orders ({dashboard.pendingApprovals})</button>}
               {dashboard.canOperate && dashboard.roleCode !== 'Cashier' && (
                 <section className="content-section" aria-label="Shop setup guide">
-                  <h2>Get your shop ready</h2>
+                  <h2>{dashboard.hasProducts ? 'Daily work' : 'Get your shop ready'}</h2>
+                  {!dashboard.hasProducts && <>
                   <p className="mb-2">Start with Products, then enter Opening Stock or receive a Purchase. Use the buttons below or the sidebar.</p>
-                  <p className="small text-secondary mb-0">For a new product, enter its name and sale price. Additional details are optional unless your shop needs them.</p>
+                  <p className="small text-secondary mb-0">For a new product, enter its name and sale price. Additional details are optional unless your shop needs them.</p></>}
                   <div className="d-flex flex-wrap gap-2 mt-3">
-                    <button className="btn btn-primary" onClick={() => setRetailPage('products')}>Add Products</button>
+                    <button className="btn btn-primary" onClick={() => setRetailPage('products')}>{dashboard.hasProducts ? 'Products' : 'Add Products'}</button>
                     <button className="btn btn-outline-secondary" onClick={() => setRetailPage('stock')}>View Stock</button>
-                    <button className="btn btn-outline-secondary" onClick={() => setRetailPage('purchases')}>Purchase Orders</button>
+                    <button className="btn btn-outline-secondary" onClick={() => { setApprovalList(false); setRetailPage('purchases') }}>Purchase Orders</button>
                   </div>
                 </section>
               )}
@@ -406,12 +420,12 @@ export default function App() {
               {retailPage === 'cash' && dashboard.cashSaleEnabled && user && <CashCheckout
                 key={user.id + '-' + dashboard.business.id} userId={user.id} dashboard={dashboard} />}
               {retailPage !== 'cash' && retailPage !== 'overview' && retailPage !== 'team' && dashboard.roleCode !== 'Cashier' &&
-                <RetailCatalog key={dashboard.business.id + '-' + retailPage} section={retailPage}
+                <RetailCatalog key={dashboard.business.id + '-' + retailPage} section={retailPage} approvalsOnly={approvalList}
                   businessId={dashboard.business.id} canOperate={dashboard.canOperate}
                   currencyCode={dashboard.business.currencyCode} locations={dashboard.locations}
                   roleCode={dashboard.roleCode} />}
               {retailPage === 'team' && dashboard.roleCode === 'Owner' &&
-                <TeamMembers businessId={dashboard.business.id} />}
+                <TeamMembers businessId={dashboard.business.id} canOperate={dashboard.canOperate} cashSaleEnabled={!!dashboard.cashSaleEnabled} />}
             </>
           )}
         </main>

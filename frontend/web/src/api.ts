@@ -56,6 +56,8 @@ export interface RetailDashboard {
     paidPlanVersionId: number | null
   } | null
   accessStatus: 'Trial' | 'TrialExpired' | 'Active' | 'Inactive'
+  hasProducts: boolean
+  pendingApprovals: number
   cashSaleEnabled?: boolean
   canOperate: boolean
 }
