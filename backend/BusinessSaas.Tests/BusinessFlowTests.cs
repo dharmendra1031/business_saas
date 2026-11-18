@@ -1436,6 +1436,21 @@ public sealed class BusinessFlowTests
         Assert.True((await refundOtherEvent.Content.ReadFromJsonAsync<JsonElement>())
             .GetProperty("alreadyRecorded").GetBoolean());
 
+        // A second provider-confirmed refund cannot exceed the remaining payment.
+        var excessRefundBody = refundBody.Replace("rfnd_test_partial_001", "rfnd_test_excess_002")
+            .Replace("50000", "70000");
+        gateway.RefundAmountOverride = 70000;
+        Assert.Equal(HttpStatusCode.Conflict,
+            (await Webhook("evt_refund_excess_003", excessRefundBody)).StatusCode);
+        gateway.RefundAmountOverride = null;
+        var failedRefundBody = refundBody.Replace("refund.processed", "refund.failed");
+        Assert.Equal(HttpStatusCode.OK,
+            (await Webhook("evt_refund_failed_004", failedRefundBody)).StatusCode);
+        var stillActive = await owner.GetFromJsonAsync<JsonElement>(
+            $"/api/businesses/{firstId}/dashboard");
+        Assert.Equal("Active", stillActive.GetProperty("accessStatus").GetString());
+        // Refunds are flagged for manual business-policy review, not silently revoked.
+
         var reconciliation = await admin.GetFromJsonAsync<JsonElement>(
             "/api/platform/billing/reconciliation");
         Assert.Equal(1, reconciliation.GetProperty("total").GetInt32());
