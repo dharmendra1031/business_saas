@@ -153,3 +153,18 @@ The Super Admin can publish reviewed **public** plan drafts as immutable catalog
 - The schema migration is `20261117210000_AddPublishedPlanVersions`. Review the intended SQL Server environment and backup/restore plan before production migration.
 
 **Not implemented by catalog publication:** payment provider integration, tax invoice issuance, payment ledger, plan assignment/checkout, new customer paid activation, immutable plan-version binding on a business subscription, and server-enforced plan/module quota resolution. Until those are built and tested, customers retain the existing subscription behavior without commercial enforcement.
+
+## 11. Internal billing draft foundation (18 November 2026)
+
+The `Plans & Billing` screen now has **Plan Catalog** and **Billing Drafts** tabs. The latter prepares an internal price snapshot without creating a legal invoice, charging a customer, or activating a paid subscription.
+
+- The MFA-verified Super Admin chooses a numeric business ID and monthly/quarterly/yearly cycle. The preview derives the matching **latest published** plan version from the business's current `PlanCode`.
+- The business currency must match the published catalog currency; otherwise the preview/draft is rejected. The amount comes only from that immutable published plan version, not a user-supplied amount.
+- The admin confirms a required reason before a numeric `SubscriptionBillingDraft.Id` is generated. A separate `RequestKey` protects against retries; it is an operation token, **not an entity ID**. The database enforces unique `(BusinessId, RequestKey)`.
+- Each draft stores the numeric business and published plan version IDs, plan code, billing cycle, currency, monetary amount, actor ID and timestamp; `Billing.DraftCreated` is recorded in the **same transaction**.
+- Admins can review paginated billing draft history. The record is always `Draft`, not `Paid`. No public business workspace or non-MFA user can create drafts.
+- **No payment provider, payment collection, payment ledger, GST/tax invoice, credit note, refund, statutory invoice number, due date, billing period or paid activation has been implemented.** Drafts have no external customer-facing invoice or payment obligation. The platform's revenue KPI must continue to show *Not available*.
+- Database migration: `20261118100000_AddSubscriptionBillingDrafts`. Apply only after review/backup of the intended SQL Server database.
+- Tests cover anonymous and customer denial, MFA-only access, preview validation, stale published version, replay request key, unmodified Trial subscription and SQL migration.
+
+**Next safe slice:** Confirm pricing/tax requirements, add period-specific invoices and immutable verified payment events, integrate a trusted payment provider/webhook, and only then introduce paid activation and revenue totals. Never use a draft amount as collected revenue.
