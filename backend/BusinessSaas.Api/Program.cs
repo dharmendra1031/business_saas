@@ -272,6 +272,7 @@ app.MapRetailPurchaseEndpoints();
 app.MapPlatformEndpoints();
 app.MapPlatformBillingEndpoints();
 app.MapRazorpayPaymentEndpoints();
+app.MapPlatformPaymentReviewEndpoints();
 
 app.Run();
 
