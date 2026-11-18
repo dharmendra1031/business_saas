@@ -347,6 +347,22 @@ namespace BusinessSaas.Api.Data.Migrations
                     b.ToTable("SubscriptionPayments");
                 });
 
+            modelBuilder.Entity("BusinessSaas.Api.Data.SubscriptionRefund", b =>
+                {
+                    b.Property<long>("Id").ValueGeneratedOnAdd().HasColumnType("bigint");
+                    SqlServerPropertyBuilderExtensions.UseIdentityColumn(b.Property<long>("Id"));
+                    b.Property<long>("SubscriptionPaymentId").HasColumnType("bigint");
+                    b.Property<string>("ProviderRefundId").IsRequired().HasMaxLength(80).HasColumnType("nvarchar(80)");
+                    b.Property<string>("CurrencyCode").IsRequired().HasMaxLength(3).HasColumnType("nvarchar(3)");
+                    b.Property<decimal>("Amount").HasPrecision(18, 2).HasColumnType("decimal(18,2)");
+                    b.Property<string>("Status").IsRequired().HasMaxLength(24).HasColumnType("nvarchar(24)");
+                    b.Property<DateTime>("ObservedAtUtc").HasColumnType("datetime2");
+                    b.HasKey("Id");
+                    b.HasIndex("ProviderRefundId").IsUnique();
+                    b.HasIndex("SubscriptionPaymentId");
+                    b.ToTable("SubscriptionRefunds");
+                });
+
             modelBuilder.Entity("BusinessSaas.Api.Data.RazorpayWebhookEvent", b =>
                 {
                     b.Property<long>("Id").ValueGeneratedOnAdd().HasColumnType("bigint");
@@ -1169,6 +1185,15 @@ namespace BusinessSaas.Api.Data.Migrations
                     b.HasOne("BusinessSaas.Api.Data.SubscriptionPaymentRequest", null)
                         .WithMany()
                         .HasForeignKey("PaymentRequestId")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .IsRequired();
+                });
+
+            modelBuilder.Entity("BusinessSaas.Api.Data.SubscriptionRefund", b =>
+                {
+                    b.HasOne("BusinessSaas.Api.Data.SubscriptionPayment", null)
+                        .WithMany()
+                        .HasForeignKey("SubscriptionPaymentId")
                         .OnDelete(DeleteBehavior.Restrict)
                         .IsRequired();
                 });

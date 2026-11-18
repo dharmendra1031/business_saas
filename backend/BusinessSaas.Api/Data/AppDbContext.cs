@@ -124,6 +124,17 @@ public sealed class SubscriptionPayment
     public DateTime CapturedAtUtc { get; set; } = DateTime.UtcNow;
 }
 
+public sealed class SubscriptionRefund
+{
+    public long Id { get; set; }
+    public long SubscriptionPaymentId { get; set; }
+    public string ProviderRefundId { get; set; } = "";
+    public string CurrencyCode { get; set; } = "";
+    public decimal Amount { get; set; }
+    public string Status { get; set; } = "Processed";
+    public DateTime ObservedAtUtc { get; set; } = DateTime.UtcNow;
+}
+
 public sealed class RazorpayWebhookEvent
 {
     public long Id { get; set; }
@@ -310,6 +321,7 @@ public sealed class AppDbContext(DbContextOptions<AppDbContext> options)
     public DbSet<SubscriptionBillingDraft> SubscriptionBillingDrafts => Set<SubscriptionBillingDraft>();
     public DbSet<SubscriptionPaymentRequest> SubscriptionPaymentRequests => Set<SubscriptionPaymentRequest>();
     public DbSet<SubscriptionPayment> SubscriptionPayments => Set<SubscriptionPayment>();
+    public DbSet<SubscriptionRefund> SubscriptionRefunds => Set<SubscriptionRefund>();
     public DbSet<RazorpayWebhookEvent> RazorpayWebhookEvents => Set<RazorpayWebhookEvent>();
     public DbSet<BusinessLocation> BusinessLocations => Set<BusinessLocation>();
 
@@ -456,6 +468,18 @@ public sealed class AppDbContext(DbContextOptions<AppDbContext> options)
             entity.HasIndex(x => x.ProviderPaymentId).IsUnique();
             entity.HasOne<SubscriptionPaymentRequest>().WithMany()
                 .HasForeignKey(x => x.PaymentRequestId).OnDelete(DeleteBehavior.Restrict);
+        });
+
+        builder.Entity<SubscriptionRefund>(entity =>
+        {
+            entity.Property(x => x.ProviderRefundId).HasMaxLength(80).IsRequired();
+            entity.Property(x => x.CurrencyCode).HasMaxLength(3).IsRequired();
+            entity.Property(x => x.Status).HasMaxLength(24).IsRequired();
+            entity.Property(x => x.Amount).HasPrecision(18, 2);
+            entity.HasIndex(x => x.ProviderRefundId).IsUnique();
+            entity.HasIndex(x => x.SubscriptionPaymentId);
+            entity.HasOne<SubscriptionPayment>().WithMany()
+                .HasForeignKey(x => x.SubscriptionPaymentId).OnDelete(DeleteBehavior.Restrict);
         });
 
         builder.Entity<RazorpayWebhookEvent>(entity =>
