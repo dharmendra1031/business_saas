@@ -293,7 +293,9 @@ namespace BusinessSaas.Api.Data.Migrations
                     b.Property<DateTime>("CreatedAtUtc").HasColumnType("datetime2");
                     b.HasKey("Id");
                     b.HasIndex("BusinessId", "RequestKey").IsUnique();
-                    b.HasIndex("BusinessId", "PeriodStartDate").IsUnique();
+                    b.HasIndex("BusinessId", "PeriodStartDate")
+                        .IsUnique()
+                        .HasFilter("[PeriodStartDate] IS NOT NULL");
                     b.HasIndex("CreatedAtUtc", "Id");
                     b.HasIndex("CreatedByUserId");
                     b.HasIndex("PublishedPlanVersionId");

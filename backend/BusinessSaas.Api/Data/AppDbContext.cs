@@ -371,7 +371,8 @@ public sealed class AppDbContext(DbContextOptions<AppDbContext> options)
             entity.Property(x => x.RequestKey).HasMaxLength(80).IsRequired();
             entity.Property(x => x.Amount).HasPrecision(18, 2);
             entity.HasIndex(x => new { x.BusinessId, x.RequestKey }).IsUnique();
-            entity.HasIndex(x => new { x.BusinessId, x.PeriodStartDate }).IsUnique();
+            entity.HasIndex(x => new { x.BusinessId, x.PeriodStartDate })
+                .IsUnique().HasFilter("[PeriodStartDate] IS NOT NULL");
             entity.Property(x => x.PeriodStartDate).HasColumnType("date");
             entity.Property(x => x.PeriodEndDate).HasColumnType("date");
             entity.HasIndex(x => new { x.CreatedAtUtc, x.Id });
