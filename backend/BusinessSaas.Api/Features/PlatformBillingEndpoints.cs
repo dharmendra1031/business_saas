@@ -99,16 +99,19 @@ public static class PlatformBillingEndpoints
             var existing = await db.SubscriptionPaymentRequests.AsNoTracking()
                 .SingleOrDefaultAsync(x => x.BillingDraftId == id);
             if (existing is not null)
-                return existing.RequestKey == key
-                    ? Results.Ok(new
+            {
+                if (existing.RequestKey == key)
+                    return Results.Ok(new
                     {
                         id = existing.Id, existing.BillingDraftId, existing.Status,
                         existing.Amount, existing.CurrencyCode, alreadyExists = true
-                    })
-                    : Results.Conflict(new
-                    {
-                        message = "A payment request already exists for this billing draft."
                     });
+
+                return Results.Conflict(new
+                {
+                    message = "A payment request already exists for this billing draft."
+                });
+            }
 
             var keyUsed = await db.SubscriptionPaymentRequests.AnyAsync(x =>
                 x.BusinessId == draft.BusinessId && x.RequestKey == key);
