@@ -182,3 +182,16 @@ The internal draft workflow now records explicit **start-inclusive / end-exclusi
 - Regression coverage includes valid anniversary starts, invalid date/missing period, duplicate overlapping cycles, unchanged trial status and SQL Server migration/model snapshot parity.
 
 Before introducing real invoices, confirm issuer tax jurisdiction, invoicing/tax rules and payment gateway. Period-aware drafts are **not** legal or tax invoices.
+
+## 13. Payment preparation, without charging (18 November 2026)
+
+This first payment-safety batch adds a **preparation record**, not a gateway order or collected payment. Payment provider, issuer and tax treatment must be approved before live collection.
+
+- `SubscriptionPaymentRequests` uses numeric auto-increment IDs, a unique numeric `BillingDraftId`, numeric `BusinessId`, immutable amount/currency snapshot, actor, timestamp and `RequestKey`. The request key is a retry token, **not an entity ID**.
+- MFA-verified Super Admin can prepare **one** payment request for a valid service-period Billing Draft. A retry with the same key returns the existing numeric ID; a different key cannot create a duplicate.
+- Historical drafts without a service period cannot be prepared. All requests have status `AwaitingGateway` with no endpoint to mark `Paid` or change a subscription to `Active`.
+- The existing **Plans & Billing** page shows preparation history and an administrative action requiring a reason. No customer checkout, payment link or collection is exposed.
+- Audit action `Billing.PaymentPrepared` is committed atomically. SQL migration `20261118140000_AddSubscriptionPaymentRequests` requires a reviewed backup and deployment.
+- Tests cover MFA/tenant denial, invalid inputs, idempotent retry, conflicting duplicates, frozen amount, unchanged Trial subscription and SQL migration.
+
+**Not implemented:** gateway order creation, verified webhook/payment capture, receipt or tax invoice, paid activation/renewal, refunds or revenue reporting. Never count `AwaitingGateway` as collected money.
