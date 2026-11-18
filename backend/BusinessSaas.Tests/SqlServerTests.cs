@@ -79,6 +79,8 @@ public sealed class SqlServerTests
                 migration => migration.EndsWith("_AddSubscriptionPaymentRequests"));
             Assert.Contains(await db.Database.GetAppliedMigrationsAsync(),
                 migration => migration.EndsWith("_AddRazorpayPaymentsAndPaidValidity"));
+            Assert.Contains(await db.Database.GetAppliedMigrationsAsync(),
+                migration => migration.EndsWith("_AddVerifiedSubscriptionRefunds"));
             Assert.True(await db.Database.CanConnectAsync());
             Assert.True(await db.BusinessTypes.AnyAsync(x => x.Code == "RETAIL" && x.IsSupported));
         }
