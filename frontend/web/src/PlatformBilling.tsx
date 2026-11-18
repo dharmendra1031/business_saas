@@ -29,6 +29,23 @@ interface BillingDraft {
   status: string
 }
 
+interface PaymentRequest {
+  id: number
+  billingDraftId: number
+  businessId: number
+  businessName: string
+  currencyCode: string
+  amount: number
+  status: string
+}
+
+interface PaymentPage {
+  items: PaymentRequest[]
+  total: number
+  page: number
+  pageSize: number
+}
+
 interface BillingPage {
   items: BillingDraft[]
   total: number
@@ -57,6 +74,10 @@ export default function PlatformBilling() {
   const [page, setPage] = useState(1)
   const [reload, setReload] = useState(0)
   const [records, setRecords] = useState<BillingPage | null>(null)
+  const [payments, setPayments] = useState<PaymentPage | null>(null)
+  const [selectedDraftId, setSelectedDraftId] = useState<number | null>(null)
+  const [paymentReason, setPaymentReason] = useState('')
+  const [paymentKey, setPaymentKey] = useState('')
   const [loading, setLoading] = useState(true)
   const [busy, setBusy] = useState(false)
   const [error, setError] = useState('')
@@ -65,12 +86,18 @@ export default function PlatformBilling() {
   useEffect(() => {
     let active = true
     setLoading(true)
-    api<BillingPage>(`/platform/billing/drafts?page=${page}`)
-      .then(result => { if (active) setRecords(result) })
+    Promise.all([
+      api<BillingPage>(`/platform/billing/drafts?page=${page}`),
+      api<PaymentPage>('/platform/billing/payment-requests')
+    ])
+      .then(([drafts, requests]) => {
+        if (active) { setRecords(drafts); setPayments(requests) }
+      })
       .catch(cause => {
         if (!active || cause instanceof SessionExpiredError) return
         setRecords(null)
-        setError('Unable to load billing drafts.')
+        setPayments(null)
+        setError('Unable to load billing records.')
       })
       .finally(() => { if (active) setLoading(false) })
     return () => { active = false }
@@ -128,6 +155,38 @@ export default function PlatformBilling() {
     } catch (cause) {
       if (!(cause instanceof SessionExpiredError))
         setError(cause instanceof Error ? cause.message : 'Unable to create billing draft.')
+    } finally {
+      setBusy(false)
+    }
+  }
+
+  function selectDraft(id: number) {
+    setSelectedDraftId(id)
+    setPaymentReason('')
+    setPaymentKey(operationKey())
+    setError('')
+    setNotice('')
+  }
+
+  async function preparePayment(event: FormEvent) {
+    event.preventDefault()
+    if (!selectedDraftId || !paymentKey) return
+    setBusy(true)
+    setError('')
+    try {
+      const result = await post<{ id: number; alreadyExists: boolean }>(
+        `/platform/billing/drafts/${selectedDraftId}/payment-requests`, {
+          requestKey: paymentKey,
+          reason: paymentReason.trim()
+        })
+      setNotice(`Payment request #${result.id} ${result.alreadyExists ? 'already exists' : 'prepared'}. No money has been collected.`)
+      setSelectedDraftId(null)
+      setPaymentKey('')
+      setPaymentReason('')
+      setReload(value => value + 1)
+    } catch (cause) {
+      if (!(cause instanceof SessionExpiredError))
+        setError(cause instanceof Error ? cause.message : 'Unable to prepare payment request.')
     } finally {
       setBusy(false)
     }
@@ -218,7 +277,7 @@ export default function PlatformBilling() {
             <div className="table-responsive">
               <table className="table platform-table align-middle">
                 <thead><tr><th>Draft ID</th><th>Business</th><th>Plan / Cycle</th>
-                  <th>Period</th><th>Amount</th><th>Created</th><th>Status</th></tr></thead>
+                  <th>Period</th><th>Amount</th><th>Created</th><th>Status</th><th>Action</th></tr></thead>
                 <tbody>{records.items.map(item => <tr key={item.id}>
                   <td>#{item.id}</td>
                   <td><strong>{item.businessName}</strong>
@@ -230,6 +289,13 @@ export default function PlatformBilling() {
                   <td>{money(item.amount, item.currencyCode)}</td>
                   <td>{new Date(item.createdAtUtc).toLocaleString()}</td>
                   <td><span className="text-secondary">{item.status} (unpaid)</span></td>
+                  <td>
+                    {payments?.items.some(request => request.billingDraftId === item.id)
+                      ? <span className="text-secondary small">Prepared</span>
+                      : <button className="btn btn-outline-primary btn-sm" type="button"
+                          disabled={busy || !item.periodStartDate || !item.periodEndDate}
+                          onClick={() => selectDraft(item.id)}>Prepare Payment</button>}
+                  </td>
                 </tr>)}</tbody>
               </table>
             </div>
@@ -245,11 +311,48 @@ export default function PlatformBilling() {
             </div>
           </>}
     </section>
+    {selectedDraftId !== null && <section className="content-section mt-3">
+      <h2>Prepare Payment Request for Draft #{selectedDraftId}</h2>
+      <p className="text-secondary small">
+        Internal unpaid request only. No gateway order, tax invoice or activation.
+      </p>
+      <form onSubmit={event => void preparePayment(event)}>
+        <label className="form-label" htmlFor="payment-preparation-reason">Reason</label>
+        <textarea id="payment-preparation-reason" className="form-control" rows={2}
+          minLength={10} maxLength={200} required value={paymentReason}
+          onChange={event => setPaymentReason(event.target.value)} />
+        <div className="form-footer">
+          <button type="button" className="btn btn-outline-secondary" disabled={busy}
+            onClick={() => setSelectedDraftId(null)}>Cancel</button>
+          <button className="btn btn-primary" disabled={busy || paymentReason.trim().length < 10}>
+            {busy ? 'Preparing…' : 'Confirm Preparation'}
+          </button>
+        </div>
+      </form>
+    </section>}
+    <section className="content-section mt-3">
+      <h2>Payment Preparation History</h2>
+      {payments?.total === 0 ? <p className="text-secondary">No payment requests prepared.</p>
+        : payments && <div className="table-responsive">
+          <table className="table platform-table align-middle">
+            <thead><tr><th>Request ID</th><th>Draft</th><th>Business</th>
+              <th>Amount</th><th>Status</th></tr></thead>
+            <tbody>{payments.items.map(item => <tr key={item.id}>
+              <td>#{item.id}</td>
+              <td>#{item.billingDraftId}</td>
+              <td>{item.businessName} (#{item.businessId})</td>
+              <td>{money(item.amount, item.currencyCode)}</td>
+              <td>{item.status}</td>
+            </tr>)}</tbody>
+          </table>
+        </div>}
+    </section>
     <p className="small text-secondary mt-3">
       Billing period dates are derived from the chosen start date and cycle.
       Overlapping internal drafts are blocked.
-      Payment gateway, tax invoices, payment ledger and paid activation will be implemented
-      separately after payment and tax requirements are approved.
+      Payment preparation requests are unpaid internal records, not gateway orders.
+      Gateway verification, tax invoices, payment ledger and paid activation remain disabled
+      until payment and tax requirements are approved.
     </p>
   </>
 }
