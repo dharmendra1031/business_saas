@@ -72,7 +72,7 @@ public static class PlatformBillingEndpoints
             if (periodEnd is null)
                 return Results.BadRequest(new
                 {
-                    message = "Choose Monthly, Quarterly or Yearly and a period starting on day 1 of the month."
+                    message = "Choose a valid start date and Monthly, Quarterly or Yearly billing cycle."
                 });
 
             var duplicatePeriod = await db.SubscriptionBillingDrafts.AsNoTracking()
@@ -201,8 +201,7 @@ public static class PlatformBillingEndpoints
 
     private static DateOnly? PeriodEnd(DateOnly? start, string? cycle)
     {
-        if (start is null || start.Value.Day != 1 ||
-            start.Value.Year is < 2020 or > 2098)
+        if (start is null || start.Value.Year is < 2020 or > 2098)
             return null;
 
         return cycle switch

@@ -925,16 +925,21 @@ public sealed class BusinessFlowTests
             });
         }
 
-        // Internal billing drafts must cover an explicit calendar period.
+        // Drafts cover explicit periods, including anniversary-based start dates.
         var periodStart = new DateOnly(DateTime.UtcNow.Year, DateTime.UtcNow.Month, 1);
         var periodEnd = periodStart.AddMonths(1);
         Assert.Equal(HttpStatusCode.BadRequest,
             (await admin.GetAsync(
                 $"/api/platform/billing/businesses/{firstId}/preview?cycle=Monthly"))
             .StatusCode);
+        var anniversaryStart = periodStart.AddDays(5);
+        var anniversaryPreview = await admin.GetFromJsonAsync<JsonElement>(
+            $"/api/platform/billing/businesses/{firstId}/preview?cycle=Monthly&periodStartDate={anniversaryStart:yyyy-MM-dd}");
+        Assert.Equal(anniversaryStart.AddMonths(1), DateOnly.Parse(
+            anniversaryPreview.GetProperty("periodEndDate").GetString()!));
         Assert.Equal(HttpStatusCode.BadRequest,
             (await admin.GetAsync(
-                $"/api/platform/billing/businesses/{firstId}/preview?cycle=Monthly&periodStartDate={periodStart.AddDays(1):yyyy-MM-dd}"))
+                $"/api/platform/billing/businesses/{firstId}/preview?cycle=Monthly&periodStartDate=1900-01-01"))
             .StatusCode);
 
         // Internal billing drafts use the immutable published price, never mark a payment.

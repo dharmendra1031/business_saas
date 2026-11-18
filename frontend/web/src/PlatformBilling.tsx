@@ -49,7 +49,7 @@ export default function PlatformBilling() {
   const [cycle, setCycle] = useState('Monthly')
   const [periodStart, setPeriodStart] = useState(() => {
     const today = new Date()
-    return `${today.getFullYear()}-${String(today.getMonth() + 1).padStart(2, '0')}-01`
+    return `${today.getFullYear()}-${String(today.getMonth() + 1).padStart(2, '0')}-${String(today.getDate()).padStart(2, '0')}`
   })
   const [reason, setReason] = useState('')
   const [preview, setPreview] = useState<BillingPreview | null>(null)
@@ -87,8 +87,8 @@ export default function PlatformBilling() {
     setError('')
     setNotice('')
     setPreview(null)
-    if (!/^\d{4}-\d{2}-01$/.test(periodStart)) {
-      setError('The billing period must start on the first day of a month.')
+    if (!/^\d{4}-\d{2}-\d{2}$/.test(periodStart)) {
+      setError('Choose a valid billing period start date.')
       return
     }
     setBusy(true)
@@ -246,7 +246,8 @@ export default function PlatformBilling() {
           </>}
     </section>
     <p className="small text-secondary mt-3">
-      Billing periods start on the first day of a calendar month. Overlapping internal drafts are blocked.
+      Billing period dates are derived from the chosen start date and cycle.
+      Overlapping internal drafts are blocked.
       Payment gateway, tax invoices, payment ledger and paid activation will be implemented
       separately after payment and tax requirements are approved.
     </p>
