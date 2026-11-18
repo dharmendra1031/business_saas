@@ -223,3 +223,10 @@ button:focus-visible, a:focus-visible, input:focus-visible, select:focus-visible
   opacity: .8;
 }
 .nav-entry-planned small { margin-left: auto; font-size: .65rem; color: #c1cee1; }
+
+@media print {
+  body:has(.cash-receipt) * { visibility: hidden; }
+  .cash-receipt, .cash-receipt * { visibility: visible !important; }
+  .cash-receipt { position: absolute; inset: 0 auto auto 0; border: 0; box-shadow: none; }
+  .cash-receipt button { display: none; }
+}

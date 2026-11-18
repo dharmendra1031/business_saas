@@ -56,11 +56,20 @@ export interface RetailDashboard {
     paidPlanVersionId: number | null
   } | null
   accessStatus: 'Trial' | 'TrialExpired' | 'Active' | 'Inactive'
+  cashSaleEnabled?: boolean
   canOperate: boolean
 }
 
 let csrfToken: string | null = null
 let sessionExpiredHandler: (() => void) | null = null
+
+export class ApiResponseError extends Error {
+  readonly status: number
+  constructor(status: number, message: string) {
+    super(message)
+    this.status = status
+  }
+}
 
 export class SessionExpiredError extends Error {
   constructor() {
@@ -132,7 +141,7 @@ export async function api<T>(path: string, options: RequestInit = {}): Promise<T
       throw new Error('Invalid code or expired verification session. Please sign in again if needed.')
 
     const body = await response.json().catch(() => ({})) as { message?: string; detail?: string }
-    throw new Error(body.message ?? body.detail ??
+    throw new ApiResponseError(response.status, body.message ?? body.detail ??
       (response.status === 429 ? 'Too many requests. Wait a minute and try again.'
         : response.status === 401 ? 'Please sign in to continue.' : 'Request failed.'))
   }

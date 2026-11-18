@@ -251,6 +251,34 @@ public sealed class RetailPurchaseTests
                 .Select(x => x.Quantity).SingleAsync());
         }
 
+        var sales = $"/api/businesses/{businessId}/cash-sales";
+        var cashSale = new { locationId, productId, quantity = 3, expectedUnitPrice = 150m,
+            tendered = 500m, requestKey = "cash-receipt-retry-001" };
+        Assert.Equal(HttpStatusCode.NotFound, (await Send(other, sales, cashSale)).StatusCode);
+        var lookup = await cashier.GetFromJsonAsync<JsonElement>($"{sales}/products?locationId={locationId}&search=RICE");
+        Assert.Equal(productId, lookup[0].GetProperty("id").GetInt64());
+        var postedSale = await Send(cashier, sales, cashSale);
+        Assert.Equal(HttpStatusCode.OK, postedSale.StatusCode);
+        var receipt = await postedSale.Content.ReadFromJsonAsync<JsonElement>();
+        Assert.Equal(450m, receipt.GetProperty("total").GetDecimal());
+        var replay = await Send(cashier, sales, cashSale);
+        Assert.Equal(HttpStatusCode.OK, replay.StatusCode);
+        Assert.Equal(receipt.GetProperty("id").GetInt64(),
+            (await replay.Content.ReadFromJsonAsync<JsonElement>()).GetProperty("id").GetInt64());
+        Assert.Equal(HttpStatusCode.Conflict, (await Send(cashier, sales,
+            cashSale with { quantity = 2 })).StatusCode);
+        Assert.Equal(HttpStatusCode.BadRequest, (await Send(cashier, sales,
+            cashSale with { requestKey = "cash-out-of-stock-001", quantity = 98, tendered = 15000m })).StatusCode);
+        using (var scope = factory.Services.CreateScope())
+        {
+            var db = scope.ServiceProvider.GetRequiredService<AppDbContext>();
+            Assert.Single(await db.RetailCashSales.Where(x => x.BusinessId == businessId).ToListAsync());
+            Assert.Equal(97m, await db.RetailStockBalances.Where(x => x.BusinessId == businessId &&
+                x.LocationId == locationId && x.ProductId == productId).Select(x => x.Quantity).SingleAsync());
+            Assert.Equal(1, await db.RetailStockMovements.CountAsync(x =>
+                x.BusinessId == businessId && x.SourceType == "CashSale"));
+        }
+
         using (var scope = factory.Services.CreateScope())
         {
             var db = scope.ServiceProvider.GetRequiredService<AppDbContext>();
@@ -261,6 +289,11 @@ public sealed class RetailPurchaseTests
         Assert.Equal(HttpStatusCode.Forbidden,
             (await Send(owner, orders, valid)).StatusCode);
         Assert.Equal(HttpStatusCode.OK, (await owner.GetAsync(orders)).StatusCode);
+        Assert.Equal(HttpStatusCode.Forbidden, (await Send(cashier, sales,
+            cashSale with { requestKey = "cash-expired-trial-001" })).StatusCode);
+        var receiptPath = $"{sales}/receipt?locationId={locationId}&requestKey={cashSale.requestKey}";
+        Assert.Equal(HttpStatusCode.OK, (await cashier.GetAsync(receiptPath)).StatusCode);
+        Assert.Equal(HttpStatusCode.NotFound, (await manager.GetAsync(receiptPath)).StatusCode);
     }
 
     private static async Task Register(HttpClient client, string email)

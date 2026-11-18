@@ -1,6 +1,7 @@
 import { useEffect, useRef, useState, type FormEvent } from 'react'
 import { Activity, ArrowLeft, ArrowRight, Boxes, Building2, CheckCircle2, CreditCard, KeyRound, LayoutDashboard, LogOut, Menu, Package, Plus, Settings2, ShieldCheck, ShoppingCart, Store, Tags, Truck, UserRound, Users } from 'lucide-react'
 import { api, post, resetCsrf, SessionExpiredError, setSessionExpiredHandler, type Business, type BusinessMarket, type BusinessType, type RetailDashboard, type User } from './api'
+import CashCheckout from './CashCheckout'
 import TeamMembers from './TeamMembers'
 import SubscriptionCheckout from './SubscriptionCheckout'
 import RetailCatalog, { type RetailSection } from './RetailCatalog'
@@ -8,9 +9,9 @@ import PlatformAdmin, { type PlatformSection } from './PlatformAdmin'
 import PlatformMfaSetup from './PlatformMfaSetup'
 
 type Page = 'loading' | 'login' | 'register' | 'mfa-setup' | 'businesses' | 'create' | 'retail' | 'platform'
-type RetailPage = RetailSection | 'overview' | 'team'
+type RetailPage = RetailSection | 'cash' | 'overview' | 'team'
 const retailTitles: Record<RetailPage, string> = {
-  overview: 'Dashboard', products: 'Products', stock: 'Stock', purchases: 'Purchase Orders',
+  cash: 'Cash sale', overview: 'Dashboard', products: 'Products', stock: 'Stock', purchases: 'Purchase Orders',
   masters: 'Categories & Units', suppliers: 'Suppliers', customers: 'Customers', team: 'Team Access'
 }
 
@@ -117,7 +118,7 @@ export default function App() {
         return
       }
       setDashboard(details)
-      setRetailPage('overview')
+      setRetailPage(details.cashSaleEnabled && details.roleCode === 'Cashier' ? 'cash' : 'overview')
       setPage('retail')
     } catch (cause) {
       if (!(cause instanceof SessionExpiredError)) {
@@ -197,10 +198,11 @@ export default function App() {
           <div className="sidebar-heading">DAILY WORK</div>
           {([
             ['overview', 'Dashboard', LayoutDashboard],
+            ['cash', 'Cash sale', CreditCard],
             ['products', 'Products', Package],
             ['stock', 'Stock', Boxes],
             ['purchases', 'Purchase', ShoppingCart]
-          ] as const).filter(([section]) => dashboard.roleCode !== 'Cashier' || section === 'overview')
+          ] as const).filter(([section]) => section === 'cash' ? dashboard.cashSaleEnabled : dashboard.roleCode !== 'Cashier' || section === 'overview')
             .map(([section, label, Icon]) => <button key={section} type="button"
               className={`nav-entry${retailPage === section ? ' active' : ''}`}
               aria-current={retailPage === section ? 'page' : undefined}
@@ -379,7 +381,7 @@ export default function App() {
                   </div>
                 </section>
               )}
-              {dashboard.roleCode === 'Cashier' && <section className="content-section">
+              {dashboard.roleCode === 'Cashier' && !dashboard.cashSaleEnabled && <section className="content-section">
                 <h2>Billing is coming soon</h2>
                 <p>Your account is ready, but POS billing is not available yet. Ask the owner to prepare products and stock.</p>
               </section>}
@@ -406,7 +408,9 @@ export default function App() {
               </details>
 
               </>}
-              {retailPage !== 'overview' && retailPage !== 'team' && dashboard.roleCode !== 'Cashier' &&
+              {retailPage === 'cash' && dashboard.cashSaleEnabled && user && <CashCheckout
+                key={user.id + '-' + dashboard.business.id} userId={user.id} dashboard={dashboard} />}
+              {retailPage !== 'cash' && retailPage !== 'overview' && retailPage !== 'team' && dashboard.roleCode !== 'Cashier' &&
                 <RetailCatalog key={dashboard.business.id + '-' + retailPage} section={retailPage}
                   businessId={dashboard.business.id} canOperate={dashboard.canOperate}
                   currencyCode={dashboard.business.currencyCode} locations={dashboard.locations}

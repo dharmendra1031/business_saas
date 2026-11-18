@@ -14,6 +14,7 @@ public static class RetailModule
         app.MapRetailStockEndpoints();
         app.MapRetailAdjustmentEndpoints();
         app.MapRetailPurchaseEndpoints();
+        if (app.Environment.IsDevelopment()) app.MapRetailCashSales();
     }
 
     public static void AddBusinessDefaults(AppDbContext db, long businessId)

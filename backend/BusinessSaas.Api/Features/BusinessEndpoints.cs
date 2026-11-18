@@ -145,7 +145,7 @@ public static class BusinessEndpoints
         });
 
         group.MapGet("/businesses/{businessId:long}/dashboard", async (
-            long businessId, ClaimsPrincipal principal, AppDbContext db) =>
+            long businessId, ClaimsPrincipal principal, AppDbContext db, IWebHostEnvironment environment) =>
         {
             var userId = CurrentUserId(principal);
             var roleCode = await db.BusinessUsers.AsNoTracking()
@@ -194,7 +194,7 @@ public static class BusinessEndpoints
             };
             var canOperate = accessStatus is "Active" or "Trial";
 
-            return Results.Ok(new { business = details, roleCode, locations, subscription, accessStatus, canOperate });
+            return Results.Ok(new { business = details, roleCode, locations, subscription, accessStatus, canOperate, cashSaleEnabled = environment.IsDevelopment() });
         });
     }
 

@@ -329,6 +329,7 @@ public sealed class AppDbContext(DbContextOptions<AppDbContext> options)
 
     public DbSet<RetailCategory> RetailCategories => Set<RetailCategory>();
     public DbSet<RetailUnit> RetailUnits => Set<RetailUnit>();
+    public DbSet<RetailCashSale> RetailCashSales => Set<RetailCashSale>();
     public DbSet<RetailProduct> RetailProducts => Set<RetailProduct>();
     public DbSet<RetailSupplier> RetailSuppliers => Set<RetailSupplier>();
     public DbSet<RetailCustomer> RetailCustomers => Set<RetailCustomer>();
@@ -642,6 +643,21 @@ public sealed class AppDbContext(DbContextOptions<AppDbContext> options)
                 .HasForeignKey(x => x.LocationId).OnDelete(DeleteBehavior.Restrict);
             entity.HasOne<RetailProduct>().WithMany()
                 .HasForeignKey(x => x.ProductId).OnDelete(DeleteBehavior.Restrict);
+        });
+
+        builder.Entity<RetailCashSale>(entity =>
+        {
+            entity.Property(x => x.RequestKey).HasMaxLength(80);
+            entity.Property(x => x.ProductName).HasMaxLength(200);
+            entity.Property(x => x.CurrencyCode).HasMaxLength(3);
+            entity.Property(x => x.UnitPrice).HasPrecision(18, 2);
+            entity.Property(x => x.Total).HasPrecision(18, 2);
+            entity.Property(x => x.Tendered).HasPrecision(18, 2);
+            entity.HasIndex(x => new { x.BusinessId, x.CashierId, x.RequestKey }).IsUnique();
+            entity.HasOne<Business>().WithMany().HasForeignKey(x => x.BusinessId).OnDelete(DeleteBehavior.Restrict);
+            entity.HasOne<BusinessLocation>().WithMany().HasForeignKey(x => x.LocationId).OnDelete(DeleteBehavior.Restrict);
+            entity.HasOne<RetailProduct>().WithMany().HasForeignKey(x => x.ProductId).OnDelete(DeleteBehavior.Restrict);
+            entity.HasOne<AppUser>().WithMany().HasForeignKey(x => x.CashierId).OnDelete(DeleteBehavior.Restrict);
         });
 
         builder.Entity<RetailStockMovement>(entity =>
