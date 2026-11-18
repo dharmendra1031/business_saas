@@ -8,6 +8,8 @@ interface BillingPreview {
   publishedPlanVersionId: number
   version: number
   billingCycle: string
+  periodStartDate: string
+  periodEndDate: string
   currencyCode: string
   amount: number
 }
@@ -19,6 +21,8 @@ interface BillingDraft {
   publishedPlanVersionId: number
   planCode: string
   billingCycle: string
+  periodStartDate: string | null
+  periodEndDate: string | null
   currencyCode: string
   amount: number
   createdAtUtc: string
@@ -43,6 +47,10 @@ function money(amount: number, currency: string) {
 export default function PlatformBilling() {
   const [businessId, setBusinessId] = useState('')
   const [cycle, setCycle] = useState('Monthly')
+  const [periodStart, setPeriodStart] = useState(() => {
+    const today = new Date()
+    return `${today.getFullYear()}-${String(today.getMonth() + 1).padStart(2, '0')}-01`
+  })
   const [reason, setReason] = useState('')
   const [preview, setPreview] = useState<BillingPreview | null>(null)
   const [requestKey, setRequestKey] = useState('')
@@ -79,10 +87,14 @@ export default function PlatformBilling() {
     setError('')
     setNotice('')
     setPreview(null)
+    if (!/^\d{4}-\d{2}-01$/.test(periodStart)) {
+      setError('The billing period must start on the first day of a month.')
+      return
+    }
     setBusy(true)
     try {
       const result = await api<BillingPreview>(
-        `/platform/billing/businesses/${Number(businessId)}/preview?cycle=${cycle}`)
+        `/platform/billing/businesses/${Number(businessId)}/preview?cycle=${cycle}&periodStartDate=${periodStart}`)
       setPreview(result)
       setRequestKey(operationKey())
     } catch (cause) {
@@ -103,6 +115,7 @@ export default function PlatformBilling() {
         businessId: preview.businessId,
         expectedPlanVersionId: preview.publishedPlanVersionId,
         billingCycle: preview.billingCycle,
+        periodStartDate: preview.periodStartDate,
         requestKey,
         reason: reason.trim()
       })
@@ -131,14 +144,14 @@ export default function PlatformBilling() {
       {error && <div className="alert alert-danger" role="alert">{error}</div>}
       <form onSubmit={event => void loadPreview(event)}>
         <div className="row g-3 align-items-end">
-          <div className="col-12 col-sm-5">
+          <div className="col-12 col-sm-4">
             <label className="form-label" htmlFor="billing-business-id">Business ID</label>
             <input className="form-control" id="billing-business-id" type="number"
               min="1" step="1" required value={businessId}
               onChange={event => { setBusinessId(event.target.value); clearPreview() }}
               placeholder="Numeric business ID" />
           </div>
-          <div className="col-12 col-sm-4">
+          <div className="col-12 col-sm-3">
             <label className="form-label" htmlFor="billing-cycle">Billing cycle</label>
             <select id="billing-cycle" className="form-select" value={cycle}
               onChange={event => { setCycle(event.target.value); clearPreview() }}>
@@ -148,6 +161,14 @@ export default function PlatformBilling() {
             </select>
           </div>
           <div className="col-12 col-sm-3">
+            <label className="form-label" htmlFor="billing-period">Period starts</label>
+            <input id="billing-period" className="form-control" type="date" required
+              value={periodStart} onChange={event => {
+                setPeriodStart(event.target.value)
+                clearPreview()
+              }} />
+          </div>
+          <div className="col-12 col-sm-2">
             <button className="btn btn-outline-primary w-100" type="submit" disabled={busy}>
               {busy ? 'Loading…' : 'Preview Terms'}
             </button>
@@ -159,6 +180,7 @@ export default function PlatformBilling() {
         <dl className="detail-list">
           <div><dt>Plan</dt><dd>{preview.planCode}, published v{preview.version}</dd></div>
           <div><dt>Cycle</dt><dd>{preview.billingCycle}</dd></div>
+          <div><dt>Period</dt><dd>{preview.periodStartDate} – {preview.periodEndDate} (end exclusive)</dd></div>
           <div><dt>Price snapshot</dt><dd>{money(preview.amount, preview.currencyCode)}</dd></div>
           <div><dt>Payment</dt><dd>Not collected</dd></div>
         </dl>
@@ -196,12 +218,15 @@ export default function PlatformBilling() {
             <div className="table-responsive">
               <table className="table platform-table align-middle">
                 <thead><tr><th>Draft ID</th><th>Business</th><th>Plan / Cycle</th>
-                  <th>Amount</th><th>Created</th><th>Status</th></tr></thead>
+                  <th>Period</th><th>Amount</th><th>Created</th><th>Status</th></tr></thead>
                 <tbody>{records.items.map(item => <tr key={item.id}>
                   <td>#{item.id}</td>
                   <td><strong>{item.businessName}</strong>
                     <small className="d-block text-secondary">#{item.businessId}</small></td>
                   <td>{item.planCode} · {item.billingCycle}</td>
+                  <td>{item.periodStartDate && item.periodEndDate
+                    ? `${item.periodStartDate} – ${item.periodEndDate} (exclusive)`
+                    : 'Not recorded (older draft)'}</td>
                   <td>{money(item.amount, item.currencyCode)}</td>
                   <td>{new Date(item.createdAtUtc).toLocaleString()}</td>
                   <td><span className="text-secondary">{item.status} (unpaid)</span></td>
@@ -221,6 +246,7 @@ export default function PlatformBilling() {
           </>}
     </section>
     <p className="small text-secondary mt-3">
+      Billing periods start on the first day of a calendar month. Overlapping internal drafts are blocked.
       Payment gateway, tax invoices, payment ledger and paid activation will be implemented
       separately after payment and tax requirements are approved.
     </p>
