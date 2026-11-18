@@ -1301,6 +1301,22 @@ public sealed class BusinessFlowTests
             (await Webhook("evt_wrong_amount_001", webhookBody)).StatusCode);
         gateway.FetchAmountOverride = null;
 
+        // A signed authorization notification never activates a subscription.
+        var authorizedBody = webhookBody.Replace("payment.captured", "payment.authorized");
+        var authorized = await Webhook("evt_authorized_only_001", authorizedBody);
+        Assert.Equal(HttpStatusCode.OK, authorized.StatusCode);
+        Assert.True((await authorized.Content.ReadFromJsonAsync<JsonElement>())
+            .GetProperty("ignored").GetBoolean());
+
+        // Captured money while suspended must not override the administrator's suspension.
+        var suspension = await Post(admin,
+            $"/api/platform/businesses/{firstId}/subscription-status", new
+            {
+                action = "Suspend", expectedStatus = "Trial",
+                reason = "Payment is under review while access stays suspended"
+            });
+        Assert.Equal(HttpStatusCode.OK, suspension.StatusCode);
+
         var captured = await Webhook("evt_capture_valid_001", webhookBody);
         Assert.Equal(HttpStatusCode.OK, captured.StatusCode);
         Assert.True((await captured.Content.ReadFromJsonAsync<JsonElement>())
@@ -1319,13 +1335,26 @@ public sealed class BusinessFlowTests
             Assert.Equal(2, await db.RazorpayWebhookEvents.CountAsync());
             var verified = await db.SubscriptionPayments.SingleAsync();
             Assert.Equal(providerPaymentId, verified.ProviderPaymentId);
-            Assert.Equal("Activated", verified.ActivationStatus);
+            Assert.Equal("HeldSuspended", verified.ActivationStatus);
             var sub = await db.BusinessSubscriptions.SingleAsync(x => x.BusinessId == firstId);
-            Assert.Equal("Active", sub.Status);
+            Assert.Equal("Suspended", sub.Status);
+            Assert.Equal("Active", sub.StatusBeforeSuspension);
             Assert.Equal(planVersionId, sub.PaidPlanVersionId);
             Assert.True(sub.PaidStartsAtUtc < DateTime.UtcNow);
             Assert.True(sub.PaidEndsAtUtc > DateTime.UtcNow);
         }
+        var heldDashboard = await owner.GetFromJsonAsync<JsonElement>(
+            $"/api/businesses/{firstId}/dashboard");
+        Assert.Equal("Suspended", heldDashboard.GetProperty("accessStatus").GetString());
+        Assert.False(heldDashboard.GetProperty("canOperate").GetBoolean());
+        var resumePaid = await Post(admin,
+            $"/api/platform/businesses/{firstId}/subscription-status", new
+            {
+                action = "Reactivate", expectedStatus = "Suspended",
+                reason = "Confirmed payment and approved access restoration"
+            });
+        Assert.Equal(HttpStatusCode.OK, resumePaid.StatusCode);
+
         var paidDashboard = await owner.GetFromJsonAsync<JsonElement>(
             $"/api/businesses/{firstId}/dashboard");
         Assert.Equal("Active", paidDashboard.GetProperty("accessStatus").GetString());

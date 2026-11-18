@@ -195,3 +195,16 @@ This first payment-safety batch adds a **preparation record**, not a gateway ord
 - Tests cover MFA/tenant denial, invalid inputs, idempotent retry, conflicting duplicates, frozen amount, unchanged Trial subscription and SQL migration.
 
 **Not implemented:** gateway order creation, verified webhook/payment capture, receipt or tax invoice, paid activation/renewal, refunds or revenue reporting. Never count `AwaitingGateway` as collected money.
+
+## 14. Razorpay checkout and verified paid validity (18 November 2026)
+
+The Razorpay backend/owner-checkout integration is now implemented behind **disabled-by-default** payment configuration; this does not confirm merchant sandbox or live acceptance.
+
+- Server-only Razorpay Order creation, owner-scoped current-period checkout, deterministic gateway order receipt and no duplicate external order on retry.
+- Strict signed raw-body webhook verification, independent captured-payment API lookup, provider order/amount/currency matching, durable numeric-ID captured-payment ledger and deduplicated event history.
+- Business subscription gets numeric `PaidPlanVersionId`, UTC `PaidStartsAtUtc` and `PaidEndsAtUtc`. Tenant writes are blocked when validity expires. Suspended subscriptions stay suspended after capture, while invalid or late billing periods require review.
+- INR only. Gateway Test/Live keys are mode-checked; live requires an explicit opt-in configuration. Razorpay secrets stay on the backend; the frontend receives only the publishable key and provider order reference.
+- SQL migration: `20261118150000_AddRazorpayPaymentsAndPaidValidity`. Apply only following a reviewed backup and intended-environment migration process.
+- Integration, configuration, test-mode setup, reconciliation and outstanding controls: [RAZORPAY_PAYMENT_INTEGRATION.md](RAZORPAY_PAYMENT_INTEGRATION.md).
+
+**Not finished:** merchant credential configuration, real Razorpay sandbox webhook/E2E testing, live payment authorisation, legal tax invoice issuance, refunds, settlement reconciliation, and final production payments approval. No GST or other tax is assumed by this batch.

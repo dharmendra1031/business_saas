@@ -17,14 +17,21 @@ public interface IRazorpayGateway
 
 public static class RazorpayConfiguration
 {
-    public static bool IsEnabled(IConfiguration configuration) =>
-        configuration.GetValue<bool>("Payments:Enabled") &&
-        configuration["Razorpay:KeyId"] is { Length: > 8 } &&
-        configuration["Razorpay:KeySecret"] is { Length: >= 16 } &&
-        configuration["Razorpay:WebhookSecret"] is { Length: >= 20 } &&
-        (string.Equals(configuration["Razorpay:Mode"], "Test", StringComparison.OrdinalIgnoreCase) ||
-         string.Equals(configuration["Razorpay:Mode"], "Live", StringComparison.OrdinalIgnoreCase) &&
-            configuration.GetValue<bool>("Payments:AllowLive"));
+    public static bool IsEnabled(IConfiguration configuration)
+    {
+        if (!configuration.GetValue<bool>("Payments:Enabled") ||
+            configuration["Razorpay:KeySecret"] is not { Length: >= 16 } ||
+            configuration["Razorpay:WebhookSecret"] is not { Length: >= 20 })
+            return false;
+
+        var keyId = configuration["Razorpay:KeyId"] ?? "";
+        var mode = configuration["Razorpay:Mode"];
+        return string.Equals(mode, "Test", StringComparison.OrdinalIgnoreCase) &&
+                keyId.StartsWith("rzp_test_", StringComparison.Ordinal) ||
+            string.Equals(mode, "Live", StringComparison.OrdinalIgnoreCase) &&
+                configuration.GetValue<bool>("Payments:AllowLive") &&
+                keyId.StartsWith("rzp_live_", StringComparison.Ordinal);
+    }
 
     public static long ToPaise(decimal amount)
     {
