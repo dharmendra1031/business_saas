@@ -153,6 +153,8 @@ public static class RazorpayPaymentEndpoints
                 if (!root.TryGetProperty("event", out var eventType) ||
                     eventType.ValueKind != JsonValueKind.String)
                     return Results.BadRequest();
+                if (eventType.GetString() == "refund.processed")
+                    return await RecordProcessedRefund(root, eventId, gateway, db, cancellationToken);
                 if (eventType.GetString() != "payment.captured")
                     return Results.Ok(new { accepted = true, ignored = true });
 
@@ -305,6 +307,102 @@ public static class RazorpayPaymentEndpoints
                 return Results.Ok(new { accepted = true, activated = activate });
             }
         });
+    }
+
+    private static async Task<IResult> RecordProcessedRefund(JsonElement root, string eventId,
+        IRazorpayGateway gateway, AppDbContext db, CancellationToken cancellationToken)
+    {
+        string refundId, paymentId, currency, status;
+        long amount;
+        try
+        {
+            var entity = root.GetProperty("payload").GetProperty("refund").GetProperty("entity");
+            refundId = entity.GetProperty("id").GetString()!;
+            paymentId = entity.GetProperty("payment_id").GetString()!;
+            currency = entity.GetProperty("currency").GetString()!;
+            status = entity.GetProperty("status").GetString()!;
+            amount = entity.GetProperty("amount").GetInt64();
+        }
+        catch (Exception error) when (error is JsonException or InvalidOperationException
+            or KeyNotFoundException)
+        {
+            return Results.BadRequest();
+        }
+
+        if (refundId is null || paymentId is null ||
+            !refundId.StartsWith("rfnd_", StringComparison.Ordinal) ||
+            refundId.Length is < 8 or > 80 || status != "processed" ||
+            currency != "INR" || amount <= 0)
+            return Results.BadRequest();
+
+        if (await db.RazorpayWebhookEvents.AsNoTracking()
+            .AnyAsync(x => x.EventId == eventId, cancellationToken))
+            return Results.Ok(new { accepted = true, alreadyProcessed = true });
+
+        GatewayRefund verified;
+        try { verified = await gateway.FetchRefund(refundId, cancellationToken); }
+        catch (Exception error) when (error is HttpRequestException or TaskCanceledException
+            or JsonException or ArgumentException)
+        {
+            return Results.StatusCode(StatusCodes.Status503ServiceUnavailable);
+        }
+
+        if (verified.Id != refundId || verified.PaymentId != paymentId ||
+            verified.Currency != currency || verified.Amount != amount ||
+            verified.Status != "processed")
+            return Results.Conflict(new { message = "Refund verification mismatch." });
+
+        await using var transaction =
+            await db.Database.BeginTransactionAsync(IsolationLevel.Serializable, cancellationToken);
+
+        if (await db.RazorpayWebhookEvents.AnyAsync(x => x.EventId == eventId, cancellationToken))
+            return Results.Ok(new { accepted = true, alreadyProcessed = true });
+
+        var captured = await db.SubscriptionPayments
+            .SingleOrDefaultAsync(x => x.ProviderPaymentId == paymentId, cancellationToken);
+        if (captured is null)
+            return Results.StatusCode(StatusCodes.Status503ServiceUnavailable);
+
+        var refund = await db.SubscriptionRefunds
+            .SingleOrDefaultAsync(x => x.ProviderRefundId == refundId, cancellationToken);
+        if (refund is not null)
+        {
+            if (refund.SubscriptionPaymentId != captured.Id ||
+                RazorpayConfiguration.ToPaise(refund.Amount) != amount)
+                return Results.Conflict(new { message = "Refund ID conflicts with an earlier record." });
+
+            db.RazorpayWebhookEvents.Add(new RazorpayWebhookEvent
+            {
+                EventId = eventId, SubscriptionPaymentId = captured.Id
+            });
+            await db.SaveChangesAsync(cancellationToken);
+            await transaction.CommitAsync(cancellationToken);
+            return Results.Ok(new { accepted = true, alreadyRecorded = true });
+        }
+
+        var totalRefunded = await db.SubscriptionRefunds
+            .Where(x => x.SubscriptionPaymentId == captured.Id)
+            .SumAsync(x => (decimal?)x.Amount, cancellationToken) ?? 0m;
+        if (amount > RazorpayConfiguration.ToPaise(captured.Amount - totalRefunded) ||
+            captured.CurrencyCode != currency)
+            return Results.Conflict(new { message = "Refund exceeds the original captured amount." });
+
+        db.SubscriptionRefunds.Add(new SubscriptionRefund
+        {
+            SubscriptionPaymentId = captured.Id,
+            ProviderRefundId = refundId,
+            CurrencyCode = currency,
+            Amount = amount / 100m,
+            Status = "Processed"
+        });
+        captured.ActivationStatus = "RefundReview";
+        db.RazorpayWebhookEvents.Add(new RazorpayWebhookEvent
+        {
+            EventId = eventId, SubscriptionPaymentId = captured.Id
+        });
+        await db.SaveChangesAsync(cancellationToken);
+        await transaction.CommitAsync(cancellationToken);
+        return Results.Ok(new { accepted = true, refundRecorded = true, requiresReview = true });
     }
 
     private static IResult CheckoutResult(long requestId, string orderId, long amount,
