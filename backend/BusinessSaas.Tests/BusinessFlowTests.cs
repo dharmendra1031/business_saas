@@ -1469,6 +1469,103 @@ public sealed class BusinessFlowTests
             Assert.True((await db.SubscriptionRefunds.SingleAsync()).Id > 0);
         }
 
+        // GST document drafts must be based on a verified captured payment/refund.
+        var taxProfile = new
+        {
+            expectedRevision = 0,
+            issuerName = "Test Platform Software",
+            issuerAddress = "Registered test address, Lucknow, Uttar Pradesh, India",
+            issuerGstin = "09ABCDE1234F1Z5",
+            issuerStateCode = "09",
+            recipientName = "Test Retail Business",
+            recipientAddress = "Buyer test address, Kanpur, Uttar Pradesh, India",
+            recipientGstin = (string?)null,
+            recipientStateCode = "09",
+            serviceCode = "998314",
+            serviceDescription = "Software subscription service",
+            invoiceSeries = "BSA",
+            gstRate = 18m,
+            pricesIncludeTax = true,
+            reason = "Reviewing the billing tax profile for integration tests"
+        };
+        Assert.Equal(HttpStatusCode.Forbidden,
+            (await Post(outsider,
+                "/api/platform/billing/tax-profiles/" + firstId, taxProfile)).StatusCode);
+        var savedTax = await Post(admin,
+            "/api/platform/billing/tax-profiles/" + firstId, taxProfile);
+        Assert.Equal(HttpStatusCode.OK, savedTax.StatusCode);
+        Assert.Equal(1, (await savedTax.Content.ReadFromJsonAsync<JsonElement>())
+            .GetProperty("revision").GetInt32());
+        Assert.Equal(HttpStatusCode.Conflict,
+            (await Post(admin, "/api/platform/billing/tax-profiles/" + firstId,
+                taxProfile)).StatusCode);
+
+        var createInvoice = new
+        {
+            id = (long)0,
+            reason = "Verified captured payment invoice draft for review"
+        };
+        Assert.Equal(HttpStatusCode.BadRequest,
+            (await Post(admin, "/api/platform/billing/invoice-drafts", createInvoice)).StatusCode);
+        using (var scope = factory.Services.CreateScope())
+        {
+            var db = scope.ServiceProvider.GetRequiredService<AppDbContext>();
+            var capturedPayment = await db.SubscriptionPayments.SingleAsync();
+            createInvoice = new
+            {
+                id = capturedPayment.Id,
+                reason = "Verified captured payment invoice draft for review"
+            };
+        }
+        var createdInvoice = await Post(admin, "/api/platform/billing/invoice-drafts", createInvoice);
+        Assert.Equal(HttpStatusCode.Created, createdInvoice.StatusCode);
+        var invoiceId = (await createdInvoice.Content.ReadFromJsonAsync<JsonElement>())
+            .GetProperty("id").GetInt64();
+        var invoice = await admin.GetFromJsonAsync<JsonElement>(
+            "/api/platform/billing/document-drafts/" + invoiceId);
+        Assert.Equal("Invoice", invoice.GetProperty("documentType").GetString());
+        Assert.Equal("Draft", invoice.GetProperty("status").GetString());
+        Assert.Equal(JsonValueKind.Null, invoice.GetProperty("documentNumber").ValueKind);
+        Assert.Equal(1099m, invoice.GetProperty("grossAmount").GetDecimal());
+        Assert.Equal(1099m, invoice.GetProperty("taxableAmount").GetDecimal() +
+            invoice.GetProperty("cgstAmount").GetDecimal() +
+            invoice.GetProperty("sgstAmount").GetDecimal() +
+            invoice.GetProperty("igstAmount").GetDecimal());
+        var invoiceAgain = await Post(admin, "/api/platform/billing/invoice-drafts", createInvoice);
+        Assert.Equal(HttpStatusCode.OK, invoiceAgain.StatusCode);
+        Assert.Equal(invoiceId, (await invoiceAgain.Content.ReadFromJsonAsync<JsonElement>())
+            .GetProperty("id").GetInt64());
+
+        long verifiedRefundId;
+        using (var scope = factory.Services.CreateScope())
+        {
+            var db = scope.ServiceProvider.GetRequiredService<AppDbContext>();
+            verifiedRefundId = (await db.SubscriptionRefunds.SingleAsync()).Id;
+        }
+        var creditInput = new
+        {
+            id = verifiedRefundId,
+            reason = "Processed partial refund pending credit note review"
+        };
+        var createdCredit = await Post(admin, "/api/platform/billing/credit-note-drafts", creditInput);
+        Assert.Equal(HttpStatusCode.Created, createdCredit.StatusCode);
+        var creditId = (await createdCredit.Content.ReadFromJsonAsync<JsonElement>())
+            .GetProperty("id").GetInt64();
+        var credit = await admin.GetFromJsonAsync<JsonElement>(
+            "/api/platform/billing/document-drafts/" + creditId);
+        Assert.Equal("CreditNote", credit.GetProperty("documentType").GetString());
+        Assert.Equal("Draft", credit.GetProperty("status").GetString());
+        Assert.Equal(JsonValueKind.Null, credit.GetProperty("documentNumber").ValueKind);
+        Assert.Equal(500m, credit.GetProperty("grossAmount").GetDecimal());
+        Assert.Equal(invoiceId, credit.GetProperty("originalDocumentId").GetInt64());
+        var creditAgain = await Post(admin, "/api/platform/billing/credit-note-drafts", creditInput);
+        Assert.Equal(HttpStatusCode.OK, creditAgain.StatusCode);
+        Assert.Equal(creditId, (await creditAgain.Content.ReadFromJsonAsync<JsonElement>())
+            .GetProperty("id").GetInt64());
+        Assert.Equal(HttpStatusCode.Forbidden,
+            (await outsider.GetAsync("/api/platform/billing/document-drafts/" + invoiceId))
+            .StatusCode);
+
         // A cached Active status must not outlive its paid period.
         using (var scope = factory.Services.CreateScope())
         {
