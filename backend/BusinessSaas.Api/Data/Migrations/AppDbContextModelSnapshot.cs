@@ -293,7 +293,7 @@ namespace BusinessSaas.Api.Data.Migrations
                     b.Property<string>("IssuerStateCode").IsRequired().HasMaxLength(2).HasColumnType("nvarchar(2)");
                     b.Property<string>("RecipientName").IsRequired().HasMaxLength(160).HasColumnType("nvarchar(160)");
                     b.Property<string>("RecipientAddress").IsRequired().HasMaxLength(300).HasColumnType("nvarchar(300)");
-                    b.Property<string?>("RecipientGstin").HasMaxLength(15).HasColumnType("nvarchar(15)");
+                    b.Property<string>("RecipientGstin").HasMaxLength(15).HasColumnType("nvarchar(15)");
                     b.Property<string>("RecipientStateCode").IsRequired().HasMaxLength(2).HasColumnType("nvarchar(2)");
                     b.Property<string>("ServiceCode").IsRequired().HasMaxLength(8).HasColumnType("nvarchar(8)");
                     b.Property<string>("ServiceDescription").IsRequired().HasMaxLength(160).HasColumnType("nvarchar(160)");
@@ -320,7 +320,7 @@ namespace BusinessSaas.Api.Data.Migrations
                     b.Property<int>("TaxProfileRevision").HasColumnType("int");
                     b.Property<string>("DocumentType").IsRequired().HasMaxLength(20).HasColumnType("nvarchar(20)");
                     b.Property<string>("Status").IsRequired().HasMaxLength(20).HasColumnType("nvarchar(20)");
-                    b.Property<string?>("DocumentNumber").HasMaxLength(16).HasColumnType("nvarchar(16)");
+                    b.Property<string>("DocumentNumber").HasMaxLength(16).HasColumnType("nvarchar(16)");
                     b.Property<string>("TaxSnapshotJson").IsRequired().HasMaxLength(2000).HasColumnType("nvarchar(2000)");
                     b.Property<string>("CurrencyCode").IsRequired().HasMaxLength(3).HasColumnType("nvarchar(3)");
                     b.Property<int>("FinancialYearStart").HasColumnType("int");
@@ -336,7 +336,6 @@ namespace BusinessSaas.Api.Data.Migrations
                     b.HasIndex("SubscriptionPaymentId", "DocumentType").IsUnique().HasFilter("[DocumentType] = 'Invoice'");
                     b.HasIndex("SubscriptionRefundId").IsUnique().HasFilter("[SubscriptionRefundId] IS NOT NULL");
                     b.HasIndex("OriginalDocumentId");
-                    b.HasIndex("SubscriptionPaymentId");
                     b.HasIndex("BillingTaxProfileId");
                     b.HasIndex("CreatedByUserId");
                     b.ToTable("BillingDocumentDrafts");

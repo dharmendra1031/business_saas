@@ -26,7 +26,7 @@ public sealed class AddBillingTaxDocumentDrafts : Migration
                 IssuerStateCode = table.Column<string>(type: "nvarchar(2)", maxLength: 2, nullable: false),
                 RecipientName = table.Column<string>(type: "nvarchar(160)", maxLength: 160, nullable: false),
                 RecipientAddress = table.Column<string>(type: "nvarchar(300)", maxLength: 300, nullable: false),
-                RecipientGstin = table.Column<string?>(type: "nvarchar(15)", maxLength: 15, nullable: true),
+                RecipientGstin = table.Column<string>(type: "nvarchar(15)", maxLength: 15, nullable: true),
                 RecipientStateCode = table.Column<string>(type: "nvarchar(2)", maxLength: 2, nullable: false),
                 ServiceCode = table.Column<string>(type: "nvarchar(8)", maxLength: 8, nullable: false),
                 ServiceDescription = table.Column<string>(type: "nvarchar(160)", maxLength: 160, nullable: false),
@@ -62,7 +62,7 @@ public sealed class AddBillingTaxDocumentDrafts : Migration
                 TaxProfileRevision = table.Column<int>(type: "int", nullable: false),
                 DocumentType = table.Column<string>(type: "nvarchar(20)", maxLength: 20, nullable: false),
                 Status = table.Column<string>(type: "nvarchar(20)", maxLength: 20, nullable: false),
-                DocumentNumber = table.Column<string?>(type: "nvarchar(16)", maxLength: 16, nullable: true),
+                DocumentNumber = table.Column<string>(type: "nvarchar(16)", maxLength: 16, nullable: true),
                 TaxSnapshotJson = table.Column<string>(type: "nvarchar(2000)", maxLength: 2000, nullable: false),
                 CurrencyCode = table.Column<string>(type: "nvarchar(3)", maxLength: 3, nullable: false),
                 FinancialYearStart = table.Column<int>(type: "int", nullable: false),
@@ -98,7 +98,6 @@ public sealed class AddBillingTaxDocumentDrafts : Migration
             "BillingDocumentDrafts", "SubscriptionRefundId", unique: true, filter: "[SubscriptionRefundId] IS NOT NULL");
         migrationBuilder.CreateIndex("IX_BillingDocumentDrafts_OriginalDocumentId",
             "BillingDocumentDrafts", "OriginalDocumentId");
-        migrationBuilder.CreateIndex("IX_BillingDocumentDrafts_SubscriptionPaymentId", "BillingDocumentDrafts", "SubscriptionPaymentId");
         migrationBuilder.CreateIndex("IX_BillingDocumentDrafts_BillingTaxProfileId", "BillingDocumentDrafts", "BillingTaxProfileId");
         migrationBuilder.CreateIndex("IX_BillingDocumentDrafts_CreatedByUserId", "BillingDocumentDrafts", "CreatedByUserId");
     }
