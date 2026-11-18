@@ -1,6 +1,5 @@
 using System.Security.Claims;
 using BusinessSaas.Api.Data;
-using Microsoft.Data.SqlClient;
 using Microsoft.EntityFrameworkCore;
 
 namespace BusinessSaas.Api.Features;
@@ -53,7 +52,7 @@ public static class RetailMasterEndpoints
             var category = new RetailCategory { BusinessId = businessId, Name = name, NameKey = key };
             db.RetailCategories.Add(category);
             try { await db.SaveChangesAsync(); }
-            catch (DbUpdateException error) when (IsDuplicate(error))
+            catch (DbUpdateException error) when (RetailModule.IsDuplicateKey(error))
             {
                 return Results.Conflict(new { message = "Category already exists." });
             }
@@ -85,7 +84,7 @@ public static class RetailMasterEndpoints
             category.NameKey = key;
             category.IsActive = request.IsActive.Value;
             try { await db.SaveChangesAsync(); }
-            catch (DbUpdateException error) when (IsDuplicate(error))
+            catch (DbUpdateException error) when (RetailModule.IsDuplicateKey(error))
             {
                 return Results.Conflict(new { message = "Category already exists." });
             }
@@ -140,7 +139,7 @@ public static class RetailMasterEndpoints
             };
             db.RetailUnits.Add(unit);
             try { await db.SaveChangesAsync(); }
-            catch (DbUpdateException error) when (IsDuplicate(error))
+            catch (DbUpdateException error) when (RetailModule.IsDuplicateKey(error))
             {
                 return Results.Conflict(new { message = "Unit code or name already exists." });
             }
@@ -173,7 +172,7 @@ public static class RetailMasterEndpoints
             unit.Code = code;
             unit.IsActive = request.IsActive.Value;
             try { await db.SaveChangesAsync(); }
-            catch (DbUpdateException error) when (IsDuplicate(error))
+            catch (DbUpdateException error) when (RetailModule.IsDuplicateKey(error))
             {
                 return Results.Conflict(new { message = "Unit code or name already exists." });
             }
@@ -185,9 +184,6 @@ public static class RetailMasterEndpoints
         name.Length is >= 2 and <= 60 &&
         code.Length is >= 1 and <= 12 &&
         code.All(ch => char.IsAsciiLetterOrDigit(ch) || ch == '-');
-
-    private static bool IsDuplicate(DbUpdateException error) =>
-        error.InnerException is SqlException { Number: 2601 or 2627 };
 
     internal static async Task<IResult?> CheckAccess(AppDbContext db, ClaimsPrincipal user,
         long businessId, bool write)

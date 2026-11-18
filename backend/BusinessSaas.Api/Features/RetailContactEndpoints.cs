@@ -1,7 +1,6 @@
 using System.ComponentModel.DataAnnotations;
 using System.Security.Claims;
 using BusinessSaas.Api.Data;
-using Microsoft.Data.SqlClient;
 using Microsoft.EntityFrameworkCore;
 
 namespace BusinessSaas.Api.Features;
@@ -57,7 +56,7 @@ public static class RetailContactEndpoints
             };
             db.RetailSuppliers.Add(supplier);
             try { await db.SaveChangesAsync(); }
-            catch (DbUpdateException ex) when (Duplicate(ex))
+            catch (DbUpdateException ex) when (RetailModule.IsDuplicateKey(ex))
             {
                 return Results.Conflict(new { message = "Supplier name already exists." });
             }
@@ -90,7 +89,7 @@ public static class RetailContactEndpoints
             supplier.Email = Clean(request.Email);
             supplier.IsActive = request.IsActive.Value;
             try { await db.SaveChangesAsync(); }
-            catch (DbUpdateException ex) when (Duplicate(ex))
+            catch (DbUpdateException ex) when (RetailModule.IsDuplicateKey(ex))
             {
                 return Results.Conflict(new { message = "Supplier name already exists." });
             }
@@ -184,9 +183,6 @@ public static class RetailContactEndpoints
     }
 
     private static string Clean(string? text) => text?.Trim() ?? "";
-
-    private static bool Duplicate(DbUpdateException ex) =>
-        ex.InnerException is SqlException { Number: 2601 or 2627 };
 
     private sealed record ContactRequest(string? Name, string? Phone, string? Email, bool? IsActive);
 }

@@ -16,6 +16,7 @@
 - **Database keys:** `BIGINT IDENTITY` / `INT IDENTITY` for all application entity IDs, including Identity users and roles. No GUID/UUID IDs. Platform tenancy key is **BusinessId**, with BusinessLocationId when necessary.
 - **Private-to-public security gate:** At the time of writing `business_saas` is public and CBK/Kaifac are private. No private source, backup, secrets or real customer data may be transferred to this repo until its visibility and publication permissions are explicitly approved.
 - **No demo data in production UI:** Seed essential system settings/module codes only where necessary, in an auditable and idempotent way. Synthetic fixtures belong in tests.
+- Implement the current screen workflow and the server checks, persistence and tests it needs. Reuse existing code and remove unused paths after checking their callers. Add abstractions when current workflows benefit from them.
 - **Real workflows first:** UX completion is a release requirement, not a cosmetic task. Follow [UX Standards](./UX_STANDARDS.md).
 
 ## 2. Critical risk register

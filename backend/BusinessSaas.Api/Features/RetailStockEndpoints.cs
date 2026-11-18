@@ -1,7 +1,6 @@
 using System.Data.Common;
 using System.Security.Claims;
 using BusinessSaas.Api.Data;
-using Microsoft.Data.SqlClient;
 using Microsoft.EntityFrameworkCore;
 
 namespace BusinessSaas.Api.Features;
@@ -133,7 +132,7 @@ public static class RetailStockEndpoints
                 await db.SaveChangesAsync();
                 await transaction.CommitAsync();
             }
-            catch (DbUpdateException ex) when (IsDuplicate(ex))
+            catch (DbUpdateException ex) when (RetailModule.IsDuplicateKey(ex) || ex.InnerException is DbException { ErrorCode: 19 })
             {
                 await transaction.RollbackAsync();
                 return Results.Conflict(new { message = "Opening stock already posted." });
@@ -161,10 +160,6 @@ public static class RetailStockEndpoints
             (role == "Owner" || x.IsPrimary));
         return allowed ? null : Results.NotFound();
     }
-
-    private static bool IsDuplicate(DbUpdateException ex) =>
-        ex.InnerException is SqlException { Number: 2601 or 2627 } ||
-        ex.InnerException is DbException { ErrorCode: 19 };
 
     private sealed record OpeningStockRequest(long ProductId, decimal Quantity);
 }

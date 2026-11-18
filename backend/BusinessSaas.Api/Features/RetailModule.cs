@@ -1,4 +1,6 @@
 using BusinessSaas.Api.Data;
+using Microsoft.Data.SqlClient;
+using Microsoft.EntityFrameworkCore;
 
 namespace BusinessSaas.Api.Features;
 
@@ -16,6 +18,9 @@ public static class RetailModule
         app.MapRetailPurchaseEndpoints();
         if (app.Environment.IsDevelopment()) app.MapRetailCashSales();
     }
+
+    internal static bool IsDuplicateKey(DbUpdateException error) =>
+        error.InnerException is SqlException { Number: 2601 or 2627 };
 
     public static void AddBusinessDefaults(AppDbContext db, long businessId)
     {

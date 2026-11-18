@@ -1,6 +1,5 @@
 using System.Security.Claims;
 using BusinessSaas.Api.Data;
-using Microsoft.Data.SqlClient;
 using Microsoft.EntityFrameworkCore;
 
 namespace BusinessSaas.Api.Features;
@@ -134,7 +133,7 @@ public static class RetailProductEndpoints
                 }
                 await transaction.CommitAsync();
             }
-            catch (DbUpdateException exception) when (IsDuplicate(exception))
+            catch (DbUpdateException exception) when (RetailModule.IsDuplicateKey(exception))
             {
                 return Results.Conflict(new { message = "SKU or barcode is already used in this business." });
             }
@@ -177,7 +176,7 @@ public static class RetailProductEndpoints
             product.IsActive = request.IsActive.Value;
 
             try { await db.SaveChangesAsync(); }
-            catch (DbUpdateException exception) when (IsDuplicate(exception))
+            catch (DbUpdateException exception) when (RetailModule.IsDuplicateKey(exception))
             {
                 return Results.Conflict(new { message = "SKU or barcode is already used in this business." });
             }
@@ -247,9 +246,6 @@ public static class RetailProductEndpoints
         var trimmed = NormalizeCode(value);
         return trimmed.Length == 0 ? null : ValidBarcode(trimmed) ? trimmed : null;
     }
-
-    private static bool IsDuplicate(DbUpdateException exception) =>
-        exception.InnerException is SqlException { Number: 2601 or 2627 };
 
     private sealed record ProductRequest(string? Name, string? Sku, string? Barcode,
         long CategoryId, long UnitId, decimal SalePrice, string? TaxClassification, bool? IsActive);

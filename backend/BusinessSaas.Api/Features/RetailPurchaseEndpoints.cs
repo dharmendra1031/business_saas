@@ -2,7 +2,6 @@ using System.Data;
 using System.Net;
 using System.Security.Claims;
 using BusinessSaas.Api.Data;
-using Microsoft.Data.SqlClient;
 using Microsoft.EntityFrameworkCore;
 
 namespace BusinessSaas.Api.Features;
@@ -77,18 +76,15 @@ public static class RetailPurchaseEndpoints
                 return Results.BadRequest(new { message = "Request key must be 12–80 characters." });
 
             var userId = UserId(user);
-            if (requestKey is not null)
-            {
-                var existing = await db.RetailPurchaseOrders.AsNoTracking()
-                    .FirstOrDefaultAsync(x => x.BusinessId == businessId &&
-                        x.CreatedByUserId == userId && x.CreationKey == requestKey);
-                if (existing is not null)
-                    return existing.LocationId == request.LocationId &&
-                        existing.SupplierId == request.SupplierId &&
-                        await SameOrderLines(db, existing.Id, request.Lines)
-                        ? Results.Ok(new { existing.Id, existing.Status })
-                        : Results.Conflict(new { message = "Request key is already used for a different purchase order." });
-            }
+            var previous = await db.RetailPurchaseOrders.AsNoTracking()
+                .FirstOrDefaultAsync(x => x.BusinessId == businessId &&
+                    x.CreatedByUserId == userId && x.CreationKey == requestKey);
+            if (previous is not null)
+                return previous.LocationId == request.LocationId &&
+                    previous.SupplierId == request.SupplierId &&
+                    await SameOrderLines(db, previous.Id, request.Lines)
+                    ? Results.Ok(new { previous.Id, previous.Status })
+                    : Results.Conflict(new { message = "Request key is already used for a different purchase order." });
 
             if (!await db.RetailSuppliers.AsNoTracking().AnyAsync(x =>
                 x.Id == request.SupplierId && x.BusinessId == businessId && x.IsActive))
@@ -123,7 +119,7 @@ public static class RetailPurchaseEndpoints
                 await db.SaveChangesAsync();
                 await transaction.CommitAsync();
             }
-            catch (DbUpdateException error) when (IsDuplicate(error) && requestKey is not null)
+            catch (DbUpdateException error) when (RetailModule.IsDuplicateKey(error))
             {
                 await transaction.RollbackAsync();
                 db.ChangeTracker.Clear();
@@ -241,17 +237,14 @@ public static class RetailPurchaseEndpoints
                 return Results.BadRequest(new { message = "Request key must be 12–80 characters." });
 
             var userId = UserId(user);
-            if (requestKey is not null)
-            {
-                var existing = await db.RetailReceivings.AsNoTracking()
-                    .FirstOrDefaultAsync(x => x.BusinessId == businessId &&
-                        x.PurchaseOrderId == orderId && x.CreatedByUserId == userId &&
-                        x.CreationKey == requestKey);
-                if (existing is not null)
-                    return await SameReceivingLines(db, existing.Id, request.Lines)
-                        ? Results.Ok(new { existing.Id, existing.Status })
-                        : Results.Conflict(new { message = "Request key is already used for a different receiving." });
-            }
+            var previous = await db.RetailReceivings.AsNoTracking()
+                .FirstOrDefaultAsync(x => x.BusinessId == businessId &&
+                    x.PurchaseOrderId == orderId && x.CreatedByUserId == userId &&
+                    x.CreationKey == requestKey);
+            if (previous is not null)
+                return await SameReceivingLines(db, previous.Id, request.Lines)
+                    ? Results.Ok(new { previous.Id, previous.Status })
+                    : Results.Conflict(new { message = "Request key is already used for a different receiving." });
 
             if (order.Status != "Approved")
                 return Results.Conflict(new { message = "Only approved, open purchase orders can be received." });
@@ -286,7 +279,7 @@ public static class RetailPurchaseEndpoints
                 await db.SaveChangesAsync();
                 await transaction.CommitAsync();
             }
-            catch (DbUpdateException error) when (IsDuplicate(error) && requestKey is not null)
+            catch (DbUpdateException error) when (RetailModule.IsDuplicateKey(error))
             {
                 await transaction.RollbackAsync();
                 db.ChangeTracker.Clear();
@@ -405,9 +398,6 @@ public static class RetailPurchaseEndpoints
             saved.TryGetValue(line.PurchaseOrderLineId, out var item) &&
             item.Quantity == line.Quantity);
     }
-
-    private static bool IsDuplicate(DbUpdateException error) =>
-        error.InnerException is SqlException { Number: 2601 or 2627 };
 
     private static async Task<Dictionary<long, decimal>> PostedQuantities(
         AppDbContext db, long businessId, long orderId)

@@ -1,6 +1,6 @@
 import { useEffect, useRef, useState, type FormEvent } from 'react'
 import { Activity, ArrowLeft, ArrowRight, Boxes, Building2, CheckCircle2, CreditCard, KeyRound, LayoutDashboard, LogOut, Menu, Package, Plus, Settings2, ShieldCheck, ShoppingCart, Store, Tags, Truck, UserRound, Users } from 'lucide-react'
-import { api, post, resetCsrf, SessionExpiredError, setSessionExpiredHandler, type Business, type BusinessMarket, type BusinessType, type RetailDashboard, type User } from './api'
+import { api, operationKey, post, resetCsrf, SessionExpiredError, setSessionExpiredHandler, type Business, type BusinessMarket, type BusinessType, type RetailDashboard, type User } from './api'
 import CashCheckout from './CashCheckout'
 import TeamMembers from './TeamMembers'
 import SubscriptionCheckout from './SubscriptionCheckout'
@@ -13,11 +13,6 @@ type RetailPage = RetailSection | 'cash' | 'overview' | 'team'
 const retailTitles: Record<RetailPage, string> = {
   cash: 'Cash sale', overview: 'Dashboard', products: 'Products', stock: 'Stock', purchases: 'Purchase Orders',
   masters: 'Categories & Units', suppliers: 'Suppliers', customers: 'Customers', team: 'Team Access'
-}
-
-function operationKey(): string {
-  const bytes = crypto.getRandomValues(new Uint8Array(16))
-  return Array.from(bytes, value => value.toString(16).padStart(2, '0')).join('')
 }
 
 export default function App() {
