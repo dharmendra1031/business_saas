@@ -281,6 +281,67 @@ namespace BusinessSaas.Api.Data.Migrations
                     b.ToTable("PublishedPlanVersions");
                 });
 
+            modelBuilder.Entity("BusinessSaas.Api.Data.BillingTaxProfile", b =>
+                {
+                    b.Property<long>("Id").ValueGeneratedOnAdd().HasColumnType("bigint");
+                    SqlServerPropertyBuilderExtensions.UseIdentityColumn(b.Property<long>("Id"));
+                    b.Property<long>("BusinessId").HasColumnType("bigint");
+                    b.Property<int>("Revision").HasColumnType("int");
+                    b.Property<string>("IssuerName").IsRequired().HasMaxLength(160).HasColumnType("nvarchar(160)");
+                    b.Property<string>("IssuerAddress").IsRequired().HasMaxLength(300).HasColumnType("nvarchar(300)");
+                    b.Property<string>("IssuerGstin").IsRequired().HasMaxLength(15).HasColumnType("nvarchar(15)");
+                    b.Property<string>("IssuerStateCode").IsRequired().HasMaxLength(2).HasColumnType("nvarchar(2)");
+                    b.Property<string>("RecipientName").IsRequired().HasMaxLength(160).HasColumnType("nvarchar(160)");
+                    b.Property<string>("RecipientAddress").IsRequired().HasMaxLength(300).HasColumnType("nvarchar(300)");
+                    b.Property<string?>("RecipientGstin").HasMaxLength(15).HasColumnType("nvarchar(15)");
+                    b.Property<string>("RecipientStateCode").IsRequired().HasMaxLength(2).HasColumnType("nvarchar(2)");
+                    b.Property<string>("ServiceCode").IsRequired().HasMaxLength(8).HasColumnType("nvarchar(8)");
+                    b.Property<string>("ServiceDescription").IsRequired().HasMaxLength(160).HasColumnType("nvarchar(160)");
+                    b.Property<string>("InvoiceSeries").IsRequired().HasMaxLength(5).HasColumnType("nvarchar(5)");
+                    b.Property<decimal>("GstRate").HasPrecision(5, 2).HasColumnType("decimal(5,2)");
+                    b.Property<bool>("PricesIncludeTax").HasColumnType("bit");
+                    b.Property<long>("UpdatedByUserId").HasColumnType("bigint");
+                    b.Property<DateTime>("UpdatedAtUtc").HasColumnType("datetime2");
+                    b.HasKey("Id");
+                    b.HasIndex("BusinessId").IsUnique();
+                    b.HasIndex("UpdatedByUserId");
+                    b.ToTable("BillingTaxProfiles");
+                });
+
+            modelBuilder.Entity("BusinessSaas.Api.Data.BillingDocumentDraft", b =>
+                {
+                    b.Property<long>("Id").ValueGeneratedOnAdd().HasColumnType("bigint");
+                    SqlServerPropertyBuilderExtensions.UseIdentityColumn(b.Property<long>("Id"));
+                    b.Property<long>("BusinessId").HasColumnType("bigint");
+                    b.Property<long>("SubscriptionPaymentId").HasColumnType("bigint");
+                    b.Property<long?>("SubscriptionRefundId").HasColumnType("bigint");
+                    b.Property<long?>("OriginalDocumentId").HasColumnType("bigint");
+                    b.Property<long>("BillingTaxProfileId").HasColumnType("bigint");
+                    b.Property<int>("TaxProfileRevision").HasColumnType("int");
+                    b.Property<string>("DocumentType").IsRequired().HasMaxLength(20).HasColumnType("nvarchar(20)");
+                    b.Property<string>("Status").IsRequired().HasMaxLength(20).HasColumnType("nvarchar(20)");
+                    b.Property<string?>("DocumentNumber").HasMaxLength(16).HasColumnType("nvarchar(16)");
+                    b.Property<string>("TaxSnapshotJson").IsRequired().HasMaxLength(2000).HasColumnType("nvarchar(2000)");
+                    b.Property<string>("CurrencyCode").IsRequired().HasMaxLength(3).HasColumnType("nvarchar(3)");
+                    b.Property<int>("FinancialYearStart").HasColumnType("int");
+                    b.Property<decimal>("GrossAmount").HasPrecision(18, 2).HasColumnType("decimal(18,2)");
+                    b.Property<decimal>("TaxableAmount").HasPrecision(18, 2).HasColumnType("decimal(18,2)");
+                    b.Property<decimal>("CgstAmount").HasPrecision(18, 2).HasColumnType("decimal(18,2)");
+                    b.Property<decimal>("SgstAmount").HasPrecision(18, 2).HasColumnType("decimal(18,2)");
+                    b.Property<decimal>("IgstAmount").HasPrecision(18, 2).HasColumnType("decimal(18,2)");
+                    b.Property<long>("CreatedByUserId").HasColumnType("bigint");
+                    b.Property<DateTime>("CreatedAtUtc").HasColumnType("datetime2");
+                    b.HasKey("Id");
+                    b.HasIndex("BusinessId");
+                    b.HasIndex("SubscriptionPaymentId", "DocumentType").IsUnique().HasFilter("[DocumentType] = 'Invoice'");
+                    b.HasIndex("SubscriptionRefundId").IsUnique().HasFilter("[SubscriptionRefundId] IS NOT NULL");
+                    b.HasIndex("OriginalDocumentId");
+                    b.HasIndex("SubscriptionPaymentId");
+                    b.HasIndex("BillingTaxProfileId");
+                    b.HasIndex("CreatedByUserId");
+                    b.ToTable("BillingDocumentDrafts");
+                });
+
             modelBuilder.Entity("BusinessSaas.Api.Data.SubscriptionBillingDraft", b =>
                 {
                     b.Property<long>("Id").ValueGeneratedOnAdd().HasColumnType("bigint");
@@ -1146,6 +1207,38 @@ namespace BusinessSaas.Api.Data.Migrations
                         .HasForeignKey("PublishedByUserId")
                         .OnDelete(DeleteBehavior.Restrict)
                         .IsRequired();
+                });
+
+            modelBuilder.Entity("BusinessSaas.Api.Data.BillingTaxProfile", b =>
+                {
+                    b.HasOne("BusinessSaas.Api.Data.Business", null)
+                        .WithMany().HasForeignKey("BusinessId")
+                        .OnDelete(DeleteBehavior.Restrict).IsRequired();
+                    b.HasOne("BusinessSaas.Api.Data.AppUser", null)
+                        .WithMany().HasForeignKey("UpdatedByUserId")
+                        .OnDelete(DeleteBehavior.Restrict).IsRequired();
+                });
+
+            modelBuilder.Entity("BusinessSaas.Api.Data.BillingDocumentDraft", b =>
+                {
+                    b.HasOne("BusinessSaas.Api.Data.Business", null)
+                        .WithMany().HasForeignKey("BusinessId")
+                        .OnDelete(DeleteBehavior.Restrict).IsRequired();
+                    b.HasOne("BusinessSaas.Api.Data.SubscriptionPayment", null)
+                        .WithMany().HasForeignKey("SubscriptionPaymentId")
+                        .OnDelete(DeleteBehavior.Restrict).IsRequired();
+                    b.HasOne("BusinessSaas.Api.Data.SubscriptionRefund", null)
+                        .WithMany().HasForeignKey("SubscriptionRefundId")
+                        .OnDelete(DeleteBehavior.Restrict);
+                    b.HasOne("BusinessSaas.Api.Data.BillingDocumentDraft", null)
+                        .WithMany().HasForeignKey("OriginalDocumentId")
+                        .OnDelete(DeleteBehavior.Restrict);
+                    b.HasOne("BusinessSaas.Api.Data.BillingTaxProfile", null)
+                        .WithMany().HasForeignKey("BillingTaxProfileId")
+                        .OnDelete(DeleteBehavior.Restrict).IsRequired();
+                    b.HasOne("BusinessSaas.Api.Data.AppUser", null)
+                        .WithMany().HasForeignKey("CreatedByUserId")
+                        .OnDelete(DeleteBehavior.Restrict).IsRequired();
                 });
 
             modelBuilder.Entity("BusinessSaas.Api.Data.SubscriptionBillingDraft", b =>

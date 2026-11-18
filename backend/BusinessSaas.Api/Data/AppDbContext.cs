@@ -322,6 +322,8 @@ public sealed class AppDbContext(DbContextOptions<AppDbContext> options)
     public DbSet<SubscriptionPaymentRequest> SubscriptionPaymentRequests => Set<SubscriptionPaymentRequest>();
     public DbSet<SubscriptionPayment> SubscriptionPayments => Set<SubscriptionPayment>();
     public DbSet<SubscriptionRefund> SubscriptionRefunds => Set<SubscriptionRefund>();
+    public DbSet<BillingTaxProfile> BillingTaxProfiles => Set<BillingTaxProfile>();
+    public DbSet<BillingDocumentDraft> BillingDocumentDrafts => Set<BillingDocumentDraft>();
     public DbSet<RazorpayWebhookEvent> RazorpayWebhookEvents => Set<RazorpayWebhookEvent>();
     public DbSet<BusinessLocation> BusinessLocations => Set<BusinessLocation>();
 
@@ -488,6 +490,57 @@ public sealed class AppDbContext(DbContextOptions<AppDbContext> options)
             entity.HasIndex(x => x.EventId).IsUnique();
             entity.HasOne<SubscriptionPayment>().WithMany()
                 .HasForeignKey(x => x.SubscriptionPaymentId).OnDelete(DeleteBehavior.Restrict);
+        });
+
+        builder.Entity<BillingTaxProfile>(entity =>
+        {
+            entity.Property(x => x.IssuerName).HasMaxLength(160).IsRequired();
+            entity.Property(x => x.IssuerAddress).HasMaxLength(300).IsRequired();
+            entity.Property(x => x.IssuerGstin).HasMaxLength(15).IsRequired();
+            entity.Property(x => x.IssuerStateCode).HasMaxLength(2).IsRequired();
+            entity.Property(x => x.RecipientName).HasMaxLength(160).IsRequired();
+            entity.Property(x => x.RecipientAddress).HasMaxLength(300).IsRequired();
+            entity.Property(x => x.RecipientGstin).HasMaxLength(15);
+            entity.Property(x => x.RecipientStateCode).HasMaxLength(2).IsRequired();
+            entity.Property(x => x.ServiceCode).HasMaxLength(8).IsRequired();
+            entity.Property(x => x.ServiceDescription).HasMaxLength(160).IsRequired();
+            entity.Property(x => x.InvoiceSeries).HasMaxLength(5).IsRequired();
+            entity.Property(x => x.GstRate).HasPrecision(5, 2);
+            entity.HasIndex(x => x.BusinessId).IsUnique();
+            entity.HasOne<Business>().WithMany()
+                .HasForeignKey(x => x.BusinessId).OnDelete(DeleteBehavior.Restrict);
+            entity.HasOne<AppUser>().WithMany()
+                .HasForeignKey(x => x.UpdatedByUserId).OnDelete(DeleteBehavior.Restrict);
+        });
+
+        builder.Entity<BillingDocumentDraft>(entity =>
+        {
+            entity.Property(x => x.DocumentType).HasMaxLength(20).IsRequired();
+            entity.Property(x => x.Status).HasMaxLength(20).IsRequired();
+            entity.Property(x => x.DocumentNumber).HasMaxLength(16);
+            entity.Property(x => x.TaxSnapshotJson).HasMaxLength(2000).IsRequired();
+            entity.Property(x => x.CurrencyCode).HasMaxLength(3).IsRequired();
+            entity.Property(x => x.GrossAmount).HasPrecision(18, 2);
+            entity.Property(x => x.TaxableAmount).HasPrecision(18, 2);
+            entity.Property(x => x.CgstAmount).HasPrecision(18, 2);
+            entity.Property(x => x.SgstAmount).HasPrecision(18, 2);
+            entity.Property(x => x.IgstAmount).HasPrecision(18, 2);
+            entity.HasIndex(x => x.BusinessId);
+            entity.HasIndex(x => new { x.SubscriptionPaymentId, x.DocumentType }).IsUnique().HasFilter("[DocumentType] = 'Invoice'");
+            entity.HasIndex(x => x.SubscriptionRefundId).IsUnique().HasFilter("[SubscriptionRefundId] IS NOT NULL");
+            entity.HasIndex(x => x.OriginalDocumentId);
+            entity.HasOne<Business>().WithMany()
+                .HasForeignKey(x => x.BusinessId).OnDelete(DeleteBehavior.Restrict);
+            entity.HasOne<SubscriptionPayment>().WithMany()
+                .HasForeignKey(x => x.SubscriptionPaymentId).OnDelete(DeleteBehavior.Restrict);
+            entity.HasOne<SubscriptionRefund>().WithMany()
+                .HasForeignKey(x => x.SubscriptionRefundId).OnDelete(DeleteBehavior.Restrict);
+            entity.HasOne<BillingDocumentDraft>().WithMany()
+                .HasForeignKey(x => x.OriginalDocumentId).OnDelete(DeleteBehavior.Restrict);
+            entity.HasOne<BillingTaxProfile>().WithMany()
+                .HasForeignKey(x => x.BillingTaxProfileId).OnDelete(DeleteBehavior.Restrict);
+            entity.HasOne<AppUser>().WithMany()
+                .HasForeignKey(x => x.CreatedByUserId).OnDelete(DeleteBehavior.Restrict);
         });
 
         builder.Entity<BusinessSubscription>(entity =>
