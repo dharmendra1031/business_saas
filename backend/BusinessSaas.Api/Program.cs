@@ -16,6 +16,11 @@ if (string.IsNullOrWhiteSpace(connectionString))
     throw new InvalidOperationException("ConnectionStrings:Default is required.");
 
 builder.Services.AddDbContext<AppDbContext>(options => options.UseSqlServer(connectionString));
+builder.Services.AddHttpClient<IRazorpayGateway, RazorpayGateway>(client =>
+{
+    client.BaseAddress = new Uri("https://api.razorpay.com/v1/");
+    client.Timeout = TimeSpan.FromSeconds(15);
+});
 
 // Use a shared encrypted key ring when deployment settings are provided.
 // Keep certificate files and passwords outside source control.
@@ -177,7 +182,9 @@ app.Use(async (context, next) =>
 app.Use(async (context, next) =>
 {
     var method = context.Request.Method;
-    if (context.Request.Path.StartsWithSegments("/api") &&
+    var webhook = string.Equals(context.Request.Path.Value,
+        "/api/payments/razorpay/webhook", StringComparison.OrdinalIgnoreCase);
+    if (!webhook && context.Request.Path.StartsWithSegments("/api") &&
         method is "POST" or "PUT" or "PATCH" or "DELETE")
     {
         try
@@ -200,6 +207,35 @@ app.Use(async (context, next) =>
 });
 
 app.UseAuthorization();
+
+// All tenant write endpoints respect the paid expiry, including older retail routes.
+// Payment checkout is still available after a trial or paid period has expired.
+app.Use(async (context, next) =>
+{
+    if (context.Request.Method is "POST" or "PUT" or "PATCH" or "DELETE" &&
+        context.Request.Path.StartsWithSegments("/api/businesses", out var rest))
+    {
+        var path = rest.Value?.TrimStart('/').Split('/') ?? [];
+        if (path.Length >= 2 && long.TryParse(path[0], out var businessId) &&
+            !(path[1] == "billing" && path.Length >= 3 && path[2] == "checkout"))
+        {
+            var db = context.RequestServices.GetRequiredService<AppDbContext>();
+            var subscription = await db.BusinessSubscriptions.AsNoTracking()
+                .SingleOrDefaultAsync(x => x.BusinessId == businessId);
+            if (subscription is not null && !SubscriptionAccess.CanOperate(subscription, DateTime.UtcNow))
+            {
+                context.Response.StatusCode = StatusCodes.Status403Forbidden;
+                await context.Response.WriteAsJsonAsync(new
+                {
+                    message = "Subscription access has expired or been suspended."
+                });
+                return;
+            }
+        }
+    }
+
+    await next();
+});
 
 app.MapGet("/api/health", () => Results.Ok(new { status = "ok" }));
 app.MapGet("/api/ready", async (AppDbContext db, ILogger<Program> logger) =>
@@ -235,6 +271,7 @@ app.MapRetailAdjustmentEndpoints();
 app.MapRetailPurchaseEndpoints();
 app.MapPlatformEndpoints();
 app.MapPlatformBillingEndpoints();
+app.MapRazorpayPaymentEndpoints();
 
 app.Run();
 

@@ -103,8 +103,9 @@ public static class BusinessStaffEndpoints
     private static Task<bool> CanEditSubscription(AppDbContext db, long businessId) =>
         db.BusinessSubscriptions.AsNoTracking().AnyAsync(x =>
             x.BusinessId == businessId &&
-            (x.Status == "Active" || x.Status == "Trial" &&
-                x.TrialEndsAtUtc > DateTime.UtcNow));
+            (x.Status == "Active" && x.PaidStartsAtUtc <= DateTime.UtcNow &&
+                x.PaidEndsAtUtc > DateTime.UtcNow && x.PaidPlanVersionId != null ||
+                x.Status == "Trial" && x.TrialEndsAtUtc > DateTime.UtcNow));
 
     private static Task<bool> IsOwner(ClaimsPrincipal user, AppDbContext db, long businessId)
     {

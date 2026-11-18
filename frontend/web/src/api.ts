@@ -47,7 +47,14 @@ export interface RetailDashboard {
     timeZoneId: string
   }
   locations: { id: number; name: string; code: string }[]
-  subscription: { planCode: string; status: string; trialEndsAtUtc: string } | null
+  subscription: {
+    planCode: string
+    status: string
+    trialEndsAtUtc: string
+    paidStartsAtUtc: string | null
+    paidEndsAtUtc: string | null
+    paidPlanVersionId: number | null
+  } | null
   accessStatus: 'Trial' | 'TrialExpired' | 'Active' | 'Inactive'
   canOperate: boolean
 }

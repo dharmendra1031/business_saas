@@ -187,11 +187,15 @@ public static class BusinessEndpoints
 
             var subscription = await db.BusinessSubscriptions.AsNoTracking()
                 .Where(x => x.BusinessId == businessId)
-                .Select(x => new { x.PlanCode, x.Status, x.TrialEndsAtUtc })
+                .Select(x => new { x.PlanCode, x.Status, x.TrialEndsAtUtc,
+                    x.PaidStartsAtUtc, x.PaidEndsAtUtc, x.PaidPlanVersionId })
                 .SingleOrDefaultAsync();
             var accessStatus = subscription?.Status switch
             {
-                "Active" => "Active",
+                "Active" when subscription.PaidStartsAtUtc <= DateTime.UtcNow &&
+                    subscription.PaidEndsAtUtc > DateTime.UtcNow &&
+                    subscription.PaidPlanVersionId.HasValue => "Active",
+                "Active" => "Inactive",
                 "Trial" when subscription.TrialEndsAtUtc > DateTime.UtcNow => "Trial",
                 "Trial" => "TrialExpired",
                 "Suspended" => "Suspended",

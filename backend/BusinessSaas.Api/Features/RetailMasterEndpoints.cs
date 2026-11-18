@@ -208,7 +208,9 @@ public static class RetailMasterEndpoints
 
         if (write && !await db.BusinessSubscriptions.AsNoTracking().AnyAsync(x =>
                 x.BusinessId == businessId &&
-                (x.Status == "Active" || x.Status == "Trial" && x.TrialEndsAtUtc > DateTime.UtcNow)))
+                (x.Status == "Active" && x.PaidStartsAtUtc <= DateTime.UtcNow &&
+                    x.PaidEndsAtUtc > DateTime.UtcNow && x.PaidPlanVersionId != null ||
+                    x.Status == "Trial" && x.TrialEndsAtUtc > DateTime.UtcNow)))
             return Results.Problem("Subscription is not active. Editing is unavailable.",
                 statusCode: StatusCodes.Status403Forbidden);
 
