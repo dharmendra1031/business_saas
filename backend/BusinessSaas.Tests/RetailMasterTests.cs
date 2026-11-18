@@ -166,6 +166,19 @@ public sealed class RetailMasterTests
             (await owner.GetAsync($"/api/businesses/{salonId}/products")).StatusCode);
         Assert.Equal(HttpStatusCode.NotFound,
             (await owner.GetAsync($"/api/businesses/{salonId}/purchase-orders")).StatusCode);
+        Assert.Equal(HttpStatusCode.NotFound,
+            (await owner.GetAsync($"/api/businesses/{salonId}/suppliers")).StatusCode);
+        long salonLocationId;
+        using (var scope = factory.Services.CreateScope())
+        {
+            var db = scope.ServiceProvider.GetRequiredService<AppDbContext>();
+            salonLocationId = await db.BusinessLocations.AsNoTracking()
+                .Where(x => x.BusinessId == salonId).Select(x => x.Id).SingleAsync();
+        }
+        Assert.Equal(HttpStatusCode.NotFound,
+            (await owner.GetAsync($"/api/businesses/{salonId}/stock/locations/{salonLocationId}")).StatusCode);
+        Assert.Equal(HttpStatusCode.NotFound,
+            (await owner.GetAsync($"/api/businesses/{salonId}/stock/locations/{salonLocationId}/adjustments")).StatusCode);
         using (var scope = factory.Services.CreateScope())
         {
             var db = scope.ServiceProvider.GetRequiredService<AppDbContext>();
