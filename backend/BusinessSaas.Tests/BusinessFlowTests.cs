@@ -1044,8 +1044,8 @@ public sealed class BusinessFlowTests
         Assert.Single(billingHistory.GetProperty("items").EnumerateArray());
         Assert.Equal(1099m, billingHistory.GetProperty("items")[0]
             .GetProperty("amount").GetDecimal());
-        Assert.Equal(periodStart, billingHistory.GetProperty("items")[0]
-            .GetProperty("periodStartDate").GetDateOnly());
+        Assert.Equal(periodStart, DateOnly.Parse(billingHistory.GetProperty("items")[0]
+            .GetProperty("periodStartDate").GetString()!));
         Assert.Equal("Draft", billingHistory.GetProperty("items")[0]
             .GetProperty("status").GetString());
         Assert.Equal(HttpStatusCode.BadRequest,
