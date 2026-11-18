@@ -1,3 +1,4 @@
+using System.Data;
 using System.Data.Common;
 using System.Security.Claims;
 using BusinessSaas.Api.Data;
@@ -32,6 +33,7 @@ public static class PlatformBillingEndpoints
                                    draft.PublishedPlanVersionId,
                                    draft.PlanCode, draft.BillingCycle,
                                    draft.CurrencyCode, draft.Amount,
+                                   draft.PeriodStartDate, draft.PeriodEndDate,
                                    draft.CreatedAtUtc,
                                    status = "Draft"
                                })
@@ -54,18 +56,30 @@ public static class PlatformBillingEndpoints
                                   draft.Id, draft.BusinessId, businessName = business.Name,
                                   draft.PublishedPlanVersionId, draft.PlanCode,
                                   draft.BillingCycle, draft.CurrencyCode, draft.Amount,
+                                  draft.PeriodStartDate, draft.PeriodEndDate,
                                   draft.CreatedAtUtc, status = "Draft"
                               }).SingleOrDefaultAsync();
             return item is null ? Results.NotFound() : Results.Ok(item);
         });
 
         group.MapGet("/businesses/{businessId:long}/preview", async (long businessId,
-            string cycle, ClaimsPrincipal user, IConfiguration configuration, AppDbContext db) =>
+            string cycle, DateOnly? periodStartDate, ClaimsPrincipal user,
+            IConfiguration configuration, AppDbContext db) =>
         {
             if (!PlatformOwner.IsOwner(user, configuration))
                 return Results.Forbid();
-            if (!IsValidCycle(cycle))
-                return Results.BadRequest(new { message = "Choose Monthly, Quarterly or Yearly." });
+            var periodEnd = PeriodEnd(periodStartDate, cycle);
+            if (periodEnd is null)
+                return Results.BadRequest(new
+                {
+                    message = "Choose Monthly, Quarterly or Yearly and a period starting on day 1 of the month."
+                });
+
+            var duplicatePeriod = await db.SubscriptionBillingDrafts.AsNoTracking()
+                .AnyAsync(x => x.BusinessId == businessId &&
+                    x.PeriodStartDate < periodEnd && x.PeriodEndDate > periodStartDate);
+            if (duplicatePeriod)
+                return Results.Conflict(new { message = "An overlapping billing draft already exists." });
 
             var terms = await ResolveTerms(db, businessId, cycle);
             if (terms is null)
@@ -78,6 +92,7 @@ public static class PlatformBillingEndpoints
                 publishedPlanVersionId = terms.Value.PlanVersionId,
                 version = terms.Value.Version,
                 billingCycle = cycle,
+                periodStartDate, periodEndDate = periodEnd.Value,
                 currencyCode = terms.Value.CurrencyCode,
                 amount = terms.Value.Amount,
                 status = "Preview"
@@ -92,14 +107,19 @@ public static class PlatformBillingEndpoints
 
             var reason = request.Reason?.Trim() ?? "";
             var requestKey = request.RequestKey?.Trim() ?? "";
+            var periodEnd = PeriodEnd(request.PeriodStartDate, request.BillingCycle);
             if (request.BusinessId <= 0 || request.ExpectedPlanVersionId <= 0 ||
-                !IsValidCycle(request.BillingCycle) || reason.Length is < 10 or > 200 ||
+                periodEnd is null || reason.Length is < 10 or > 200 ||
                 requestKey.Length is < 12 or > 80 ||
                 !requestKey.All(ch => char.IsAsciiLetterOrDigit(ch) || ch == '-'))
                 return Results.BadRequest(new
                 {
-                    message = "Business, current plan version, billing cycle, request key and 10–200 character reason are required."
+                    message = "Business, billing period, current plan version, request key and a 10–200 character reason are required."
                 });
+
+            // Serializable isolation prevents overlapping drafts racing through the period check.
+            await using var transaction =
+                await db.Database.BeginTransactionAsync(IsolationLevel.Serializable);
 
             var existing = await db.SubscriptionBillingDrafts.AsNoTracking()
                 .SingleOrDefaultAsync(x => x.BusinessId == request.BusinessId &&
@@ -107,10 +127,20 @@ public static class PlatformBillingEndpoints
             if (existing is not null)
             {
                 return existing.PublishedPlanVersionId == request.ExpectedPlanVersionId &&
-                    existing.BillingCycle == request.BillingCycle
+                    existing.BillingCycle == request.BillingCycle &&
+                    existing.PeriodStartDate == request.PeriodStartDate
                     ? Results.Ok(new { id = existing.Id, status = "Draft", alreadyExists = true })
-                    : Results.Conflict(new { message = "Request key already belongs to a different billing draft." });
+                    : Results.Conflict(new { message = "Request key already belongs to different billing terms." });
             }
+
+            var overlapping = await db.SubscriptionBillingDrafts.AsNoTracking()
+                .AnyAsync(x => x.BusinessId == request.BusinessId &&
+                    x.PeriodStartDate < periodEnd && x.PeriodEndDate > request.PeriodStartDate);
+            if (overlapping)
+                return Results.Conflict(new
+                {
+                    message = "A draft already covers some or all of this business's billing period."
+                });
 
             var terms = await ResolveTerms(db, request.BusinessId, request.BillingCycle!);
             if (terms is null || terms.Value.PlanVersionId != request.ExpectedPlanVersionId)
@@ -126,13 +156,14 @@ public static class PlatformBillingEndpoints
                 PublishedPlanVersionId = terms.Value.PlanVersionId,
                 PlanCode = terms.Value.PlanCode,
                 BillingCycle = request.BillingCycle!,
+                PeriodStartDate = request.PeriodStartDate,
+                PeriodEndDate = periodEnd.Value,
                 CurrencyCode = terms.Value.CurrencyCode,
                 Amount = terms.Value.Amount,
                 RequestKey = requestKey,
                 CreatedByUserId = actorId
             };
 
-            await using var transaction = await db.Database.BeginTransactionAsync();
             db.SubscriptionBillingDrafts.Add(draft);
             try
             {
@@ -141,7 +172,7 @@ public static class PlatformBillingEndpoints
             catch (DbUpdateException error) when (error.InnerException is
                 SqlException { Number: 2601 or 2627 } or DbException { ErrorCode: 19 })
             {
-                return Results.Conflict(new { message = "This draft request was already processed. Refresh the list." });
+                return Results.Conflict(new { message = "A draft already exists for this period. Refresh the list." });
             }
 
             var audit = new PlatformAuditEvent
@@ -151,7 +182,8 @@ public static class PlatformBillingEndpoints
                 TargetType = "BillingDraft",
                 TargetId = draft.Id,
                 Reason = reason,
-                NewValue = $"{draft.PlanCode} {draft.BillingCycle} {draft.CurrencyCode} {draft.Amount:0.00}"
+                NewValue = $"{draft.PlanCode} {draft.BillingCycle} " +
+                    $"{draft.PeriodStartDate:yyyy-MM-dd} {draft.CurrencyCode} {draft.Amount:0.00}"
             };
             db.PlatformAuditEvents.Add(audit);
             await db.SaveChangesAsync();
@@ -161,13 +193,26 @@ public static class PlatformBillingEndpoints
             {
                 id = draft.Id, status = "Draft", alreadyExists = false,
                 draft.BusinessId, draft.PublishedPlanVersionId, draft.PlanCode,
-                draft.BillingCycle, draft.CurrencyCode, draft.Amount, auditId = audit.Id
+                draft.BillingCycle, draft.PeriodStartDate, draft.PeriodEndDate,
+                draft.CurrencyCode, draft.Amount, auditId = audit.Id
             });
         });
     }
 
-    private static bool IsValidCycle(string? cycle) =>
-        cycle is "Monthly" or "Quarterly" or "Yearly";
+    private static DateOnly? PeriodEnd(DateOnly? start, string? cycle)
+    {
+        if (start is null || start.Value.Day != 1 ||
+            start.Value.Year is < 2020 or > 2098)
+            return null;
+
+        return cycle switch
+        {
+            "Monthly" => start.Value.AddMonths(1),
+            "Quarterly" => start.Value.AddMonths(3),
+            "Yearly" => start.Value.AddYears(1),
+            _ => null
+        };
+    }
 
     private static async Task<BillingTerms?> ResolveTerms(AppDbContext db, long businessId,
         string cycle)
@@ -201,7 +246,8 @@ public static class PlatformBillingEndpoints
     }
 
     private sealed record CreateBillingDraftRequest(long BusinessId,
-        long ExpectedPlanVersionId, string? BillingCycle, string? RequestKey, string? Reason);
+        long ExpectedPlanVersionId, string? BillingCycle, DateOnly? PeriodStartDate,
+        string? RequestKey, string? Reason);
 
     private readonly record struct BillingTerms(string BusinessName, string PlanCode,
         long PlanVersionId, int Version, string CurrencyCode, decimal Amount);
