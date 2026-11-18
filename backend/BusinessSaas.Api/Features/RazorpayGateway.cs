@@ -5,7 +5,10 @@ using System.Text.Json;
 
 namespace BusinessSaas.Api.Features;
 
-public sealed record GatewayOrder(string Id, long Amount, string Currency, string Status);
+public sealed record GatewayOrder(string Id, long Amount, string Currency, string Status,
+    string? Receipt = null);
+public sealed record GatewayRefund(string Id, string PaymentId, long Amount,
+    string Currency, string Status);
 public sealed record GatewayPayment(string Id, string OrderId, long Amount,
     string Currency, string Status);
 
@@ -13,6 +16,8 @@ public interface IRazorpayGateway
 {
     Task<GatewayOrder> CreateOrder(long requestId, long amount, CancellationToken cancellationToken);
     Task<GatewayPayment> FetchPayment(string paymentId, CancellationToken cancellationToken);
+    Task<GatewayOrder> FetchOrder(string orderId, CancellationToken cancellationToken);
+    Task<GatewayRefund> FetchRefund(string refundId, CancellationToken cancellationToken);
 }
 
 public static class RazorpayConfiguration
@@ -62,7 +67,8 @@ public sealed class RazorpayGateway(HttpClient client, IConfiguration configurat
         return new GatewayOrder(root.GetProperty("id").GetString()!,
             root.GetProperty("amount").GetInt64(),
             root.GetProperty("currency").GetString()!,
-            root.GetProperty("status").GetString()!);
+            root.GetProperty("status").GetString()!,
+            root.GetProperty("receipt").GetString());
     }
 
     public async Task<GatewayPayment> FetchPayment(string paymentId,
@@ -84,6 +90,48 @@ public sealed class RazorpayGateway(HttpClient client, IConfiguration configurat
             root.GetProperty("amount").GetInt64(),
             root.GetProperty("currency").GetString()!,
             root.GetProperty("status").GetString()!);
+    }
+
+    public async Task<GatewayOrder> FetchOrder(string orderId,
+        CancellationToken cancellationToken)
+    {
+        ValidateReference(orderId, "order_", nameof(orderId));
+        using var request = CreateRequest(HttpMethod.Get, $"orders/{orderId}");
+        using var response = await client.SendAsync(request, cancellationToken);
+        response.EnsureSuccessStatusCode();
+        using var data = await JsonDocument.ParseAsync(
+            await response.Content.ReadAsStreamAsync(cancellationToken), cancellationToken: cancellationToken);
+        var root = data.RootElement;
+        return new GatewayOrder(root.GetProperty("id").GetString()!,
+            root.GetProperty("amount").GetInt64(),
+            root.GetProperty("currency").GetString()!,
+            root.GetProperty("status").GetString()!,
+            root.GetProperty("receipt").GetString());
+    }
+
+    public async Task<GatewayRefund> FetchRefund(string refundId,
+        CancellationToken cancellationToken)
+    {
+        ValidateReference(refundId, "rfnd_", nameof(refundId));
+        using var request = CreateRequest(HttpMethod.Get, $"refunds/{refundId}");
+        using var response = await client.SendAsync(request, cancellationToken);
+        response.EnsureSuccessStatusCode();
+        using var data = await JsonDocument.ParseAsync(
+            await response.Content.ReadAsStreamAsync(cancellationToken), cancellationToken: cancellationToken);
+        var root = data.RootElement;
+        return new GatewayRefund(root.GetProperty("id").GetString()!,
+            root.GetProperty("payment_id").GetString()!,
+            root.GetProperty("amount").GetInt64(),
+            root.GetProperty("currency").GetString()!,
+            root.GetProperty("status").GetString()!);
+    }
+
+    private static void ValidateReference(string value, string prefix, string parameter)
+    {
+        if (!value.StartsWith(prefix, StringComparison.Ordinal) ||
+            value.Length is < 8 or > 80 ||
+            !value.All(ch => char.IsAsciiLetterOrDigit(ch) || ch == '_'))
+            throw new ArgumentException("Invalid gateway reference.", parameter);
     }
 
     private HttpRequestMessage CreateRequest(HttpMethod method, string path)
