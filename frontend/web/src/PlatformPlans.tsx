@@ -1,5 +1,6 @@
 import { useEffect, useState, type FormEvent } from 'react'
 import { api, post, SessionExpiredError } from './api'
+import PlatformBilling from './PlatformBilling'
 
 interface PlanDraft {
   id: number
@@ -72,6 +73,7 @@ function numberOrNull(value: string): number | null {
 }
 
 export default function PlatformPlans() {
+  const [activeTab, setActiveTab] = useState<'catalog' | 'billing'>('catalog')
   const [data, setData] = useState<PlanResponse | null>(null)
   const [loading, setLoading] = useState(true)
   const [busy, setBusy] = useState(false)
@@ -185,7 +187,7 @@ export default function PlatformPlans() {
   return <>
     <div className="page-header">
       <div><h1>Plans & Billing</h1>
-        <p>Publish catalog terms. Subscription billing and payments are not available yet.</p>
+        <p>Manage published plans and prepare safe internal billing drafts.</p>
       </div>
       <button type="button" className="btn btn-outline-secondary btn-sm"
         disabled={loading || busy} onClick={() => setReload(value => value + 1)}>Refresh</button>
@@ -195,6 +197,17 @@ export default function PlatformPlans() {
       {!editing && !publishing && <button type="button" className="btn btn-outline-secondary btn-sm ms-2"
         onClick={() => setReload(value => value + 1)}>Retry</button>}
     </div>}
+    <div className="d-flex gap-2 mb-3" role="tablist" aria-label="Plans and billing">
+      <button type="button" role="tab" aria-selected={activeTab === 'catalog'}
+        className={activeTab === 'catalog' ? 'btn btn-primary btn-sm' : 'btn btn-outline-primary btn-sm'}
+        onClick={() => setActiveTab('catalog')}>Plan Catalog</button>
+      <button type="button" role="tab" aria-selected={activeTab === 'billing'}
+        className={activeTab === 'billing' ? 'btn btn-primary btn-sm' : 'btn btn-outline-primary btn-sm'}
+        onClick={() => { setEditing(null); setPublishing(null); setActiveTab('billing') }}>
+        Billing Drafts
+      </button>
+    </div>
+    {activeTab === 'billing' ? <PlatformBilling /> : <>
     <section className="content-section">
       <h2>Subscription Plans</h2>
       {loading ? <p role="status">Loading plans…</p> : data && <>
@@ -333,5 +346,6 @@ export default function PlatformPlans() {
         </div>
       </form>
     </section>}
+    </>}
   </>
 }
