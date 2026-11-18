@@ -481,6 +481,13 @@ public sealed class BusinessFlowTests
             (await anonymous.GetAsync("/api/platform/audit")).StatusCode);
         Assert.Equal(HttpStatusCode.Unauthorized,
             (await anonymous.GetAsync("/api/platform/plans")).StatusCode);
+        Assert.Equal(HttpStatusCode.Unauthorized,
+            (await anonymous.GetAsync("/api/platform/billing/drafts")).StatusCode);
+        Assert.Equal(HttpStatusCode.Forbidden,
+            (await owner.GetAsync("/api/platform/billing/drafts")).StatusCode);
+        Assert.Equal(HttpStatusCode.Forbidden,
+            (await owner.GetAsync($"/api/platform/billing/businesses/{firstId}/preview?cycle=Monthly"))
+            .StatusCode);
         Assert.Equal(HttpStatusCode.Forbidden,
             (await owner.GetAsync("/api/platform/plans")).StatusCode);
         Assert.Equal(HttpStatusCode.Forbidden,
@@ -554,6 +561,15 @@ public sealed class BusinessFlowTests
             (await Post(admin, "/api/platform/plans/STARTER/publish",
                 new { expectedDraftRevision = 1, expectedPublishedVersion = 0,
                       reason = "Not authorized without verified MFA" })).StatusCode);
+        Assert.Equal(HttpStatusCode.Forbidden,
+            (await admin.GetAsync("/api/platform/billing/drafts")).StatusCode);
+        Assert.Equal(HttpStatusCode.Forbidden,
+            (await Post(admin, "/api/platform/billing/drafts", new
+            {
+                businessId = firstId, expectedPlanVersionId = 1,
+                billingCycle = "Monthly", requestKey = "mfa-not-verified-0001",
+                reason = "MFA is required for drafting"
+            })).StatusCode);
         Assert.Equal(HttpStatusCode.Forbidden,
             (await Post(admin, $"/api/platform/businesses/{firstId}/subscription-status",
                 new { action = "Suspend", expectedStatus = "Trial", reason = "No MFA access to suspend" }))
@@ -909,6 +925,96 @@ public sealed class BusinessFlowTests
             });
         }
 
+        // Internal billing drafts use the immutable published price, never mark a payment.
+        var draftListBefore = await admin.GetFromJsonAsync<JsonElement>(
+            "/api/platform/billing/drafts");
+        Assert.Equal(0, draftListBefore.GetProperty("total").GetInt32());
+        Assert.Equal(HttpStatusCode.Forbidden,
+            (await outsider.GetAsync($"/api/platform/billing/businesses/{firstId}/preview?cycle=Monthly"))
+            .StatusCode);
+        Assert.Equal(HttpStatusCode.BadRequest,
+            (await admin.GetAsync($"/api/platform/billing/businesses/{firstId}/preview?cycle=Weekly"))
+            .StatusCode);
+        Assert.Equal(HttpStatusCode.Conflict,
+            (await admin.GetAsync("/api/platform/billing/businesses/999999/preview?cycle=Monthly"))
+            .StatusCode);
+        var preview = await admin.GetFromJsonAsync<JsonElement>(
+            $"/api/platform/billing/businesses/{firstId}/preview?cycle=Monthly");
+        Assert.Equal("Alpha Retail", preview.GetProperty("businessName").GetString());
+        Assert.Equal(1099m, preview.GetProperty("amount").GetDecimal());
+        Assert.Equal("INR", preview.GetProperty("currencyCode").GetString());
+        Assert.Equal(2, preview.GetProperty("version").GetInt32());
+        var planVersionId = preview.GetProperty("publishedPlanVersionId").GetInt64();
+
+        var billingRequest = new
+        {
+            businessId = firstId,
+            expectedPlanVersionId = planVersionId,
+            billingCycle = "Monthly",
+            requestKey = "billing-first-request-20261118",
+            reason = "Internal price record for a trial business"
+        };
+        Assert.Equal(HttpStatusCode.Forbidden,
+            (await Post(outsider, "/api/platform/billing/drafts", billingRequest)).StatusCode);
+        Assert.Equal(HttpStatusCode.BadRequest,
+            (await Post(admin, "/api/platform/billing/drafts", new
+            {
+                businessId = firstId, expectedPlanVersionId = planVersionId,
+                billingCycle = "Monthly", requestKey = "bad", reason = "Too short"
+            })).StatusCode);
+        Assert.Equal(HttpStatusCode.Conflict,
+            (await Post(admin, "/api/platform/billing/drafts", new
+            {
+                businessId = firstId, expectedPlanVersionId = publishedId,
+                billingCycle = "Monthly", requestKey = "billing-old-plan-version-20261118",
+                reason = "Old plan version must not be used for new drafts"
+            })).StatusCode);
+
+        var billingCreated = await Post(admin, "/api/platform/billing/drafts", billingRequest);
+        Assert.Equal(HttpStatusCode.Created, billingCreated.StatusCode);
+        var billingResult = await billingCreated.Content.ReadFromJsonAsync<JsonElement>();
+        var billingId = billingResult.GetProperty("id").GetInt64();
+        Assert.True(billingId > 0);
+        Assert.False(billingResult.GetProperty("alreadyExists").GetBoolean());
+        Assert.Equal(1099m, billingResult.GetProperty("amount").GetDecimal());
+
+        var billingAgain = await Post(admin, "/api/platform/billing/drafts", billingRequest);
+        Assert.Equal(HttpStatusCode.OK, billingAgain.StatusCode);
+        var existingBilling = await billingAgain.Content.ReadFromJsonAsync<JsonElement>();
+        Assert.Equal(billingId, existingBilling.GetProperty("id").GetInt64());
+        Assert.True(existingBilling.GetProperty("alreadyExists").GetBoolean());
+        Assert.Equal(HttpStatusCode.Conflict,
+            (await Post(admin, "/api/platform/billing/drafts", new
+            {
+                businessId = firstId, expectedPlanVersionId = planVersionId,
+                billingCycle = "Yearly", requestKey = billingRequest.requestKey,
+                reason = billingRequest.reason
+            })).StatusCode);
+
+        var billingHistory = await admin.GetFromJsonAsync<JsonElement>(
+            "/api/platform/billing/drafts?page=1&pageSize=10");
+        Assert.Equal(1, billingHistory.GetProperty("total").GetInt32());
+        Assert.Single(billingHistory.GetProperty("items").EnumerateArray());
+        Assert.Equal(1099m, billingHistory.GetProperty("items")[0]
+            .GetProperty("amount").GetDecimal());
+        Assert.Equal("Draft", billingHistory.GetProperty("items")[0]
+            .GetProperty("status").GetString());
+        Assert.Equal(HttpStatusCode.BadRequest,
+            (await admin.GetAsync("/api/platform/billing/drafts?page=0")).StatusCode);
+        Assert.Equal(HttpStatusCode.NotFound,
+            (await admin.GetAsync("/api/platform/billing/drafts/999999")).StatusCode);
+        Assert.Equal(HttpStatusCode.OK,
+            (await admin.GetAsync($"/api/platform/billing/drafts/{billingId}")).StatusCode);
+
+        using (var scope = factory.Services.CreateScope())
+        {
+            var db = scope.ServiceProvider.GetRequiredService<AppDbContext>();
+            Assert.Equal(1, await db.SubscriptionBillingDrafts.CountAsync());
+            Assert.Equal("Trial", (await db.BusinessSubscriptions
+                .SingleAsync(x => x.BusinessId == firstId)).Status);
+            Assert.Equal(1099m, (await db.SubscriptionBillingDrafts.SingleAsync()).Amount);
+        }
+
         // Suspending a subscription blocks operations, replay is rejected and reactivation
         // restores its prior state without extending its original trial.
         var statusRequest = new
@@ -982,9 +1088,13 @@ public sealed class BusinessFlowTests
             .GetProperty("newValue").GetString());
         Assert.Equal("Subscription.Suspended", lastAudit.GetProperty("items")[1]
             .GetProperty("action").GetString());
-        Assert.Equal("Plan.Published", lastAudit.GetProperty("items")[2]
+        Assert.Equal("Billing.DraftCreated", lastAudit.GetProperty("items")[2]
             .GetProperty("action").GetString());
-        Assert.Equal("Plan.DraftSaved", lastAudit.GetProperty("items")[3]
+        Assert.Equal(billingId, lastAudit.GetProperty("items")[2]
+            .GetProperty("targetId").GetInt64());
+        Assert.Equal("Plan.Published", lastAudit.GetProperty("items")[3]
+            .GetProperty("action").GetString());
+        Assert.Equal("Plan.DraftSaved", lastAudit.GetProperty("items")[4]
             .GetProperty("action").GetString());
 
         // An active paid subscription must never accept a trial extension.

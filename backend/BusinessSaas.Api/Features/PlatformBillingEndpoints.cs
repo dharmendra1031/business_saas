@@ -40,6 +40,25 @@ public static class PlatformBillingEndpoints
             return Results.Ok(new { items, total, page, pageSize });
         });
 
+        group.MapGet("/drafts/{id:long}", async (long id, ClaimsPrincipal user,
+            IConfiguration configuration, AppDbContext db) =>
+        {
+            if (!PlatformOwner.IsOwner(user, configuration))
+                return Results.Forbid();
+            var item = await (from draft in db.SubscriptionBillingDrafts.AsNoTracking()
+                              join business in db.Businesses.AsNoTracking()
+                                  on draft.BusinessId equals business.Id
+                              where draft.Id == id
+                              select new
+                              {
+                                  draft.Id, draft.BusinessId, businessName = business.Name,
+                                  draft.PublishedPlanVersionId, draft.PlanCode,
+                                  draft.BillingCycle, draft.CurrencyCode, draft.Amount,
+                                  draft.CreatedAtUtc, status = "Draft"
+                              }).SingleOrDefaultAsync();
+            return item is null ? Results.NotFound() : Results.Ok(item);
+        });
+
         group.MapGet("/businesses/{businessId:long}/preview", async (long businessId,
             string cycle, ClaimsPrincipal user, IConfiguration configuration, AppDbContext db) =>
         {
