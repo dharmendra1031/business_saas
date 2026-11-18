@@ -2,8 +2,10 @@ using System.Buffers.Binary;
 using System.Net;
 using System.Security.Cryptography;
 using System.Net.Http.Json;
+using System.Text;
 using System.Text.Json;
 using BusinessSaas.Api.Data;
+using BusinessSaas.Api.Features;
 using Microsoft.AspNetCore.Hosting;
 using Microsoft.AspNetCore.Mvc.Testing;
 using Microsoft.Data.Sqlite;
@@ -428,13 +430,26 @@ public sealed class BusinessFlowTests
         using var database = new SqliteConnection("Data Source=:memory:");
         await database.OpenAsync();
 
+        const string webhookSecret = "unit-testing-webhook-secret-for-razorpay-2026";
+        var gateway = new StubRazorpayGateway();
         using var factory = new WebApplicationFactory<Program>().WithWebHostBuilder(builder =>
         {
             builder.UseEnvironment("Development");
+            builder.ConfigureAppConfiguration((_, config) => config.AddInMemoryCollection(
+                new Dictionary<string, string?>
+                {
+                    ["Payments:Enabled"] = "true",
+                    ["Razorpay:Mode"] = "Test",
+                    ["Razorpay:KeyId"] = "rzp_test_unit_fake_123",
+                    ["Razorpay:KeySecret"] = "fake-unit-secret-never-live",
+                    ["Razorpay:WebhookSecret"] = webhookSecret
+                }));
             builder.ConfigureServices(services =>
             {
                 services.RemoveAll<DbContextOptions<AppDbContext>>();
                 services.RemoveAll<IDbContextOptionsConfiguration<AppDbContext>>();
+                services.RemoveAll<IRazorpayGateway>();
+                services.AddSingleton<IRazorpayGateway>(gateway);
                 services.AddDbContext<AppDbContext>(options => options.UseSqlite(database));
             });
         });
@@ -1221,6 +1236,118 @@ public sealed class BusinessFlowTests
                 .OrderByDescending(x => x.Id).FirstAsync()).Action);
         }
 
+        // The tenant Owner checks out a prepared request, never another tenant.
+        Assert.Equal(HttpStatusCode.NotFound,
+            (await outsider.GetAsync($"/api/businesses/{firstId}/billing/checkout")).StatusCode);
+        var checkoutSummary = await owner.GetFromJsonAsync<JsonElement>(
+            $"/api/businesses/{firstId}/billing/checkout");
+        Assert.True(checkoutSummary.GetProperty("enabled").GetBoolean());
+        Assert.True(checkoutSummary.GetProperty("available").GetBoolean());
+        Assert.Equal(paymentRequestId,
+            checkoutSummary.GetProperty("paymentRequestId").GetInt64());
+        Assert.Equal(HttpStatusCode.NotFound,
+            (await Post(outsider, $"/api/businesses/{firstId}/billing/checkout",
+                new { paymentRequestId })).StatusCode);
+        var checkout = await Post(owner, $"/api/businesses/{firstId}/billing/checkout",
+            new { paymentRequestId });
+        Assert.Equal(HttpStatusCode.OK, checkout.StatusCode);
+        var checkoutData = await checkout.Content.ReadFromJsonAsync<JsonElement>();
+        var orderId = checkoutData.GetProperty("orderId").GetString()!;
+        Assert.Equal(109900L, checkoutData.GetProperty("amount").GetInt64());
+        Assert.Equal(1, gateway.OrderCalls);
+        var retryOrder = await Post(owner, $"/api/businesses/{firstId}/billing/checkout",
+            new { paymentRequestId });
+        Assert.Equal(HttpStatusCode.OK, retryOrder.StatusCode);
+        Assert.Equal(orderId, (await retryOrder.Content.ReadFromJsonAsync<JsonElement>())
+            .GetProperty("orderId").GetString());
+        Assert.Equal(1, gateway.OrderCalls);
+
+        const string providerPaymentId = "pay_test_capture_0123";
+        var webhookBody = JsonSerializer.Serialize(new
+        {
+            @event = "payment.captured",
+            payload = new
+            {
+                payment = new
+                {
+                    entity = new
+                    {
+                        id = providerPaymentId, order_id = orderId,
+                        amount = 109900, currency = "INR", status = "captured"
+                    }
+                }
+            }
+        });
+
+        async Task<HttpResponseMessage> Webhook(string eventId, string body, bool correctSignature = true)
+        {
+            using var request = new HttpRequestMessage(HttpMethod.Post,
+                "/api/payments/razorpay/webhook")
+            {
+                Content = new StringContent(body, Encoding.UTF8, "application/json")
+            };
+            var bytes = HMACSHA256.HashData(Encoding.UTF8.GetBytes(webhookSecret),
+                Encoding.UTF8.GetBytes(body));
+            request.Headers.Add("X-Razorpay-Event-Id", eventId);
+            request.Headers.Add("X-Razorpay-Signature", correctSignature
+                ? Convert.ToHexStringLower(bytes) : new string('0', 64));
+            return await anonymous.SendAsync(request);
+        }
+
+        Assert.Equal(HttpStatusCode.Unauthorized,
+            (await Webhook("evt_invalid_signature_1", webhookBody, false)).StatusCode);
+        gateway.FetchAmountOverride = 1L;
+        Assert.Equal(HttpStatusCode.Conflict,
+            (await Webhook("evt_wrong_amount_001", webhookBody)).StatusCode);
+        gateway.FetchAmountOverride = null;
+
+        var captured = await Webhook("evt_capture_valid_001", webhookBody);
+        Assert.Equal(HttpStatusCode.OK, captured.StatusCode);
+        Assert.True((await captured.Content.ReadFromJsonAsync<JsonElement>())
+            .GetProperty("activated").GetBoolean());
+        var duplicate = await Webhook("evt_capture_valid_001", webhookBody);
+        Assert.Equal(HttpStatusCode.OK, duplicate.StatusCode);
+        Assert.True((await duplicate.Content.ReadFromJsonAsync<JsonElement>())
+            .GetProperty("alreadyProcessed").GetBoolean());
+        Assert.Equal(HttpStatusCode.OK,
+            (await Webhook("evt_capture_second_event_001", webhookBody)).StatusCode);
+
+        using (var scope = factory.Services.CreateScope())
+        {
+            var db = scope.ServiceProvider.GetRequiredService<AppDbContext>();
+            Assert.Equal(1, await db.SubscriptionPayments.CountAsync());
+            Assert.Equal(2, await db.RazorpayWebhookEvents.CountAsync());
+            var verified = await db.SubscriptionPayments.SingleAsync();
+            Assert.Equal(providerPaymentId, verified.ProviderPaymentId);
+            Assert.Equal("Activated", verified.ActivationStatus);
+            var sub = await db.BusinessSubscriptions.SingleAsync(x => x.BusinessId == firstId);
+            Assert.Equal("Active", sub.Status);
+            Assert.Equal(planVersionId, sub.PaidPlanVersionId);
+            Assert.True(sub.PaidStartsAtUtc < DateTime.UtcNow);
+            Assert.True(sub.PaidEndsAtUtc > DateTime.UtcNow);
+        }
+        var paidDashboard = await owner.GetFromJsonAsync<JsonElement>(
+            $"/api/businesses/{firstId}/dashboard");
+        Assert.Equal("Active", paidDashboard.GetProperty("accessStatus").GetString());
+        Assert.True(paidDashboard.GetProperty("canOperate").GetBoolean());
+
+        // A cached Active status must not outlive its paid period.
+        using (var scope = factory.Services.CreateScope())
+        {
+            var db = scope.ServiceProvider.GetRequiredService<AppDbContext>();
+            var sub = await db.BusinessSubscriptions.SingleAsync(x => x.BusinessId == firstId);
+            sub.PaidEndsAtUtc = DateTime.UtcNow.AddSeconds(-1);
+            await db.SaveChangesAsync();
+        }
+        var expiredPaid = await owner.GetFromJsonAsync<JsonElement>(
+            $"/api/businesses/{firstId}/dashboard");
+        Assert.Equal("Inactive", expiredPaid.GetProperty("accessStatus").GetString());
+        Assert.False(expiredPaid.GetProperty("canOperate").GetBoolean());
+        Assert.Equal(HttpStatusCode.Forbidden,
+            (await Post(owner, $"/api/businesses/{firstId}/staff",
+                new { email = "directory-outsider@example.test", roleCode = "Cashier" }))
+            .StatusCode);
+
         // An active paid subscription must never accept a trial extension.
         using (var scope = factory.Services.CreateScope())
         {
@@ -1447,6 +1574,28 @@ public sealed class BusinessFlowTests
             password = "SecurePassword123!"
         });
         Assert.Equal(HttpStatusCode.BadRequest, response.StatusCode);
+    }
+
+    private sealed class StubRazorpayGateway : IRazorpayGateway
+    {
+        public int OrderCalls { get; private set; }
+        public long? FetchAmountOverride { get; set; }
+        private string orderId = "";
+        private long amount;
+
+        public Task<GatewayOrder> CreateOrder(long requestId, long orderAmount,
+            CancellationToken cancellationToken)
+        {
+            OrderCalls++;
+            orderId = $"order_test_request_{requestId}";
+            amount = orderAmount;
+            return Task.FromResult(new GatewayOrder(orderId, amount, "INR", "created"));
+        }
+
+        public Task<GatewayPayment> FetchPayment(string paymentId,
+            CancellationToken cancellationToken) =>
+            Task.FromResult(new GatewayPayment(paymentId, orderId,
+                FetchAmountOverride ?? amount, "INR", "captured"));
     }
 
     private static async Task<(string secret, string[] recoveryCodes)> EnableOwnerMfaAndSignIn(
