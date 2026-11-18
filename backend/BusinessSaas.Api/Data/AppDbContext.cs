@@ -91,6 +91,8 @@ public sealed class SubscriptionBillingDraft
     public string CurrencyCode { get; set; } = "";
     public decimal Amount { get; set; }
     public string RequestKey { get; set; } = "";
+    public DateOnly? PeriodStartDate { get; set; }
+    public DateOnly? PeriodEndDate { get; set; }
     public long CreatedByUserId { get; set; }
     public DateTime CreatedAtUtc { get; set; } = DateTime.UtcNow;
 }
@@ -369,6 +371,9 @@ public sealed class AppDbContext(DbContextOptions<AppDbContext> options)
             entity.Property(x => x.RequestKey).HasMaxLength(80).IsRequired();
             entity.Property(x => x.Amount).HasPrecision(18, 2);
             entity.HasIndex(x => new { x.BusinessId, x.RequestKey }).IsUnique();
+            entity.HasIndex(x => new { x.BusinessId, x.PeriodStartDate }).IsUnique();
+            entity.Property(x => x.PeriodStartDate).HasColumnType("date");
+            entity.Property(x => x.PeriodEndDate).HasColumnType("date");
             entity.HasIndex(x => new { x.CreatedAtUtc, x.Id });
             entity.HasOne<Business>().WithMany()
                 .HasForeignKey(x => x.BusinessId).OnDelete(DeleteBehavior.Restrict);

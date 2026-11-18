@@ -287,10 +287,13 @@ namespace BusinessSaas.Api.Data.Migrations
                     b.Property<string>("CurrencyCode").IsRequired().HasMaxLength(3).HasColumnType("nvarchar(3)");
                     b.Property<decimal>("Amount").HasPrecision(18, 2).HasColumnType("decimal(18,2)");
                     b.Property<string>("RequestKey").IsRequired().HasMaxLength(80).HasColumnType("nvarchar(80)");
+                    b.Property<DateOnly?>("PeriodStartDate").HasColumnType("date");
+                    b.Property<DateOnly?>("PeriodEndDate").HasColumnType("date");
                     b.Property<long>("CreatedByUserId").HasColumnType("bigint");
                     b.Property<DateTime>("CreatedAtUtc").HasColumnType("datetime2");
                     b.HasKey("Id");
                     b.HasIndex("BusinessId", "RequestKey").IsUnique();
+                    b.HasIndex("BusinessId", "PeriodStartDate").IsUnique();
                     b.HasIndex("CreatedAtUtc", "Id");
                     b.HasIndex("CreatedByUserId");
                     b.HasIndex("PublishedPlanVersionId");
