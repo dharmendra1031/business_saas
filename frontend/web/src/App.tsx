@@ -110,6 +110,12 @@ export default function App() {
     setError('')
     try {
       const details = await api<RetailDashboard>(`/businesses/${id}/dashboard`)
+      if (details.business.typeCode !== 'RETAIL') {
+        setDashboard(null)
+        setPage('businesses')
+        setError(`${details.business.typeName} workspace is not available yet.`)
+        return
+      }
       setDashboard(details)
       setRetailPage('overview')
       setPage('retail')

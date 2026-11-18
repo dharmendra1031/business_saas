@@ -133,6 +133,46 @@ public sealed class RetailMasterTests
                 new { code = "EA", name = "Each", isActive = true })).StatusCode);
         Assert.Equal(HttpStatusCode.OK,
             (await owner.GetAsync(categories + "?page=1")).StatusCode);
+
+        // Another business type can exist without inheriting Retail data or APIs.
+        long salonTypeId;
+        using (var scope = factory.Services.CreateScope())
+        {
+            var db = scope.ServiceProvider.GetRequiredService<AppDbContext>();
+            var salon = new BusinessType
+            {
+                Code = "SALON", Name = "Salon (test only)", IsSupported = true
+            };
+            db.BusinessTypes.Add(salon);
+            await db.SaveChangesAsync();
+            salonTypeId = salon.Id;
+        }
+
+        var salonResponse = await Post(owner, "/api/businesses", new
+        {
+            name = "Second Business Type", businessTypeId = salonTypeId,
+            countryCode = "IN", currencyCode = "INR",
+            timeZoneId = "Asia/Kolkata", requestKey = "retail-boundary-salon-001"
+        });
+        Assert.Equal(HttpStatusCode.Created, salonResponse.StatusCode);
+        var salonId = (await salonResponse.Content.ReadFromJsonAsync<JsonElement>())
+            .GetProperty("id").GetInt64();
+
+        Assert.Equal(HttpStatusCode.OK,
+            (await owner.GetAsync($"/api/businesses/{salonId}/dashboard")).StatusCode);
+        Assert.Equal(HttpStatusCode.NotFound,
+            (await owner.GetAsync($"/api/businesses/{salonId}/categories")).StatusCode);
+        Assert.Equal(HttpStatusCode.NotFound,
+            (await owner.GetAsync($"/api/businesses/{salonId}/products")).StatusCode);
+        Assert.Equal(HttpStatusCode.NotFound,
+            (await owner.GetAsync($"/api/businesses/{salonId}/purchase-orders")).StatusCode);
+        using (var scope = factory.Services.CreateScope())
+        {
+            var db = scope.ServiceProvider.GetRequiredService<AppDbContext>();
+            Assert.False(await db.RetailCategories.AnyAsync(x => x.BusinessId == salonId));
+            Assert.False(await db.RetailUnits.AnyAsync(x => x.BusinessId == salonId));
+            Assert.True(await db.RetailCategories.AnyAsync(x => x.BusinessId == secondId));
+        }
     }
 
     private static async Task Register(HttpClient client, string email)

@@ -120,16 +120,7 @@ public static class BusinessEndpoints
                 });
 
                 if (businessType == "RETAIL")
-                {
-                    db.RetailCategories.Add(new RetailCategory
-                    {
-                        BusinessId = business.Id, Name = "General", NameKey = "GENERAL"
-                    });
-                    db.RetailUnits.Add(new RetailUnit
-                    {
-                        BusinessId = business.Id, Name = "Item", NameKey = "ITEM", Code = "ITEM"
-                    });
-                }
+                    RetailModule.AddBusinessDefaults(db, business.Id);
 
                 await db.SaveChangesAsync();
                 await transaction.CommitAsync();

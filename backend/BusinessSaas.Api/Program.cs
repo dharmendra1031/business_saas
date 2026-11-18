@@ -263,12 +263,7 @@ app.MapGet("/api/ready", async (AppDbContext db, ILogger<Program> logger) =>
 app.MapAuthEndpoints();
 app.MapBusinessEndpoints();
 app.MapBusinessStaffEndpoints();
-app.MapRetailMasterEndpoints();
-app.MapRetailProductEndpoints();
-app.MapRetailContactEndpoints();
-app.MapRetailStockEndpoints();
-app.MapRetailAdjustmentEndpoints();
-app.MapRetailPurchaseEndpoints();
+app.MapRetailModule();
 app.MapPlatformEndpoints();
 app.MapPlatformBillingEndpoints();
 app.MapRazorpayPaymentEndpoints();
