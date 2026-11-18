@@ -273,6 +273,7 @@ app.MapPlatformEndpoints();
 app.MapPlatformBillingEndpoints();
 app.MapRazorpayPaymentEndpoints();
 app.MapPlatformPaymentReviewEndpoints();
+app.MapBillingDocumentEndpoints();
 
 app.Run();
 
