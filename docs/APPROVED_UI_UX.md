@@ -1,8 +1,8 @@
 # Business SaaS — Approved UI/UX Reference
 
-**Decision date:** 17 November 2026  
+**Visual approval:** 17 November 2026 · **Latest workflow decision:** 21 November 2026  
 **Approved by:** Product owner, in the Business SaaS project conversation  
-**Status:** APPROVED VISUAL TARGET for design and future implementation; not a claim that all screens/features are implemented  
+**Status:** APPROVED VISUAL TARGET for design and future implementation; not a claim that all screens/features are implemented. **Screen ownership / order:** [Master Screen Register](./MASTER_SCREEN_REGISTER.md).  
 **Source:** The four Super Admin reference screenshots supplied in that conversation, saved together in `BusinessSaaS_Approved_SuperAdmin_References.zip` for visual handoff. Refer to the exact screenshots, not a newly invented dashboard aesthetic.
 
 ## 1. Design decision — preserve the approved screenshots
@@ -76,9 +76,11 @@ Dashboard alerts only navigate to the existing business or audit details; Custom
 
 Customer accounts may own multiple independent businesses. Their experience should match the approved blue/white design language but **must not reuse Super Admin control menus**:
 
-`Account sign-in → My Businesses → Create / Switch Business → Business Dashboard → Products / Purchase / Stock / Staff → Subscription / Settings`.
+`Business Owner/Admin sign-in → My Assigned Businesses → Select/Switch Business → Business Dashboard → Products / Purchase / Stock / Staff → Subscription / Settings`.
 
-Business creation should remain a short progressive wizard; switching must clear old BusinessId context and permissions. Role-appropriate operational menus and status badges must remain clear. Owner/Manager/Cashier actions differ. Retail POS gets a dedicated fast checkout layout instead of an admin dashboard grid; stock/receiving is an operational flow, not platform administration. Salon/Repair remain future modules until implemented and verified.
+**Latest product decision (21 Nov 2026):** Business creation is **exclusively** a Platform Super Admin operation, under `Businesses → Create Business → Assign Owner → Plan/Location → Review/Provision`. Owner/Admin cannot create business from this portal. This supersedes the former self-service creation text and requires backend authorization changes, not just hiding a button. See `AUTH-*`, `SA-04…SA-08` and `BUS-*` in the screen register.
+
+**Super Admin** business creation should remain a short progressive wizard; Business Owner switching must clear old BusinessId context and permissions. Role-appropriate operational menus and status badges must remain clear. Owner/Manager/Cashier actions differ. Retail POS gets a dedicated fast checkout layout instead of an admin dashboard grid; stock/receiving is an operational flow, not platform administration. Salon/Repair remain future modules until implemented and verified.
 
 ## 6. UX acceptance and implementation constraints
 
@@ -99,4 +101,4 @@ Business creation should remain a short progressive wizard; switching must clear
 4. Add audited trial extension and activation/suspension/reactivation flows; only then expose relevant UI buttons.
 5. Subscription ledger, payments/invoices, licenses, modules, settings, support, monitoring and enterprise capabilities by product priority, with tests.
 
-**Source of truth:** This document records the user's approved screenshots and requirements. If a later design conflicts with the four supplied reference images, ask for or record an explicit design decision before replacing the agreed direction.
+**Source of truth:** This document defines the approved Super Admin visual direction and exactly eight top-level modules. The **21 Nov** final concept montage is a visual reference; illustrative standalone Reports, Payments, Subscriptions, Users and Announcements panels belong under those eight modules rather than becoming duplicated top-level menus. The [Master Screen Register](./MASTER_SCREEN_REGISTER.md) defines all role-separated screen IDs, current progress, P0 conflicts and completion requirements. Never replace the approved look without another explicit decision.
