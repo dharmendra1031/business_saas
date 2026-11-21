@@ -29,7 +29,9 @@ function restore(key: string): SaleRequest | null {
       !Number.isSafeInteger(line.productId) || line.productId < 1 ||
       typeof line.name !== 'string' || !Number.isSafeInteger(line.quantity) ||
       line.quantity < 1 || line.quantity > 1000000 ||
-      !Number.isFinite(line.expectedUnitPrice) || line.expectedUnitPrice < 0))
+      !Number.isFinite(line.expectedUnitPrice) || line.expectedUnitPrice < 0 ||
+      Math.round(line.expectedUnitPrice * 100) !== line.expectedUnitPrice * 100 &&
+      Math.abs(Math.round(line.expectedUnitPrice * 100) - line.expectedUnitPrice * 100) > 0.000001))
       throw new Error('Invalid checkout lines')
     return { locationId: saved.locationId, requestKey: saved.requestKey, tendered: saved.tendered, lines }
   } catch {
@@ -98,7 +100,8 @@ export default function CashCheckout({ userId, dashboard }: { userId: number; da
     const count = Number(quantity)
     const existing = basket.find(line => line.productId === product.id)
     const combined = count + (existing?.quantity ?? 0)
-    if (!Number.isSafeInteger(count) || count < 1 || combined > Math.min(product.available, 1000000)) {
+    if (!Number.isSafeInteger(count) || count < 1 || !Number.isSafeInteger(combined) ||
+      combined > Math.min(product.available, 1000000)) {
       setError('Choose a whole quantity within the available stock.')
       return
     }
@@ -117,7 +120,8 @@ export default function CashCheckout({ userId, dashboard }: { userId: number; da
     if (!pending && (!locationId || !basket.length || basket.some(line =>
       !Number.isSafeInteger(line.quantity) || line.quantity < 1 ||
       !Number.isFinite(line.expectedUnitPrice) || line.expectedUnitPrice < 0) ||
-      !Number.isFinite(total) || total <= 0 || !Number.isFinite(received) || received < total)) {
+      !Number.isFinite(total) || total <= 0 || !Number.isFinite(received) ||
+      !Number.isInteger(Math.round(received * 100)) || received < total)) {
       setError('Check basket quantities and enter enough cash before recording the sale.')
       return
     }
@@ -218,7 +222,7 @@ export default function CashCheckout({ userId, dashboard }: { userId: number; da
           <strong>Total {money(total)}</strong>
           <label>Cash received<input className="form-control" type="number" min={total} step="0.01"
             required value={cash} onChange={e => setCash(e.target.value)} /></label>
-          <span>Change {money(Math.max(0, Number(cash) - total))}</span>
+          <span>Change {money(cash.trim() && Number.isFinite(Number(cash)) ? Math.max(0, Number(cash) - total) : 0)}</span>
           <button className="btn btn-primary" disabled={!Number.isFinite(Number(cash)) || cash.trim() === '' || Number(cash) < total || !Number.isFinite(total) || total <= 0 || basket.some(line => !Number.isSafeInteger(line.quantity) || line.quantity < 1)}>Record cash sale</button>
         </fieldset>
       </form>
