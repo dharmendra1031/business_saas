@@ -1,8 +1,10 @@
 # Business SaaS — Development Task Tracker (190 Tasks)
 
-**Updated:** 13 November 2026  
+**Tracker baseline updated:** 13 November 2026 · **Screen/flow alignment:** 21 November 2026  
 **Repository:** `dharmendra1031/business_saas` · **Source of truth:** [Development Roadmap](./DEVELOPMENT_ROADMAP.md), [Master SRS](./BUSINESS_SAAS_MASTER_SRS.md), [UX Standards](./UX_STANDARDS.md)  
 **Scope:** Planning and acceptance tracking, not a claim of implementation. The platform is not production-ready.
+
+> **LATEST SCREEN-LEVEL SOURCE OF TRUTH:** [MASTER_SCREEN_REGISTER.md](./MASTER_SCREEN_REGISTER.md) tracks 145 actual UI work items with stable IDs, roles, acceptance gates and execution order. **DR-001:** Only Platform Super Admin creates/provisions businesses and assigns owners, superseding any older owner self-service references below. Owners/Cashiers use separate workspace entry experiences and cannot create businesses. Existing UI/API has not yet been migrated; a tracker task is not DONE solely because it displays a working component. Preserve the existing BS task IDs, but when executing any BS task cite the corresponding AUTH/SA/BUS/POS screen ID.
 
 ## Non-negotiable rule — UI/UX review **after EVERY task**
 
@@ -13,7 +15,7 @@
 3. Ask from the **actual role's perspective**: Is the primary action obvious? Are labels and status understandable? Can someone finish without instructions? Is there any misleading button, confusing navigation, unnecessary scrolling or clutter?
 4. Check the entire impacted journey: what happened before, **this action**, next action, cancellation, errors/retry and returning to the list. Do not call a feature usable because it has a pretty screenshot.
 5. Check English/Arabic + RTL **once supported**; until then, record locale testing as pending. Verify contrast, readable type, spacing, tap targets and accessible keyboard navigation.
-6. Recheck existing critical screens after each task (login, business list/create/switch and currently live Retail flows); test unauthorized user/other business boundaries where relevant.
+6. Recheck existing critical screens after each task (Super Admin login/create/owner assignment, Owner login/business switch, POS and currently live Retail flows); test unauthorized user/other business boundaries where relevant.
 7. Fix any confusing UI or broken workflow **within the same task** before moving on; record proof (browser/test run, viewport/role, screenshot or concise review notes), remaining risks and commit link.
 8. If actual browser/human UX review is not possible, mark **UX REVIEW PENDING** — never mark DONE or claim user friendliness verified.
 
@@ -367,7 +369,7 @@ If any checkbox cannot be verified, keep `TODO` or `UX REVIEW PENDING`, not `DON
 
 ## First executable delivery sequence
 
-**Release slice 1:** Secure registration/login and scoped Business creation/switching (A–D), UX basics (E), minimum plan/trial checks (G).  
+**Release slice 1:** Role-specific login entry, **Super Admin-only** verified Business creation and owner assignment, secure business switch (A–D), UX basics (E), minimum plan/trial checks (G), and screen-ID acceptance per the Master Screen Register.  
 **Release slice 2:** Retail catalog (H) → stock (I) → PO/receipt (J) → POS (K) → returns/cash (L) → real reports/pilot (M).  
 **Release slice 3:** Platform admin/entitlements (F), localization (N) and tested cloud paid operations (G), only after supporting routes exist.  
 **Release slice 4:** Reuse licensing and Windows on-prem validation (O); private signing key never reaches the customer or public repository.  
