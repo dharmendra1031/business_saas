@@ -7,8 +7,14 @@ import SubscriptionCheckout from './SubscriptionCheckout'
 import RetailCatalog, { type RetailSection } from './RetailCatalog'
 import PlatformAdmin, { type PlatformSection } from './PlatformAdmin'
 import PlatformMfaSetup from './PlatformMfaSetup'
+import { WorkspaceEntry, accessContent, type AccessPortal } from './WorkspaceEntry'
 
-type Page = 'loading' | 'login' | 'register' | 'mfa-setup' | 'businesses' | 'create' | 'retail' | 'platform'
+type Page = 'loading' | 'gateway' | 'login' | 'register' | 'mfa-setup' | 'businesses' | 'create' | 'retail' | 'platform'
+
+function selectedPortalFromUrl(): AccessPortal | null {
+  const value = new URLSearchParams(window.location.search).get('workspace')
+  return value === 'platform' || value === 'business' || value === 'pos' ? value : null
+}
 type RetailPage = RetailSection | 'cash' | 'overview' | 'team'
 const retailTitles: Record<RetailPage, string> = {
   cash: 'POS Checkout', overview: 'Business Dashboard', products: 'Products', stock: 'Stock', purchases: 'Purchase Orders',
@@ -17,6 +23,7 @@ const retailTitles: Record<RetailPage, string> = {
 
 export default function App() {
   const [page, setPage] = useState<Page>('loading')
+  const [accessPortal, setAccessPortal] = useState<AccessPortal | null>(selectedPortalFromUrl)
   const [user, setUser] = useState<User | null>(null)
   const [businesses, setBusinesses] = useState<Business[]>([])
   const [canViewPlatform, setCanViewPlatform] = useState(false)
@@ -45,7 +52,7 @@ export default function App() {
       setError('')
       setSessionExpired(true)
       setAuthNotice('')
-      setPage('login')
+      setPage('gateway')
     })
 
     api<User>('/auth/me')
@@ -63,7 +70,7 @@ export default function App() {
         if (list.length === 1) await openBusiness(list[0].id)
         else setPage('businesses')
       })
-      .catch(() => setPage('login'))
+      .catch(() => setPage(selectedPortalFromUrl() ? 'login' : 'gateway'))
     return () => setSessionExpiredHandler(null)
   }, [])
 
@@ -134,7 +141,11 @@ export default function App() {
       setCanViewPlatform(false)
       setDashboard(null)
       setBusinesses([])
-      setPage('login')
+      setPage('gateway')
+      setAccessPortal(null)
+      const url = new URL(window.location.href)
+      url.searchParams.delete('workspace')
+      window.history.replaceState(null, '', url)
       setSessionExpired(false)
       setAuthNotice('')
       setError('')
@@ -142,6 +153,17 @@ export default function App() {
     } catch (cause) {
       setError(message(cause))
     }
+  }
+
+  function chooseWorkspace(next: AccessPortal | null) {
+    setAccessPortal(next)
+    setAuthNotice('')
+    setError('')
+    const url = new URL(window.location.href)
+    if (next) url.searchParams.set('workspace', next)
+    else url.searchParams.delete('workspace')
+    window.history.replaceState(null, '', url)
+    setPage(next ? 'login' : 'gateway')
   }
 
   function onSignedIn(next: User, list: Business[]) {
@@ -160,8 +182,12 @@ export default function App() {
   if (page === 'loading')
     return <main className="center-screen" aria-live="polite">Loading your workspace…</main>
 
-  if (page === 'login' || page === 'register')
-    return <AuthPage key={page} mode={page} onChange={setPage} onSignedIn={onSignedIn}
+  if (page === 'gateway' || ((page === 'login' || page === 'register') && !accessPortal))
+    return <WorkspaceEntry onChoose={chooseWorkspace} />
+
+  if ((page === 'login' || page === 'register') && accessPortal)
+    return <AuthPage key={page + '-' + accessPortal} portal={accessPortal} mode={page}
+      onBack={() => chooseWorkspace(null)} onChange={setPage} onSignedIn={onSignedIn}
       sessionExpired={sessionExpired} authNotice={authNotice} onRegistered={setAuthNotice} />
 
   if (page === 'mfa-setup')
@@ -466,7 +492,9 @@ export default function App() {
   )
 }
 
-function AuthPage({ mode, onChange, onSignedIn, sessionExpired, authNotice, onRegistered }: {
+function AuthPage({ mode, portal, onBack, onChange, onSignedIn, sessionExpired, authNotice, onRegistered }: {
+  portal: AccessPortal
+  onBack: () => void
   mode: 'login' | 'register'
   onChange: (page: Page) => void
   onSignedIn: (user: User, businesses: Business[]) => void
@@ -517,6 +545,17 @@ function AuthPage({ mode, onChange, onSignedIn, sessionExpired, authNotice, onRe
         resetCsrf()
         const me = await api<User>('/auth/me')
         const list = me.isPlatformOwner ? [] : await api<Business[]>('/businesses')
+        const wrongWorkspace =
+          portal === 'platform' ? !me.isPlatformOwner
+            : me.isPlatformOwner || (portal === 'pos'
+              ? !list.some(b => b.roleCode === 'Cashier')
+              : list.length > 0 && !list.some(b => b.roleCode === 'Owner' || b.roleCode === 'Manager'))
+        if (wrongWorkspace) {
+          await api<void>('/auth/logout', { method: 'POST' })
+          resetCsrf()
+          setError('This account has no access to the selected workspace. Choose the workspace assigned by your administrator.')
+          return
+        }
         onSignedIn(me, list)
       }
     } catch (cause) {
@@ -527,21 +566,32 @@ function AuthPage({ mode, onChange, onSignedIn, sessionExpired, authNotice, onRe
   }
 
   return (
-    <div className="auth-layout">
-      <aside className="auth-aside"><div className="brand"><span className="brand-mark">B</span><div>Business SaaS<small>Business Workspace</small></div></div>
-        <div className="auth-intro"><div className="auth-overline">ONE ACCOUNT. MULTIPLE BUSINESSES.</div>
-          <h1>One account for your businesses.</h1>
-          <p>Set up your Retail workspace today. Product and stock tools are available; POS billing is still in development.</p>
+    <div className={`auth-layout auth-layout-${portal}`}>
+      <aside className="auth-aside">
+        <div className="brand"><span className="brand-mark">B</span><div>Business SaaS<small>{accessContent[portal].label}</small></div></div>
+        <div className="auth-intro">
+          <div className="auth-overline">{accessContent[portal].eyebrow}</div>
+          <h1>{accessContent[portal].title}</h1>
+          <p>{accessContent[portal].description}</p>
+          <div className="auth-assurance"><ShieldCheck size={18} /> Access is verified against your assigned account and business role.</div>
         </div>
-        <span className="auth-bottom">Business SaaS · Foundation Release</span>
+        <span className="auth-bottom">Business SaaS · Secure {accessContent[portal].label} access</span>
       </aside>
       <main className="auth-content">
-        <form className="auth-card" onSubmit={event => void submit(event)}>
-          <span className="form-eyebrow">ACCOUNT ACCESS</span>
-          <h2>{secondFactor ? 'Verify your sign in' : mode === 'login' ? 'Sign in' : 'Create your account'}</h2>
+        <div className="auth-form-container">
+          <button type="button" className="auth-back" onClick={onBack} disabled={busy}>
+            <ArrowLeft size={17} /> All workspaces
+          </button>
+          <form className="auth-card" onSubmit={event => void submit(event)}>
+          <div className="auth-portal-icon">{portal === 'platform' ? <ShieldCheck size={25} /> :
+            portal === 'business' ? <Building2 size={25} /> : <ShoppingCart size={25} />}</div>
+          <span className="form-eyebrow">{accessContent[portal].eyebrow}</span>
+          <h2>{secondFactor ? 'Verify your sign in' :
+            mode === 'register' ? 'Create your account' : accessContent[portal].button}</h2>
           <p className="form-hint">{secondFactor
             ? 'Enter the code from your authenticator app or a recovery code.'
-            : mode === 'login' ? 'Access your business workspace.' : 'Start with your email and a secure password.'}</p>
+            : mode === 'login' ? 'Sign in with your assigned account. Access is checked after authentication.'
+              : 'Creating an account does not create a business or grant workspace permissions.'}</p>
           {error && <div className="alert alert-danger" role="alert">{error}</div>}
           {sessionExpired && mode === 'login' && <div className="alert alert-warning" role="status">Your session expired. Please sign in again.</div>}
           {authNotice && mode === 'login' && <div className="alert alert-success" role="status">{authNotice}</div>}
@@ -573,16 +623,20 @@ function AuthPage({ mode, onChange, onSignedIn, sessionExpired, authNotice, onRe
             onClick={() => { setSecondFactor(false); setVerificationCode(''); setError('') }}>
             Back to password sign in
           </button>}
-          {!secondFactor && registrationEnabled ? (
+          {!secondFactor && portal !== 'platform' && registrationEnabled ? (
             <p className="auth-switch">{mode === 'login' ? 'New to Business SaaS?' : 'Already have an account?'}{' '}
               <button type="button" onClick={() => { setError(''); onChange(mode === 'login' ? 'register' : 'login') }}>
                 {mode === 'login' ? 'Create account' : 'Sign in'}
               </button>
             </p>
-          ) : registrationEnabled === false && mode === 'login' ? (
-            <p className="auth-switch">New account registration is not available yet.</p>
+          ) : portal !== 'platform' && registrationEnabled === false && mode === 'login' ? (
+            <p className="auth-switch">Need access? Ask your platform administrator to assign you to a business.</p>
           ) : null}
-        </form>
+          </form>
+          <p className="auth-helper-note">{portal === 'platform' ? 'Platform accounts require approved Super Admin access and MFA.' :
+            portal === 'pos' ? 'Cashier access requires an assigned business role and store location.' :
+              'You can only manage businesses assigned to your account.'}</p>
+        </div>
       </main>
     </div>
   )
