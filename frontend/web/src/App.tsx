@@ -11,8 +11,8 @@ import PlatformMfaSetup from './PlatformMfaSetup'
 type Page = 'loading' | 'login' | 'register' | 'mfa-setup' | 'businesses' | 'create' | 'retail' | 'platform'
 type RetailPage = RetailSection | 'cash' | 'overview' | 'team'
 const retailTitles: Record<RetailPage, string> = {
-  cash: 'Cash sale', overview: 'Dashboard', products: 'Products', stock: 'Stock', purchases: 'Purchase Orders',
-  masters: 'Categories & Units', suppliers: 'Suppliers', customers: 'Customers', team: 'Team Access'
+  cash: 'POS Checkout', overview: 'Business Dashboard', products: 'Products', stock: 'Stock', purchases: 'Purchase Orders',
+  masters: 'Categories & Units', suppliers: 'Suppliers', customers: 'Customers', team: 'Staff & Access'
 }
 
 export default function App() {
@@ -173,15 +173,22 @@ export default function App() {
     }} />
 
   return (
-    <div className={`app-shell${user?.isPlatformOwner ? ' platform-shell' : ''}`}>
+    <div className={`app-shell${page === 'platform' ? ' platform-shell' : ''}${page === 'retail' && dashboard?.roleCode === 'Cashier' ? ' pos-shell' : ''}`}>
       {menuOpen && <button type="button" className="sidebar-scrim" aria-label="Close navigation"
         onClick={() => { setMenuOpen(false); menuToggle.current?.focus() }} />}
       <aside id="main-navigation" className={`app-sidebar${menuOpen ? ' is-open' : ''}`}>
         <div className="brand"><span className="brand-mark">B</span>
-          <div>Business SaaS<small>{user?.isPlatformOwner ? 'Platform Super Admin' : 'Business Workspace'}</small></div>
+          <div>Business SaaS<small>{page === 'platform' ? 'Platform Super Admin' :
+            page === 'retail' && dashboard?.roleCode === 'Cashier' ? 'Point of Sale' : 'Business Management'}</small></div>
         </div>
-        {!user?.isPlatformOwner && <div className="sidebar-heading">WORKSPACE</div>}
-        {!user?.isPlatformOwner && <button type="button" ref={businessNav}
+        {page === 'retail' && dashboard && <div className="workspace-identity">
+          <span>{dashboard.roleCode === 'Cashier' ? 'POINT OF SALE' :
+            dashboard.roleCode === 'Owner' ? 'BUSINESS ADMIN' : 'STORE MANAGER'}</span>
+          <strong>{dashboard.business.name}</strong>
+          <small>{dashboard.roleCode} · {dashboard.locations[0]?.name ?? 'No location assigned'}</small>
+        </div>}
+        {!user?.isPlatformOwner && page !== 'platform' && <div className="sidebar-heading">ACCOUNT</div>}
+        {!user?.isPlatformOwner && page !== 'platform' && <button type="button" ref={businessNav}
           className={`nav-entry${page === 'businesses' || page === 'create' ? ' active' : ''}`}
           aria-current={page === 'businesses' || page === 'create' ? 'page' : undefined}
           onClick={() => {
@@ -190,19 +197,19 @@ export default function App() {
             setError('')
             void loadBusinesses()
           }}>
-          <Building2 size={18} /> My Businesses
+          <Building2 size={18} /> {page === 'retail' ? 'Switch Business' : 'My Businesses'}
         </button>}
         {page === 'retail' && dashboard && <>
-          <div className="sidebar-heading">DAILY WORK</div>
+          <div className="sidebar-heading">{dashboard.roleCode === 'Cashier' ? 'CHECKOUT' : 'BUSINESS OPERATIONS'}</div>
           {([
-            ['overview', 'Dashboard', LayoutDashboard],
-            ['cash', 'Cash sale', CreditCard],
+            ['cash', 'POS · New Sale', ShoppingCart],
+            ['overview', 'Business Dashboard', LayoutDashboard],
             ['products', 'Products', Package],
-            ['stock', 'Stock', Boxes],
-            ['purchases', 'Purchase', ShoppingCart]
+            ['stock', 'Inventory', Boxes],
+            ['purchases', 'Purchase Orders', ShoppingCart]
           ] as const).filter(([section]) => section === 'cash' ? dashboard.cashSaleEnabled : dashboard.roleCode !== 'Cashier' || section === 'overview')
             .map(([section, label, Icon]) => <button key={section} type="button"
-              className={`nav-entry${retailPage === section ? ' active' : ''}`}
+              className={`nav-entry${section === 'cash' ? ' pos-nav-entry' : ''}${retailPage === section ? ' active' : ''}`}
               aria-current={retailPage === section ? 'page' : undefined}
               onClick={() => {
                 if (menuOpen) menuToggle.current?.focus()
@@ -233,10 +240,10 @@ export default function App() {
               if (menuOpen) menuToggle.current?.focus()
               setMenuOpen(false)
               setRetailPage('team')
-            }}><UserRound size={18} /> Team Access</button>}
+            }}><UserRound size={18} /> Staff & Access</button>}
         </>}
-        {canViewPlatform && <>
-          <div className="sidebar-heading">PLATFORM CONTROL</div>
+        {canViewPlatform && page === 'platform' && <>
+          <div className="sidebar-heading">SUPER ADMIN MODULES</div>
           {([
             ['overview', 'Dashboard', LayoutDashboard],
             ['customers', 'Customers', Users],
@@ -268,9 +275,11 @@ export default function App() {
                   setPage('platform')
                 }}><Icon size={18} /> {label}</button>)}
         </>}
-        <div className="sidebar-footer">{user?.isPlatformOwner
-          ? <>Platform Owner <small className="d-block mt-1">MFA-protected access</small></>
-          : 'A workspace for every business.'}</div>
+        <div className="sidebar-footer">{page === 'platform'
+          ? <>Platform Administration <small className="d-block mt-1">Manage SaaS accounts, not shop transactions</small></>
+          : page === 'retail' && dashboard
+            ? <>{dashboard.roleCode === 'Cashier' ? 'Cashier checkout' : 'Shop operations'}<small className="d-block mt-1">Signed in as {dashboard.roleCode}</small></>
+            : 'Select a business to manage.'}</div>
       </aside>
 
       <div className="app-main">
@@ -280,11 +289,28 @@ export default function App() {
               aria-controls="main-navigation" aria-expanded={menuOpen} onClick={() => setMenuOpen(open => !open)}>
               <Menu size={20} />
             </button>
-            {page === 'retail' ? dashboard?.business.name
-              : page === 'create' ? 'Create Business'
-              : page === 'platform' ? 'Super Admin' : 'My Businesses'}
+            <span className="topbar-workspace">
+              <small>{page === 'platform' ? 'PLATFORM SUPER ADMIN' :
+                page === 'retail' && dashboard?.roleCode === 'Cashier' ? 'POINT OF SALE' :
+                page === 'retail' ? dashboard?.roleCode === 'Owner' ? 'BUSINESS ADMIN' : 'STORE MANAGER' :
+                'BUSINESS ACCOUNT'}</small>
+              <strong>{page === 'retail' ? `${dashboard?.business.name} / ${retailTitles[retailPage]}` :
+                page === 'create' ? 'Create Business' :
+                page === 'platform' ? 'Platform Management' : 'My Businesses'}</strong>
+            </span>
           </div>
-          <div className="topbar-account"><UserRound size={17} />
+          <div className="topbar-account">
+            {canViewPlatform && !user?.isPlatformOwner && page !== 'platform' && <button
+              type="button" className="btn btn-outline-primary btn-sm workspace-switch" onClick={() => {
+                setDashboard(null)
+                setPlatformSection('overview')
+                setPlatformBusinessId(null)
+                setBillingBusiness(null)
+                setPage('platform')
+              }}><ShieldCheck size={16} /> Super Admin</button>}
+            {page === 'platform' && !user?.isPlatformOwner && <button
+              type="button" className="btn btn-outline-secondary btn-sm workspace-switch"
+              onClick={() => { void loadBusinesses() }}><Building2 size={16} /> Business Workspace</button>}<UserRound size={17} />
             <span className="account-email">{user?.isPlatformOwner ? 'Platform Owner · ' : ''}{user?.email}</span>
             <button className="btn btn-outline-secondary btn-sm" onClick={() => void logout()}><LogOut size={15} /> Sign out</button>
           </div>
@@ -346,7 +372,7 @@ export default function App() {
             <>
               <div className="page-header">
                 <div><button className="back-link" onClick={() => { setNotice(''); void loadBusinesses() }}><ArrowLeft size={16} /> All businesses</button>
-                  <h1>{retailTitles[retailPage]}</h1><p>{dashboard.business.name} · {dashboard.business.typeName}</p>
+                  <h1>{retailTitles[retailPage]}</h1><p>{dashboard.business.name} · {dashboard.roleCode === 'Cashier' ? 'POS / Cashier' : dashboard.roleCode === 'Owner' ? 'Business Admin' : 'Store Manager'}</p>
                 </div>
                 {dashboard.canOperate
                   ? <span className="workspace-state"><CheckCircle2 size={16} /> {dashboard.accessStatus === 'Trial' ? 'Trial active' : 'Plan active'}</span>
@@ -378,21 +404,27 @@ export default function App() {
                 onClick={() => { setApprovalList(true); setRetailPage('purchases') }}>
                 Review pending orders ({dashboard.pendingApprovals})</button>}
               {dashboard.canOperate && dashboard.roleCode !== 'Cashier' && (
-                <section className="content-section" aria-label="Shop setup guide">
-                  <h2>{dashboard.hasProducts ? 'Daily work' : 'Get your shop ready'}</h2>
+                <section className="content-section business-home-actions" aria-label="Business administration shortcuts">
+                  <h2>{dashboard.hasProducts ? 'Manage your shop' : 'Get your shop ready'}</h2>
                   {!dashboard.hasProducts && <>
                   <p className="mb-2">Start with Products, then enter Opening Stock or receive a Purchase. Use the buttons below or the sidebar.</p>
                   <p className="small text-secondary mb-0">For a new product, enter its name and sale price. Additional details are optional unless your shop needs them.</p></>}
                   <div className="d-flex flex-wrap gap-2 mt-3">
-                    <button className="btn btn-primary" onClick={() => setRetailPage('products')}>{dashboard.hasProducts ? 'Products' : 'Add Products'}</button>
-                    <button className="btn btn-outline-secondary" onClick={() => setRetailPage('stock')}>View Stock</button>
-                    <button className="btn btn-outline-secondary" onClick={() => { setApprovalList(false); setRetailPage('purchases') }}>Purchase Orders</button>
+                    {dashboard.cashSaleEnabled && <button className="btn btn-primary" type="button"
+                      onClick={() => setRetailPage('cash')}><ShoppingCart size={18} /> Open POS Checkout</button>}
+                    <button className={`btn ${dashboard.cashSaleEnabled ? 'btn-outline-secondary' : 'btn-primary'}`}
+                      type="button" onClick={() => setRetailPage('products')}>{dashboard.hasProducts ? 'Manage Products' : 'Add Products'}</button>
+                    <button className="btn btn-outline-secondary" type="button" onClick={() => setRetailPage('stock')}>Inventory</button>
+                    <button className="btn btn-outline-secondary" type="button" onClick={() => { setApprovalList(false); setRetailPage('purchases') }}>Purchase Orders</button>
                   </div>
+                  {!dashboard.cashSaleEnabled && <p className="small text-secondary mt-3 mb-0">
+                    POS checkout is not enabled in this environment. Shop setup and inventory remain available.
+                  </p>}
                 </section>
               )}
               {dashboard.roleCode === 'Cashier' && !dashboard.cashSaleEnabled && <section className="content-section">
-                <h2>Billing is coming soon</h2>
-                <p>Your account is ready, but POS billing is not available yet. Ask the owner to prepare products and stock.</p>
+                <h2>POS checkout is not available</h2>
+                <p>This environment has not enabled POS billing. Ask your shop owner or administrator about checkout availability.</p>
               </section>}
               <details className="content-section">
                 <summary>Shop details and locations</summary>
