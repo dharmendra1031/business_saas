@@ -1,14 +1,16 @@
 # Business SaaS — Master Software Requirements Specification
 
 **Status:** Phase 0 design baseline; requirements approved direction, implementation pending  
-**Last updated:** 2026-11-10  
-**Authoritative repository:** `dharmendra1031/business_saas` (`main`)  
-**Product:** Self-service multi-business operating platform  
-**Related:** [Database](./DATABASE_ARCHITECTURE.md) · [Roadmap](./DEVELOPMENT_ROADMAP.md) · [Retail V1](./RETAIL_V1_SRS.md) · [UX Standards](./UX_STANDARDS.md) · [CBK UI Reference](./CBK_UI_REFERENCE.md)
+**Last updated:** 2026-11-21  
+**Authoritative repository:** `dharmendra1031/business_saas` (working branch: `development`; `main` release branch)  
+**Product:** Super Admin-provisioned multi-business operating platform  
+**Related:** [Master Screen Register](./MASTER_SCREEN_REGISTER.md) · [Database](./DATABASE_ARCHITECTURE.md) · [Roadmap](./DEVELOPMENT_ROADMAP.md) · [Retail V1](./RETAIL_V1_SRS.md) · [UX Standards](./UX_STANDARDS.md) · [CBK UI Reference](./CBK_UI_REFERENCE.md)
+
+**Decision update (21 November 2026, DR-001):** **Only Platform Super Admin may create/provision a business.** The assigned/invited Business Owner/Admin uses a distinct business login experience; a Cashier uses a dedicated POS login experience. A single securely role-verified identity backend can serve all three. See [Master Screen Register](./MASTER_SCREEN_REGISTER.md). This latest direction supersedes the earlier owner self-service creation idea. Existing backend still permits owner-side creation and requires a P0 security/flow change; this document does not imply that change has shipped.
 
 ## 1. Vision and measurable outcomes
 
-One person registers once, creates one or more business workspaces, chooses a supported business type and eligible plan, configures the first shop/branch and begins operations without manual infrastructure setup **on the standard shared SaaS tier**. Dedicated/customer-hosted deployments are reviewed Platform Admin/Enterprise operations.
+A Platform Super Admin securely creates and provisions one or more independently managed businesses, assigns/invites their Business Owners, selects a supported business type and compatible plan/trial, and creates the first location. Verified owners and authorized staff sign into their own role-specific workspaces and start operating without manual infrastructure setup on the standard shared SaaS tier. Dedicated/customer-hosted deployments are reviewed Platform Admin/Enterprise operations.
 
 Target outcomes (not yet achieved):
 - Owner completes a simple business onboarding and first useful business task in a **5–10 minute target** for the supported starter template, tested with real pilot users.
@@ -38,7 +40,7 @@ Do not build a generic engine that pretends every industry has identical operati
 
 | Deployment offering | Branding | Operational data storage | Provisioning |
 | --- | --- | --- | --- |
-| Standard SaaS | Our product brand | Shared SQL Server, all records BusinessId-scoped | Self-service |
+| Standard SaaS | Our product brand | Shared SQL Server, all records BusinessId-scoped | Platform Super Admin provisions; Owner/Admin operates assigned business |
 | Branded/white-label SaaS | Approved customer logo, app name, colors, verified domain and mail/receipt branding | Shared or managed dedicated DB, as contracted | Brand/domain verification by Platform Admin |
 | Managed Enterprise dedicated | Customer branding optional | Independent SQL Server database for a selected BusinessId (or separately contracted business group) | Platform Admin; independent backup/restore |
 | Customer-hosted Enterprise / BYO database | Customer brand and optionally isolated deployment | Supported customer-managed DB **after** connectivity, security, backups, network and compatibility checks | Explicit sales/technical onboarding; not an arbitrary self-service connection string |
@@ -70,9 +72,9 @@ Do not build a generic engine that pretends every industry has identical operati
 
 | Persona | Workspace / route group | Jobs |
 | --- | --- | --- |
-| Platform Super Admin | `platform` layout | Business directory, categories/templates, plans, modules, quotas, translations, subscriptions, support/audit |
+| Platform Super Admin | `platform` layout | **Exclusive business creation/owner assignment**; business directory, categories/templates, plans, modules, quotas, translations, subscriptions, support/audit |
 | Platform Billing/Support | `platform` layout | Restricted finance/support functions; no blanket customer data access |
-| Business Owner | `business` layout | Create business, choose plan, locations, users, products/services, reporting |
+| Business Owner | `business` layout | Operate and configure **assigned** business, plan/subscription view, locations, users, products/services, reports; **cannot create businesses** |
 | Location Manager | `business` layout | Assigned locations only; relevant approvals and inventory/operations |
 | Cashier | `pos` layout | Fast sale, refunds if allowed, register, receipt |
 | Receptionist/Stylist/Technician | Role-specific routes when supported | Bookings or jobs only when corresponding vertical supported |
@@ -80,29 +82,26 @@ Do not build a generic engine that pretends every industry has identical operati
 
 A single person may have different roles in multiple businesses. Platform roles are separate from each business membership.
 
-## 4. Self-service onboarding (first operational vertical = general retail)
+## 4. Super Admin provisioning and Owner onboarding (Retail first)
 
-### 4.1 New account
+### 4.1 Create and activate a new business
 
-1. Register with email or phone and verify contact before privileged operations.
-2. Sign in securely. A first-time user sees **Create Business** or **Join Business** (invitation).
-3. Enter business name, country, legal/trading details where required, timezone, currency and preferred language.
-4. Select **BusinessCategory -> BusinessType**; show only released **Supported** templates for direct activation. Unsupported types show clear "Coming later / Request support" status, not a nonfunctional dashboard.
-5. Choose a compatible subscription plan or an eligible trial. Price, tax, limits, add-ons and renewal terms must be visible.
-6. Provision business + Owner membership + plan snapshot + default settings + first location reliably. Provide safe retry/resume if a step fails.
-7. Show a short **Get Started** checklist tailored by template:
-   - Retail: location, first products/categories, optional opening stock, payments/receipt settings, first sale.
-   - Salon: location/hours, services, staff/resources, first appointment.
-   - Repair: location, job types, technicians, first job.
-8. Enter correct Business Admin workspace. Hide empty modules from outside template; show actionable empty states without demo sales.
+1. **Platform Super Admin** signs into the separate platform entry and completes server-verified MFA.
+2. From **Businesses → Create Business**, enter the business name, supported business type, country, legal/trading details where required, timezone, currency and preferred language. Unsupported templates must not look operational.
+3. **Assign the owner** by selecting a verified existing account or creating a time-limited owner invitation. The authenticated Super Admin is the creator/actor, **not automatically the tenant Owner**.
+4. Select a published compatible plan/trial, with price, taxes, limits, period and renewal terms clearly displayed; configure the first location.
+5. Review and explicitly confirm. Provision business + correct Owner membership or pending invitation + plan snapshot + default settings + first location **transactionally and idempotently**, with audited actor and safe retry/recovery. Do not duplicate tenants on network timeout.
+6. Notify/activate the assigned owner using an approved verified invitation/identity flow. Ownership must not be granted by only entering an arbitrary email.
+7. Business Owner uses the separate **Business Owner/Admin login**, sees only authorized existing businesses and completes the correct **Get Started** checklist: location, products/categories, optional opening stock, payment/receipt settings and first Retail sale. No mock transactions.
+8. Cashiers use a separate **POS entry**, assigned role/location and the approved full-width checkout. Backend role and tenant checks, not login-page choice, determine access.
 
-### 4.2 Existing user / second business
+### 4.2 Additional business, existing owner and switching
 
-- Switcher lists only memberships the account can access, with business name, type, role and active status.
-- Creating a second business requires a separate subscription/trial eligibility evaluation and creates a new business context; do not reuse an existing BusinessId.
-- On switching: discard/invalidate prior-business API caches, drafts, filters and in-flight sensitive requests safely; reload entitlements, locations, language defaults and role.
-- API receives an authenticated membership-scoped active business context; client-provided BusinessId is never sufficient authorization.
-- Invite flows use expiring signed invitation tokens; accepted membership uses numeric database IDs; no silent cross-business account merge.
+- A **second business must also be created by Platform Super Admin**, with independent subscription/trial eligibility, numeric BusinessId, Owner membership/invitation and location.
+- The switcher lists only businesses for which the user has active authorized membership. It cannot offer **Create Business** to Owners/Managers/Cashiers.
+- On switching: discard/invalidate old BusinessId API caches, drafts, filters and in-flight sensitive requests; reload entitlements, locations, language and role.
+- Client-supplied BusinessId is never sufficient authorization. Invites have expiring signed tokens, verified acceptance and safe numeric membership IDs; no silent cross-business account merge.
+- The previous self-service owner-creation workflow is **superseded** by DR-001; do not implement it as another entry point.
 
 ## 5. Modules and business-template catalog
 
@@ -218,10 +217,12 @@ These require final business and country-specific approval before production rel
 ## 13. Decision log
 
 - **BS-001:** Product name and repository: `business_saas`; previous `salon_saas` docs become a **Salon vertical archive/reference**, not platform architecture.
-- **BS-002:** One global login, many businesses, independent BusinessId/locations/memberships/subscriptions.
+- **BS-002:** One shared secure identity backend, many businesses and separate authorized BusinessId/locations/memberships/subscriptions. Distinct Super Admin, Owner/Admin and POS/Cashier login *experiences* per DR-001.
 - **BS-003:** Central catalog/templates only enable verified, released workflows; 1,000+ labels are an expansion goal.
 - **BS-004:** .NET 10 LTS modular monolith; React/TypeScript/Bootstrap; CBK read-only UX reference.
 - **BS-005:** All application entity IDs numeric SQL IDENTITY; never use GUID/UUID entity IDs.
 - **BS-006:** Default first fully working vertical: General Retail; second Salon; third Repair.
 - **BS-007:** White-label branding/custom domain is independent of database deployment mode. Shared SQL Server first, contract-driven dedicated SQL Server, other providers only after certification; no customer-supplied connection strings in public APIs.
-- **BS-007:** All modifications restricted to `dharmendra1031/business_saas`; CBK/Kaifac remain read-only references.
+- **BS-008:** All modifications restricted to `dharmendra1031/business_saas`; CBK/Kaifac remain read-only references.
+
+- **BS-009 / DR-001 (2026-11-21):** Platform Super Admin exclusively creates/provisions businesses and assigns Owners; Owners/Managers/Cashiers cannot self-create a business. Separate workspace/login experiences with server-checked permissions. The Master Screen Register is the canonical per-screen implementation/acceptance plan; existing owner-create code must be migrated safely and verified before this is treated as shipped.
