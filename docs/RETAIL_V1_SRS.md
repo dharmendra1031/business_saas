@@ -1,17 +1,17 @@
 # Business SaaS — General Retail V1 Requirements
 
 **Status:** Retail specification; catalog masters under review, transactional modules pending  
-**Updated:** 2026-11-08  
+**Updated:** 2026-11-21  
 **Repository:** `dharmendra1031/business_saas` ONLY  
 **Reference UI:** CBK `development` read-only. New React + TypeScript + Bootstrap UI.  
-**Related:** [Master SRS](./BUSINESS_SAAS_MASTER_SRS.md) · [Database](./DATABASE_ARCHITECTURE.md) · [UX Standards](./UX_STANDARDS.md) · [Appointment & Financial Rules (Salon reference)](./APPOINTMENT_FINANCIAL_RULES.md)
+**Related:** [Master Screen Register](./MASTER_SCREEN_REGISTER.md) · [Master SRS](./BUSINESS_SAAS_MASTER_SRS.md) · [Database](./DATABASE_ARCHITECTURE.md) · [UX Standards](./UX_STANDARDS.md) · [Appointment & Financial Rules (Salon reference)](./APPOINTMENT_FINANCIAL_RULES.md)
 
 ## 1. V1 launch slice
 
-**General Retail Shop** is the first fully functional business template. A real new owner must be able to register, set up a shop, add products, receive stock, sell and return an item, reconcile day-end money and see basic branch-scoped reports.
+**General Retail Shop** is the first fully functional business template. A real Owner, after a Platform Super Admin provisions a Retail business and assigns/invites the verified owner, must be able to sign in, set up their shop, add products, receive stock, sell and return an item, reconcile day-end money and see branch-scoped reports. **Only Super Admin creates businesses** (latest owner direction; see [Master Screen Register](./MASTER_SCREEN_REGISTER.md)).
 
 **In V1:**
-- Business registration -> General Retail -> plan/trial -> location, business date/timezone/currency and initial settings.
+- **Super Admin** creates General Retail business -> assigns Owner -> published plan/trial -> location, business date/timezone/currency and initial settings -> separate Owner/Admin login.
 - Owner/Manager/Cashier roles, store assignment and server-side permissions.
 - Product, Category, Unit and Supplier; customer optional for ordinary walk-in sale.
 - Opening Stock with one-time/reversal rules and complete audit.
@@ -36,7 +36,7 @@ A small store may have one person holding multiple roles; do not force unnecessa
 
 ## 3. Retail setup and product master
 
-**Owner flow:** Create business -> choose first location -> configure tax/payment/receipt policy -> create Category/Unit -> create Product with name, code/SKU, barcode optional, sale price and unit -> optional opening stock -> New Sale.
+**Owner flow:** Accept assigned business invitation / sign in -> select authorized business -> review its provisioned first location -> configure tax/payment/receipt policy -> create Category/Unit -> create Product with name, code/SKU, barcode optional, sale price and unit -> optional opening stock -> New Sale. The Owner does not have a Create Business button.
 
 Product:
 - Name, code/SKU (unique within Business), category, unit, active, sale price and applicable tax classification.
@@ -122,7 +122,7 @@ UI:
 
 | Test | Expected outcome |
 | --- | --- |
-| A user creates a new retail business | Separate numeric BusinessId, owner membership, location, subscription/trial, checklist |
+| Super Admin provisions a new retail business | Platform-only server permission + MFA, unique numeric BusinessId, assigned verified owner/invitation, location, subscription/trial, audit, duplicate-safe retry and Owner access after activation |
 | One user owns two businesses | Switching never shows first business's stock, customer, sale or cache |
 | Cross-business ProductId/InvoiceId passed | Access denied without data leakage |
 | Plan disables Purchase | UI entry unavailable and purchase API access denied |
