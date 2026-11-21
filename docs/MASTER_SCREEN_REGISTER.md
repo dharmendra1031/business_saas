@@ -9,7 +9,7 @@
 
 **Decision DR-001 (latest owner direction, 21 Nov 2026):** Only **Platform Super Admin** creates/provisions a new business and assigns its Business Owner; the Business Owner/Admin logs into a separate business workspace and manages only authorized business operations. A POS/Cashier has a separate login *experience* and dedicated checkout workspace.
 
-- This changes/supersedes the older **self-service owner Creates Business** workflow documented in `BUSINESS_SAAS_MASTER_SRS.md` §4 and `APPROVED_UI_UX.md` §5; do **not** follow those older creation directions when building new screens. Align source SRS/backend safely during the screen implementation sequence.
+- This supersedes the **earlier revisions** of `BUSINESS_SAAS_MASTER_SRS.md` §4 and `APPROVED_UI_UX.md` §5 that allowed owner self-service creation. Those documents have now been textually aligned with this decision; **application code and access-control tests are still pending**. Do not reinstate the superseded self-service path.
 - **Current code mismatch:** `frontend/web/src/App.tsx` still shows `Create Business` to business users; `backend/BusinessSaas.Api/Features/BusinessEndpoints.cs` `POST /api/businesses` currently uses the logged-in actor as the owner. Platform `Create Business` is not implemented. **P0**; UI-only hiding is NOT sufficient. Plan safe, audited server-side Super Admin-only provisioning and owner assignment, migration/compatibility implications and tests before activation.
 - Super Admin manages SaaS-level businesses, customer accounts, plans/billing, licensing, settings, security and operations **but never edits a tenant's stock, retail sales or POS transactions**. "Only Super Admin creates business" means **exclusive business creation permission**, not removal of all other platform-management functions.
 - Login entry pages are visually separate for Super Admin, Owner/Admin and Cashier, with **one underlying secure authentication system** and server-verified roles/MFA. A role picker does not grant permissions. One ASP.NET API, one React frontend, one underlying business/tenant authorization model; **no duplicate applications or over-engineering**.
@@ -308,7 +308,7 @@ Status: Partial | Missing | Deferred | DONE
 | Generic login for all three roles | `frontend/web/src/App.tsx` | P0: three distinct role entry/login experiences using same backend |
 | Super Admin eight-menu baseline, but approved montage shows extra illustrative top-level links | `docs/APPROVED_UI_UX.md` and project-approved visuals | Keep eight modules; nest Subscriptions/Payments/Reports under proper groups |
 | Development-only cash-sale API | `backend/BusinessSaas.Api/Features/RetailModule.cs` | Do not expose production POS until correct cash/financial/tax tests, rollout and release approval |
-| Old requirements suggest self-service creation | `docs/BUSINESS_SAAS_MASTER_SRS.md` §4, `docs/APPROVED_UI_UX.md` §5 | This register records latest DR-001; update authoritative SRS during P0 provisioning change |
+| Earlier requirement revisions suggested self-service creation | Historical SRS/UX wording (updated 21 Nov 2026) | Current SRS/UX/roadmap/tracker now reflect DR-001; **backend/UI implementation and tests remain P0** |
 
 ## 7. Ordered execution queue (do not jump around)
 
