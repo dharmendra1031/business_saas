@@ -51,8 +51,8 @@ The mockup pictures display illustrative controls (Card, UPI, Split, Services, d
 
 | Current evidence status | Count |
 | --- | ---: |
-| Missing | 67 |
-| Partial | 64 |
+| Missing | 66 |
+| Partial | 65 |
 | Deferred | 14 |
 
 ### A. Entry, authentication and cross-workspace navigation
@@ -61,7 +61,7 @@ The mockup pictures display illustrative controls (Card, UPI, Split, Services, d
 
 | ID | Screen / interaction | Type | Current | Priority | Required outcome / guardrail |
 | --- | --- | --- | --- | --- | --- |
-| AUTH-01 | Workspace entry / role gateway | Page | Missing | P0 | Separate links for Super Admin, Business Owner/Admin and POS Cashier; server determines access, not a client-chosen role. |
+| AUTH-01 | Workspace entry / role gateway | Page | Partial | P0 | Gateway screen and distinct login links implemented; server validates roles. Browser UX/visual acceptance pending. |
 | AUTH-02 | Super Admin sign-in | Page | Partial | P0 | Premium platform-specific login; platform owner + MFA; never enter shop operations. |
 | AUTH-03 | Business Owner / Manager sign-in | Page | Partial | P0 | Separate branded entry; open authorized business dashboard, no super-admin controls. |
 | AUTH-04 | Cashier sign-in | Page | Partial | P0 | Separate compact entry; open assigned location's POS, no admin sidebar. |
@@ -235,6 +235,14 @@ The mockup pictures display illustrative controls (Card, UPI, Split, Services, d
 | FUT-11 | Dedicated SQL Server tenant provisioning | Family | Deferred | P3 | Platform-only data assignment, backup, migration/restore tests. |
 | FUT-12 | On-premises offline installation and activation | Family | Deferred | P3 | Local bootstrap, license import, no cloud dependency; separate release gate. |
 
+
+## 3A. Implementation evidence / screen in progress
+
+| Screen ID | Changes on `development` | Evidence | Gate |
+| --- | --- | --- | --- |
+| **AUTH-01** | `WorkspaceEntry.tsx` adds three premium entry cards; `App.tsx` wires separate portal query/direct login and filters business membership by role; `styles.css` adds responsive entry/login layouts. | [Gateway commit](https://github.com/dharmendra1031/business_saas/commit/0dca155852858d47c96c940c6be8b3f16f0c7a57) · [Login commit](https://github.com/dharmendra1031/business_saas/commit/5ae9fd65a015300e4706e1e8105529060ff02ffd) · [UI build passed](https://github.com/dharmendra1031/business_saas/actions/runs/44918699661) | **Partial**, not DONE: requires real browser at desktop/tablet/360px, keyboard, authenticated Super Admin/Owner/Cashier checks, Owner business creation path removal with P0 backend provisioning. |
+
+**Important:** This change does not yet implement Super Admin-only business creation; the prior Owner creation path and API must be replaced in **SA-04 through SA-08** with server-enforced authorization and safe owner assignment.
 
 ## 4. Critical end-to-end journeys — do not lose these
 
