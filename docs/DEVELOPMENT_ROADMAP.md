@@ -1,11 +1,13 @@
 # Business SaaS — Development Roadmap, Phase Gates and Decisions
 
 **Status:** Phase 0 complete; P1 code and SQL Server migrations started, CI verified; Enterprise white-label/dedicated data-store requirement documented, implementation pending  
-**Updated:** 2026-11-10  
+**Updated:** 2026-11-21  
 **Repository:** `dharmendra1031/business_saas` ONLY  
-**Source-of-truth:** [Master SRS](./BUSINESS_SAAS_MASTER_SRS.md) · [Database Architecture](./DATABASE_ARCHITECTURE.md) · [Retail V1 SRS](./RETAIL_V1_SRS.md)  
+**Source-of-truth:** [Master Screen Register](./MASTER_SCREEN_REGISTER.md) · [Master SRS](./BUSINESS_SAAS_MASTER_SRS.md) · [Database Architecture](./DATABASE_ARCHITECTURE.md) · [Retail V1 SRS](./RETAIL_V1_SRS.md)  
 **Design:** [CBK UI Reference](./CBK_UI_REFERENCE.md) · [UX Standards](./UX_STANDARDS.md)  
 **Legacy vertical reference:** Kaifac `development` for salon behavior only; CBK `development` for layout/workflow reference, both read-only.
+
+**Nov 21 workflow override:** Only Platform Super Admin may create new businesses and assign Owners; separate role-based entry experiences share secure backend authorization. Old self-service wording is superseded. The 145-item Master Screen Register is the canonical single-screen implementation and acceptance queue. Existing owner-create API/UI must be changed with server authorization, transaction/audit and migration tests before launch.
 
 ## 1. Development principles
 
@@ -20,7 +22,7 @@
 
 ## 1A. Strict no-over-engineering rules
 
-1. **First runnable slice:** login -> create Retail business -> first location -> product -> receive stock -> bill -> return -> report. Do not scaffold Salon, Repair, Rental, Class or Projects until needed.
+1. **First runnable slice:** Super Admin login/MFA -> create Retail business & assign Owner -> Owner login -> first location -> product -> receive stock -> Cashier POS/payment -> return -> report. Do not scaffold Salon, Repair, Rental, Class or Projects until needed.
 2. **One API and one web app:** separate role-based layouts and feature folders, not multiple deployments or cross-app synchronization.
 3. **Shared SQL Server default:** keep one API and React app; a contract-driven, separately tested dedicated SQL Server database is an Enterprise offering. Never create a database per business **type**, or add Redis, Kafka, microservices, event sourcing, CQRS, generic repositories or a workflow engine to support this prematurely.
 4. **Minimal tables per working slice:** use the phased physical schema in [Database Architecture](./DATABASE_ARCHITECTURE.md). The future entity catalog is not a migration checklist.
@@ -36,7 +38,7 @@
 ## 1B. White-label and multiple database rollout (requested Enterprise capability)
 
 - **P1/P4 architecture gate:** Before adding extensive Retail master/transaction tables, mark global Identity/membership/subscription as **control plane** and Retail data as **operational plane**. The current `AppDbContext` is still one physical SQL Server context; do not claim tenant routing already works.
-- **First supported offering:** Shared SQL Server self-service, including approved logo/name/theme/custom-domain configuration when branded delivery ships. Domain ownership, HTTPS and login scope must be verified.
+- **First supported offering:** Shared SQL Server with Super Admin-provisioned tenants and separate Owner/Admin onboarding, including approved logo/name/theme/custom-domain configuration when branded delivery ships. Domain ownership, HTTPS and login scope must be verified.
 - **First dedicated offering:** Platform Admin provisions a **separate SQL Server operational database per contracted business**, preserving numeric local identities, BusinessId scoping, safe migrations, independent backups and tested restore. Existing users continue to authenticate in the central SaaS account unless a separate full-instance contract requires otherwise.
 - **Customer-hosted / BYO database:** Enterprise onboarding with permitted providers, credentials stored outside repo/tenant DB, connectivity/allowlisting/TLS, permissions, backups and support responsibility. Never accept an arbitrary database connection string from a regular user interface.
 - **Provider support:** SQL Server first; PostgreSQL and MySQL/MariaDB candidates after explicit provider compatibility and full migration/stock/money/security test parity; Oracle only if commercially required and tested. Database engines may require independent migration histories. Do not enable options just because EF Core has a provider.
@@ -51,9 +53,9 @@
 | Phase | Scope | Deliverable | Gate |
 | --- | --- | --- | --- |
 | **P0 — Product & Architecture** | Master SRS, BusinessId multi-tenancy, database, templates, roles/plans, onboarding, Retail V1, risk/pilot standards | Reviewed authoritative documents | Phase 0 document consistency and key open decisions recorded |
-| **P1 — Foundation** | Solution, identity with long IDs, auth/verification, business memberships, location, tenant security, audit, migrations | One user can safely create/switch businesses | Auth, numeric IDs, cross-tenant tests, build/migration pass |
+| **P1 — Foundation** | Solution, identity with long IDs, auth/verification, business memberships, location, tenant security, audit, migrations | Super Admin can provision business/assign Owner safely; an authorized user can switch existing businesses | Auth, numeric IDs, cross-tenant tests, build/migration pass |
 | **P2 — SaaS Platform Admin** | Minimal business directory, supported-type toggle, module/plan mapping, trial status and requested language upload/publish | Central configuration for working Retail modules | Entitlement/role/limit and translation import/publish tests |
-| **P3 — Self-Service Onboarding** | Signup, choose supported type, choose plan/trial, create business + first location, guided setup | Owner can open a usable business workspace | Idempotent provisioning, retry/resume, tested business switch |
+| **P3 — Super Admin provisioning & Owner onboarding** | Super Admin login/MFA, supported template/plan, verified owner assignment, business + first location creation, invite activation, guided owner setup | Assigned Owner can open a usable authorized business workspace; owner cannot create tenant | Idempotent/audited provisioning, retry/resume, role checks, tested switch |
 | **P4 — General Retail V1** | Products, Suppliers, Purchase, Receiving, Stock, POS, Returns, Cash Register, basic Reports | First working shop end-to-end | Financial/stock reconciliation, usability pilot, browser/device tests |
 | **P5 — Salon / Barber V1** | Services, Staff, Resources, Appointment Calendar, Booking, Checkout, manual Waitlist/Deposit where supported | Second verified workflow family | Concurrency/no-show, booking and checkout pilot |
 | **P6 — Repair Center V1** | Customer, Job Card, Technician, Parts, Work Status, Billing | Third verified workflow family | Repair job and inventory/billing acceptance |
@@ -101,7 +103,7 @@ Within the API, keep business logic in focused feature/service files and EF Core
 | Business Type / Template catalog | Supported vs unsupported, published versions and dependencies | Documented; admin not built |
 | Single login / multi-business flow | Verified membership selection, scoped switch, safe cache reset | Documented; API not built |
 | Subscription + role + location access | Server-side permission matrix and billing version rule | Documented; final prices/policy open |
-| First retail workflow | Create business -> products -> receiving -> POS -> return -> reports | Documented; tests not run |
+| First retail workflow | Super Admin provisions business -> Owner products -> receiving -> POS -> return -> reports | Documented; acceptance pending |
 | Roadmap & reference governance | CBK/Kaifac read-only; old salon docs classified as vertical | Documented; cross-document links verified |
 | Country-specific financial and privacy rules | Launch market, tax, payments, export/retention | **Open — must approve before production** |
 | Source/privacy security boundary | Public repo may contain only independently authored docs/code | Mandatory; private source import prohibited |
@@ -119,7 +121,7 @@ No development implementation or performance testing is represented by these sta
 7. Audit/error logging, secrets management, rate limits, backup baseline and branch-based deployment.
 8. Build + integration tests, migrations, browser smoke flows and negative authorization before moving on.
 
-## 6. P2/P3 SaaS Admin and onboarding milestone
+## 6. P2/P3 SaaS Admin, Super Admin provisioning and Owner onboarding milestone
 
 ### Platform Admin screens
 
@@ -132,7 +134,7 @@ No development implementation or performance testing is represented by these sta
 
 ### Onboarding and entitlement flows
 
-- No manual DB provisioning. Registration/verification; choose business type; plan/trial; create named business; assign owner and first location; finish category-specific setup.
+- No manual DB provisioning. **Super Admin only**: verified platform login/MFA; select supported business type and plan/trial; assign verified Owner/invite; create named business and first location transactionally, idempotently and with audit. **Owner**: verified invitation/login, authorized business select, guided category-specific setup. Ordinary Owner/Manager/Cashier creation endpoint must deny provisioning.
 - Plan comparison and billing terms correct for country; incompatible plan cannot be chosen.
 - No unsanctioned second account or new trial to bypass limits.
 - Every module API checks subscription state + entitlement + role + location + BusinessId.
