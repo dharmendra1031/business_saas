@@ -12,7 +12,8 @@ interface Receipt {
 }
 
 function restore(key: string): SaleRequest | null {
-  const raw = sessionStorage.getItem(key)
+  let raw: string | null
+  try { raw = sessionStorage.getItem(key) } catch { return null }
   if (!raw) return null
   try {
     const saved = JSON.parse(raw)
@@ -32,7 +33,7 @@ function restore(key: string): SaleRequest | null {
       throw new Error('Invalid checkout lines')
     return { locationId: saved.locationId, requestKey: saved.requestKey, tendered: saved.tendered, lines }
   } catch {
-    sessionStorage.removeItem(key)
+    try { sessionStorage.removeItem(key) } catch { /* Storage may be unavailable. */ }
     return null
   }
 }
@@ -111,19 +112,27 @@ export default function CashCheckout({ userId, dashboard }: { userId: number; da
   }
 
   async function recordSale() {
-    if (lock.current || basket.some(line => line.quantity < 1) || !dashboard.canOperate || (pending && lookupState !== 'missing')) return
-    const request = pending ?? { locationId, lines: basket, tendered: Number(cash), requestKey: operationKey() }
+    const received = Number(cash)
+    if (lock.current || !dashboard.canOperate || (pending && lookupState !== 'missing')) return
+    if (!pending && (!locationId || !basket.length || basket.some(line =>
+      !Number.isSafeInteger(line.quantity) || line.quantity < 1 ||
+      !Number.isFinite(line.expectedUnitPrice) || line.expectedUnitPrice < 0) ||
+      !Number.isFinite(total) || total <= 0 || !Number.isFinite(received) || received < total)) {
+      setError('Check basket quantities and enter enough cash before recording the sale.')
+      return
+    }
+    const request = pending ?? { locationId, lines: basket, tendered: received, requestKey: operationKey() }
     lock.current = true
     setBusy(true)
     setError('')
     try {
-      sessionStorage.setItem(key, JSON.stringify(request))
+      try { sessionStorage.setItem(key, JSON.stringify(request)) } catch { /* Keep the request key in memory. */ }
       setPending(request)
       setReceipt(await post<Receipt>(base, request))
     } catch (cause) {
       setError(cause instanceof Error ? cause.message : 'Unable to confirm sale.')
       if (cause instanceof ApiResponseError && [400, 403].includes(cause.status)) {
-        sessionStorage.removeItem(key)
+        try { sessionStorage.removeItem(key) } catch { /* Storage may be unavailable. */ }
         setPending(null)
       }
     } finally { lock.current = false; setBusy(false) }
@@ -148,7 +157,7 @@ export default function CashCheckout({ userId, dashboard }: { userId: number; da
     <button className="btn btn-outline-secondary me-2" onClick={() => window.print()}>Print receipt</button>
     <button className="btn btn-primary" onClick={() => {
       if (pending) {
-        sessionStorage.removeItem(key)
+        try { sessionStorage.removeItem(key) } catch { /* Storage may be unavailable. */ }
         setPending(null)
         setBasket([])
         setCash('')
@@ -210,7 +219,7 @@ export default function CashCheckout({ userId, dashboard }: { userId: number; da
           <label>Cash received<input className="form-control" type="number" min={total} step="0.01"
             required value={cash} onChange={e => setCash(e.target.value)} /></label>
           <span>Change {money(Math.max(0, Number(cash) - total))}</span>
-          <button className="btn btn-primary" disabled={Number(cash) < total || basket.some(line => line.quantity < 1)}>Record cash sale</button>
+          <button className="btn btn-primary" disabled={!Number.isFinite(Number(cash)) || cash.trim() === '' || Number(cash) < total || !Number.isFinite(total) || total <= 0 || basket.some(line => !Number.isSafeInteger(line.quantity) || line.quantity < 1)}>Record cash sale</button>
         </fieldset>
       </form>
     </>}
