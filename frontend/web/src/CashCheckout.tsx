@@ -173,59 +173,109 @@ export default function CashCheckout({ userId, dashboard }: { userId: number; da
     }}>{pending ? 'New sale' : 'Back to checkout'}</button>
   </section>
 
-  return <section className="content-section" aria-label="Cash checkout">
+  return <section className="pos-checkout" aria-label="Point of Sale checkout">
+    <header className="pos-header">
+      <div>
+        <p className="pos-kicker">RETAIL / POINT OF SALE</p>
+        <h2>{pending ? 'Recover Pending Sale' : 'New Cash Sale'}</h2>
+        <p>{pending ? 'Verify the previous transaction before submitting again.' :
+          'Search or scan products, review the basket and collect payment.'}</p>
+      </div>
+      <span className="pos-mode">Cash-only checkout · {business.currencyCode}</span>
+    </header>
     {error && <p role="alert" className="alert alert-danger">{error}</p>}
-    {pending ? <>
+    {pending ? <section className="content-section" aria-label="Pending sale recovery">
       <h2>Pending cash sale</h2>
       <ul>{pending.lines.map(line => <li key={line.productId}>{line.name} · {line.quantity} × {money(line.expectedUnitPrice)}</li>)}</ul>
-      <p>Total {money(total)} · Cash received {money(pending.tendered)}</p>
+      <p><strong>Total {money(total)}</strong> · Cash received {money(pending.tendered)}</p>
       <p role="status">{busy ? 'Recording sale…' : lookupState === 'missing' ? 'No posted receipt found for this sale.'
         : lookupState === 'unknown' ? 'Receipt status could not be verified.' : 'Checking for a posted receipt…'}</p>
-      {lookupState === 'missing' && <button className="btn btn-primary me-2" disabled={busy || !dashboard.canOperate}
+      {lookupState === 'missing' && <button type="button" className="btn btn-primary me-2" disabled={busy || !dashboard.canOperate}
         onClick={() => void recordSale()}>Record this sale</button>}
-      <button className="btn btn-outline-secondary" disabled={busy || lookupState === 'checking'}
+      <button type="button" className="btn btn-outline-secondary" disabled={busy || lookupState === 'checking'}
         onClick={() => { setLookupState('checking'); setRefresh(n => n + 1) }}>Check status again</button>
-    </> : <>
-      <label>Location<select className="form-select" value={locationId} disabled={busy || basket.length > 0}
-        onChange={e => { setLocation(Number(e.target.value)); setProduct(null) }}>
-        {locations.map(l => <option key={l.id} value={l.id}>{l.name}</option>)}</select></label>
-      <button className="btn btn-link" disabled={busy || !locationId} onClick={() => void lastReceipt()}>Last receipt</button>
-      <form onSubmit={e => { e.preventDefault(); addItem() }}>
-        <fieldset className="d-grid gap-2" disabled={!dashboard.canOperate || busy}>
-          <legend>Add a product</legend>
-          <label>Find by name, SKU or barcode<input className="form-control" value={search} maxLength={150}
-            onChange={e => { setSearch(e.target.value); setProduct(null) }} /></label>
-          <label>Product<select className="form-select" value={product?.id ?? ''} required
-            onChange={e => setProduct(products.find(x => x.id === Number(e.target.value)) ?? null)}>
-            <option value="">Select a product</option>{products.map(x =>
-              <option key={x.id} value={x.id}>{x.name} · {x.sku} · {money(x.salePrice)}</option>)}</select></label>
-          {hint && <span role="status">{hint}</span>}
-          {product && <span>Available at this location: {product.available}</span>}
-          <label>Quantity<input ref={qtyInput} className="form-control" type="number" min="1" step="1" required
-            value={quantity} onChange={e => setQuantity(e.target.value)} /></label>
-          <button className="btn btn-outline-primary" disabled={!product}>Add to basket</button>
-        </fieldset>
-      </form>
-      <h2 className="mt-3">Basket</h2>
-      {!basket.length && <p>No products added.</p>}
-      <ul>{basket.map(line => <li key={line.productId}>{line.name} · {money(line.expectedUnitPrice)} each
-        <label className="ms-2">Quantity <input aria-label={'Quantity of ' + line.name} type="number" min="1" max="1000000"
-          step="1" disabled={busy} value={line.quantity || ''} onChange={e => {
-            const count = Number(e.target.value)
-            if (Number.isSafeInteger(count) && count >= 0 && count <= 1000000)
-              setBasket(basket.map(x => x.productId === line.productId ? { ...x, quantity: count } : x))
-          }} /></label>
-        <button className="btn btn-link" disabled={busy} aria-label={'Remove ' + line.name}
-          onClick={() => setBasket(basket.filter(x => x.productId !== line.productId))}>Remove</button></li>)}</ul>
-      <form onSubmit={e => { e.preventDefault(); void recordSale() }}>
-        <fieldset className="d-grid gap-2" disabled={busy || !dashboard.canOperate || !basket.length}>
-          <strong>Total {money(total)}</strong>
-          <label>Cash received<input className="form-control" type="number" min={total} step="0.01"
-            required value={cash} onChange={e => setCash(e.target.value)} /></label>
-          <span>Change {money(cash.trim() && Number.isFinite(Number(cash)) ? Math.max(0, Number(cash) - total) : 0)}</span>
-          <button className="btn btn-primary" disabled={!Number.isFinite(Number(cash)) || cash.trim() === '' || Number(cash) < total || !Number.isFinite(total) || total <= 0 || basket.some(line => !Number.isSafeInteger(line.quantity) || line.quantity < 1)}>Record cash sale</button>
-        </fieldset>
-      </form>
-    </>}
+    </section> : <div className="pos-grid">
+      <section className="content-section pos-catalog" aria-label="Product selection">
+        <div className="pos-panel-heading"><h2>Find products</h2><span>Search and add items</span></div>
+        <div className="pos-location-row">
+          <label className="form-label">Store location
+            <select className="form-select" value={locationId} disabled={busy || basket.length > 0}
+              onChange={e => { setLocation(Number(e.target.value)); setProduct(null) }}>
+              {locations.map(l => <option key={l.id} value={l.id}>{l.name}</option>)}
+            </select>
+          </label>
+          <button type="button" className="btn btn-outline-secondary btn-sm" disabled={busy || !locationId}
+            onClick={() => void lastReceipt()}>Last receipt</button>
+        </div>
+        <form onSubmit={e => { e.preventDefault(); addItem() }}>
+          <fieldset className="pos-fields" disabled={!dashboard.canOperate || busy}>
+            <legend className="visually-hidden">Add a product</legend>
+            <label className="form-label">Product name, SKU or barcode
+              <input autoFocus className="form-control" type="search" value={search} maxLength={150}
+                placeholder="Search or scan barcode"
+                onChange={e => { setSearch(e.target.value); setProduct(null) }} />
+            </label>
+            <label className="form-label">Matching product
+              <select className="form-select" value={product?.id ?? ''} required
+                onChange={e => setProduct(products.find(x => x.id === Number(e.target.value)) ?? null)}>
+                <option value="">Choose a product</option>{products.map(x =>
+                  <option key={x.id} value={x.id}>{x.name} · {x.sku} · {money(x.salePrice)}</option>)}
+              </select>
+            </label>
+            {hint && <p className="pos-field-status" role="status">{hint}</p>}
+            {product && <p className="pos-field-status">Available at this location: <strong>{product.available}</strong></p>}
+            <div className="pos-add-row">
+              <label className="form-label">Quantity
+                <input ref={qtyInput} className="form-control" type="number" min="1" step="1" required
+                  value={quantity} onChange={e => setQuantity(e.target.value)} />
+              </label>
+              <button type="submit" className="btn btn-outline-primary" disabled={!product}>Add to basket</button>
+            </div>
+          </fieldset>
+        </form>
+      </section>
+      <section className="content-section pos-basket" aria-label="Sale basket and cash payment">
+        <div className="pos-panel-heading"><h2>Current basket</h2><span>{basket.length} products</span></div>
+        {!basket.length && <p className="pos-basket-empty">No products added yet. Search for a product to begin this sale.</p>}
+        {basket.length > 0 && <ul className="pos-basket-lines">{basket.map(line =>
+          <li key={line.productId} className="pos-basket-line">
+            <div className="pos-line-description">
+              <strong>{line.name}</strong>
+              <small>{money(line.expectedUnitPrice)} each · {money(line.expectedUnitPrice * line.quantity)}</small>
+            </div>
+            <label className="pos-line-quantity">Qty
+              <input className="form-control form-control-sm" aria-label={'Quantity of ' + line.name}
+                type="number" min="1" max="1000000" step="1" disabled={busy}
+                value={line.quantity || ''} onChange={e => {
+                  const count = Number(e.target.value)
+                  if (Number.isSafeInteger(count) && count >= 0 && count <= 1000000)
+                    setBasket(basket.map(x => x.productId === line.productId ? { ...x, quantity: count } : x))
+                }} />
+            </label>
+            <button type="button" className="btn btn-link btn-sm" disabled={busy}
+              aria-label={'Remove ' + line.name}
+              onClick={() => setBasket(basket.filter(x => x.productId !== line.productId))}>Remove</button>
+          </li>)}</ul>}
+        <form className="pos-payment" onSubmit={e => { e.preventDefault(); void recordSale() }}>
+          <fieldset className="pos-fields" disabled={busy || !dashboard.canOperate || !basket.length}>
+            <legend className="visually-hidden">Cash payment</legend>
+            <div className="pos-total-row"><span>Amount to collect</span><strong>{money(total)}</strong></div>
+            <label className="form-label">Cash received
+              <input className="form-control" type="number" min={total} step="0.01" required
+                value={cash} onChange={e => setCash(e.target.value)} />
+            </label>
+            <div className="pos-change-row">Change to return
+              <strong>{money(cash.trim() && Number.isFinite(Number(cash)) ? Math.max(0, Number(cash) - total) : 0)}</strong>
+            </div>
+            <button className="btn btn-primary pos-record-button" type="submit"
+              disabled={!Number.isFinite(Number(cash)) || cash.trim() === '' || Number(cash) < total ||
+                !Number.isFinite(total) || total <= 0 ||
+                basket.some(line => !Number.isSafeInteger(line.quantity) || line.quantity < 1)}>
+              {busy ? 'Recording…' : 'Record cash sale'}
+            </button>
+          </fieldset>
+        </form>
+      </section>
+    </div>}
   </section>
 }
