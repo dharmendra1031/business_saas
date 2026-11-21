@@ -2,7 +2,7 @@
 
 **Status:** Development foundation with Retail catalog, stock, purchase orders and receiving. Not production-ready; POS billing and production release checks are pending.
 
-A self-service multi-business SaaS platform. A person registers once, creates one or more independently managed businesses, selects a published business template and plan, configures a first location and begins operations in the workflow appropriate to that business.
+A multi-business SaaS platform with **Super Admin-controlled business creation** and separate Business Owner/Admin and Cashier/POS workspaces. The platform owner provisions the business, assigns/invites its Owner and provisions the compatible plan and first location. Authorized users then operate only their business; actual code still needs the P0 provisioning/role-flow change described in the screen register.
 
 ## Where to start
 
@@ -10,6 +10,8 @@ For a fresh Windows development run with a separate test database, use the [loca
 
 | Document | Purpose |
 | --- | --- |
+| [Master Screen Register — 145 tracked UI items](docs/MASTER_SCREEN_REGISTER.md) | **Canonical screen IDs, role boundaries, page/tab/modal flows, statuses, acceptance protocol and one-screen-at-a-time development queue** |
+| [Approved POS + Payment Popup](docs/APPROVED_POS_UI_UX.md) | Approved full-width Ibdaa-inspired 61/39 checkout design and payment dialog acceptance |
 | [Business SaaS Master SRS](docs/BUSINESS_SAAS_MASTER_SRS.md) | **Authoritative** product requirements and the multi-business model |
 | [Database Architecture](docs/DATABASE_ARCHITECTURE.md) | **Authoritative** BusinessId tenant isolation, numeric SQL identity IDs, schema rules |
 | [White Label & Dedicated Database Plan](docs/WHITE_LABEL_DATABASE_IMPLEMENTATION.md) | Custom domains, safe tenant DB routing, provisioning, migration, provider support and release gates |
@@ -60,4 +62,4 @@ The long-term goal of **1,000+ business categories** is a product coverage targe
 
 ## Work status
 
-The development branch includes authentication, business/trial setup, tenant-scoped Retail masters, stock ledger and adjustment review, purchase orders and partial goods receiving. The CI covers backend, SQL Server migration/integration and a locked frontend build. **POS billing, returns, printing, reports, verified email signup, subscription payments, restore drills and production-scale security/load testing remain pending.** Production signup is disabled until email verification is implemented.
+The development branch includes authentication, existing **owner self-service** business/trial creation (to be replaced with Super Admin-only provisioning), tenant-scoped Retail masters, stock ledger and adjustment review, purchase orders and partial goods receiving, a Development-only cash-sale prototype and partial UI components. The CI covers backend, SQL Server migration/integration and a locked frontend build. **The approved Ibdaa-style POS layout and Payment Popup, release-ready POS tax/payments, returns, register, reports, verified owner onboarding, subscription-payment acceptance, restore drills and production-scale security/load testing remain pending or incomplete.** Production signup is disabled until email verification is implemented.
