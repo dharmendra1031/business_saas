@@ -11,6 +11,12 @@ import { WorkspaceEntry, accessContent, type AccessPortal } from './WorkspaceEnt
 
 type Page = 'loading' | 'gateway' | 'login' | 'register' | 'mfa-setup' | 'businesses' | 'create' | 'retail' | 'platform'
 
+function visibleBusinessesForPortal(items: Business[], portal: AccessPortal | null): Business[] {
+  if (portal === 'pos') return items.filter(item => item.roleCode === 'Cashier')
+  if (portal === 'business') return items.filter(item => item.roleCode === 'Owner' || item.roleCode === 'Manager')
+  return items
+}
+
 function selectedPortalFromUrl(): AccessPortal | null {
   const value = new URLSearchParams(window.location.search).get('workspace')
   return value === 'platform' || value === 'business' || value === 'pos' ? value : null
@@ -65,7 +71,7 @@ export default function App() {
           setPage(me.mfaVerified ? 'platform' : 'mfa-setup')
           return
         }
-        const list = await api<Business[]>('/businesses')
+        const list = visibleBusinessesForPortal(await api<Business[]>('/businesses'), selectedPortalFromUrl())
         setBusinesses(list)
         if (list.length === 1) await openBusiness(list[0].id)
         else setPage('businesses')
@@ -101,7 +107,7 @@ export default function App() {
 
   async function loadBusinesses() {
     try {
-      const list = await api<Business[]>('/businesses')
+      const list = visibleBusinessesForPortal(await api<Business[]>('/businesses'), accessPortal)
       setBusinesses(list)
       setDashboard(null)
       setPage('businesses')
@@ -170,13 +176,14 @@ export default function App() {
     resetCsrf()
     setUser(next)
     setCanViewPlatform(next.isPlatformOwner && next.mfaVerified)
-    setBusinesses(next.isPlatformOwner ? [] : list)
+    const visible = visibleBusinessesForPortal(list, accessPortal)
+    setBusinesses(next.isPlatformOwner ? [] : visible)
     setSessionExpired(false)
     setAuthNotice('')
     setPlatformSection('overview')
     setPage(next.isPlatformOwner ? (next.mfaVerified ? 'platform' : 'mfa-setup') : 'businesses')
     setError('')
-    if (!next.isPlatformOwner && list.length === 1) void openBusiness(list[0].id)
+    if (!next.isPlatformOwner && visible.length === 1) void openBusiness(visible[0].id)
   }
 
   if (page === 'loading')
@@ -359,18 +366,20 @@ export default function App() {
             <>
               <div className="page-header">
                 <div><h1>My Businesses</h1><p>Choose a business to continue, or create a new one.</p></div>
-                {businesses.length > 0 && <button className="btn btn-primary" onClick={() => { setNotice(''); setError(''); setPage('create') }}>
+                {businesses.length > 0 && accessPortal !== 'pos' && <button className="btn btn-primary" onClick={() => { setNotice(''); setError(''); setPage('create') }}>
                   <Plus size={18} /> Create Business
                 </button>}
               </div>
               {businesses.length === 0 ? (
                 <section className="empty-state">
                   <Store size={32} />
-                  <h2>Set up your first business</h2>
-                  <p>Create a retail workspace to manage your shop. No sample transactions will be added.</p>
-                  <p>Joining a shop? Ask the owner to add {user?.email} under Team Access.</p>
+                  <h2>{accessPortal === 'pos' ? 'No cashier assignment found' : 'No business access yet'}</h2>
+                  <p>{accessPortal === 'pos'
+                    ? 'Ask your Business Owner to assign your Cashier account to an active Retail location.'
+                    : 'A Platform Super Admin must provision your business and assign you as Owner or Manager.'}</p>
+                  <p className="small">Signed in as {user?.email}. Refresh after your administrator grants access.</p>
                   <button className="btn btn-outline-secondary me-2" onClick={() => void loadBusinesses()}>Refresh access</button>
-                  <button className="btn btn-primary" onClick={() => setPage('create')}>Create Business <ArrowRight size={16} /></button>
+                  {accessPortal !== 'pos' && <button className="btn btn-primary" onClick={() => setPage('create')}>Create Business <ArrowRight size={16} /></button>}
                 </section>
               ) : (
                 <div className="business-list">
