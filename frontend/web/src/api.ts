@@ -58,6 +58,17 @@ export interface RetailDashboard {
   accessStatus: 'Trial' | 'TrialExpired' | 'Active' | 'Inactive' | 'Suspended'
   hasProducts: boolean
   pendingApprovals: number
+  cashSalesToday?: {
+    total: number
+    billCount: number
+    businessDate: string
+    recentReceipts: {
+      id: number
+      locationId: number
+      total: number
+      postedAtUtc: string
+    }[]
+  } | null
   cashSaleEnabled?: boolean
   canOperate: boolean
 }
