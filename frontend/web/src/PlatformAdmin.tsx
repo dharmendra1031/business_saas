@@ -6,7 +6,7 @@ import PlatformAudit from './PlatformAudit'
 import PlatformPlans from './PlatformPlans'
 import PlatformOperations from './PlatformOperations'
 import PlatformCreateBusiness from './PlatformCreateBusiness'
-import { Plus } from 'lucide-react'
+import { Building2, Plus, Search } from 'lucide-react'
 
 export type PlatformSection = 'overview' | 'customers' | 'businesses' | 'plans' | 'audit' | 'operations'
 
@@ -39,6 +39,12 @@ function statusLabel(status: string | null, trialEnds: string | null = null) {
   if (status === 'Trial' && trialEnds && new Date(trialEnds).getTime() <= Date.now())
     return 'Trial expired'
   return status ?? 'No subscription'
+}
+
+function statusStyle(status: string) {
+  if (status === 'Active') return 'is-active'
+  if (status === 'Trial') return 'is-trial'
+  return 'is-muted'
 }
 
 function PlatformBusinesses({ selectedBusinessId, onBilling, startCreate, onCreateHandled, incomingSearch }: {
@@ -327,79 +333,94 @@ function PlatformBusinesses({ selectedBusinessId, onBilling, startCreate, onCrea
   }
 
   return (
-    <>
+    <div className="platform-business-directory">
       <div className="page-header">
         <div>
+          <span className="platform-kicker">PLATFORM MANAGEMENT</span>
           <h1>Businesses</h1>
-          <p>Manage registered businesses, verified owners and platform subscriptions.</p>
+          <p>View registered businesses, verified owners, plans and subscription status.</p>
         </div>
         <button type="button" className="btn btn-primary" onClick={() => { setError(''); setCreating(true) }}>
           <Plus size={18} /> Create Business
         </button>
       </div>
-      <section className="content-section">
-        <form className="platform-search mb-3" onSubmit={applySearch}>
-          <div>
-            <label className="form-label" htmlFor="platform-search">Business name</label>
-            <input id="platform-search" className="form-control" type="search"
-              maxLength={100} placeholder="Search businesses" value={search}
+
+      <section className="content-section platform-directory-card" aria-label="Business directory">
+        <div className="platform-directory-heading">
+          <div><h2>Business Directory</h2>
+            <p>{list && !loading ? `${list.total.toLocaleString()} businesses` : 'Authorized platform records'}</p>
+          </div>
+          <span className="platform-data-tag">Server-paginated</span>
+        </div>
+        <form className="platform-search platform-directory-search" role="search" onSubmit={applySearch}>
+          <div className="platform-directory-search-field">
+            <label htmlFor="platform-search" className="visually-hidden">Search business name</label>
+            <Search size={18} aria-hidden="true" />
+            <input id="platform-search" className="form-control" type="search" maxLength={100}
+              placeholder="Search business by name" value={search}
               onChange={event => setSearch(event.target.value)} />
           </div>
           <button type="submit" className="btn btn-primary">Search</button>
-          {term && <button type="button" className="btn btn-outline-secondary"
+          {(term || search) && <button type="button" className="btn btn-outline-secondary"
             onClick={() => { setSearch(''); setTerm(''); setPage(1) }}>Clear</button>}
         </form>
+
         {error && <div className="alert alert-danger" role="alert">{error}
           <button type="button" className="btn btn-outline-secondary btn-sm ms-2"
             onClick={() => setReload(value => value + 1)}>Retry</button>
         </div>}
-        {detailLoading && <p role="status" className="text-secondary">Opening business details…</p>}
-        {loading ? <p role="status" className="text-secondary">Loading businesses…</p>
-          : list?.total === 0 ? <p role="status" className="text-secondary">
-            {term ? 'No businesses match this search.' : 'No businesses have been created yet.'}
-          </p>
-          : list && <>
-            <div className="table-responsive">
-              <table className="table table-sm platform-table">
-                <thead>
-                  <tr><th scope="col">Business</th><th scope="col">Owner</th>
-                    <th scope="col">Plan</th><th scope="col">Status</th>
-                    <th scope="col" className="text-end">Action</th></tr>
-                </thead>
-                <tbody>
-                  {list.items.map(item => (
-                    <tr key={item.id}>
-                      <td><strong>{item.name}</strong><small className="d-block text-secondary">
-                        {item.typeName} · {item.countryCode}</small></td>
-                      <td>{item.ownerEmail}</td>
-                      <td>{item.planCode ?? 'Not assigned'}</td>
-                      <td>{statusLabel(item.subscriptionStatus, item.trialEndsAtUtc)}</td>
-                      <td className="text-end"><button type="button"
-                        className="btn btn-outline-secondary btn-sm" disabled={detailLoading}
-                        aria-label={`View details for ${item.name}`}
-                        onClick={() => void openBusiness(item.id)}>View</button></td>
-                    </tr>
-                  ))}
-                </tbody>
-              </table>
+        {detailLoading && <p role="status" className="text-secondary small">Opening business details…</p>}
+        {loading ? <div className="platform-directory-loading" role="status">
+          <span className="spinner-border spinner-border-sm" aria-hidden="true" /> Loading businesses…
+        </div> : list?.total === 0 ? <div className="platform-directory-empty" role="status">
+          <Building2 size={32} />
+          <h3>{term ? 'No matching businesses' : 'No businesses created yet'}</h3>
+          <p>{term ? 'Try a different business name or clear the search.' :
+            'Create your first business using the Platform Owner workflow.'}</p>
+        </div> : list && <>
+          <div className="table-responsive">
+            <table className="table table-sm platform-table platform-directory-table">
+              <thead>
+                <tr><th scope="col">Business</th><th scope="col">Owner</th>
+                  <th scope="col">Type / Country</th><th scope="col">Plan</th>
+                  <th scope="col">Status</th><th scope="col" className="text-end">Action</th></tr>
+              </thead>
+              <tbody>{list.items.map(item => {
+                const status = statusLabel(item.subscriptionStatus, item.trialEndsAtUtc)
+                return <tr key={item.id}>
+                  <td><span className="platform-business-cell">
+                    <span className="platform-business-symbol" aria-hidden="true"><Building2 size={19} /></span>
+                    <span><strong>{item.name}</strong><small>Business #{item.id}</small></span>
+                  </span></td>
+                  <td>{item.ownerEmail}</td>
+                  <td>{item.typeName}<small className="d-block text-secondary">{item.countryCode}</small></td>
+                  <td><span className="platform-plan-pill">{item.planCode ?? 'Not assigned'}</span></td>
+                  <td><span className={`platform-state-pill ${statusStyle(status)}`}>{status}</span></td>
+                  <td className="text-end"><button type="button"
+                    className="btn btn-outline-secondary btn-sm" disabled={detailLoading}
+                    aria-label={`View details for ${item.name}`}
+                    onClick={() => void openBusiness(item.id)}>View</button></td>
+                </tr>
+              })}</tbody>
+            </table>
+          </div>
+          <div className="platform-summary platform-directory-pagination">
+            <p>{list.items.length ? `Showing ${(page - 1) * list.pageSize + 1}–${(page - 1) * list.pageSize + list.items.length} of ${list.total}`
+              : `No businesses on page ${page}`}</p>
+            <div className="platform-directory-pages">
+              <button type="button" className="btn btn-outline-secondary btn-sm"
+                disabled={page <= 1} onClick={() => setPage(value => value - 1)}>Previous</button>
+              <span aria-label={`Current page ${page}`}>Page {page}</span>
+              <button type="button" className="btn btn-outline-secondary btn-sm"
+                disabled={page * list.pageSize >= list.total}
+                onClick={() => setPage(value => value + 1)}>Next</button>
             </div>
-            <div className="platform-summary">
-              <p className="text-secondary small">
-                {list.items.length ? `Showing ${(page - 1) * list.pageSize + 1}–${(page - 1) * list.pageSize + list.items.length} of ${list.total}`
-                  : `No businesses on page ${page}`}
-              </p>
-              <div className="d-flex align-items-center gap-2">
-                <button type="button" className="btn btn-outline-secondary btn-sm"
-                  disabled={page <= 1} onClick={() => setPage(value => value - 1)}>Previous</button>
-                <span className="small">Page {page}</span>
-                <button type="button" className="btn btn-outline-secondary btn-sm"
-                  disabled={page * list.pageSize >= list.total}
-                  onClick={() => setPage(value => value + 1)}>Next</button>
-              </div>
-            </div>
-          </>}
+          </div>
+        </>}
       </section>
-    </>
+      <p className="platform-directory-note">Directory search currently uses the verified business-name API.
+        Plan/status filters and creation dates will appear only when backed by accurate platform data.</p>
+    </div>
   )
 }
 
