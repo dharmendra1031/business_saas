@@ -216,11 +216,13 @@ export default function App() {
       setPage('login')
     }} />
 
+  const isPosView = page === 'retail' && retailPage === 'cash' && !!dashboard?.cashSaleEnabled
+
   return (
-    <div className={`app-shell${page === 'platform' ? ' platform-shell' : ''}${page === 'retail' && dashboard?.roleCode === 'Cashier' ? ' pos-shell' : ''}${page === 'retail' && dashboard?.roleCode !== 'Cashier' ? ' business-shell' : ''}`}>
-      {menuOpen && <button type="button" className="sidebar-scrim" aria-label="Close navigation"
+    <div className={`app-shell${page === 'platform' ? ' platform-shell' : ''}${isPosView ? ' pos-shell' : ''}${page === 'retail' && dashboard?.roleCode !== 'Cashier' ? ' business-shell' : ''}`}>
+      {!isPosView && menuOpen && <button type="button" className="sidebar-scrim" aria-label="Close navigation"
         onClick={() => { setMenuOpen(false); menuToggle.current?.focus() }} />}
-      <aside id="main-navigation" className={`app-sidebar${menuOpen ? ' is-open' : ''}`}>
+      {!isPosView && <aside id="main-navigation" className={`app-sidebar${menuOpen ? ' is-open' : ''}`}>
         <div className="brand"><span className="brand-mark">B</span>
           <div>Business SaaS<small>{page === 'platform' ? 'Platform Super Admin' :
             page === 'retail' && dashboard?.roleCode === 'Cashier' ? 'Point of Sale' : 'Business Management'}</small></div>
@@ -345,10 +347,24 @@ export default function App() {
           : page === 'retail' && dashboard
             ? <>{dashboard.roleCode === 'Cashier' ? 'Cashier checkout' : 'Shop operations'}<small className="d-block mt-1">Signed in as {dashboard.roleCode}</small></>
             : 'Select a business to manage.'}</div>
-      </aside>
+      </aside>}
 
       <div className="app-main">
         <header className={`app-topbar${page === 'platform' ? ' platform-topbar' : ''}`}>
+          {isPosView && dashboard ? <>
+            <div className="pos-topbar-brand"><span className="pos-brand-mark">B</span>
+              <span><strong>Business SaaS</strong><small>POINT OF SALE</small></span>
+            </div>
+            <div className="pos-topbar-store"><Store size={17} />
+              <span><strong>{dashboard.business.name}</strong>
+                <small>{dashboard.locations[0]?.name ?? 'No assigned location'} · {dashboard.roleCode}</small></span>
+            </div>
+            <div className="pos-topbar-account">
+              <span className="pos-topbar-email">{user?.email}</span>
+              <button type="button" className="btn btn-outline-secondary btn-sm"
+                onClick={() => void logout()}><LogOut size={15} /> Sign out</button>
+            </div>
+          </> : <>
           {page === 'platform' && <div className="platform-topbar-brand">
             <span className="platform-topbar-logo" aria-hidden="true">B</span>
             <strong>Business SaaS</strong>
@@ -397,6 +413,7 @@ export default function App() {
             <span className="account-email">{user?.isPlatformOwner ? 'Platform Owner · ' : ''}{user?.email}</span>
             <button className="btn btn-outline-secondary btn-sm" onClick={() => void logout()}><LogOut size={15} /> Sign out</button>
           </div>
+          </>}
         </header>
 
         <main className="page-content">
@@ -452,7 +469,7 @@ export default function App() {
 
           {page === 'retail' && dashboard && (
             <>
-              <div className={`page-header${dashboard.roleCode !== 'Cashier' ? ' business-page-header' : ''}`}>
+              {!isPosView && <div className={`page-header${dashboard.roleCode !== 'Cashier' ? ' business-page-header' : ''}`}>
                 <div><button className="back-link" onClick={() => { setNotice(''); void loadBusinesses() }}><ArrowLeft size={16} /> All businesses</button>
                   {dashboard.roleCode !== 'Cashier' && <span className="business-eyebrow">BUSINESS OPERATIONS · {dashboard.business.name}</span>}
                   <h1>{retailTitles[retailPage]}</h1><p>{dashboard.business.name} · {dashboard.roleCode === 'Cashier' ? 'POS / Cashier' : dashboard.roleCode === 'Owner' ? 'Business Admin' : 'Store Manager'} · {dashboard.locations[0]?.name ?? 'No location assigned'}</p>
@@ -462,13 +479,13 @@ export default function App() {
                   : <span className="workspace-state inactive">
                     {dashboard.accessStatus === 'TrialExpired' ? 'Trial expired' : 'Subscription inactive'}
                   </span>}
-              </div>
+              </div>}
               {!dashboard.canOperate && <div className="alert alert-warning" role="status">
                 {dashboard.accessStatus === 'TrialExpired'
                   ? 'Your free trial has ended. Ask the platform administrator to prepare a subscription payment request.'
                   : 'This business has no active subscription. Contact the platform administrator for help.'}
               </div>}
-              {dashboard.subscription && <p className="small text-secondary">
+              {!isPosView && dashboard.subscription && <p className="small text-secondary">
                 {dashboard.subscription.planCode} · {dashboard.accessStatus === 'TrialExpired'
                   ? 'Trial expired' : dashboard.subscription.status}
                 {dashboard.subscription.status === 'Trial' &&
