@@ -1,7 +1,7 @@
 import { useEffect, useState } from 'react'
 import {
-  AlertTriangle, BellRing, Building2, CalendarClock, CheckCircle2, ChevronRight,
-  CirclePause, Construction, Eye, Globe2, LockKeyhole, Megaphone, Package,
+  AlertTriangle, BellRing, Building2, CalendarClock, ChevronRight,
+  CirclePause, Construction, Eye, LockKeyhole, Megaphone, Package,
   RefreshCw, ShieldCheck, Wrench
 } from 'lucide-react'
 import { api, SessionExpiredError, type BusinessType } from './api'
