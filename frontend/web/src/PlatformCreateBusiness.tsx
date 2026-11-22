@@ -28,6 +28,8 @@ export default function PlatformCreateBusiness({ onCancel, onCreated }: {
   const [key] = useState(operationKey)
   const [busy, setBusy] = useState(false)
   const [error, setError] = useState('')
+  const [submissionUncertain, setSubmissionUncertain] = useState(false)
+  const [confirmed, setConfirmed] = useState(false)
 
   useEffect(() => {
     let active = true
@@ -55,6 +57,7 @@ export default function PlatformCreateBusiness({ onCancel, onCreated }: {
     try {
       const result = await api<VerifiedOwner>('/platform/owner-lookup?email=' +
         encodeURIComponent(ownerEmail.trim()))
+      if (!result.verified) throw new Error('The selected owner account is not email-verified.')
       setOwner(result)
       setStep(2)
     } catch (cause) {
@@ -65,9 +68,10 @@ export default function PlatformCreateBusiness({ onCancel, onCreated }: {
 
   async function create(event: FormEvent) {
     event.preventDefault()
-    if (!owner || !market) return
+    if (!owner || !market || !confirmed || !canProceedDetails || !validLocation) return
     setBusy(true)
     setError('')
+    setSubmissionUncertain(false)
     try {
       const result = await post<{ id: number; alreadyExists: boolean }>('/platform/businesses', {
         name: name.trim(), businessTypeId: typeId, countryCode,
@@ -78,13 +82,15 @@ export default function PlatformCreateBusiness({ onCancel, onCreated }: {
       onCreated(result.id)
     } catch (cause) {
       if (!(cause instanceof SessionExpiredError))
+        const uncertain = cause instanceof Error && /connection lost|incomplete|timed out|network/i.test(cause.message)
+        setSubmissionUncertain(uncertain)
         setError(cause instanceof Error ? cause.message : 'Unable to create business. Check status before retry.')
     } finally { setBusy(false) }
   }
 
   const currentType = types.find(x => x.id === typeId)
   const canProceedDetails = name.trim().length >= 2 && name.trim().length <= 150 &&
-    typeId > 0 && !!market && market.currencies.includes(currency) &&
+    types.some(x => x.id === typeId) && !!market && market.currencies.includes(currency) &&
     market.timeZones.includes(timeZone)
   const validLocation = location.trim().length >= 2 && location.trim().length <= 100
 
@@ -100,7 +106,8 @@ export default function PlatformCreateBusiness({ onCancel, onCreated }: {
       <span className="provision-security"><ShieldCheck size={16} /> Platform Owner · MFA protected</span>
     </div>
 
-    <nav className="provision-steps" aria-label="Business creation progress">
+    <nav className="provision-steps" aria-label="Business creation progress" aria-describedby="provision-progress-help">
+      <span className="visually-hidden" id="provision-progress-help">Step {step + 1} of {steps.length}: {steps[step]}</span>
       {steps.map((label, index) => <div key={label}
         className={`provision-step${index === step ? ' is-current' : ''}${index < step ? ' is-complete' : ''}`}
         aria-current={index === step ? 'step' : undefined}>
@@ -235,10 +242,18 @@ export default function PlatformCreateBusiness({ onCancel, onCreated }: {
           </dl>
           <p className="provision-submit-note"><ShieldCheck size={17} /> Confirming will provision a real business and log the action in Platform Audit.</p>
           <form onSubmit={event => void create(event)}>
+            <label className="provision-confirm-label">
+              <input type="checkbox" className="form-check-input" checked={confirmed} disabled={busy}
+                onChange={event => setConfirmed(event.target.checked)} />
+              <span>I have checked the business details and verified the Owner assignment.</span>
+            </label>
+            {submissionUncertain && <div className="alert alert-warning mt-3" role="alert">
+              The previous request may have completed. Check the Businesses directory before retrying. Retrying this form uses the same request key to prevent duplicate provisioning.
+            </div>}
             <div className="form-footer">
               <button type="button" className="btn btn-outline-secondary" disabled={busy}
                 onClick={() => { setError(''); setStep(2) }}>Back</button>
-              <button type="submit" className="btn btn-primary" disabled={busy || !owner || !validLocation || !canProceedDetails}>
+              <button type="submit" className="btn btn-primary" disabled={busy || !confirmed || !owner || !validLocation || !canProceedDetails}>
                 {busy ? 'Creating business…' : 'Confirm & Create Business'} <ArrowRight size={16} />
               </button>
             </div>
