@@ -877,3 +877,66 @@ button:focus-visible, a:focus-visible, input:focus-visible, select:focus-visible
   .platform-plan-card { padding: 17px; }
   .platform-plans-intro { align-items: flex-start; }
 }
+
+/* SA-40–46: Audit and Operations frontend-first visual pass, server-truthful states. */
+.platform-audit-page > .page-header .platform-kicker,
+.platform-operations-page > .page-header .platform-kicker { display: block; margin-bottom: 6px; }
+.platform-shell .platform-audit-security-card { display: flex; align-items: center; gap: 17px;
+  padding: 22px; margin-bottom: 18px; }
+.platform-audit-symbol { width: 53px; height: 53px; display: grid; place-items: center;
+  background: #eceaff; color: #5942c5; border-radius: 13px; flex-shrink: 0; }
+.platform-audit-security-card > div { flex: 1; min-width: 0; }
+.platform-shell .platform-audit-security-card h2 { font-size: 1.04rem; font-weight: 780;
+  color: #172948; margin: 6px 0 10px; padding: 0; border: 0; }
+.platform-audit-security-card p { margin: 10px 0 0; color: #687b95; font-size: .79rem; line-height: 1.5; }
+.platform-audit-lock { display: inline-flex; align-items: center; gap: 7px; white-space: nowrap;
+  border: 1px solid #e0e5f0; color: #596982; padding: 7px 10px; font-size: .73rem; font-weight: 720; border-radius: 999px; }
+.platform-audit-note { color: #75849e; font-size: .78rem; line-height: 1.55; padding: 13px 22px; margin: 0; }
+.platform-audit-detail { min-width: 130px; }
+.platform-audit-detail summary { display: inline-flex; align-items: center; gap: 6px;
+  color: #5640d2; font-size: .75rem; font-weight: 750; cursor: pointer; list-style: none; }
+.platform-audit-detail summary::-webkit-details-marker { display: none; }
+.platform-audit-detail[open] summary svg { transform: rotate(180deg); }
+.platform-audit-detail dl { margin: 10px 0 0; padding: 12px; border: 1px solid #e1e5ef; border-radius: 9px;
+  background: #f8f9fc; min-width: 220px; max-width: 330px; text-align: left; }
+.platform-audit-detail dl > div { padding: 7px 0; border-bottom: 1px solid #e5e8f1; }
+.platform-audit-detail dl > div:last-child { border-bottom: 0; }
+.platform-audit-detail dt { font-size: .7rem; font-weight: 740; color: #5d6d88; }
+.platform-audit-detail dd { margin: 3px 0 0; font-size: .74rem; color: #263859;
+  overflow-wrap: anywhere; white-space: pre-wrap; }
+
+.platform-shell .platform-readiness-panel { display: flex; align-items: center; gap: 18px; padding: 23px; margin-bottom: 23px; }
+.platform-readiness-panel > div { flex: 1; min-width: 0; }
+.platform-shell .platform-readiness-panel h2 { border: 0; padding: 0; margin: 5px 0 8px; font-size: 1.11rem; }
+.platform-readiness-panel p { color: #687c97; font-size: .81rem; line-height: 1.5; }
+.platform-readiness-panel small { color: #8796ab; font-size: .72rem; }
+.platform-operations-status { display: inline-flex; align-items: center; justify-content: center; gap: 5px;
+  min-width: 129px; border-radius: 999px; padding: 7px 12px; font-size: .74rem; font-weight: 750; }
+.platform-operations-status.is-checking { color: #5d6c82; background: #eef0f5; }
+.platform-operations-status.is-ready { color: #20794c; background: #e6f6ed; }
+.platform-operations-status.is-unavailable { color: #a05b21; background: #fff1dd; }
+.platform-operations-section-heading { display: flex; justify-content: space-between; align-items: center;
+  gap: 12px; flex-wrap: wrap; margin-bottom: 15px; }
+.platform-operations-section-heading h2 { color: #172943; font-size: 1.15rem; font-weight: 780; margin-bottom: 5px; }
+.platform-operations-section-heading p { color: #687b95; font-size: .8rem; margin: 0; }
+.platform-operations-grid { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 15px; }
+.platform-shell .platform-operations-card { display: flex; flex-direction: column; align-items: flex-start;
+  gap: 12px; padding: 22px; min-height: 229px; }
+.platform-operations-icon { display: grid; place-items: center; flex: 0 0 46px; width: 46px; height: 46px;
+  color: #5843d3; background: #eeebff; border-radius: 12px; }
+.platform-operations-icon.is-blue { color: #275bbf; background: #eaf0ff; flex-basis: 55px; width: 55px; height: 55px; }
+.platform-shell .platform-operations-card h3 { margin: 0; color: #1d2d4c; font-size: 1.02rem; font-weight: 760; }
+.platform-operations-card p { color: #70809a; font-size: .79rem; line-height: 1.6; margin: 0; flex: 1; }
+.platform-operations-card-status { display: inline-flex; align-items: center; gap: 5px;
+  padding: 6px 10px; background: #f0f2f7; border-radius: 999px;
+  color: #6e7e97; font-size: .71rem; font-weight: 720; }
+@media (max-width: 1060px) {
+  .platform-operations-grid { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+}
+@media (max-width: 650px) {
+  .platform-shell .platform-audit-security-card, .platform-shell .platform-readiness-panel { flex-wrap: wrap; padding: 17px; }
+  .platform-audit-lock, .platform-operations-status { width: 100%; justify-content: center; }
+  .platform-audit-note { padding: 12px 15px; }
+  .platform-operations-grid { grid-template-columns: 1fr; gap: 11px; }
+  .platform-shell .platform-operations-card { min-height: 0; padding: 17px; }
+}
