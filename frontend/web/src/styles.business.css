@@ -157,32 +157,34 @@
   .business-shell .business-module-card > .business-empty-state { margin-left: 16px; margin-right: 16px; }
 }
 
-/* BUS-01 / AUTH-11: assigned business selection and section headers. */
-.business-picker-header { padding: 8px 0; }
-.business-picker-header h1 { font-weight: 810; color: #142849; letter-spacing: -.035em; }
-.business-picker-header p { font-size: .89rem; line-height: 1.6; max-width: 660px; }
-.business-assigned-list { display: grid; grid-template-columns: repeat(auto-fit, minmax(285px, 1fr)); gap: 15px; }
-.business-assigned-list .business-row { min-height: 112px; height: 100%; gap: 15px; padding: 24px 19px; border-radius: 13px;
-  background: #fff; border: 1px solid #dce5f0; box-shadow: 0 4px 22px #163b6310;
-  transition: border-color .15s, background .15s, transform .15s; }
-.business-assigned-list .business-row:hover { background: #f9fbff; border-color: #aac2e6; transform: translateY(-2px); }
-.business-assigned-list .business-row:focus-visible { outline: 3px solid #85aff0; outline-offset: 3px; }
-.business-assigned-list .shop-symbol { flex-basis: 53px; width: 53px; height: 53px; color: #2d65b8;
-  background: #e9f1fd; border-radius: 12px; }
-.business-assigned-list .business-summary { flex: 1; }
-.business-assigned-list .business-summary strong { font-size: .98rem; color: #243956; font-weight: 760; }
-.business-assigned-list .business-summary small { font-size: .82rem; color: #526a86; line-height: 1.45; }
-.business-assigned-role { background: #eaf2ff; color: #2a5ca6; padding: 6px 10px; border-radius: 999px;
-  white-space: nowrap; font-size: .7rem; font-weight: 750; }
+/* BUS-03: compact selection of server-assigned businesses, not a second dashboard. */
+.business-picker-header { padding: 0; margin-bottom: 15px; }
+.business-picker-header h1 { font-weight: 770; color: #142849; letter-spacing: -.025em; }
+.business-picker-header p { font-size: .84rem; line-height: 1.45; margin-top: 4px; }
+.business-assigned-list { display: grid; grid-template-columns: minmax(0, 1fr); gap: 8px;
+  max-width: 820px; }
+.business-assigned-list .business-row { display: flex; align-items: center; min-height: 68px;
+  gap: 12px; padding: 11px 14px; border: 1px solid #dce5f0; border-radius: 9px;
+  background: #fff; box-shadow: none; transition: border-color .15s, background .15s; }
+.business-assigned-list .business-row:hover:not(:disabled) { background: #f7faff; border-color: #a8bfdd; }
+.business-assigned-list .business-row:focus-visible { outline: 3px solid #85aff0; outline-offset: 2px; }
+.business-assigned-list .business-row:disabled { cursor: progress; opacity: .75; }
+.business-assigned-list .shop-symbol { flex: 0 0 36px; width: 36px; height: 36px;
+  background: #e9f1fd; border-radius: 7px; color: #2d65b8; }
+.business-assigned-list .shop-symbol svg { width: 18px; height: 18px; }
+.business-assigned-list .business-summary { min-width: 0; flex: 1; gap: 2px; }
+.business-assigned-list .business-summary strong { font-size: .89rem; color: #243956; font-weight: 730; }
+.business-assigned-list .business-summary small { font-size: .76rem; color: #60748b; line-height: 1.35; }
+.business-assigned-role { flex-shrink: 0; white-space: nowrap; font-size: .74rem; font-weight: 680; color: #3c5b81; }
+.business-opening-label { color: #45658b; font-size: .76rem; white-space: nowrap; }
 .business-assigned-list .business-row > svg:last-child { margin-left: 0; color: #597cb4; }
-@media (max-width: 680px) {
-  .business-assigned-list { grid-template-columns: 1fr; gap: 12px; }
-  .business-assigned-list .business-row { min-height: 90px; padding: 17px 12px; gap: 11px; }
-  .business-assigned-list .shop-symbol { width: 43px; height: 43px; flex-basis: 43px; }
-  .business-assigned-role { font-size: .65rem; padding: 5px 7px; }
+@media (max-width: 600px) {
+  .business-assigned-list .business-row { gap: 9px; padding: 10px; min-height: 64px; }
+  .business-assigned-list .shop-symbol { flex-basis: 32px; width: 32px; height: 32px; }
+  .business-assigned-list .business-summary strong { font-size: .83rem; }
+  .business-assigned-role { font-size: .68rem; }
 }
-@media (prefers-reduced-motion: reduce) { .business-assigned-list .business-row { transition: none; }
-  .business-assigned-list .business-row:hover { transform: none; } }
+@media (prefers-reduced-motion: reduce) { .business-assigned-list .business-row { transition: none; } }
 
 /* Preview-only modules: functional tabs, without decorative dashboards. */
 .business-shell .business-preview-nav { gap: 10px; }

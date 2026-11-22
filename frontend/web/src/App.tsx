@@ -27,6 +27,7 @@ export default function App() {
   const [sessionError, setSessionError] = useState('')
   const [businessesLoading, setBusinessesLoading] = useState(false)
   const [businessesError, setBusinessesError] = useState('')
+  const [openingBusinessId, setOpeningBusinessId] = useState<number | null>(null)
   const [platformSection, setPlatformSection] = useState<PlatformSection>('overview')
   const [platformBusinessId, setPlatformBusinessId] = useState<number | null>(null)
   const [platformStartCreate, setPlatformStartCreate] = useState(false)
@@ -106,11 +107,12 @@ export default function App() {
     setError('')
     setBusinessesError('')
     setBusinessesLoading(true)
+    setOpeningBusinessId(null)
+    setDashboard(null)
     setPage('businesses')
     try {
       const list = await api<Business[]>('/businesses')
       setBusinesses(list)
-      setDashboard(null)
       if (openSingle && list.length === 1) await openBusiness(list[0].id)
     } catch (cause) {
       if (!(cause instanceof SessionExpiredError))
@@ -121,7 +123,9 @@ export default function App() {
   }
 
   async function openBusiness(id: number, showOverview = false) {
+    if (openingBusinessId !== null) return
     setError('')
+    setOpeningBusinessId(id)
     try {
       const details = await api<RetailDashboard>(`/businesses/${id}/dashboard`)
       if (details.business.typeCode !== 'RETAIL') {
@@ -140,6 +144,8 @@ export default function App() {
         setError(message(cause))
         setPage('businesses')
       }
+    } finally {
+      setOpeningBusinessId(null)
     }
   }
 
@@ -396,7 +402,7 @@ export default function App() {
           {page === 'businesses' && (
             <>
               <div className="page-header business-picker-header">
-                <div><h1>My Assigned Businesses</h1><p>Select a business assigned to your account. New businesses are provisioned by the Platform Super Admin.</p></div>
+                <div><h1>Choose a business</h1>{!businessesLoading && !businessesError && businesses.length > 1 && <p>Select an assigned business to continue.</p>}</div>
 
               </div>
               {businessesLoading ? (
@@ -414,18 +420,21 @@ export default function App() {
                   <Store size={32} />
                   <h2>No business access yet</h2>
                   <p>Ask your administrator to assign your account to a business and role.</p>
-                  <p className="small">Signed in as {user?.email}. Refresh after your administrator grants access.</p>
                   <button className="btn btn-outline-secondary me-2" onClick={() => void loadBusinesses()}>Refresh access</button>
 
                 </section>
               ) : (
                 <div className="business-list business-assigned-list" aria-label="Assigned business workspaces">
                   {businesses.map(business => (
-                    <button className="business-row" type="button" key={business.id} onClick={() => void openBusiness(business.id)}>
+                    <button className="business-row" type="button" key={business.id}
+                      disabled={openingBusinessId !== null} aria-busy={openingBusinessId === business.id}
+                      onClick={() => void openBusiness(business.id)}>
                       <span className="shop-symbol"><Store size={22} /></span>
                       <span className="business-summary"><strong>{business.name}</strong><small>{business.typeName} · {business.countryCode}</small></span>
                       <span className="business-assigned-role">{business.roleCode}</span>
-                      <ArrowRight size={18} />
+                      {openingBusinessId === business.id
+                        ? <span className="business-opening-label">Opening…</span>
+                        : <ArrowRight size={18} aria-hidden="true" />}
                     </button>
                   ))}
                 </div>

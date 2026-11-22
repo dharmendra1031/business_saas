@@ -10,9 +10,9 @@ const business = role => ({
   id: 1, name: 'Sample Retail', typeCode: 'RETAIL', typeName: 'Retail',
   countryCode: 'IN', currencyCode: 'INR', timeZoneId: 'Asia/Kolkata', roleCode: role
 })
-const dashboard = (role, hasProducts = false, pendingApprovals = 0) => ({
+const dashboard = (role, hasProducts = false, pendingApprovals = 0, selectedBusinessId = 1) => ({
   business: {
-    id: 1, name: 'Sample Retail', typeCode: 'RETAIL', typeName: 'Retail',
+    id: selectedBusinessId, name: selectedBusinessId === 2 ? 'Second Retail' : 'Sample Retail', typeCode: 'RETAIL', typeName: 'Retail',
     countryCode: 'IN', currencyCode: 'INR', timeZoneId: 'Asia/Kolkata'
   },
   roleCode: role, locations: [{ id: 1, name: 'Main Shop', code: 'MAIN' }],
@@ -99,7 +99,7 @@ async function scenario(name, {
       const first = business(role)
       return response(route, 200, multiple ? [first, { ...first, id: 2, name: 'Second Retail' }] : [first])
     }
-    if (/^\/businesses\/\d+\/dashboard$/.test(path)) return response(route, 200, dashboard(role, hasProducts, pendingApprovals))
+    if (/^\/businesses\/\d+\/dashboard$/.test(path)) return response(route, 200, dashboard(role, hasProducts, pendingApprovals, Number(path.split('/')[2])))
     if (/^\/businesses\/\d+\/cash-sales\/products$/.test(path)) return response(route, 200, [])
     if (path === '/platform/overview') return response(route, 200, overview)
     if (path === '/platform/businesses') return response(route, 200, { items: [], total: 0 })
@@ -307,14 +307,37 @@ try {
   {
     const t = await scenario('multi-business', { role: 'Manager', multiple: true })
     await t.login()
-    await t.page.getByRole('heading', { name: 'My Assigned Businesses' }).waitFor()
+    await t.page.getByRole('heading', { name: 'Choose a business' }).waitFor()
     assert.equal(await t.page.locator('.business-row').count(), 2)
     await t.screenshot('multi-business-picker')
-    await t.page.locator('.business-row').first().click()
+    const firstRowHeight = await t.page.locator('.business-row').first().evaluate(el => el.getBoundingClientRect().height)
+    assert.ok(firstRowHeight <= 85, 'Business selector rows should stay compact')
+    assert.equal(await t.page.getByRole('button', { name: /Create Business/i }).count(), 0, 'Owner/Manager cannot provision tenants here')
+    await t.page.locator('.business-row').nth(1).click()
     await t.page.getByRole('heading', { name: 'Business Dashboard', exact: true }).waitFor()
+    await t.page.locator('.workspace-identity strong').getByText('Second Retail').waitFor()
+    await t.page.getByRole('button', { name: 'Switch Business' }).click()
+    await t.page.getByRole('heading', { name: 'Choose a business' }).waitFor()
+    await t.page.locator('.business-row').first().click()
+    await t.page.locator('.workspace-identity strong').getByText('Sample Retail').waitFor()
     await t.check()
     await t.context.close()
     console.log('PASS multi-business select / manager workspace')
+  }
+
+  {
+    const t = await scenario('multi-business-mobile', { role: 'Owner', multiple: true, width: 360, height: 780 })
+    await t.login()
+    await t.page.getByRole('heading', { name: 'Choose a business' }).waitFor()
+    assert.equal(await t.page.locator('.business-row').count(), 2)
+    assert.ok(await t.page.evaluate(() => document.documentElement.scrollWidth) <= 361,
+      'BUS-03 chooser must fit at 360px')
+    await t.screenshot('BUS-03-business-selector-mobile-360')
+    await t.page.locator('.business-row').nth(1).click()
+    await t.page.locator('.workspace-identity strong').getByText('Second Retail').waitFor()
+    await t.check()
+    await t.context.close()
+    console.log('PASS BUS-03 responsive business selector and tenant navigation')
   }
 
   {
