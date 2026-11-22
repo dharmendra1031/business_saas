@@ -427,18 +427,27 @@ try {
       'Do not display a pagination bar when all products fit one page')
     await t.screenshot('BUS-06-products-list-desktop')
     await t.page.locator('#product-filter-status').selectOption('inactive')
-    await t.page.getByText('Red Bag').waitFor()
+    await t.page.waitForFunction(() => {
+      const rows = document.querySelectorAll('.business-record-table tbody tr')
+      return rows.length === 1 && rows[0].textContent.includes('Red Bag')
+    })
     assert.equal(await t.page.locator('.business-record-table tbody tr').count(), 1,
       'Inactive status must filter actual records')
     await t.page.locator('#product-filter-status').selectOption('all')
     await t.page.locator('#product-filter-category').selectOption('2')
-    await t.page.getByText('Blue Shirt').waitFor()
+    await t.page.waitForFunction(() => {
+      const rows = document.querySelectorAll('.business-record-table tbody tr')
+      return rows.length === 1 && rows[0].textContent.includes('Blue Shirt')
+    })
     assert.equal(await t.page.locator('.business-record-table tbody tr').count(), 1,
       'Category selection must filter records')
     await t.page.locator('#product-filter-category').selectOption('0')
     await t.page.locator('#product-search').fill('BLUE-11')
     await t.page.getByRole('button', { name: 'Search', exact: true }).click()
-    await t.page.getByText('Blue Shirt').waitFor()
+    await t.page.waitForFunction(() => {
+      const rows = document.querySelectorAll('.business-record-table tbody tr')
+      return rows.length === 1 && rows[0].textContent.includes('Blue Shirt')
+    })
     assert.equal(await t.page.locator('.business-record-table tbody tr').count(), 1,
       'SKU search must filter server results')
     await t.page.getByRole('button', { name: 'Add Product' }).click()
