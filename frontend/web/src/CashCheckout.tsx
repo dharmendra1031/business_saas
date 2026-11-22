@@ -56,6 +56,7 @@ export default function CashCheckout({ userId, dashboard, onExit }: {
   const [basket, setBasket] = useState<Line[]>(pending?.lines ?? [])
   const [search, setSearch] = useState('')
   const [products, setProducts] = useState<Product[]>([])
+  const [productsLoading, setProductsLoading] = useState(false)
   const [showPayment, setShowPayment] = useState(false)
   const [clearArmed, setClearArmed] = useState(false)
   const [exitArmed, setExitArmed] = useState(false)
@@ -87,15 +88,17 @@ export default function CashCheckout({ userId, dashboard, onExit }: {
     if (!locationId || !dashboard.canOperate || pending || receipt) return
     let active = true
     setProducts([])
-    setHint('Finding products…')
+    setProductsLoading(true)
+    setHint('')
     const timer = setTimeout(() => {
       api<Product[]>(`${base}/products?locationId=${locationId}&search=${encodeURIComponent(search)}`)
         .then(items => {
           if (!active) return
           setProducts(items)
+          setProductsLoading(false)
           setHint(items.length ? '' : 'No eligible products found.')
           // Product cards and barcode entry use the same verified product collection.
-        }).catch(cause => { if (active) setHint(cause.message) })
+        }).catch(cause => { if (active) { setProductsLoading(false); setHint(cause instanceof Error ? cause.message : 'Unable to load products.') } })
     }, 200)
     return () => { active = false; clearTimeout(timer) }
   }, [base, search, locationId, dashboard.canOperate, pending, receipt])
@@ -246,7 +249,7 @@ export default function CashCheckout({ userId, dashboard, onExit }: {
       <section className="content-section pos-catalog" aria-label="Product selection">
         <div className="pos-panel-heading">
           <div><h2>Products</h2><small>Tap a product to add it to this sale</small></div>
-          <span className="pos-count-pill">{products.length} shown</span>
+          <span className="pos-count-pill">{productsLoading ? 'Loading…' : `${products.length} shown`}</span>
         </div>
         <div className="pos-location-row">
           <label className="form-label" htmlFor="pos-location">Store location
@@ -273,8 +276,11 @@ export default function CashCheckout({ userId, dashboard, onExit }: {
         {!dashboard.canOperate && <p className="alert alert-warning" role="status">
           Your business is not enabled for checkout. Product selection is read-only.
         </p>}
-        <div className="pos-catalog-results">
-          {products.length ? <div className="pos-products-grid">
+        <div className="pos-catalog-results" aria-busy={productsLoading}>
+          {productsLoading ? <div className="pos-products-empty" role="status">
+            <Package size={30} aria-hidden="true" /><strong>Loading products…</strong>
+            <p>Checking available products and stock for this location.</p>
+          </div> : products.length ? <div className="pos-products-grid">
             {products.map(item => {
               const inBasket = basket.find(line => line.productId === item.id)?.quantity ?? 0
               const canAdd = dashboard.canOperate && !busy && item.available >= inBasket + 1 &&
