@@ -83,3 +83,5 @@ This is a visual scope tracker, **not** a statement that all frontend screens ar
 | **11: Activity Logs** | Security header, real MFA state, audited events with expandable reason/previous/new data and pagination | No backend global search, date/action/user filters or fabricated named actors. Fixed prior logic that incorrectly formatted non-date old/new values as timestamps. | **Pending** |
 
 **Quality gates:** React TypeScript build + .NET/SQL CI is a necessary build gate, not visual proof. Actual approved-reference **image-versus-browser screenshots**, keyboard/tab/mobile checks and product-owner design acceptance are still required. No image file or screenshot of the running app is asserted here.
+
+**Code batch CI evidence (22 Nov):** [Actions run 45008520111](https://github.com/dharmendra1031/business_saas/actions/runs/45008520111) — **frontend TypeScript/build PASS, backend integration PASS, isolated SQL Server PASS** on frontend code commit `9982ba7f`. These results verify build/integration checks only; browser visual/image comparison is still pending.
