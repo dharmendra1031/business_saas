@@ -49,6 +49,14 @@
 - **Source/build verification:** [Build run 45015039397](https://github.com/dharmendra1031/business_saas/actions/runs/45015039397) **PASS** (frontend, backend, SQL Server jobs). The browser fixture does not constitute production server MFA enforcement testing.
 - **Status:** `AUTH-02 = Partial`, browser UI QA evidenced; still needs real SQL-backed Super Admin credentials, server-side deny/lockout cases in authenticated E2E, and product owner approval of the actual browser captures. Do not mark DONE.
 
+## Business Owner/Admin — compact module headers (22 November 2026)
+
+- The screenshot showing **Quick access** is older than the current `development` UI; verify local Git branch/commit and restart Vite to compare.
+- Products, Purchase Orders, Inventory, Categories & Units, Suppliers and Customers previously rendered three title layers: sidebar, shared page hero with business/role/trial details, and a second oversized module heading. The shared retail page hero and repeated trial line have been removed. Each actual module keeps **one compact heading and its real controls** (Add Product, New Purchase Order, stock location selector, category tabs, search, forms, tables and permission states).
+- Staff & Access no longer adds an extra top margin. Retail topbar has a short section name; sidebar retains authorized business identity, without the repeated role footer. Changes are scoped to Business Admin; Platform Super Admin/POS layouts are not changed.
+- The preview-only Sales/Returns, Cash Register, Reports and Business Settings tabs retain working tab selection and genuine read-only business identity when available. Decorative preview welcome cards, empty chart-like panels, and developer-facing implementation guardrails were removed. Missing features remain visibly **Under construction**, with no fake numbers or saves.
+- No backend, SQL, permissions, new UI library or routing framework added. Real browser testing at 1366px/360px and user acceptance are separate; **not DONE** based on source changes alone.
+
 ## BUS-01 — owner-approved dashboard direction (22 November 2026)
 
 - Established stores: **Business Overview**, **Attention Needed**, **Recent Activity**. Maximum four compact KPI slots and no duplicated sidebar navigation. New stores: a separate first-run setup panel with working Categories/Units and Products links; stock comes after products and receipt settings is marked unavailable.
