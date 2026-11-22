@@ -512,7 +512,8 @@ export default function App() {
                   <p>This environment has not enabled POS billing. Ask your shop owner or administrator about checkout availability.</p>
                 </section>}
               {retailPage === 'cash' && dashboard.cashSaleEnabled && user && <CashCheckout
-                key={user.id + '-' + dashboard.business.id} userId={user.id} dashboard={dashboard} />}
+                key={user.id + '-' + dashboard.business.id} userId={user.id} dashboard={dashboard}
+                onExit={() => dashboard.roleCode === 'Cashier' ? void loadBusinesses() : setRetailPage('overview')} />}
               {isRetailSection(retailPage) && dashboard.roleCode !== 'Cashier' &&
                 <RetailCatalog key={dashboard.business.id + '-' + retailPage} section={retailPage} approvalsOnly={approvalList}
                   businessId={dashboard.business.id} canOperate={dashboard.canOperate}
