@@ -41,7 +41,12 @@ function statusLabel(status: string | null, trialEnds: string | null = null) {
   return status ?? 'No subscription'
 }
 
-function PlatformBusinesses({ selectedBusinessId, onBilling }: { selectedBusinessId: number | null; onBilling: (business: BusinessRow) => void }) {
+function PlatformBusinesses({ selectedBusinessId, onBilling, startCreate, onCreateHandled }: {
+  selectedBusinessId: number | null
+  onBilling: (business: BusinessRow) => void
+  startCreate: boolean
+  onCreateHandled: () => void
+}) {
   const [search, setSearch] = useState('')
   const [term, setTerm] = useState('')
   const [page, setPage] = useState(1)
@@ -59,7 +64,9 @@ function PlatformBusinesses({ selectedBusinessId, onBilling }: { selectedBusines
   const [statusReason, setStatusReason] = useState('')
   const [statusBusy, setStatusBusy] = useState(false)
   const [notice, setNotice] = useState('')
-  const [creating, setCreating] = useState(false)
+  const [creating, setCreating] = useState(startCreate)
+
+  useEffect(() => { if (startCreate) setCreating(true) }, [startCreate])
 
   useEffect(() => {
     let active = true
@@ -164,9 +171,10 @@ function PlatformBusinesses({ selectedBusinessId, onBilling }: { selectedBusines
     if (selectedBusinessId !== null) void openBusiness(selectedBusinessId)
   }, [selectedBusinessId])
 
-  if (creating) return <PlatformCreateBusiness onCancel={() => setCreating(false)}
+  if (creating) return <PlatformCreateBusiness onCancel={() => { setCreating(false); onCreateHandled() }}
     onCreated={id => {
       setCreating(false)
+      onCreateHandled()
       setReload(value => value + 1)
       void openBusiness(id)
     }} />
@@ -388,18 +396,25 @@ function PlatformBusinesses({ selectedBusinessId, onBilling }: { selectedBusines
   )
 }
 
-export default function PlatformAdmin({ section, selectedBusinessId, onViewBusiness, onBilling, billingBusiness, onChooseBusiness }: {
+export default function PlatformAdmin({ section, selectedBusinessId, onViewBusiness, onBilling,
+  billingBusiness, onChooseBusiness, onSeeBusinesses, onStartCreate, startCreate, onCreateHandled }: {
   billingBusiness: { id: number; name: string } | null
   onBilling: (business: BusinessRow) => void
   onChooseBusiness: () => void
   section: PlatformSection
   selectedBusinessId: number | null
   onViewBusiness: (id: number) => void
+  onSeeBusinesses: () => void
+  onStartCreate: () => void
+  startCreate: boolean
+  onCreateHandled: () => void
 }) {
-  if (section === 'overview') return <PlatformOverview onViewBusiness={onViewBusiness} />
+  if (section === 'overview') return <PlatformOverview onViewBusiness={onViewBusiness}
+    onSeeBusinesses={onSeeBusinesses} onCreateBusiness={onStartCreate} />
   if (section === 'customers') return <PlatformCustomers />
   if (section === 'plans') return <PlatformPlans business={billingBusiness} onChooseBusiness={onChooseBusiness} />
   if (section === 'audit') return <PlatformAudit />
   if (section === 'operations') return <PlatformOperations />
-  return <PlatformBusinesses onBilling={onBilling} selectedBusinessId={selectedBusinessId} />
+  return <PlatformBusinesses onBilling={onBilling} selectedBusinessId={selectedBusinessId}
+    startCreate={startCreate} onCreateHandled={onCreateHandled} />
 }
