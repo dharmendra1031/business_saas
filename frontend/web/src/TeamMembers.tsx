@@ -68,7 +68,7 @@ export default function TeamMembers({ businessId, canOperate, cashSaleEnabled }:
   }
 
   return (
-    <section className="content-section mt-3" aria-labelledby="team-heading">
+    <section className="content-section" aria-labelledby="team-heading">
       <h2 id="team-heading">Team Access</h2>
       <p className="text-secondary small mb-3">
         Only existing accounts can be added. Team members work at the primary location. {cashSaleEnabled ? "Cashiers can record cash sales." : "Cash checkout is unavailable."}
