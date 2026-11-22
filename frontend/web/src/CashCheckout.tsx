@@ -63,7 +63,6 @@ export default function CashCheckout({ userId, dashboard }: { userId: number; da
   const [busy, setBusy] = useState(false)
   const lock = useRef(false)
   const searchInput = useRef<HTMLInputElement>(null)
-  const payButtonRef = useRef<HTMLButtonElement>(null)
   const total = basket.reduce((sum, line) => sum + Math.round(line.expectedUnitPrice * 100) * line.quantity, 0) / 100
   const money = (amount: number) => business.currencyCode + ' ' + amount.toFixed(2)
 
@@ -335,7 +334,7 @@ export default function CashCheckout({ userId, dashboard }: { userId: number; da
           <div className="pos-subtotal-row"><span>Subtotal</span><strong>{money(total)}</strong></div>
           <div className="pos-total-row"><span>Total Payable</span><strong>{money(total)}</strong></div>
           <p className="pos-no-discount-note">Additional discounts and payment methods are not enabled for this checkout.</p>
-          <button ref={payButtonRef} type="button" className="btn btn-primary pos-record-button"
+          <button type="button" className="btn btn-primary pos-record-button"
             disabled={!dashboard.canOperate || busy || !basket.length || !Number.isFinite(total) || total <= 0 ||
               basket.some(line => !Number.isSafeInteger(line.quantity) || line.quantity < 1)}
             onClick={() => { setError(''); setShowPayment(true) }}>
