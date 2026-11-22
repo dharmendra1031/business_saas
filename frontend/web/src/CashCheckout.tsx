@@ -112,6 +112,7 @@ export default function CashCheckout({ userId, dashboard }: { userId: number; da
     }
     const line = { productId: item.id, name: item.name, quantity: nextQty, expectedUnitPrice: item.salePrice }
     setBasket(existing ? basket.map(previous => previous.productId === item.id ? line : previous) : [...basket, line])
+    setCash('')
     setError('')
     setClearArmed(false)
     setSearch('')
@@ -142,6 +143,7 @@ export default function CashCheckout({ userId, dashboard }: { userId: number; da
       return
     }
     setBasket(previous => previous.map(x => x.productId === line.productId ? { ...x, quantity } : x))
+    setCash('')
     setError('')
   }
 
@@ -325,6 +327,7 @@ export default function CashCheckout({ userId, dashboard }: { userId: number; da
             <button type="button" className="pos-remove-item" disabled={busy}
               aria-label={`Remove ${line.name}`} onClick={() => {
                 setBasket(previous => previous.filter(x => x.productId !== line.productId))
+                setCash('')
                 setClearArmed(false)
               }}><Trash2 size={16} /></button>
           </li>)}</ul>}
