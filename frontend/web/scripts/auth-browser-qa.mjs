@@ -224,7 +224,7 @@ try {
     assert.equal(await t.page.locator('.business-action-card').count(), 0)
     await t.screenshot('BUS-01-owner-operational-desktop')
     await t.page.getByRole('button', { name: /Review 3 draft purchase orders/ }).click()
-    await t.page.getByRole('heading', { name: 'Purchase Orders', level: 1 }).waitFor()
+    await t.page.getByRole('heading', { name: 'Purchase Orders', level: 2 }).waitFor()
     await t.check()
     await t.context.close()
     console.log('PASS BUS-01 operational owner three sections and review action')
@@ -242,6 +242,54 @@ try {
     await t.check()
     await t.context.close()
     console.log('PASS BUS-01 operational owner mobile layout')
+  }
+
+  {
+    const t = await scenario('business-owner-all-tabs', { role: 'Owner', hasProducts: true })
+    await t.login()
+    await t.page.getByRole('heading', { name: 'Business Overview' }).waitFor()
+    const modules = [
+      ['Products', 'Products', 'BUS-06-products-compact'],
+      ['Purchase Orders', 'Purchase Orders', 'BUS-20-purchases-compact'],
+      ['Inventory', 'Inventory', 'BUS-27-inventory-compact'],
+      ['Categories & Units', 'Categories & Units', null],
+      ['Suppliers', 'Suppliers', null],
+      ['Customers', 'Customers', null],
+      ['Sales & Returns', 'Sales & Returns', 'BUS-35-sales-preview-compact'],
+      ['Cash Register', 'Cash Register', null],
+      ['Reports', 'Reports', null],
+      ['Staff & Access', 'Team Access', null],
+      ['Business Settings', 'Business Settings', null]
+    ]
+    for (const [label, heading, shot] of modules) {
+      await t.page.locator('.app-sidebar .nav-entry').filter({ hasText: label }).first().click()
+      await t.page.getByRole('heading', { name: heading, exact: true, level: 2 }).waitFor()
+      assert.equal(await t.page.locator('.business-page-header').count(), 0,
+        label + ': duplicated page hero must not render')
+      assert.equal(await t.page.locator('.business-module-title').count(), 0,
+        label + ': old icon/title/description hero must not render')
+      if (shot) await t.screenshot(shot)
+    }
+    await t.check()
+    await t.context.close()
+    console.log('PASS business owner live/preview tabs keep one compact title')
+  }
+
+  {
+    const t = await scenario('business-module-mobile', {
+      role: 'Owner', hasProducts: true, width: 360, height: 780
+    })
+    await t.login()
+    await t.page.getByRole('heading', { name: 'Business Overview' }).waitFor()
+    await t.page.getByRole('button', { name: 'Open navigation' }).click()
+    await t.page.locator('.app-sidebar .nav-entry').filter({ hasText: 'Products' }).first().click()
+    await t.page.getByRole('heading', { name: 'Products', exact: true, level: 2 }).waitFor()
+    assert.ok(await t.page.evaluate(() => document.documentElement.scrollWidth) <= 361,
+      'Products tab must fit 360px viewport without horizontal overflow')
+    await t.screenshot('BUS-06-products-compact-mobile-360')
+    await t.check()
+    await t.context.close()
+    console.log('PASS mobile compact business module layout')
   }
 
   {
