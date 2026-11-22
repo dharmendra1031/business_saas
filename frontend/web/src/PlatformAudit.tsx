@@ -1,5 +1,6 @@
 import { useEffect, useState } from 'react'
 import { api, SessionExpiredError } from './api'
+import { ChevronDown, FileClock, RefreshCw, ShieldCheck } from 'lucide-react'
 
 interface AuditEvent {
   id: number
@@ -26,6 +27,7 @@ export default function PlatformAudit() {
   const [list, setList] = useState<AuditPage | null>(null)
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState('')
+  const [mfaStatus, setMfaStatus] = useState('Checking…')
 
   useEffect(() => {
     let active = true
@@ -42,45 +44,67 @@ export default function PlatformAudit() {
     return () => { active = false }
   }, [page, reload])
 
-  return <>
+  useEffect(() => {
+    let active = true
+    setMfaStatus('Checking…')
+    api<{ enabled: boolean; verified: boolean }>('/auth/mfa/status')
+      .then(result => {
+        if (active) setMfaStatus(result.enabled && result.verified ? 'Verified' : 'Not verified')
+      })
+      .catch(cause => {
+        if (active && !(cause instanceof SessionExpiredError)) setMfaStatus('Unavailable')
+      })
+    return () => { active = false }
+  }, [reload])
+
+  return <div className="platform-audit-page">
     <div className="page-header">
       <div>
+        <span className="platform-kicker">SECURITY & COMPLIANCE</span>
         <h1>Security & Audit</h1>
-        <p>Platform owner sign-in history. Administrative changes will be audited when enabled.</p>
+        <p>Read-only, server-recorded platform actions and identity protections.</p>
       </div>
       <button className="btn btn-outline-secondary btn-sm" type="button"
-        disabled={loading} onClick={() => setReload(value => value + 1)}>Refresh</button>
+        disabled={loading} onClick={() => setReload(value => value + 1)}><RefreshCw size={15} /> Refresh</button>
     </div>
-    <section className="content-section mb-3">
-      <h2>Security Status</h2>
-      <p className="mb-1">Super Admin MFA: <strong>Enabled (Authenticator app)</strong></p>
-      <p className="small text-secondary mb-0">
-        Authenticator verification is required for platform access. Audit history is read-only.
-      </p>
+    <section className="content-section platform-audit-security-card" aria-label="Security status">
+      <span className="platform-audit-symbol"><ShieldCheck size={24} /></span>
+      <div><span className="platform-kicker">SUPER ADMIN AUTHENTICATION</span>
+        <h2>Authenticator verification</h2>
+        <strong className={`platform-state-pill ${mfaStatus === 'Verified' ? 'is-active' : 'is-muted'}`}>{mfaStatus}</strong>
+        <p>Verified with the authenticated platform account endpoint. Shop operations remain tenant-scoped.</p>
+      </div>
+      <span className="platform-audit-lock"><FileClock size={17} /> Read-only audit</span>
     </section>
-    <section className="content-section">
-      <h2>Audit History</h2>
+    <section className="content-section platform-directory-card" aria-label="Platform audit log">
+      <div className="platform-directory-heading"><div>
+        <h2>Platform Activity Log</h2>
+        <p>Recorded actor, entity, action, reason and timestamp</p></div>
+        <span className="platform-data-tag">Audit records</span>
+      </div>
+      <p className="platform-audit-note">Search and date filters require server-side audit queries;
+        this view shows actual paginated records ordered by newest audit ID.</p>
       {error && <div className="alert alert-danger" role="alert">{error}
         <button className="btn btn-outline-secondary btn-sm ms-2" type="button"
           onClick={() => setReload(value => value + 1)}>Retry</button>
       </div>}
-      {loading ? <p role="status">Loading audit history…</p>
-        : list?.total === 0 ? <p className="text-secondary">No recorded platform events yet.</p>
+      {loading ? <div className="platform-directory-loading" role="status">Loading audit history…</div>
+        : list?.total === 0 ? <p className="platform-audit-note">No platform events have been recorded yet.</p>
         : list && <>
           <div className="table-responsive">
-            <table className="table table-sm platform-table">
-              <thead><tr><th>When</th><th>Action</th><th>Actor</th><th>Target</th></tr></thead>
+            <table className="table table-sm platform-table platform-directory-table">
+              <thead><tr><th scope="col">Time</th><th scope="col">Action</th>
+                <th scope="col">Actor</th><th scope="col">Target</th><th scope="col">Details</th></tr></thead>
               <tbody>{list.items.map(event => <tr key={event.id}>
                 <td>{new Date(event.createdAtUtc).toLocaleString()}</td>
-                <td>{event.action}<small className="d-block text-secondary">
-                  {event.reason ?? ''}
-                  {event.previousValue && event.newValue &&
-                    <span className="d-block mt-1">
-                      {new Date(event.previousValue).toLocaleString()} → {new Date(event.newValue).toLocaleString()}
-                    </span>}
-                </small></td>
+                <td><strong>{event.action}</strong><small className="d-block text-secondary">Event #{event.id}</small></td>
                 <td>#{event.actorUserId}</td>
                 <td>{event.targetType}{event.targetId === null ? '' : ` #${event.targetId}`}</td>
+                <td><details className="platform-audit-detail"><summary><ChevronDown size={14} /> View details</summary>
+                  <dl><div><dt>Reason</dt><dd>{event.reason ?? 'Not recorded'}</dd></div>
+                    <div><dt>Previous value</dt><dd>{event.previousValue ?? 'Not recorded'}</dd></div>
+                    <div><dt>New value</dt><dd>{event.newValue ?? 'Not recorded'}</dd></div></dl>
+                </details></td>
               </tr>)}</tbody>
             </table>
           </div>
@@ -101,5 +125,5 @@ export default function PlatformAudit() {
           </div>
         </>}
     </section>
-  </>
+  </div>
 }
