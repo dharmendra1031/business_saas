@@ -832,3 +832,48 @@ button:focus-visible, a:focus-visible, input:focus-visible, select:focus-visible
   .platform-customer-summary { grid-template-columns: 1fr; gap: 10px; }
   .platform-customer-summary > section { padding: 17px; }
 }
+
+/* SA-17–20: real plan-card layout from the approved Super Admin catalogue design. */
+.platform-shell .platform-plans-section { padding: 0; overflow: hidden; }
+.platform-shell .page-header:has(+ .platform-plan-tabs) .platform-kicker { display: block; margin-bottom: 6px; }
+.platform-plan-tabs { margin-bottom: 19px; }
+.platform-plans-intro { display: flex; justify-content: space-between; align-items: center; gap: 15px; padding: 21px 23px 0; }
+.platform-shell .platform-plans-intro h2 { font-size: 1.05rem; font-weight: 780; color: #162844;
+  border: 0; padding: 0; margin: 0 0 4px; }
+.platform-plans-intro p { font-size: .79rem; color: #6f7f98; margin: 0; }
+.platform-plan-cards { display: grid; grid-template-columns: repeat(auto-fit, minmax(205px, 1fr)); gap: 14px; padding: 21px 23px 26px; }
+.platform-plan-card { min-width: 0; display: flex; flex-direction: column; border: 1px solid #e1e5f0; border-radius: 11px;
+  padding: 18px 16px; background: #fff; box-shadow: 0 2px 8px #111d3b08; }
+.platform-plan-card:hover { border-color: #c5b7f5; }
+.platform-plan-card-top { display: flex; align-items: center; justify-content: space-between; gap: 7px; min-height: 34px; margin-bottom: 15px; }
+.platform-plan-card-icon { width: 35px; height: 35px; display: grid; place-items: center; flex-shrink: 0; color: #5945d3;
+  background: #f0edff; border-radius: 9px; }
+.platform-plan-card .platform-state-pill { font-size: .64rem; }
+.platform-shell .platform-plan-card h3 { font-size: 1.07rem; font-weight: 790; color: #1b2c4f; margin: 0 0 3px; }
+.platform-plan-card > p { font-size: .72rem; color: #7c8aa1; margin: 0 0 13px; line-height: 1.5; }
+.platform-plan-card-price { display: flex; align-items: baseline; flex-wrap: wrap; gap: 6px; margin-bottom: 15px;
+  padding-bottom: 13px; border-bottom: 1px solid #ecedf4; }
+.platform-plan-card-price strong { font-size: clamp(1.04rem, 1.9vw, 1.3rem); color: #1e2b51;
+  font-weight: 800; letter-spacing: -.03em; }
+.platform-plan-card-price small { color: #8390a5; font-size: .71rem; }
+.platform-plan-card-details { display: grid; gap: 12px; margin-bottom: 19px; }
+.platform-plan-card-details > div { display: flex; align-items: center; gap: 8px; font-size: .74rem; color: #667793; }
+.platform-plan-card-details svg { flex: 0 0 auto; color: #5a46d1; }
+.platform-plan-card-details span { min-width: 0; flex: 1; }
+.platform-plan-card-details strong { font-size: .75rem; color: #2b395b; font-weight: 740; white-space: nowrap; }
+.platform-plan-card > .btn { margin-top: auto; }
+.platform-plan-table-heading { padding: 18px 23px 13px; border-top: 1px solid #e6eaf3; }
+.platform-shell .platform-plan-table-heading h3 { font-size: .97rem; color: #1b2c4e; font-weight: 780; margin: 0 0 4px; }
+.platform-plan-table-heading p { margin: 0; color: #74839d; font-size: .75rem; }
+.platform-shell .platform-plans-section > .table-responsive .platform-table { margin-bottom: 0; }
+.platform-shell .platform-plans-section > .table-responsive .platform-table th { background: #f6f7fc; font-size: .72rem; padding: 12px; }
+.platform-shell .platform-plans-section > .table-responsive .platform-table td { font-size: .79rem; padding: 13px 12px; }
+@media (max-width: 790px) {
+  .platform-plan-cards { grid-template-columns: repeat(2, minmax(0, 1fr)); padding: 17px; gap: 11px; }
+  .platform-plans-intro, .platform-plan-table-heading { padding-left: 17px; padding-right: 17px; }
+}
+@media (max-width: 520px) {
+  .platform-plan-cards { grid-template-columns: 1fr; }
+  .platform-plan-card { padding: 17px; }
+  .platform-plans-intro { align-items: flex-start; }
+}
