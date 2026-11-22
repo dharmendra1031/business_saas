@@ -7,7 +7,7 @@
 **Design:** [CBK UI Reference](./CBK_UI_REFERENCE.md) · [UX Standards](./UX_STANDARDS.md)  
 **Legacy vertical reference:** Kaifac `development` for salon behavior only; CBK `development` for layout/workflow reference, both read-only.
 
-**Nov 21 workflow override:** Only Platform Super Admin may create new businesses and assign Owners; separate role-based entry experiences share secure backend authorization. Old self-service wording is superseded. The 145-item Master Screen Register is the canonical single-screen implementation and acceptance queue. Existing owner-create API/UI must be changed with server authorization, transaction/audit and migration tests before launch.
+**Nov 21 workflow override:** Only Platform Super Admin may create new businesses and assign Owners; one shared sign-in leads to server-authorized role-specific workspaces. Old self-service wording is superseded. The 145-item Master Screen Register is the canonical single-screen implementation and acceptance queue. Existing owner-create API/UI must be changed with server authorization, transaction/audit and migration tests before launch.
 
 ## 1. Development principles
 

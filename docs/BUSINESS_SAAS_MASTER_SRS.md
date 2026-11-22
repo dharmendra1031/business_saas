@@ -10,7 +10,7 @@
 
 ## 1. Vision and measurable outcomes
 
-A Platform Super Admin securely creates and provisions one or more independently managed businesses, assigns/invites their Business Owners, selects a supported business type and compatible plan/trial, and creates the first location. Verified owners and authorized staff sign into their own role-specific workspaces and start operating without manual infrastructure setup on the standard shared SaaS tier. Dedicated/customer-hosted deployments are reviewed Platform Admin/Enterprise operations.
+A Platform Super Admin securely creates and provisions one or more independently managed businesses, assigns/invites their Business Owners, selects a supported business type and compatible plan/trial, and creates the first location. Verified owners and authorized staff use the shared sign-in to enter their role-specific workspaces and start operating without manual infrastructure setup on the standard shared SaaS tier. Dedicated/customer-hosted deployments are reviewed Platform Admin/Enterprise operations.
 
 Target outcomes (not yet achieved):
 - Owner completes a simple business onboarding and first useful business task in a **5–10 minute target** for the supported starter template, tested with real pilot users.
@@ -86,14 +86,14 @@ A single person may have different roles in multiple businesses. Platform roles 
 
 ### 4.1 Create and activate a new business
 
-1. **Platform Super Admin** signs into the separate platform entry and completes server-verified MFA.
+1. **Platform Super Admin** uses the shared sign-in and completes server-verified MFA before accessing platform controls.
 2. From **Businesses → Create Business**, enter the business name, supported business type, country, legal/trading details where required, timezone, currency and preferred language. Unsupported templates must not look operational.
 3. **Assign the owner** by selecting a verified existing account or creating a time-limited owner invitation. The authenticated Super Admin is the creator/actor, **not automatically the tenant Owner**.
 4. Select a published compatible plan/trial, with price, taxes, limits, period and renewal terms clearly displayed; configure the first location.
 5. Review and explicitly confirm. Provision business + correct Owner membership or pending invitation + plan snapshot + default settings + first location **transactionally and idempotently**, with audited actor and safe retry/recovery. Do not duplicate tenants on network timeout.
 6. Notify/activate the assigned owner using an approved verified invitation/identity flow. Ownership must not be granted by only entering an arbitrary email.
-7. Business Owner uses the separate **Business Owner/Admin login**, sees only authorized existing businesses and completes the correct **Get Started** checklist: location, products/categories, optional opening stock, payment/receipt settings and first Retail sale. No mock transactions.
-8. Cashiers use a separate **POS entry**, assigned role/location and the approved full-width checkout. Backend role and tenant checks, not login-page choice, determine access.
+7. Business Owner uses the **shared sign-in**, sees only authorized existing businesses and completes the correct **Get Started** checklist: location, products/categories, optional opening stock, payment/receipt settings and first Retail sale. No mock transactions.
+8. Cashiers use the **shared sign-in**, assigned role/location and approved full-width POS checkout. Backend role and tenant checks, not login-page choice, determine access.
 
 ### 4.2 Additional business, existing owner and switching
 
@@ -217,7 +217,7 @@ These require final business and country-specific approval before production rel
 ## 13. Decision log
 
 - **BS-001:** Product name and repository: `business_saas`; previous `salon_saas` docs become a **Salon vertical archive/reference**, not platform architecture.
-- **BS-002:** One shared secure identity backend, many businesses and separate authorized BusinessId/locations/memberships/subscriptions. Distinct Super Admin, Owner/Admin and POS/Cashier login *experiences* per DR-001.
+- **BS-002:** One shared secure identity backend, many businesses and separate authorized BusinessId/locations/memberships/subscriptions. One shared sign-in with distinct authorized Super Admin, Owner/Admin and POS/Cashier destinations per DR-001.
 - **BS-003:** Central catalog/templates only enable verified, released workflows; 1,000+ labels are an expansion goal.
 - **BS-004:** .NET 10 LTS modular monolith; React/TypeScript/Bootstrap; CBK read-only UX reference.
 - **BS-005:** All application entity IDs numeric SQL IDENTITY; never use GUID/UUID entity IDs.
@@ -225,4 +225,4 @@ These require final business and country-specific approval before production rel
 - **BS-007:** White-label branding/custom domain is independent of database deployment mode. Shared SQL Server first, contract-driven dedicated SQL Server, other providers only after certification; no customer-supplied connection strings in public APIs.
 - **BS-008:** All modifications restricted to `dharmendra1031/business_saas`; CBK/Kaifac remain read-only references.
 
-- **BS-009 / DR-001 (2026-11-21):** Platform Super Admin exclusively creates/provisions businesses and assigns Owners; Owners/Managers/Cashiers cannot self-create a business. Separate workspace/login experiences with server-checked permissions. The Master Screen Register is the canonical per-screen implementation/acceptance plan; existing owner-create code must be migrated safely and verified before this is treated as shipped.
+- **BS-009 / DR-001 (2026-11-21):** Platform Super Admin exclusively creates/provisions businesses and assigns Owners; Owners/Managers/Cashiers cannot self-create a business. One shared login with role-specific workspaces and server-checked permissions. The Master Screen Register is the canonical per-screen implementation/acceptance plan; existing owner-create code must be migrated safely and verified before this is treated as shipped.

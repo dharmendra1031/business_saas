@@ -30,6 +30,8 @@
 - A Platform Owner goes to MFA setup or the Super Admin shell. Other users see their real assigned businesses; a sole business opens automatically and its role determines the Owner/Manager dashboard or Cashier POS.
 - Users assigned multiple businesses choose one *after* signing in; no role-choice form or login-then-logout on mismatched roles.
 - Reused the existing identity/MFA APIs and business selection. Removed obsolete gateway code and CSS; no new library or backend changes.
+- **Auth/session resilience:** session bootstrap exposes a Retry state on network/server failure instead of treating every error as logout; a successful login transitions to a single session loader, with distinct business loading/retry (no password reentry on transient business API errors).
+- **Unnecessary access call removed:** no redundant authenticated `/platform/access` request or stale workspace query cleanup. `/auth/me` remains the authoritative owner/MFA identity source; backend authorization is unchanged.
 - **Visual QA pending:** confirm responsive layout in browser and final user approval before marking this screen complete.
 
 ## 2. Exact approved-image references examined

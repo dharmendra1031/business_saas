@@ -4,7 +4,7 @@
 **Repository:** `dharmendra1031/business_saas` · **Source of truth:** [Development Roadmap](./DEVELOPMENT_ROADMAP.md), [Master SRS](./BUSINESS_SAAS_MASTER_SRS.md), [UX Standards](./UX_STANDARDS.md)  
 **Scope:** Planning and acceptance tracking, not a claim of implementation. The platform is not production-ready.
 
-> **LATEST SCREEN-LEVEL SOURCE OF TRUTH:** [MASTER_SCREEN_REGISTER.md](./MASTER_SCREEN_REGISTER.md) tracks 145 actual UI work items with stable IDs, roles, acceptance gates and execution order. **DR-001:** Only Platform Super Admin creates/provisions businesses and assigns owners, superseding any older owner self-service references below. Owners/Cashiers use separate workspace entry experiences and cannot create businesses. Existing UI/API has not yet been migrated; a tracker task is not DONE solely because it displays a working component. Preserve the existing BS task IDs, but when executing any BS task cite the corresponding AUTH/SA/BUS/POS screen ID.
+> **LATEST SCREEN-LEVEL SOURCE OF TRUTH:** [MASTER_SCREEN_REGISTER.md](./MASTER_SCREEN_REGISTER.md) tracks 145 actual UI work items with stable IDs, roles, acceptance gates and execution order. **DR-001:** Only Platform Super Admin creates/provisions businesses and assigns owners, superseding any older owner self-service references below. Owners/Cashiers use shared sign-in and separate authorized workspaces; they cannot create businesses. Existing UI/API has not yet been migrated; a tracker task is not DONE solely because it displays a working component. Preserve the existing BS task IDs, but when executing any BS task cite the corresponding AUTH/SA/BUS/POS screen ID.
 
 ## Non-negotiable rule — UI/UX review **after EVERY task**
 
@@ -369,7 +369,7 @@ If any checkbox cannot be verified, keep `TODO` or `UX REVIEW PENDING`, not `DON
 
 ## First executable delivery sequence
 
-**Release slice 1:** Role-specific login entry, **Super Admin-only** verified Business creation and owner assignment, secure business switch (A–D), UX basics (E), minimum plan/trial checks (G), and screen-ID acceptance per the Master Screen Register.  
+**Release slice 1:** Shared login with role-aware workspace routing, **Super Admin-only** verified Business creation and owner assignment, secure business switch (A–D), UX basics (E), minimum plan/trial checks (G), and screen-ID acceptance per the Master Screen Register.  
 **Release slice 2:** Retail catalog (H) → stock (I) → PO/receipt (J) → POS (K) → returns/cash (L) → real reports/pilot (M).  
 **Release slice 3:** Platform admin/entitlements (F), localization (N) and tested cloud paid operations (G), only after supporting routes exist.  
 **Release slice 4:** Reuse licensing and Windows on-prem validation (O); private signing key never reaches the customer or public repository.  

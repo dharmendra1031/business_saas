@@ -41,12 +41,12 @@ Platform Super Admin needs central controls for registered **Business Type creat
 
 ## 0. Non-negotiable product decision and conflict resolution
 
-**Decision DR-001 (latest owner direction, 21 Nov 2026):** Only **Platform Super Admin** creates/provisions a new business and assigns its Business Owner; the Business Owner/Admin logs into a separate business workspace and manages only authorized business operations. A POS/Cashier has a separate login *experience* and dedicated checkout workspace.
+**Decision DR-001 (latest owner direction, 21 Nov 2026):** Only **Platform Super Admin** creates/provisions a new business and assigns its Business Owner; the Business Owner/Admin logs into a separate business workspace and manages only authorized business operations. A POS/Cashier uses the shared sign-in and a dedicated checkout workspace.
 
 - This supersedes the **earlier revisions** of `BUSINESS_SAAS_MASTER_SRS.md` §4 and `APPROVED_UI_UX.md` §5 that allowed owner self-service creation. Those documents have now been textually aligned with this decision; **application code and access-control tests are still pending**. Do not reinstate the superseded self-service path.
 - **Current implementation (22 Nov):** The Owner-facing `Create Business` UI was removed; `POST /api/businesses` is now forbidden by default. Only legacy **Development integration fixtures** may opt into that route using `Tests:AllowLegacyBusinessCreation`; remove this test-compatibility path when fixtures migrate. Platform MFA-only `POST /api/platform/businesses` creates a Starter trial business with an existing verified Owner, first location, audit and idempotency. **P0 gaps**: email verification/invitation delivery, wider plan/entitlement selection, browser UX acceptance and retired fixture compatibility.
 - Super Admin manages SaaS-level businesses, customer accounts, plans/billing, licensing, settings, security and operations **but never edits a tenant's stock, retail sales or POS transactions**. "Only Super Admin creates business" means **exclusive business creation permission**, not removal of all other platform-management functions.
-- Login entry pages are visually separate for Super Admin, Owner/Admin and Cashier, with **one underlying secure authentication system** and server-verified roles/MFA. A role picker does not grant permissions. One ASP.NET API, one React frontend, one underlying business/tenant authorization model; **no duplicate applications or over-engineering**.
+- **One shared sign-in screen** for Super Admin, Owner/Admin and Cashier. The server verifies identity, MFA and role/tenant membership; the user never selects an authorization role before login. Super Admin proceeds to MFA/platform, a single assigned business opens automatically, and multiple assigned businesses require selection after login. One ASP.NET API and React frontend; no duplicated role-specific login pages.
 - **Super Admin has exactly eight canonical main sidebar modules**: **Dashboard, Customers, Businesses, Plans & Billing, Licenses, Platform Settings, Security & Audit, Operations**. The mockups' standalone Users, Subscriptions, Payments, Invoices, Reports, Announcements and System Health are **sub-screens/tabs within these modules**, NOT extra top-level navigation. `Customers` refers to SaaS account owners, while `Business Customers` are that shop's retail customers.
 - Supported Retail V1 first. **Salon, Repair, custom branding, dedicated DB and offline licensing are deferred** until separately scoped and verifiable; do not expose their placeholder controls as working.
 - No invented prices, metrics, customers, stock, tax, payment methods or receipt numbers. Development-only POS endpoints are **not production-ready**.
@@ -95,10 +95,10 @@ The mockup pictures display illustrative controls (Card, UPI, Split, Services, d
 
 | ID | Screen / interaction | Type | Current | Priority | Required outcome / guardrail |
 | --- | --- | --- | --- | --- | --- |
-| AUTH-01 | Workspace entry / role gateway | Page | Partial | P0 | Gateway screen and distinct login links implemented; server validates roles. Browser UX/visual acceptance pending. |
-| AUTH-02 | Super Admin sign-in | Page | Partial | P0 | Premium platform-specific login; platform owner + MFA; never enter shop operations. |
-| AUTH-03 | Business Owner / Manager sign-in | Page | Partial | P0 | Separate branded entry; open authorized business dashboard, no super-admin controls. |
-| AUTH-04 | Cashier sign-in | Page | Partial | P0 | Separate compact entry; open assigned location's POS, no admin sidebar. |
+| AUTH-01 | Shared sign-in / session bootstrap / unavailable state | Page/state | Partial | P0 | One login entry; 401 prompts login, transient session-check failure offers Retry without assuming logout. Browser UX acceptance pending. |
+| AUTH-02 | Super Admin sign-in branch | Flow | Partial | P0 | Shared login; configured platform owner + MFA, then platform shell. No pre-login role selector. |
+| AUTH-03 | Business Owner / Manager sign-in branch | Flow | Partial | P0 | Shared login; server memberships determine authorized business dashboard or business picker. |
+| AUTH-04 | Cashier sign-in branch | Flow | Partial | P0 | Shared login; server-assigned Cashier role leads to available POS; no business-management sidebar. |
 | AUTH-05 | Platform MFA setup and recovery codes | Page | Partial | P0 | MFA enrolment verified against server; securely handle recovery codes. |
 | AUTH-06 | MFA verification challenge | State | Partial | P0 | Recoverable invalid/expired code and attempt limits; no bypass. |
 | AUTH-07 | Business Owner invitation / activation | Flow | Missing | P0 | Super Admin assigns an existing verified account or sends expiring owner invitation. |
@@ -274,7 +274,7 @@ The mockup pictures display illustrative controls (Card, UPI, Split, Services, d
 
 | Screen ID | Changes on `development` | Evidence | Gate |
 | --- | --- | --- | --- |
-| **AUTH-01** | `WorkspaceEntry.tsx` adds three premium entry cards; `App.tsx` wires separate portal query/direct login and filters business membership by role; `styles.css` adds responsive entry/login layouts. | [Gateway commit](https://github.com/dharmendra1031/business_saas/commit/0dca155852858d47c96c940c6be8b3f16f0c7a57) · [Login commit](https://github.com/dharmendra1031/business_saas/commit/5ae9fd65a015300e4706e1e8105529060ff02ffd) · [UI build passed](https://github.com/dharmendra1031/business_saas/actions/runs/44918699661) | **Partial**, not DONE: requires real browser at desktop/tablet/360px, keyboard, authenticated Super Admin/Owner/Cashier checks, Owner business creation path removal with P0 backend provisioning. |
+| **AUTH-01..04** | Shared `AuthPage.tsx` sign-in; `App.tsx` server-driven routing, MFA and genuine business picker with separate loading/retry states. Old `WorkspaceEntry.tsx` removed. | [Gateway removal](https://github.com/dharmendra1031/business_saas/commit/35ba1ae4636dcce9b778453af3b4e9127305faf6) · [Error handling](https://github.com/dharmendra1031/business_saas/commit/e19c642faf9f9283148624eca58edcb65d44d4a1) | **Partial**, not DONE: desktop/mobile browser checks, keyboard, 401/network/session cases, roles/MFA and owner sign-off still required. |
 
 **Important:** This change does not yet implement Super Admin-only business creation; the prior Owner creation path and API must be replaced in **SA-04 through SA-08** with server-enforced authorization and safe owner assignment.
 
@@ -360,7 +360,7 @@ Status: Partial | Missing | Deferred | DONE
 | Product-search dropdown instead of approved catalogue cards | `frontend/web/src/CashCheckout.tsx` | P0: real image/category cards, scan/search and exact prices |
 | Cash tender inside page instead of approved Payment Popup | `frontend/web/src/CashCheckout.tsx` | P0: accessible modal and safe cash submit/retry |
 | Owner dashboard mostly setup actions, not business insights | `frontend/web/src/App.tsx` | P0: real KPI and exception-first dashboard |
-| Generic login for all three roles | `frontend/web/src/App.tsx` | P0: three distinct role entry/login experiences using same backend |
+| Old three-card workspace gateway | `frontend/web/src/WorkspaceEntry.tsx` (removed) | Code refactored to shared sign-in; visual acceptance and end-to-end verification pending |
 | Super Admin eight-menu baseline, but approved montage shows extra illustrative top-level links | `docs/APPROVED_UI_UX.md` and project-approved visuals | Keep eight modules; nest Subscriptions/Payments/Reports under proper groups |
 | Development-only cash-sale API | `backend/BusinessSaas.Api/Features/RetailModule.cs` | Do not expose production POS until correct cash/financial/tax tests, rollout and release approval |
 | Earlier requirement revisions suggested self-service creation | Historical SRS/UX wording (updated 21 Nov 2026) | Current SRS/UX/roadmap/tracker now reflect DR-001; **backend/UI implementation and tests remain P0** |
@@ -369,7 +369,7 @@ Status: Partial | Missing | Deferred | DONE
 
 | Order | ID(s) | Deliverable |
 | ---: | --- | --- |
-| 1 | **AUTH-01, AUTH-02, AUTH-03, AUTH-04** | Three clear workspace entries and role-verified login navigation |
+| 1 | **AUTH-01, AUTH-02, AUTH-03, AUTH-04** | One login, server-verified role routing, MFA and session/business retry states |
 | 2 | **SA-03 to SA-08** | Platform-only create business, assign owner, provision and owner invitation (backend safe) |
 | 3 | **BUS-02, BUS-01, AUTH-11** | Owner sign-in, correct store context and useful premium dashboard |
 | 4 | **POS-01, POS-05, POS-06** | Approved full-width photo grid/cart + payment modal |
