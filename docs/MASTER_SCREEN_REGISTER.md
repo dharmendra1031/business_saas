@@ -30,6 +30,15 @@ Platform Super Admin needs central controls for registered **Business Type creat
 - Every new business provisioning path, module write and public notice will ultimately use the same server-owned policy and audited versions; frontend-only status choices cannot authorize or block actions. Existing tenants must not lose data/access because new type creation is paused.
 - Backend model, statuses, safe maintenance modes, notices, precedence and tests are specified in [Platform Release & Maintenance SRS](./PLATFORM_RELEASE_AND_MAINTENANCE_SRS.md). All related screens remain **Partial/Missing** until browser visual acceptance and full backend tests.
 
+### Iteration 4 — approved POS frontend (22 November 2026)
+
+- `POS-01`: dedicated full-width workspace with navy header; admin sidebar absent when the checkout page is open. The actual product API provides name, SKU, barcode, price and branch stock; the catalogue now renders selectable product cards with honest image placeholders and a live search/scan entry. Responsive desktop split is 61/39, stacking for smaller screens. Category and product photo APIs **do not exist yet**, so no invented category or garment images.
+- `POS-05`: basket has quantity stepper, editable quantity, individual removal, guarded Clear confirmation, actual subtotals and one primary Pay/Checkout CTA.
+- `POS-06`: centered, keyboard-accessible cash-only payment dialog. Tender, validation, change, Cancel/Escape/focus containment and confirmation are in source. The dialog **does not post until confirmation**.
+- `POS-07 / POS-09 / POS-10 / POS-18`: existing idempotent original cash request, pending receipt lookup, committed receipt printing and unknown-outcome recovery were **retained**, not rewritten. Browser/E2E tests and full release acceptance remain pending.
+- **Backend:** unchanged; cash sales remain Development-only and tax/discount/customer/hold/return/register/UPI/Card remain outside supported runtime. Do not mark any POS screen DONE before real browser screenshots and end-to-end tests.
+- Source: `frontend/web/src/CashCheckout.tsx`, `PosCashPaymentDialog.tsx`, `App.tsx`, `styles.pos.css`; approved target: [APPROVED POS UI/UX](./APPROVED_POS_UI_UX.md).
+
 ## 0. Non-negotiable product decision and conflict resolution
 
 **Decision DR-001 (latest owner direction, 21 Nov 2026):** Only **Platform Super Admin** creates/provisions a new business and assigns its Business Owner; the Business Owner/Admin logs into a separate business workspace and manages only authorized business operations. A POS/Cashier has a separate login *experience* and dedicated checkout workspace.
@@ -76,8 +85,8 @@ The mockup pictures display illustrative controls (Card, UPI, Split, Services, d
 
 | Current evidence status | Count |
 | --- | ---: |
-| Missing | 61 |
-| Partial | 70 |
+| Missing | 60 |
+| Partial | 71 |
 | Deferred | 14 |
 
 ### A. Entry, authentication and cross-workspace navigation
@@ -227,7 +236,7 @@ The mockup pictures display illustrative controls (Card, UPI, Split, Services, d
 | POS-03 | Customer search / walk-in selector | Panel | Missing | P1 | Visible on basket, business-scoped customer lookup; optional only if retail policy permits. |
 | POS-04 | Quick add customer | Modal | Missing | P2 | Create customer without losing current cart, with duplicate checks. |
 | POS-05 | Cart quantity / remove / clear | State | Partial | P0 | Inline fast edit, exact money and stock checks; no extra page. |
-| POS-06 | Payment Popup — Cash first | Modal | Missing | P0 | Pay button opens centered accessible dialog: total, received, change, Confirm, Cancel, no posting on open. |
+| POS-06 | Payment Popup — Cash first | Modal | Partial | P0 | Cash-only frontend modal implemented with total, tender, change, focus containment and Cancel/Confirm. Browser visual QA and full cash posting/retry tests still pending. |
 | POS-07 | Payment Popup — processing / unknown outcome | State | Missing | P0 | Disable double submit; reconcile original request before retry, never fake failure/success. |
 | POS-08 | Payment Popup — Card/UPI/Split | Tab | Deferred | P2 | Only show/enabled after verified backend and configured payment capability. |
 | POS-09 | Sale complete / committed receipt | State | Partial | P0 | Persisted sale ID, exact totals, Print / New Sale, original basket safely cleared. |
