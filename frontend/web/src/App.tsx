@@ -5,6 +5,7 @@ import CashCheckout from './CashCheckout'
 import TeamMembers from './TeamMembers'
 import SubscriptionCheckout from './SubscriptionCheckout'
 import RetailCatalog, { type RetailSection } from './RetailCatalog'
+import BusinessOverview from './BusinessOverview'
 import PlatformAdmin, { type PlatformSection } from './PlatformAdmin'
 import PlatformMfaSetup from './PlatformMfaSetup'
 import { WorkspaceEntry, accessContent, type AccessPortal } from './WorkspaceEntry'
@@ -209,7 +210,7 @@ export default function App() {
     }} />
 
   return (
-    <div className={`app-shell${page === 'platform' ? ' platform-shell' : ''}${page === 'retail' && dashboard?.roleCode === 'Cashier' ? ' pos-shell' : ''}`}>
+    <div className={`app-shell${page === 'platform' ? ' platform-shell' : ''}${page === 'retail' && dashboard?.roleCode === 'Cashier' ? ' pos-shell' : ''}${page === 'retail' && dashboard?.roleCode !== 'Cashier' ? ' business-shell' : ''}`}>
       {menuOpen && <button type="button" className="sidebar-scrim" aria-label="Close navigation"
         onClick={() => { setMenuOpen(false); menuToggle.current?.focus() }} />}
       <aside id="main-navigation" className={`app-sidebar${menuOpen ? ' is-open' : ''}`}>
@@ -238,11 +239,11 @@ export default function App() {
         {page === 'retail' && dashboard && <>
           <div className="sidebar-heading">{dashboard.roleCode === 'Cashier' ? 'CHECKOUT' : 'BUSINESS OPERATIONS'}</div>
           {([
-            ['cash', 'POS · New Sale', ShoppingCart],
-            ['overview', 'Business Dashboard', LayoutDashboard],
+            ['overview', 'Dashboard', LayoutDashboard],
             ['products', 'Products', Package],
+            ['purchases', 'Purchase Orders', ShoppingCart],
             ['stock', 'Inventory', Boxes],
-            ['purchases', 'Purchase Orders', ShoppingCart]
+            ['cash', 'Open POS Checkout', ShoppingCart]
           ] as const).filter(([section]) => section === 'cash' ? dashboard.cashSaleEnabled : dashboard.roleCode !== 'Cashier' || section === 'overview')
             .map(([section, label, Icon]) => <button key={section} type="button"
               className={`nav-entry${section === 'cash' ? ' pos-nav-entry' : ''}${retailPage === section ? ' active' : ''}`}
@@ -388,7 +389,7 @@ export default function App() {
           {page === 'businesses' && (
             <>
               <div className="page-header">
-                <div><h1>My Businesses</h1><p>Choose a business to continue, or create a new one.</p></div>
+                <div><h1>My Assigned Businesses</h1><p>Select a business assigned to your account. New businesses are provisioned by the Platform Super Admin.</p></div>
 
               </div>
               {businesses.length === 0 ? (
@@ -445,58 +446,20 @@ export default function App() {
                     dateStyle: 'medium', timeStyle: 'short', timeZone: dashboard.business.timeZoneId
                   })}`}
               </p>}
-              {retailPage === 'overview' && <>
-              {dashboard.roleCode === 'Owner' &&
-                <SubscriptionCheckout key={dashboard.business.id} businessId={dashboard.business.id} />}
-              {dashboard.canOperate && dashboard.pendingApprovals > 0 && <button className="btn btn-primary mb-2"
-                onClick={() => { setApprovalList(true); setRetailPage('purchases') }}>
-                Review pending orders ({dashboard.pendingApprovals})</button>}
-              {dashboard.canOperate && dashboard.roleCode !== 'Cashier' && (
-                <section className="content-section business-home-actions" aria-label="Business administration shortcuts">
-                  <h2>{dashboard.hasProducts ? 'Manage your shop' : 'Get your shop ready'}</h2>
-                  {!dashboard.hasProducts && <>
-                  <p className="mb-2">Start with Products, then enter Opening Stock or receive a Purchase. Use the buttons below or the sidebar.</p>
-                  <p className="small text-secondary mb-0">For a new product, enter its name and sale price. Additional details are optional unless your shop needs them.</p></>}
-                  <div className="d-flex flex-wrap gap-2 mt-3">
-                    {dashboard.cashSaleEnabled && <button className="btn btn-primary" type="button"
-                      onClick={() => setRetailPage('cash')}><ShoppingCart size={18} /> Open POS Checkout</button>}
-                    <button className={`btn ${dashboard.cashSaleEnabled ? 'btn-outline-secondary' : 'btn-primary'}`}
-                      type="button" onClick={() => setRetailPage('products')}>{dashboard.hasProducts ? 'Manage Products' : 'Add Products'}</button>
-                    <button className="btn btn-outline-secondary" type="button" onClick={() => setRetailPage('stock')}>Inventory</button>
-                    <button className="btn btn-outline-secondary" type="button" onClick={() => { setApprovalList(false); setRetailPage('purchases') }}>Purchase Orders</button>
-                  </div>
-                  {!dashboard.cashSaleEnabled && <p className="small text-secondary mt-3 mb-0">
-                    POS checkout is not enabled in this environment. Shop setup and inventory remain available.
-                  </p>}
-                </section>
-              )}
-              {dashboard.roleCode === 'Cashier' && !dashboard.cashSaleEnabled && <section className="content-section">
-                <h2>POS checkout is not available</h2>
-                <p>This environment has not enabled POS billing. Ask your shop owner or administrator about checkout availability.</p>
-              </section>}
-              <details className="content-section">
-                <summary>Shop details and locations</summary>
-                <div className="detail-grid mt-3">
-                <section className="content-section">
-                  <h2>Store Details</h2>
-                  <dl className="detail-list">
-                    <div><dt>Business</dt><dd>{dashboard.business.name}</dd></div>
-                    <div><dt>Business Type</dt><dd>{dashboard.business.typeName}</dd></div>
-                    <div><dt>Country</dt><dd>{dashboard.business.countryCode}</dd></div>
-                    <div><dt>Currency</dt><dd>{dashboard.business.currencyCode}</dd></div>
-                    <div><dt>Timezone</dt><dd>{dashboard.business.timeZoneId}</dd></div>
-                  </dl>
-                </section>
-                <section className="content-section">
-                  <h2>Shop Locations</h2>
-                  {dashboard.locations.map(location => (
-                    <div className="location-row" key={location.id}><Store size={18} /><div><strong>{location.name}</strong><small>{location.code}</small></div></div>
-                  ))}
-                </section>
-                </div>
-              </details>
-
+              {retailPage === 'overview' && dashboard.roleCode !== 'Cashier' && <>
+                <BusinessOverview dashboard={dashboard}
+                  onNavigate={section => { setApprovalList(false); setRetailPage(section) }}
+                  onReviewApprovals={() => { setApprovalList(true); setRetailPage('purchases') }} />
+                {dashboard.roleCode === 'Owner' && <details className="content-section business-subscription-panel">
+                  <summary><CreditCard size={17} /> Subscription payment and billing status</summary>
+                  <SubscriptionCheckout key={dashboard.business.id} businessId={dashboard.business.id} />
+                </details>}
               </>}
+              {retailPage === 'overview' && dashboard.roleCode === 'Cashier' && !dashboard.cashSaleEnabled &&
+                <section className="content-section">
+                  <h2>POS checkout is not available</h2>
+                  <p>This environment has not enabled POS billing. Ask your shop owner or administrator about checkout availability.</p>
+                </section>}
               {retailPage === 'cash' && dashboard.cashSaleEnabled && user && <CashCheckout
                 key={user.id + '-' + dashboard.business.id} userId={user.id} dashboard={dashboard} />}
               {retailPage !== 'cash' && retailPage !== 'overview' && retailPage !== 'team' && dashboard.roleCode !== 'Cashier' &&
