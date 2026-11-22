@@ -1,6 +1,6 @@
 import { useEffect, useRef, useState, type FormEvent } from 'react'
-import { Activity, ArrowLeft, ArrowRight, Boxes, Building2, CheckCircle2, CreditCard, KeyRound, LayoutDashboard, LogOut, Menu, Package, Plus, Settings2, ShieldCheck, ShoppingCart, Store, Tags, Truck, UserRound, Users } from 'lucide-react'
-import { api, operationKey, post, resetCsrf, SessionExpiredError, setSessionExpiredHandler, type Business, type BusinessMarket, type BusinessType, type RetailDashboard, type User } from './api'
+import { Activity, ArrowLeft, ArrowRight, Boxes, Building2, CheckCircle2, CreditCard, KeyRound, LayoutDashboard, LogOut, Menu, Package, Settings2, ShieldCheck, ShoppingCart, Store, Tags, Truck, UserRound, Users } from 'lucide-react'
+import { api, post, resetCsrf, SessionExpiredError, setSessionExpiredHandler, type Business, type RetailDashboard, type User } from './api'
 import CashCheckout from './CashCheckout'
 import TeamMembers from './TeamMembers'
 import SubscriptionCheckout from './SubscriptionCheckout'
@@ -9,7 +9,7 @@ import PlatformAdmin, { type PlatformSection } from './PlatformAdmin'
 import PlatformMfaSetup from './PlatformMfaSetup'
 import { WorkspaceEntry, accessContent, type AccessPortal } from './WorkspaceEntry'
 
-type Page = 'loading' | 'gateway' | 'login' | 'register' | 'mfa-setup' | 'businesses' | 'create' | 'retail' | 'platform'
+type Page = 'loading' | 'gateway' | 'login' | 'register' | 'mfa-setup' | 'businesses' | 'retail' | 'platform'
 
 function visibleBusinessesForPortal(items: Business[], portal: AccessPortal | null): Business[] {
   if (portal === 'pos') return items.filter(item => item.roleCode === 'Cashier')
@@ -222,8 +222,8 @@ export default function App() {
         </div>}
         {!user?.isPlatformOwner && page !== 'platform' && <div className="sidebar-heading">ACCOUNT</div>}
         {!user?.isPlatformOwner && page !== 'platform' && <button type="button" ref={businessNav}
-          className={`nav-entry${page === 'businesses' || page === 'create' ? ' active' : ''}`}
-          aria-current={page === 'businesses' || page === 'create' ? 'page' : undefined}
+          className={`nav-entry${page === 'businesses' ? ' active' : ''}`}
+          aria-current={page === 'businesses' ? 'page' : undefined}
           onClick={() => {
             if (menuOpen) menuToggle.current?.focus()
             setMenuOpen(false)
@@ -328,7 +328,6 @@ export default function App() {
                 page === 'retail' ? dashboard?.roleCode === 'Owner' ? 'BUSINESS ADMIN' : 'STORE MANAGER' :
                 'BUSINESS ACCOUNT'}</small>
               <strong>{page === 'retail' ? `${dashboard?.business.name} / ${retailTitles[retailPage]}` :
-                page === 'create' ? 'Create Business' :
                 page === 'platform' ? 'Platform Management' : 'My Businesses'}</strong>
             </span>
           </div>
@@ -366,9 +365,7 @@ export default function App() {
             <>
               <div className="page-header">
                 <div><h1>My Businesses</h1><p>Choose a business to continue, or create a new one.</p></div>
-                {businesses.length > 0 && accessPortal !== 'pos' && <button className="btn btn-primary" onClick={() => { setNotice(''); setError(''); setPage('create') }}>
-                  <Plus size={18} /> Create Business
-                </button>}
+
               </div>
               {businesses.length === 0 ? (
                 <section className="empty-state">
@@ -379,7 +376,7 @@ export default function App() {
                     : 'A Platform Super Admin must provision your business and assign you as Owner or Manager.'}</p>
                   <p className="small">Signed in as {user?.email}. Refresh after your administrator grants access.</p>
                   <button className="btn btn-outline-secondary me-2" onClick={() => void loadBusinesses()}>Refresh access</button>
-                  {accessPortal !== 'pos' && <button className="btn btn-primary" onClick={() => setPage('create')}>Create Business <ArrowRight size={16} /></button>}
+
                 </section>
               ) : (
                 <div className="business-list">
@@ -393,14 +390,6 @@ export default function App() {
                 </div>
               )}
             </>
-          )}
-
-          {page === 'create' && (
-            <CreateBusiness onCancel={() => setPage('businesses')} onCreated={async id => {
-              await loadBusinesses()
-              setNotice('Business created successfully.')
-              await openBusiness(id)
-            }} />
           )}
 
           {page === 'retail' && dashboard && (
@@ -648,146 +637,6 @@ function AuthPage({ mode, portal, onBack, onChange, onSignedIn, sessionExpired, 
         </div>
       </main>
     </div>
-  )
-}
-
-function CreateBusiness({ onCancel, onCreated }: {
-  onCancel: () => void
-  onCreated: (id: number) => Promise<void>
-}) {
-  const [types, setTypes] = useState<BusinessType[]>([])
-  const [typeId, setTypeId] = useState(0)
-  const [name, setName] = useState('')
-  const [markets, setMarkets] = useState<BusinessMarket[]>([])
-  const [countrySearch, setCountrySearch] = useState('')
-  const [selectedCurrency, setSelectedCurrency] = useState('')
-  const [selectedTimeZone, setSelectedTimeZone] = useState('')
-  const market = markets.find(item =>
-    `${item.name} (${item.code})`.toLowerCase() === countrySearch.trim().toLowerCase() ||
-    item.name.toLowerCase() === countrySearch.trim().toLowerCase() ||
-    item.code.toLowerCase() === countrySearch.trim().toLowerCase())
-  const currency = market?.currencies.includes(selectedCurrency) ? selectedCurrency : market?.currencies[0] ?? ''
-  const timeZone = market?.timeZones.includes(selectedTimeZone) ? selectedTimeZone : market?.timeZones[0] ?? ''
-  const [requestKey] = useState(operationKey)
-  const [busy, setBusy] = useState(false)
-  const [error, setError] = useState('')
-  const [loadingOptions, setLoadingOptions] = useState(true)
-  const [loadFailed, setLoadFailed] = useState(false)
-  const [retryOptions, setRetryOptions] = useState(0)
-
-  useEffect(() => {
-    let active = true
-    setLoadingOptions(true)
-    setLoadFailed(false)
-    setError('')
-    Promise.all([
-      api<BusinessType[]>('/business-types'),
-      api<BusinessMarket[]>('/business-markets')
-    ]).then(([list, supportedMarkets]) => {
-      if (!active) return
-      setTypes(list)
-      setTypeId(list[0]?.id ?? 0)
-      setMarkets(supportedMarkets)
-    }).catch(cause => {
-      if (!active || cause instanceof SessionExpiredError) return
-      setError(message(cause))
-      setLoadFailed(true)
-    }).finally(() => {
-      if (active) setLoadingOptions(false)
-    })
-    return () => { active = false }
-  }, [retryOptions])
-
-  async function create(event: FormEvent) {
-    event.preventDefault()
-    setBusy(true)
-    setError('')
-    try {
-      const result = await post<{ id: number }>('/businesses', {
-        name, businessTypeId: typeId, countryCode: market?.code,
-        currencyCode: currency, timeZoneId: timeZone, requestKey
-      })
-      await onCreated(result.id)
-    } catch (cause) {
-      setError(message(cause))
-    } finally {
-      setBusy(false)
-    }
-  }
-
-  return (
-    <>
-      <div className="page-header"><div>
-        <button className="back-link" onClick={onCancel}><ArrowLeft size={16} /> My Businesses</button>
-        <h1>Create Business</h1><p>Choose a supported business type and enter your shop details.</p>
-      </div></div>
-      <section className="content-section form-panel">
-        <form onSubmit={event => void create(event)} aria-busy={busy || loadingOptions}>
-          {error && <div className="alert alert-danger" role="alert">{error}</div>}
-          {loadingOptions && <p className="text-secondary" role="status">Loading business setup options…</p>}
-          {loadFailed && <button type="button" className="btn btn-outline-secondary mb-3"
-            onClick={() => setRetryOptions(value => value + 1)}>Retry loading options</button>}
-          {!loadingOptions && !loadFailed && types.length === 0 &&
-            <p className="alert alert-info" role="status">No business types are available yet.</p>}
-          <div className="form-grid">
-            <div><label className="form-label" htmlFor="businessName">Business name *</label>
-              <input id="businessName" className="form-control" value={name} onChange={event => setName(event.target.value)}
-                maxLength={150} minLength={2} required autoFocus placeholder="Enter business name" /></div>
-            <div><label className="form-label" htmlFor="businessType">Business type *</label>
-              <select id="businessType" className="form-select" value={typeId}
-                onChange={event => setTypeId(Number(event.target.value))} required>
-                {types.length === 0 && <option value={0}>{loadingOptions ? 'Loading business types…' : 'No business types available'}</option>}
-                {types.map(type => <option value={type.id} key={type.id}>{type.name}</option>)}
-              </select></div>
-            <div className="form-wide">
-              <label className="form-label" htmlFor="country">Country *</label>
-              <input id="country" className="form-control" type="search" list="business-countries"
-                aria-describedby={countrySearch && !market ? 'country-help' : undefined}
-                aria-invalid={Boolean(countrySearch && !market)}
-                autoComplete="off" placeholder="Search country name or ISO code"
-                value={countrySearch}
-                onChange={event => {
-                  setCountrySearch(event.target.value)
-                  setSelectedCurrency('')
-                  setSelectedTimeZone('')
-                }} required />
-              <datalist id="business-countries">
-                {markets.map(item => <option key={item.code} value={`${item.name} (${item.code})`} />)}
-              </datalist>
-              {countrySearch && !market && <div id="country-help" className="field-help text-danger">Select a country from the suggestions.</div>}
-            </div>
-            <div className="form-wide">
-              <p className="small text-secondary mb-2">
-                Currency: <strong>{currency || '—'}</strong> · Timezone: <strong>{timeZone || '—'}</strong>
-              </p>
-              <details>
-                <summary>Change currency or timezone</summary>
-                <div className="form-grid mt-2">
-                  <div>
-              <label className="form-label" htmlFor="currency">Currency *</label>
-              <select id="currency" className="form-select" value={currency}
-                onChange={event => setSelectedCurrency(event.target.value)} disabled={!market} required>
-                {market?.currencies.map(code => <option key={code} value={code}>{code === 'XXX' ? 'No official currency' : code}</option>)}
-              </select>
-            </div>
-            <div>
-              <label className="form-label" htmlFor="timezone">Timezone *</label>
-              <select id="timezone" className="form-select" value={timeZone}
-                onChange={event => setSelectedTimeZone(event.target.value)} disabled={!market} required>
-                {market?.timeZones.map(zone => <option key={zone} value={zone}>{zone}</option>)}
-              </select>
-                  </div>
-                </div>
-              </details>
-            </div>
-          </div>
-          <div className="form-footer"><button type="button" className="btn btn-outline-secondary" onClick={onCancel}>Cancel</button>
-            <button type="submit" className="btn btn-primary" disabled={busy || loadingOptions || loadFailed || typeId === 0 || !market}>
-              {busy ? 'Creating…' : 'Create Business'} <ArrowRight size={16} />
-            </button></div>
-        </form>
-      </section>
-    </>
   )
 }
 
