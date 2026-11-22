@@ -483,3 +483,24 @@ button:focus-visible, a:focus-visible, input:focus-visible, select:focus-visible
   .provision-heading .provision-security { max-width: 100%; }
   .provision-review > div { gap: 9px; font-size: .8rem; }
 }
+
+/* Platform visual approval: 21 Nov 2026 final Super Admin montage.
+   Navy shell, violet-blue active navigation and primary actions, white canvas.
+   Scoped to Platform only: Business Admin and approved POS remain independent. */
+.platform-shell { --brand: #5b42de; --brand-hover: #4a33c6; }
+.platform-shell .app-sidebar { background: #101939; }
+.platform-shell .app-topbar { background: #101939; border-color: #202b54; }
+.platform-shell .brand-mark { background: #5b42de; }
+.platform-shell .nav-entry.active,
+.platform-shell .nav-entry:not(:disabled):hover { background: #5b42de; color: #fff; }
+.platform-shell .topbar-workspace small { color: #c1b7ff; }
+.platform-shell .platform-metric-top svg,
+.platform-shell .platform-panel-heading h2 svg { color: #6044d8; }
+.platform-shell .platform-activity-dot { background: #6044d8; }
+.platform-shell .provision-step.is-current .provision-step-number { background: #5b42de; border-color: #5b42de; }
+.platform-shell .provision-intro-icon { color: #5740c8; background: #efedff; }
+.platform-shell .provision-security { color: #5544b8; border-color: #ddd6fd; background: #f4f1ff; }
+.platform-shell .provision-plan-card { border-color: #c6bafa; background: #f9f7ff; }
+.platform-shell .btn-primary { --bs-btn-bg: #5b42de; --bs-btn-border-color: #5b42de;
+  --bs-btn-hover-bg: #4a33c6; --bs-btn-hover-border-color: #4a33c6;
+  --bs-btn-active-bg: #452fb9; --bs-btn-active-border-color: #452fb9; }
