@@ -12,6 +12,9 @@ public static class BusinessEndpoints
 {
     private static readonly BusinessMarket[] Markets = LoadMarkets();
 
+    internal static bool ValidMarket(string country, string currency, string timeZone) =>
+        Markets.Any(x => x.Code == country && x.Currencies.Contains(currency) && x.TimeZones.Contains(timeZone));
+
     public static void MapBusinessEndpoints(this WebApplication app)
     {
         var group = app.MapGroup("/api").RequireAuthorization();
