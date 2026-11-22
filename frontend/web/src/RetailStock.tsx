@@ -180,13 +180,7 @@ export default function RetailStock({ businessId, locations, canOperate, isOwner
   return (
     <section className="content-section retail-masters business-module-card" aria-label="Retail stock">
       <div className="masters-heading business-module-heading">
-        <div className="business-module-title">
-          <span className="business-module-icon"><Boxes size={23} /></span>
-          <div><span className="business-eyebrow">LOCATION INVENTORY</span>
-            <h2>Inventory</h2>
-            <p>Verify actual stock balances, opening quantities and stock movement history by location.</p>
-          </div>
-        </div>
+        <h2>Inventory</h2>
         <div className="business-location-picker">
           <label className="form-label" htmlFor="stock-location"><MapPin size={16} /> Location</label>
           <select id="stock-location" className="form-select" value={locationId}
