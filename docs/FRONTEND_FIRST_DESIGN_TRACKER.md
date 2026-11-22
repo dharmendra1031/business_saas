@@ -109,3 +109,12 @@ This is a visual scope tracker, **not** a statement that all frontend screens ar
 - Next focus: review mobile visual fidelity and continue the **dedicated POS** based on approved Ibdaa inspiration, without enabling unintegrated payment options.
 
 **Business UI batch CI evidence (22 Nov):** [GitHub Actions run 45009702082](https://github.com/dharmendra1031/business_saas/actions/runs/45009702082) at code commit `218ef9c`: frontend TypeScript and Vite production build **PASSED**, backend tests **PASSED**, isolated SQL Server integration **PASSED**. Earlier failed runs in this batch were TypeScript route narrowing errors; the final `isRetailSection` guard fixed them. CI does not substitute for screenshot/pixel-level visual acceptance.
+
+## 7. DR-002 — Release Policy, Business Type Availability & Maintenance UI (22 Nov 2026)
+
+- **New approved capability:** Platform Super Admin can eventually control which registered Business Types can be provisioned; distinguish Available, Coming Soon, Under Construction, Paused and Retired; roll out modules independently; schedule scoped maintenance modes and publish targeted notices.
+- **No new top-level sidebar item:** Under existing **Platform Settings**, tab menu adds **Maintenance** and **Announcements** to General, Business Types, Modules & Access, Languages and transactional Notifications.
+- **Source:** `frontend/web/src/PlatformAvailabilityPreview.tsx` (new), `PlatformModulePreview.tsx` (integrated tabs), scoped `styles.css`.
+- **Frontend behavior today:** Business Types tab reads `GET /api/business-types` (catalogue list only); UI can locally choose a sample state, module family and notice/maintenance copy, scope, operating mode and times to preview the layout. **None of these values are saved, activated or published.** No server release state or maintenance-window APIs exist.
+- **Architecture contract:** [Platform Release & Maintenance SRS](./PLATFORM_RELEASE_AND_MAINTENANCE_SRS.md). No duplicated booleans, fake demo enabled statuses or arbitrary DB-defined business types. Future server-side provisioning and module execution gates must validate state; use existing platform audit, typed registered scopes and row-version concurrency.
+- **Visual QA:** Based on approved navy/violet Super Admin visual system (compact cards, state labels, responsive forms). **Actual 1536/1366/768/360 browser screenshot comparison and product-owner approval pending.** Do not mark `SA-33..39` as DONE.
