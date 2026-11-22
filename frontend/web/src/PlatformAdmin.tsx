@@ -5,6 +5,8 @@ import PlatformCustomers from './PlatformCustomers'
 import PlatformAudit from './PlatformAudit'
 import PlatformPlans from './PlatformPlans'
 import PlatformOperations from './PlatformOperations'
+import PlatformCreateBusiness from './PlatformCreateBusiness'
+import { Plus } from 'lucide-react'
 
 export type PlatformSection = 'overview' | 'customers' | 'businesses' | 'plans' | 'audit' | 'operations'
 
@@ -57,6 +59,7 @@ function PlatformBusinesses({ selectedBusinessId, onBilling }: { selectedBusines
   const [statusReason, setStatusReason] = useState('')
   const [statusBusy, setStatusBusy] = useState(false)
   const [notice, setNotice] = useState('')
+  const [creating, setCreating] = useState(false)
 
   useEffect(() => {
     let active = true
@@ -160,6 +163,13 @@ function PlatformBusinesses({ selectedBusinessId, onBilling }: { selectedBusines
   useEffect(() => {
     if (selectedBusinessId !== null) void openBusiness(selectedBusinessId)
   }, [selectedBusinessId])
+
+  if (creating) return <PlatformCreateBusiness onCancel={() => setCreating(false)}
+    onCreated={id => {
+      setCreating(false)
+      setReload(value => value + 1)
+      void openBusiness(id)
+    }} />
 
   if (details) {
     return (
@@ -305,9 +315,12 @@ function PlatformBusinesses({ selectedBusinessId, onBilling }: { selectedBusines
     <>
       <div className="page-header">
         <div>
-          <h1>Platform Super Admin</h1>
-          <p>All customer businesses and subscription status. Operational business data remains private.</p>
+          <h1>Businesses</h1>
+          <p>Manage registered businesses, verified owners and platform subscriptions.</p>
         </div>
+        <button type="button" className="btn btn-primary" onClick={() => { setError(''); setCreating(true) }}>
+          <Plus size={18} /> Create Business
+        </button>
       </div>
       <section className="content-section">
         <form className="platform-search mb-3" onSubmit={applySearch}>
