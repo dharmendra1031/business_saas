@@ -13,6 +13,15 @@ The owner approved designing and visually accepting all released screens **befor
 
 **Visual QA remaining:** Compare real authenticated browser captures at 1536×864, 1366×768, 768px and 360px to approved reference images. A matching CSS source and green CI build do **not** certify pixel-level fidelity or owner approval.
 
+### Iteration 3 — Business Owner/Admin frontend batch (22 November 2026)
+
+- `BUS-01` Dashboard: `BusinessOverview.tsx` now implements an enterprise blue/navy role-specific layout with location count, server `hasProducts` state, real owner draft-PO count, subscription status, working management-module action cards, setup guidance and location list.
+- `AUTH-11` / `BUS-03` business selection: enhanced assigned-business cards with role/market identity; only Super Admin may create a tenant.
+- `BUS-06..08`, `BUS-10..15`, `BUS-17..18`, `BUS-20..25`, `BUS-27..32`: products, categories/units, contacts, purchases and inventory received shared enterprise headers, data tables and responsive styling. Existing real APIs, stock posting and approvals remain unchanged.
+- `BUS-35..47`, `BUS-53..55`: **design-preview UI only**, not working sales, returns, register, reports or settings; `BusinessPreview.tsx` makes tab flows visually inspectable with explicit no-backend messaging and no fictitious records, payments or totals.
+- Business Owner/Admin and Cashier navigation are separated further: with checkout enabled a Cashier no longer sees Business Dashboard in the sidebar. The full-width approved POS shell is still a separate unfinished frontend milestone.
+- **No screen becomes DONE** from this source implementation or passing build alone. Exact image comparison requires authenticated browser screenshots at 1536×864, 1366×768, 768px and 360px and owner sign-off. See [Frontend Design Tracker](./FRONTEND_FIRST_DESIGN_TRACKER.md).
+
 ## 0. Non-negotiable product decision and conflict resolution
 
 **Decision DR-001 (latest owner direction, 21 Nov 2026):** Only **Platform Super Admin** creates/provisions a new business and assigns its Business Owner; the Business Owner/Admin logs into a separate business workspace and manages only authorized business operations. A POS/Cashier has a separate login *experience* and dedicated checkout workspace.
