@@ -1868,6 +1868,10 @@ public sealed class BusinessFlowTests
             requestKey = "platform-provision-verified-0001"
         };
 
+        // The historical owner-create endpoint is disabled, even in Development
+        // unless a legacy integration fixture explicitly opts in.
+        Assert.Equal(HttpStatusCode.Forbidden,
+            (await Post(owner, "/api/businesses", body)).StatusCode);
         Assert.Equal(HttpStatusCode.Forbidden,
             (await Post(outsider, "/api/platform/businesses", body)).StatusCode);
         Assert.Equal(HttpStatusCode.Forbidden,
