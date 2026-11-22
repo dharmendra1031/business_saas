@@ -59,6 +59,8 @@ The following source-level changes have been committed on `development` against 
 
 **Intentional gaps:** the server currently does **not** return product images, category facets or a customer selector for this cash-sale API, so the UI uses plain product icons and does not invent categories, customer data, discounts, Card/UPI/Split or real production availability. Pending-sale reconciliation, idempotent posting and receipt printing reuse existing logic. The API is still Development-only.
 
+**22 Nov POS loading UX refinement:** `CashCheckout.tsx` now distinguishes the actual product API loading state from a verified empty result, announces loading via `role="status"` and `aria-busy`, and avoids briefly showing “No products” while a request is pending. This is a focused frontend-only fix; it does not alter cash posting or server-side stock validation.
+
 **Acceptance status remains not done:** no authenticated desktop/mobile browser screenshot comparison to the approved PNG, live cash transaction E2E or receipt-printer acceptance has been recorded yet. Keep the checklist below unchecked until those actual tests pass.
 
 ## 4. Implementation acceptance checklist
