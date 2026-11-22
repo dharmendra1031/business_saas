@@ -1,4 +1,5 @@
 import { useEffect, useState, type FormEvent } from 'react'
+import { ArrowLeft, ArrowRight, Building2, CheckCircle2, Mail, RefreshCw, Search, ShieldCheck, UserRound, Users, XCircle } from 'lucide-react'
 import { api, SessionExpiredError } from './api'
 
 interface Customer {
@@ -30,7 +31,14 @@ interface CustomerDetails {
   businesses: OwnedBusiness[]
 }
 
-export default function PlatformCustomers() {
+function VerificationBadge({ confirmed }: { confirmed: boolean }) {
+  return <span className={`platform-state-pill ${confirmed ? 'is-active' : 'is-muted'}`}>
+    {confirmed ? <CheckCircle2 size={13} aria-hidden="true" /> : <XCircle size={13} aria-hidden="true" />}
+    {confirmed ? 'Verified' : 'Not verified'}
+  </span>
+}
+
+export default function PlatformCustomers({ onViewBusiness }: { onViewBusiness: (businessId: number) => void }) {
   const [search, setSearch] = useState('')
   const [term, setTerm] = useState('')
   const [page, setPage] = useState(1)
@@ -50,7 +58,7 @@ export default function PlatformCustomers() {
       .catch(cause => {
         if (!active || cause instanceof SessionExpiredError) return
         setList(null)
-        setError('Unable to load customer accounts.')
+        setError('Unable to load customer accounts. Check your access and retry.')
       })
       .finally(() => { if (active) setLoading(false) })
     return () => { active = false }
@@ -63,7 +71,7 @@ export default function PlatformCustomers() {
       setDetails(await api<CustomerDetails>(`/platform/customers/${id}`))
     } catch (cause) {
       if (!(cause instanceof SessionExpiredError))
-        setError('Unable to open customer account.')
+        setError('Unable to open customer details. Please retry.')
     } finally {
       setDetailLoading(false)
     }
@@ -76,101 +84,148 @@ export default function PlatformCustomers() {
     setDetails(null)
   }
 
-  if (details) return <>
-    <div className="page-header">
-      <div>
-        <button type="button" className="back-link" onClick={() => { setDetails(null); setError('') }}>
-          All customers
-        </button>
-        <h1>{details.email}</h1>
-        <p>Customer #{details.id} · Read-only account summary</p>
-      </div>
-    </div>
-    <section className="content-section">
-      <dl className="detail-list">
-        <div><dt>Customer ID</dt><dd>{details.id}</dd></div>
-        <div><dt>Email</dt><dd>{details.email}</dd></div>
-        <div><dt>Email verified</dt><dd>{details.emailConfirmed ? 'Yes' : 'No'}</dd></div>
-        <div><dt>Owned Businesses</dt><dd>{details.businesses.length}</dd></div>
-      </dl>
-    </section>
-    <section className="content-section mt-3">
-      <h2>Businesses created by this customer</h2>
-      {details.businesses.length === 0 ? <p className="text-secondary">No businesses created yet.</p>
-        : <div className="table-responsive"><table className="table table-sm">
-          <thead><tr><th>Business</th><th>Type</th><th>Plan</th><th>Status</th></tr></thead>
-          <tbody>{details.businesses.map(business => <tr key={business.id}>
-            <td>{business.name} <span className="small text-secondary">#{business.id}</span></td>
-            <td>{business.typeName}</td>
-            <td>{business.planCode ?? 'Not assigned'}</td>
-            <td>{business.subscriptionStatus ?? 'No subscription'}</td>
-          </tr>)}</tbody>
-        </table></div>}
-    </section>
-    <p className="small text-secondary mt-3">
-      Only account and subscription metadata is visible here. Shop records remain private.
-    </p>
-  </>
+  function closeDetails() {
+    setDetails(null)
+    setError('')
+  }
 
-  return <>
+  if (details) return <div className="platform-customer-page">
     <div className="page-header">
       <div>
-        <h1>Customer Accounts</h1>
-        <p>Search registered accounts and view businesses they own. This page is read-only.</p>
+        <button type="button" className="back-link" onClick={closeDetails}>
+          <ArrowLeft size={16} /> All Customers
+        </button>
+        <span className="platform-kicker">CUSTOMER ACCOUNTS</span>
+        <h1>Customer Details</h1>
+        <p>Account #{details.id} · Platform identity and associated businesses</p>
       </div>
     </div>
-    <section className="content-section">
-      <form className="platform-search mb-3" onSubmit={applySearch}>
-        <div>
-          <label className="form-label" htmlFor="customer-search">Customer email</label>
-          <input className="form-control" id="customer-search" type="search"
-            maxLength={100} placeholder="Search by email" value={search}
+    {error && <div className="alert alert-danger" role="alert">{error}</div>}
+    <section className="content-section platform-customer-profile" aria-label="Customer identity">
+      <span className="platform-customer-avatar is-large" aria-hidden="true"><UserRound size={29} /></span>
+      <div className="platform-customer-profile-info">
+        <h2>{details.email}</h2>
+        <p>Customer ID #{details.id}</p>
+        <VerificationBadge confirmed={details.emailConfirmed} />
+      </div>
+      <span className="platform-customer-account-state"><ShieldCheck size={16} /> Read-only access</span>
+    </section>
+    <div className="platform-customer-summary">
+      <section className="content-section">
+        <span className="platform-kicker">REGISTERED ACCOUNT</span>
+        <div className="platform-customer-summary-value"><Mail size={21} /> Verified email</div>
+        <strong>{details.emailConfirmed ? 'Yes' : 'No'}</strong>
+        <small>Server-reported contact verification</small>
+      </section>
+      <section className="content-section">
+        <span className="platform-kicker">BUSINESS OWNERSHIP</span>
+        <div className="platform-customer-summary-value"><Building2 size={21} /> Linked businesses</div>
+        <strong>{details.businesses.length.toLocaleString()}</strong>
+        <small>Businesses linked to this account by the platform</small>
+      </section>
+    </div>
+    <section className="content-section platform-directory-card" aria-label="Owned businesses">
+      <div className="platform-directory-heading">
+        <div><h2>Associated Businesses</h2><p>Subscription and ownership metadata only</p></div>
+        <span className="platform-data-tag">Read only</span>
+      </div>
+      {details.businesses.length === 0 ? <div className="platform-directory-empty">
+        <Building2 size={30} />
+        <h3>No businesses assigned</h3>
+        <p>A Super Admin must provision a business and assign this verified account as Owner.</p>
+      </div> : <div className="table-responsive">
+        <table className="table table-sm platform-table platform-directory-table">
+          <thead><tr><th scope="col">Business</th><th scope="col">Type</th>
+            <th scope="col">Plan</th><th scope="col">Subscription</th>
+            <th scope="col" className="text-end">Action</th></tr></thead>
+          <tbody>{details.businesses.map(business => <tr key={business.id}>
+            <td><strong>{business.name}</strong><small className="d-block text-secondary">#{business.id}</small></td>
+            <td>{business.typeName}</td>
+            <td><span className="platform-plan-pill">{business.planCode ?? 'Not assigned'}</span></td>
+            <td><span className={`platform-state-pill ${business.subscriptionStatus === 'Active' ? 'is-active' :
+              business.subscriptionStatus === 'Trial' ? 'is-trial' : 'is-muted'}`}>
+              {business.subscriptionStatus ?? 'No subscription'}</span></td>
+            <td className="text-end"><button type="button" className="btn btn-outline-secondary btn-sm"
+              onClick={() => onViewBusiness(business.id)}>View Business <ArrowRight size={14} /></button></td>
+          </tr>)}</tbody>
+        </table>
+      </div>}
+    </section>
+    <p className="platform-directory-note">This page does not expose shop sales, stock, customer orders or POS transactions.</p>
+  </div>
+
+  return <div className="platform-customer-page">
+    <div className="page-header">
+      <div>
+        <span className="platform-kicker">PLATFORM MANAGEMENT</span>
+        <h1>Customers</h1>
+        <p>Manage visibility of SaaS customer accounts and their businesses. No shop records are accessible here.</p>
+      </div>
+      <button className="btn btn-outline-secondary btn-sm" type="button" disabled={loading}
+        onClick={() => setReload(value => value + 1)}><RefreshCw size={15} /> Refresh</button>
+    </div>
+    <section className="content-section platform-directory-card" aria-label="Customer account directory">
+      <div className="platform-directory-heading">
+        <div><h2>Customer Directory</h2><p>{list && !loading ?
+          `${list.total.toLocaleString()} accounts matching the current search` : 'Verified platform account records'}</p></div>
+        <span className="platform-data-tag">Account registry</span>
+      </div>
+      <form className="platform-search platform-directory-search" role="search" onSubmit={applySearch}>
+        <div className="platform-directory-search-field">
+          <label className="visually-hidden" htmlFor="customer-search">Customer email search</label>
+          <Search size={18} aria-hidden="true" />
+          <input id="customer-search" className="form-control" type="search"
+            placeholder="Search by customer email" maxLength={100} value={search}
             onChange={event => setSearch(event.target.value)} />
         </div>
         <button className="btn btn-primary" type="submit">Search</button>
-        {term && <button className="btn btn-outline-secondary" type="button"
+        {(term || search) && <button className="btn btn-outline-secondary" type="button"
           onClick={() => { setSearch(''); setTerm(''); setPage(1) }}>Clear</button>}
       </form>
       {error && <div className="alert alert-danger" role="alert">{error}
         <button type="button" className="btn btn-outline-secondary btn-sm ms-2"
           onClick={() => setReload(value => value + 1)}>Retry</button>
       </div>}
-      {detailLoading && <p role="status" className="text-secondary">Opening customer…</p>}
-      {loading ? <p role="status">Loading customers…</p>
-        : list?.total === 0 ? <p role="status" className="text-secondary">
-          {term ? 'No customers match this search.' : 'No customer accounts registered yet.'}
-        </p> : list && <>
-          <div className="table-responsive"><table className="table table-sm platform-table">
-            <thead><tr><th>Email</th><th>Verified</th><th>Owned Businesses</th>
-              <th className="text-end">Action</th></tr></thead>
+      {detailLoading && <p role="status" className="text-secondary small px-3">Opening customer details…</p>}
+      {loading ? <div className="platform-directory-loading" role="status">
+        <span className="spinner-border spinner-border-sm" aria-hidden="true" /> Loading customer accounts…
+      </div> : list?.total === 0 ? <div className="platform-directory-empty" role="status">
+        <Users size={32} />
+        <h3>{term ? 'No matching accounts' : 'No registered customer accounts'}</h3>
+        <p>{term ? 'Try another email address or clear the search.' :
+          'New customer accounts will appear after secure registration and provisioning.'}</p>
+      </div> : list && <>
+        <div className="table-responsive">
+          <table className="table table-sm platform-table platform-directory-table">
+            <thead><tr><th scope="col">Customer</th><th scope="col">Email Verification</th>
+              <th scope="col">Owned Businesses</th><th scope="col" className="text-end">Action</th></tr></thead>
             <tbody>{list.items.map(customer => <tr key={customer.id}>
-              <td>{customer.email}<small className="d-block text-secondary">#{customer.id}</small></td>
-              <td>{customer.emailConfirmed ? 'Yes' : 'No'}</td>
-              <td>{customer.ownedBusinessCount}</td>
-              <td className="text-end">
-                <button type="button" className="btn btn-outline-secondary btn-sm"
-                  disabled={detailLoading} onClick={() => void openCustomer(customer.id)}>
-                  View
-                </button>
-              </td>
+              <td><span className="platform-business-cell">
+                <span className="platform-customer-avatar" aria-hidden="true"><UserRound size={18} /></span>
+                <span><strong>{customer.email}</strong><small>Customer #{customer.id}</small></span>
+              </span></td>
+              <td><VerificationBadge confirmed={customer.emailConfirmed} /></td>
+              <td>{customer.ownedBusinessCount.toLocaleString()}</td>
+              <td className="text-end"><button className="btn btn-outline-secondary btn-sm" type="button"
+                aria-label={`View customer ${customer.email}`} disabled={detailLoading}
+                onClick={() => void openCustomer(customer.id)}>View <ArrowRight size={14} /></button></td>
             </tr>)}</tbody>
-          </table></div>
-          <div className="platform-summary">
-            <p className="text-secondary small">
-              {list.items.length
-                ? `Showing ${(page - 1) * list.pageSize + 1}–${(page - 1) * list.pageSize + list.items.length} of ${list.total}`
-                : `No customers on page ${page}`}
-            </p>
-            <div className="d-flex align-items-center gap-2">
-              <button type="button" className="btn btn-outline-secondary btn-sm"
-                disabled={page <= 1} onClick={() => setPage(value => value - 1)}>Previous</button>
-              <span className="small">Page {page}</span>
-              <button type="button" className="btn btn-outline-secondary btn-sm"
-                disabled={page * list.pageSize >= list.total}
-                onClick={() => setPage(value => value + 1)}>Next</button>
-            </div>
+          </table>
+        </div>
+        <div className="platform-summary platform-directory-pagination">
+          <p>{list.items.length ?
+            `Showing ${(page - 1) * list.pageSize + 1}–${(page - 1) * list.pageSize + list.items.length} of ${list.total}` :
+            `No customer accounts on page ${page}`}</p>
+          <div className="platform-directory-pages">
+            <button type="button" className="btn btn-outline-secondary btn-sm"
+              disabled={page <= 1} onClick={() => setPage(value => value - 1)}>Previous</button>
+            <span>Page {page}</span>
+            <button type="button" className="btn btn-outline-secondary btn-sm"
+              disabled={page * list.pageSize >= list.total} onClick={() => setPage(value => value + 1)}>Next</button>
           </div>
-        </>}
+        </div>
+      </>}
     </section>
-  </>
+    <p className="platform-directory-note">Account restrictions and new-customer invitation actions require approved backend workflows and audit before they can be enabled.</p>
+  </div>
 }
