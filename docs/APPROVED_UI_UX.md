@@ -1,22 +1,22 @@
 # Business SaaS — Approved UI/UX Reference
 
-**Visual approval:** 17 November 2026 · **Latest workflow decision:** 21 November 2026  
+**Visual approval:** 17 November 2026; **Final all-screens montage approved:** 21 November 2026 · **Latest workflow decision:** 21 November 2026  
 **Approved by:** Product owner, in the Business SaaS project conversation  
 **Status:** APPROVED VISUAL TARGET for design and future implementation; not a claim that all screens/features are implemented. **Screen ownership / order:** [Master Screen Register](./MASTER_SCREEN_REGISTER.md).  
 **Source:** The four Super Admin reference screenshots supplied in that conversation, saved together in `BusinessSaaS_Approved_SuperAdmin_References.zip` for visual handoff. Refer to the exact screenshots, not a newly invented dashboard aesthetic.
 
 ## 1. Design decision — preserve the approved screenshots
 
-The four reference screenshots show the approved **dark-navy / royal-blue / white enterprise SaaS** visual language. Future Super Admin screens should look materially like these references, including:
+The final 21 November Super Admin montage supersedes earlier palette differences: it uses **dark navy / violet-blue active navigation / white enterprise SaaS** styling. The prior four screenshots remain a structural inspiration but the final montage is the newer visual target. See [Businesses wizard visual QA](./SUPER_ADMIN_BUSINESS_VISUAL_QA.md). Future Super Admin screens should look materially like these references, including:
 
-- Dark navy full-height left sidebar, compact icon-plus-label menu, saturated blue active item, Platform Owner profile at the bottom.
+- Dark navy full-height left sidebar, compact icon-plus-label menu, **violet-blue active item**, Platform Owner identity at the bottom.
 - Dark navy top bar with `Business SaaS / Platform Super Admin`, notification/help icons, profile dropdown.
 - Very light cool-grey main canvas, white cards, light borders, restrained radius/shadow, no decorative gradients or oversized widgets.
 - Compact, readable KPI cards with outline icons, real totals, subtle green/orange/red state indicators.
 - Dashboard information hierarchy: KPI row, two main analytics panels, then expiring-trials table and recent platform activity.
 - Blue line/area **Business Growth** chart with period controls and `Businesses / Customers` toggle; `Businesses by Plan` doughnut chart with counts/percentages.
 - Searchable, filterable, paginated tables; small badges, clear row `View` actions, details panel/drawer, and consistent spacing.
-- Buttons: a single prominent blue primary action per section, bordered secondary controls, explicit cancel/confirm for risky changes.
+- Buttons: a single prominent **violet-blue** primary action per section, bordered secondary controls, explicit cancel/confirm for risky changes.
 - Clear text labels and sensible empty/loading/error states. No generic, confusing nested menus.
 - Responsive desktop/tablet/mobile behavior; sidebar becomes a drawer on small screens; tables remain usable by horizontal scroll or compact cards. Keyboard and screen-reader controls stay functional.
 
@@ -85,7 +85,7 @@ Customer accounts may own multiple independent businesses. Their experience shou
 ## 6. UX acceptance and implementation constraints
 
 - Check visual fidelity against the approved screenshots at desktop ~1536×864 and 1366×768; test tablet and small Android-phone widths.
-- Keep nav labels, card proportions, chart placements and relative density consistent; don't introduce a new purple-first theme or redesign layout without a new explicit decision.
+- Keep nav labels, card proportions, chart placements and relative density consistent; apply the **explicitly approved final montage's scoped violet-blue Platform accent**. Business Admin and approved POS keep independent workspace palettes; do not redesign other layouts without approval.
 - Only real API/SQL counts, dates, plan limits, payment totals and audit history should reach production screens.
 - Use neutral loading skeletons/spinners, useful empty states, inline validation, no silent errors; searchable tables paginate server-side.
 - Confirm sensitive edits with affected entity, prior/new value, clear reason, explicit action button, safe retries and audited server transaction.
@@ -101,4 +101,4 @@ Customer accounts may own multiple independent businesses. Their experience shou
 4. Add audited trial extension and activation/suspension/reactivation flows; only then expose relevant UI buttons.
 5. Subscription ledger, payments/invoices, licenses, modules, settings, support, monitoring and enterprise capabilities by product priority, with tests.
 
-**Source of truth:** This document defines the approved Super Admin visual direction and exactly eight top-level modules. The **21 Nov** final concept montage is a visual reference; illustrative standalone Reports, Payments, Subscriptions, Users and Announcements panels belong under those eight modules rather than becoming duplicated top-level menus. The [Master Screen Register](./MASTER_SCREEN_REGISTER.md) defines all role-separated screen IDs, current progress, P0 conflicts and completion requirements. Never replace the approved look without another explicit decision.
+**Source of truth:** This document defines the approved Super Admin visual direction and exactly eight top-level modules. The **21 Nov** final concept montage is the latest approved visual reference; illustrative standalone Reports, Payments, Subscriptions, Users and Announcements panels belong under those eight modules rather than becoming duplicated top-level menus. The [Master Screen Register](./MASTER_SCREEN_REGISTER.md) defines all role-separated screen IDs, current progress, P0 conflicts and completion requirements. Never replace the approved look without another explicit decision.
