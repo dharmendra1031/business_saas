@@ -267,7 +267,6 @@ button:focus-visible, a:focus-visible, input:focus-visible, select:focus-visible
   .topbar-title { flex: 1; }
   .topbar-account { flex-shrink: 0; }
   .topbar-workspace strong { max-width: 44vw; }
-  .workspace-switch { font-size: 0; padding: 7px 9px; gap: 0; }
 }
 @media (max-width: 600px) {
   .workspace-identity { margin: 12px 0 0; }

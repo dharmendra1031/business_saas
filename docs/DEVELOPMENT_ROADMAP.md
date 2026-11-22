@@ -101,7 +101,7 @@ Within the API, keep business logic in focused feature/service files and EF Core
 | Establish canonical Multi-Business SRS and source-of-truth | BusinessId, memberships, setup and entitlement behavior | Documented |
 | Database architecture | Numeric identity users, global account/tenant model, module/version mapping | Documented; schema not migrated |
 | Business Type / Template catalog | Supported vs unsupported, published versions and dependencies | Documented; admin not built |
-| Single login / multi-business flow | Verified membership selection, scoped switch, safe cache reset | Documented; API not built |
+| Single login / multi-business flow | Server-verified membership selection, scoped switch, safe cache reset | Shared sign-in, authorized business lookup and selection implemented; E2E/visual acceptance pending |
 | Subscription + role + location access | Server-side permission matrix and billing version rule | Documented; final prices/policy open |
 | First retail workflow | Super Admin provisions business -> Owner products -> receiving -> POS -> return -> reports | Documented; acceptance pending |
 | Roadmap & reference governance | CBK/Kaifac read-only; old salon docs classified as vertical | Documented; cross-document links verified |
