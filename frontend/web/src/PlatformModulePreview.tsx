@@ -1,7 +1,7 @@
 import { useState } from 'react'
 import PlatformAvailabilityPreview from './PlatformAvailabilityPreview'
 import {
-  Bell, Building2, ChevronRight, FileClock, Globe2, KeyRound, Languages,
+  Bell, Building2, FileClock, Globe2, KeyRound, Languages,
   LockKeyhole, Mail, Settings2, ShieldCheck, SlidersHorizontal, Users
 } from 'lucide-react'
 
