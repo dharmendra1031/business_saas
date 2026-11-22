@@ -207,8 +207,8 @@ export default function App() {
           <strong>{dashboard.business.name}</strong>
           <small>{dashboard.roleCode} · {dashboard.locations[0]?.name ?? 'No location assigned'}</small>
         </div>}
-        {!user?.isPlatformOwner && page !== 'platform' && <div className="sidebar-heading">ACCOUNT</div>}
-        {!user?.isPlatformOwner && page !== 'platform' && <button type="button" ref={businessNav}
+        {!user?.isPlatformOwner && page !== 'platform' && (page === 'businesses' || businesses.length > 1) && <div className="sidebar-heading">ACCOUNT</div>}
+        {!user?.isPlatformOwner && page !== 'platform' && (page === 'businesses' || businesses.length > 1) && <button type="button" ref={businessNav}
           className={`nav-entry${page === 'businesses' ? ' active' : ''}`}
           aria-current={page === 'businesses' ? 'page' : undefined}
           onClick={() => {
@@ -231,6 +231,7 @@ export default function App() {
             ? (section === 'cash' ? dashboard.cashSaleEnabled : section === 'overview' && !dashboard.cashSaleEnabled)
             : (section !== 'cash' || dashboard.cashSaleEnabled))
             .map(([section, label, Icon]) => <button key={section} type="button"
+              ref={section === 'overview' && businesses.length <= 1 ? businessNav : undefined}
               className={`nav-entry${section === 'cash' ? ' pos-nav-entry' : ''}${retailPage === section ? ' active' : ''}`}
               aria-current={retailPage === section ? 'page' : undefined}
               onClick={() => {
@@ -443,7 +444,7 @@ export default function App() {
               {!isPosView && !isBusinessOverview && <div className={`page-header${dashboard.roleCode !== 'Cashier' ? ' business-page-header' : ''}`}>
                 <div>{!isBusinessOverview && <button className="back-link" onClick={() => { setNotice(''); void loadBusinesses() }}><ArrowLeft size={16} /> All businesses</button>}
                   {!isBusinessOverview && dashboard.roleCode !== 'Cashier' && <span className="business-eyebrow">BUSINESS OPERATIONS · {dashboard.business.name}</span>}
-                  <h1>{isBusinessOverview ? 'Business Dashboard' : retailTitles[retailPage]}</h1>
+                  <h1>{isBusinessOverview ? 'Dashboard' : retailTitles[retailPage]}</h1>
                   {isBusinessOverview
                     ? <p>{dashboard.locations.length === 1 ? dashboard.locations[0].name : `${dashboard.locations.length} locations`}</p>
                     : <p>{dashboard.business.name} · {dashboard.roleCode === 'Cashier' ? 'POS / Cashier' : dashboard.roleCode === 'Owner' ? 'Business Admin' : 'Store Manager'} · {dashboard.locations[0]?.name ?? 'No location assigned'}</p>}

@@ -185,6 +185,7 @@ try {
     assert.equal(await t.page.getByText('No plan', { exact: false }).count(), 0,
       'Trial fixture must show an actual plan rather than conflicting No plan status')
     assert.equal(await t.page.getByText('Welcome to Sample Retail').count(), 0)
+    assert.equal(await t.page.getByText('Switch Business').count(), 0, 'No single-business switch')
     await t.screenshot('owner-workspace')
     await t.check()
     await t.context.close()
