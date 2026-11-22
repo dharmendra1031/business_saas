@@ -15,7 +15,7 @@ The owner approved designing and visually accepting all released screens **befor
 
 ### Iteration 3 — Business Owner/Admin frontend batch (22 November 2026)
 
-- `BUS-01` Dashboard: `BusinessOverview.tsx` now implements an enterprise blue/navy role-specific layout with location count, server `hasProducts` state, real owner draft-PO count, subscription status, working management-module action cards, setup guidance and location list.
+- `BUS-01` Dashboard: `BusinessOverview.tsx` now separates first-run setup from a three-section operational dashboard (Business Overview, Attention Needed, Recent Activity). Draft PO counts and subscription status come from the existing API; no duplicate module cards or fabricated sales/stock metrics.
 - `AUTH-11` / `BUS-03` business selection: enhanced assigned-business cards with role/market identity; only Super Admin may create a tenant.
 - `BUS-06..08`, `BUS-10..15`, `BUS-17..18`, `BUS-20..25`, `BUS-27..32`: products, categories/units, contacts, purchases and inventory received shared enterprise headers, data tables and responsive styling. Existing real APIs, stock posting and approvals remain unchanged.
 - `BUS-35..47`, `BUS-53..55`: **design-preview UI only**, not working sales, returns, register, reports or settings; `BusinessPreview.tsx` makes tab flows visually inspectable with explicit no-backend messaging and no fictitious records, payments or totals.
@@ -169,7 +169,7 @@ The mockup pictures display illustrative controls (Card, UPI, Split, Services, d
 
 | ID | Screen / interaction | Type | Current | Priority | Required outcome / guardrail |
 | --- | --- | --- | --- | --- | --- |
-| BUS-01 | Business Dashboard | Page | Partial | P0 | One compact status row and actual onboarding steps (when needed); redundant welcome/cards removed. Desktop/360px Chromium QA passed; real stock/sales KPI APIs, owner approval and authenticated E2E pending. |
+| BUS-01 | Business Dashboard | Page | Partial | P0 | Owner-approved three-section operational layout and separate first-run setup; missing Sales/Bills/Stock Alerts/Recent Activity data remains explicitly unavailable, never fake. Browser QA, authenticated E2E and integration status tracked separately. |
 | BUS-02 | First-run business setup checklist | Page | Missing | P0 | Provisioned business readiness: first location, products, opening stock, receipt settings; resume safely. |
 | BUS-03 | Business selector / context switch | Page | Partial | P0 | Membership-filtered existing businesses, clear active role/location; owners cannot create tenants. |
 | BUS-04 | Locations — list and active location | Page | Partial | P1 | Only authorized locations; branch status and current scope clear. |
