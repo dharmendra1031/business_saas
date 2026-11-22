@@ -24,7 +24,7 @@ The final 21 November Super Admin montage supersedes earlier palette differences
 
 ## 2. Canonical Super Admin navigation — eight modules
 
-Approved on 17 November 2026. The left sidebar has **exactly eight** main modules. Each action has one authoritative location. Planned modules remain disabled until implemented end-to-end, rather than displaying nonfunctional controls.
+Approved on 17 November 2026. The left sidebar has **exactly eight** main modules. Each action has one authoritative location. Unimplemented modules may have clearly labeled **frontend-only design previews** for screen-flow review; no functional Save/Publish/Activate action is exposed until a secure backend exists.
 
 | Module | One authoritative workflow | Current implementation |
 | --- | --- | --- |
@@ -32,7 +32,7 @@ Approved on 17 November 2026. The left sidebar has **exactly eight** main module
 | Customers | Customer search/details, verification and owned-business references | Read-only directory |
 | Businesses | Business directory/details, audited trial extensions and suspend/reactivate | Working core controls |
 | Plans & Billing | Plan drafts, immutable catalog publication, future billing, invoices and payments | Plan controls working; billing unavailable |
-| Licenses | Offline license lifecycle and history | Planned; sidebar disabled |
+| Licenses | Offline license lifecycle and history | Navigable **frontend design preview only**; no real issuance or activation API |
 | Platform Settings | Business type release availability, module lifecycle, scoped maintenance, public announcements, regions, languages | Navigable **frontend design preview only**; no live policy/maintenance publishing API yet |
 | Security & Audit | MFA, sign-in audit, administrative change history | Working foundation |
 | Operations | API/database readiness, future monitoring, backup/restore and support | Readiness working; other controls planned |
