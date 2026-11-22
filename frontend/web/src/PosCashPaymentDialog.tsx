@@ -17,6 +17,10 @@ export default function PosCashPaymentDialog({
 }: PosCashPaymentDialogProps) {
   const dialogRef = useRef<HTMLDivElement>(null)
   const cashRef = useRef<HTMLInputElement>(null)
+  const cancelRef = useRef(onCancel)
+  const busyRef = useRef(busy)
+  cancelRef.current = onCancel
+  busyRef.current = busy
   const received = Number(cash)
   const validCash = cash.trim() !== '' && Number.isFinite(received) && received >= amount &&
     Math.abs(Math.round(received * 100) - received * 100) < 0.000001
@@ -27,9 +31,9 @@ export default function PosCashPaymentDialog({
     const previouslyFocused = document.activeElement instanceof HTMLElement ? document.activeElement : null
     cashRef.current?.focus()
     function onKeyDown(event: KeyboardEvent) {
-      if (event.key === 'Escape' && !busy) {
+      if (event.key === 'Escape' && !busyRef.current) {
         event.preventDefault()
-        onCancel()
+        cancelRef.current()
         return
       }
       if (event.key !== 'Tab') return
@@ -52,7 +56,7 @@ export default function PosCashPaymentDialog({
       document.removeEventListener('keydown', onKeyDown)
       previouslyFocused?.focus()
     }
-  }, [busy, onCancel])
+  }, [])
 
   function submit(event: FormEvent) {
     event.preventDefault()
