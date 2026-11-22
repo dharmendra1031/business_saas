@@ -35,7 +35,7 @@ export default function BusinessOverview({ dashboard, onNavigate, onReviewApprov
           purchasing, inventory or your team.</p>
         <div className="business-welcome-meta">
           <span><Store size={15} /> {locations.length} {locations.length === 1 ? 'location' : 'locations'}</span>
-          <span><ShieldRoleIcon /> {isOwner ? 'Business Owner' : 'Store Manager'}</span>
+          <span><CheckCircle2 size={15} aria-hidden="true" /> {isOwner ? 'Business Owner' : 'Store Manager'}</span>
           <span className={canOperate ? 'is-ready' : 'is-restricted'}>
             {canOperate ? <CheckCircle2 size={15} /> : <Clock3 size={15} />} {statusLabel}
           </span>
@@ -56,7 +56,7 @@ export default function BusinessOverview({ dashboard, onNavigate, onReviewApprov
       <section className="business-fact-card">
         <span className="business-fact-icon is-catalog"><Package size={22} /></span>
         <div><small>Product catalog</small>
-          <strong className="business-fact-word">{hasProducts ? 'Configured' : 'Not started'}</strong>
+          <strong className="business-fact-word">{hasProducts ? 'Products added' : 'Not started'}</strong>
           <span>Based on existing product records</span></div>
       </section>
       <section className="business-fact-card">
@@ -147,6 +147,3 @@ export default function BusinessOverview({ dashboard, onNavigate, onReviewApprov
   </div>
 }
 
-function ShieldRoleIcon() {
-  return <CheckCircle2 size={15} aria-hidden="true" />
-}
