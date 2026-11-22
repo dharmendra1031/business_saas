@@ -1,4 +1,5 @@
 import { useState } from 'react'
+import PlatformAvailabilityPreview from './PlatformAvailabilityPreview'
 import {
   Bell, Building2, ChevronRight, FileClock, Globe2, KeyRound, Languages,
   LockKeyhole, Mail, Settings2, ShieldCheck, SlidersHorizontal, Users
@@ -10,6 +11,8 @@ const settingTabs = [
   { id: 'general', name: 'General', Icon: Settings2 },
   { id: 'types', name: 'Business Types', Icon: Building2 },
   { id: 'modules', name: 'Modules & Access', Icon: ShieldCheck },
+  { id: 'maintenance', name: 'Maintenance', Icon: SlidersHorizontal },
+  { id: 'announcements', name: 'Announcements', Icon: Bell },
   { id: 'localization', name: 'Languages', Icon: Languages },
   { id: 'notifications', name: 'Notifications', Icon: Bell }
 ] as const
@@ -71,33 +74,8 @@ function PlatformSettingsPreview() {
               hint="Each business retains its own authoritative timezone." />
           </div>
         </>}
-        {tab === 'types' && <>
-          <div className="platform-preview-panel-title">
-            <span className="platform-preview-panel-icon"><Building2 size={20} /></span>
-            <div><h2>Business Templates</h2><p>Publish only supported business workflows</p></div>
-          </div>
-          <div className="platform-preview-feature-list">
-            <div><span><strong>General Retail</strong><small>Current first operational vertical</small></span>
-              <span className="platform-preview-small-tag">Initial scope</span></div>
-            <div><span><strong>Salon / Barber</strong><small>Future vertical; workflow not released</small></span>
-              <span className="platform-preview-small-tag">Deferred</span></div>
-            <div><span><strong>Repair Center</strong><small>Future vertical; workflow not released</small></span>
-              <span className="platform-preview-small-tag">Deferred</span></div>
-          </div>
-        </>}
-        {tab === 'modules' && <>
-          <div className="platform-preview-panel-title">
-            <span className="platform-preview-panel-icon"><ShieldCheck size={20} /></span>
-            <div><h2>Modules & Access</h2><p>Plan entitlements plus user and location authorization</p></div>
-          </div>
-          <div className="platform-preview-feature-list">
-            {['Products & Categories', 'Purchases & Receiving', 'Inventory & Stock',
-              'POS & Sales', 'Returns & Refunds', 'Cash Register', 'Reports'].map(label =>
-              <div key={label}><span><strong>{label}</strong>
-                <small>Availability depends on the business template, plan and assigned role</small></span>
-                <ChevronRight size={17} /></div>)}
-          </div>
-        </>}
+        {(tab === 'types' || tab === 'modules' || tab === 'maintenance' || tab === 'announcements') &&
+          <PlatformAvailabilityPreview view={tab} />}
         {tab === 'localization' && <>
           <div className="platform-preview-panel-title">
             <span className="platform-preview-panel-icon"><Globe2 size={20} /></span>
