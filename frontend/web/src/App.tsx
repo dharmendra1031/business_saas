@@ -373,6 +373,7 @@ export default function App() {
           {page === 'platform' && canViewPlatform && <PlatformAdmin section={platformSection}
             selectedBusinessId={platformBusinessId} billingBusiness={billingBusiness}
             startCreate={platformStartCreate} businessSearch={platformBusinessSearch}
+            onViewAudit={() => { setPlatformBusinessId(null); setPlatformSection('audit') }}
             onCreateHandled={() => setPlatformStartCreate(false)}
             onSeeBusinesses={() => { setPlatformStartCreate(false); setPlatformBusinessId(null); setPlatformSection('businesses') }}
             onStartCreate={() => { setPlatformBusinessId(null); setPlatformStartCreate(true); setPlatformSection('businesses') }}
