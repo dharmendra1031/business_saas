@@ -171,10 +171,10 @@ The mockup pictures display illustrative controls (Card, UPI, Split, Services, d
 | --- | --- | --- | --- | --- | --- |
 | BUS-01 | Business Dashboard | Page | Partial | P0 | Owner-approved three-section operational layout and separate first-run setup; missing Sales/Bills/Stock Alerts/Recent Activity data remains explicitly unavailable, never fake. Browser QA, authenticated E2E and integration status tracked separately. |
 | BUS-02 | First-run business setup checklist | Page | Missing | P0 | Provisioned business readiness: first location, products, opening stock, receipt settings; resume safely. |
-| BUS-03 | Business selector / context switch | Page | Partial | P0 | Membership-filtered existing businesses, clear active role/location; owners cannot create tenants. |
-| BUS-04 | Locations — list and active location | Page | Partial | P1 | Only authorized locations; branch status and current scope clear. |
+| BUS-03 | Business selector / context switch | Page | Partial | P0 | Compact membership-only rows with business name/type/role; no owner tenant creation. Repeated clicks guarded and prior context cleared; Chromium fixture QA passed. Real tenant-revocation/authorization E2E and visual owner sign-off pending. |
+| BUS-04 | Locations — list and active location | Page | Partial | P1 | Authorized stock location selection and one-location label verified in Chromium; sidebar uses count for multi-branch rather than assuming first is active. Separate location management/list and authoritative primary/active scope still missing. |
 | BUS-05 | Locations — add / edit | Form | Missing | P1 | Permission and entitlement limits; no unauthorized branch access. |
-| BUS-06 | Products — list / search | Page | Partial | P0 | Server paging, SKU/name filters, categories, active status, real pricing. |
+| BUS-06 | Products — list / search | Page | Partial | P0 | Existing server paging, SKU/name/barcode search, category/status filters and prices retained. Redundant zero count and one-page pager removed; 360px list prioritizes price/status/edit with SKU under name. Mocked API browser tests and real-world visual acceptance tracked separately. |
 | BUS-07 | Products — create | Form | Partial | P0 | Name, SKU/barcode, category, unit, sale price, tax classification, validation. |
 | BUS-08 | Products — edit | Form | Partial | P1 | Prefill, meaningful update, no stock reset; protected duplicate-SKU checks. |
 | BUS-09 | Products — detail | Panel | Missing | P2 | Product identity, current status and inventory links; no fabricated movement history. |
