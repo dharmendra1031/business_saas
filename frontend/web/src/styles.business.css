@@ -9,18 +9,16 @@
 .business-shell .app-sidebar .nav-entry.active { background: #2e67c9; color: #fff; font-weight: 750; }
 .business-shell .app-sidebar .nav-entry:hover { background: #294b78; }
 .business-shell .app-sidebar .nav-entry.active:hover { background: #2e67c9; }
-.business-shell .sidebar-footer { margin-top: auto; padding: 15px; color: #b0c4df; font-size: .76rem;
-  background: #ffffff0c; border: 1px solid #3a4c68; border-radius: 10px; }
 .business-shell .workspace-identity { margin: 15px 4px 0; padding: 16px 13px; border-radius: 11px; background: #1c3455; }
 .business-shell .workspace-identity > span { color: #a9caff; }
 .business-shell .workspace-identity > strong { font-size: 1.03rem; }
-.business-shell .app-topbar { height: 68px; background: #fff; padding: 0 25px;
+.business-shell .app-topbar { height: 58px; background: #fff; padding: 0 25px;
   box-shadow: 0 2px 16px #16284608; }
 .business-shell .topbar-workspace small { color: #2361bf; }
 .business-shell .topbar-account { gap: 13px; }
 .business-shell .topbar-account > svg { width: 30px; height: 30px; padding: 7px; border-radius: 50%;
   color: #2f62b5; background: #eaf1fd; }
-.business-shell .page-content { width: 100%; max-width: 1580px; padding: 28px 30px 50px; }
+.business-shell .page-content { width: 100%; max-width: 1580px; padding: 18px 24px 40px; }
 .business-shell .page-header { align-items: center; margin-bottom: 22px; }
 .business-shell .page-header h1 { font-size: 1.52rem; font-weight: 790; letter-spacing: -.035em; color: #162a48; }
 .business-shell .page-header p { color: #71819a; font-size: .84rem; }
@@ -88,14 +86,10 @@
 }
 /* BUS-06–32: shared retail module surfaces. One coherent design language for real forms/tables. */
 .business-shell .business-module-card { padding: 0 0 18px; overflow: hidden; margin-top: 0; }
-.business-shell .business-module-heading { display: flex; align-items: center; justify-content: space-between; gap: 18px;
-  padding: 21px 23px; margin: 0 0 18px; border-bottom: 1px solid #e5ebf4; background: #fff; }
-.business-module-title { display: flex; align-items: center; gap: 14px; min-width: 0; }
-.business-module-title > div { min-width: 0; }
-.business-module-icon { display: grid; place-items: center; flex: 0 0 50px; width: 50px; height: 50px;
-  border-radius: 12px; background: #e9f1fd; color: #2964bb; }
-.business-shell .business-module-title h2 { font-size: 1.13rem; color: #1a3151; font-weight: 790; padding: 0; margin: 4px 0 5px; border: 0; }
-.business-module-title p { font-size: .8rem; line-height: 1.45; color: #7889a0; margin: 0; }
+.business-shell .business-module-heading { display: flex; align-items: center; justify-content: space-between;
+  gap: 14px; padding: 13px 18px; margin: 0 0 15px; border-bottom: 1px solid #e5ebf4; background: #fff; }
+.business-shell .business-module-heading h2 { padding: 0; margin: 0; border: 0;
+  font-size: 1.08rem; font-weight: 760; color: #1c3555; }
 .business-module-actions { display: flex; align-items: center; flex-wrap: wrap; justify-content: flex-end; gap: 12px; }
 .business-module-count { white-space: nowrap; color: #697c99; font-size: .75rem; font-weight: 710; }
 .business-module-heading .btn-primary { min-height: 40px; font-size: .83rem; font-weight: 730; }
@@ -148,9 +142,7 @@
 .business-empty-state strong { color: #294261; font-size: .96rem; font-weight: 780; }
 .business-empty-state p { margin: 0; color: #7a8da7; font-size: .8rem; line-height: 1.55; max-width: 440px; }
 @media (max-width: 790px) {
-  .business-shell .business-module-heading { flex-wrap: wrap; align-items: flex-start; gap: 13px; padding: 17px; }
-  .business-module-title { align-items: flex-start; }
-  .business-module-icon { flex-basis: 43px; width: 43px; height: 43px; }
+  .business-shell .business-module-heading { flex-wrap: wrap; align-items: center; padding: 12px 15px; }
   .business-module-actions { width: 100%; justify-content: space-between; }
   .business-location-picker { width: 100%; }
   .business-location-picker select { width: 100%; }
@@ -183,86 +175,45 @@
 .business-assigned-role { background: #eaf2ff; color: #2a5ca6; padding: 6px 10px; border-radius: 999px;
   white-space: nowrap; font-size: .7rem; font-weight: 750; }
 .business-assigned-list .business-row > svg:last-child { margin-left: 0; color: #597cb4; }
-.business-shell .business-page-header { align-items: flex-end; }
-.business-shell .business-page-header .business-eyebrow { margin: 0 0 7px; }
-.business-shell .business-page-header .back-link { margin-bottom: 9px; font-size: .78rem; }
-.business-shell .business-page-header .back-link:hover { text-decoration: underline; }
-.business-shell .business-page-header h1 { font-size: clamp(1.36rem, 2vw, 1.7rem); margin-bottom: 6px; }
-.business-shell .business-page-header .workspace-state { margin-bottom: 3px; }
 @media (max-width: 680px) {
   .business-assigned-list { grid-template-columns: 1fr; gap: 12px; }
   .business-assigned-list .business-row { min-height: 90px; padding: 17px 12px; gap: 11px; }
   .business-assigned-list .shop-symbol { width: 43px; height: 43px; flex-basis: 43px; }
   .business-assigned-role { font-size: .65rem; padding: 5px 7px; }
-  .business-shell .business-page-header { align-items: flex-start; }
 }
 @media (prefers-reduced-motion: reduce) { .business-assigned-list .business-row { transition: none; }
   .business-assigned-list .business-row:hover { transform: none; } }
 
-/* BUS-35–55 frontend preview modules: real tab navigation, no simulated APIs. */
+/* Preview-only modules: functional tabs, without decorative dashboards. */
 .business-shell .business-preview-nav { gap: 10px; }
 .business-shell .business-preview-nav span { flex: 1; }
-.business-shell .business-preview-nav small { color: #9fb3d0; font-size: .6rem; border: 1px solid #607494;
-  padding: 3px 5px; border-radius: 4px; font-weight: 720; letter-spacing: .01em; }
-.business-shell .business-preview-nav.active small { color: #e9f2ff; border-color: #ffffff75; }
+.business-shell .business-preview-nav small { color: #9fb3d0; font-size: .6rem;
+  border: 1px solid #607494; padding: 3px 5px; border-radius: 4px; font-weight: 720; }
 .business-preview { min-width: 0; }
-.business-preview-intro { display: flex; align-items: center; gap: 17px; padding: 25px;
-  background: #fff; border: 1px solid #e0e6f1; box-shadow: 0 3px 16px #102d5510;
-  border-radius: 13px; margin-bottom: 15px; }
-.business-preview-symbol { display: grid; place-items: center; width: 61px; height: 61px; flex: 0 0 61px;
-  background: #e8f1ff; color: #245fba; border-radius: 13px; }
-.business-preview-intro > div { min-width: 0; }
-.business-preview-intro h2 { margin: 7px 0 6px; padding: 0; border: 0; font-size: clamp(1.26rem, 2.1vw, 1.56rem);
-  color: #192b49; letter-spacing: -.03em; font-weight: 790; }
-.business-preview-intro p { margin: 0; color: #71829b; font-size: .83rem; line-height: 1.5; }
-.business-preview-disclosure { display: flex; align-items: flex-start; gap: 10px; background: #eff4ff;
-  color: #345a89; border: 1px solid #d5e4fa; padding: 12px 16px;
-  margin-bottom: 15px; border-radius: 9px; font-size: .79rem; line-height: 1.55; }
-.business-preview-disclosure svg { flex: 0 0 auto; margin-top: 2px; }
-.business-preview-tabs { display: flex; flex-wrap: wrap; gap: 8px; margin-bottom: 16px; }
-.business-preview-tabs button { display: flex; align-items: center; gap: 9px; padding: 10px 14px;
-  min-height: 42px; background: #fff; border: 1px solid #e0e7f2; border-radius: 9px;
-  color: #566982; font-size: .81rem; font-weight: 740; }
+.business-preview-heading { display: flex; flex-wrap: wrap; gap: 12px;
+  align-items: center; justify-content: space-between; margin-bottom: 14px; }
+.business-preview-heading h2 { margin: 0; color: #1c3555; font-weight: 760; font-size: 1.12rem; }
+.business-preview-heading > span { font-size: .76rem; color: #65531e; background: #fff4da;
+  border: 1px solid #e6d5a7; padding: 5px 9px; border-radius: 6px; }
+.business-preview-tabs { display: flex; flex-wrap: wrap; gap: 8px; margin-bottom: 14px; }
+.business-preview-tabs button { display: flex; align-items: center; gap: 8px; padding: 8px 12px;
+  min-height: 38px; background: #fff; border: 1px solid #e0e7f2; border-radius: 7px;
+  color: #566982; font-size: .81rem; font-weight: 690; }
 .business-preview-tabs button:hover { background: #f3f7fe; border-color: #a1bbeb; }
 .business-preview-tabs button.is-active { background: #285eab; border-color: #285eab; color: #fff; }
-.business-preview-layout { display: grid; grid-template-columns: minmax(0, 1.7fr) minmax(255px, .8fr);
-  align-items: start; gap: 15px; }
-.business-shell .business-preview-content, .business-shell .business-preview-guidance { padding: 24px; }
-.business-preview-panel-heading { display: flex; gap: 13px; align-items: flex-start;
-  padding-bottom: 17px; margin-bottom: 19px; border-bottom: 1px solid #e5ebf3; }
-.business-preview-panel-heading > span { display: grid; place-items: center; width: 43px; height: 43px;
-  flex: 0 0 43px; border-radius: 10px; background: #eaf2ff; color: #2b64b8; }
-.business-shell .business-preview-panel-heading h3 { font-size: 1.04rem; color: #203653; font-weight: 780;
-  margin: 2px 0 6px; }
-.business-preview-panel-heading p { font-size: .79rem; color: #76869c; line-height: 1.5; margin: 0; }
-.business-preview-empty { display: grid; justify-items: center; gap: 10px; min-height: 230px; align-content: center;
-  padding: 30px 18px; text-align: center; border: 1px dashed #dce6f4; border-radius: 10px; background: #fafcff; }
-.business-preview-empty > span { display: grid; place-items: center; height: 53px; width: 53px;
-  border-radius: 12px; background: #e7f0ff; color: #3770be; }
-.business-preview-empty h4 { font-size: .96rem; color: #2d4669; font-weight: 780; margin: 0; }
-.business-preview-empty p { max-width: 430px; font-size: .79rem; color: #7a8aa4; line-height: 1.6; margin: 0; }
-.business-preview-identity { display: grid; grid-template-columns: repeat(2,minmax(0,1fr)); gap: 12px; margin: 0; }
-.business-preview-identity > div { display: grid; align-content: center; gap: 7px; min-height: 70px; padding: 13px 16px;
-  background: #f8faff; border: 1px solid #e5ebf5; border-radius: 8px; }
+.business-shell .business-preview-content { padding: 19px; }
+.business-preview-content h3 { font-size: 1.03rem; font-weight: 760; margin: 0 0 8px; }
+.business-preview-description { font-size: .81rem; color: #74859b; margin: 0 0 14px; }
+.business-preview-unavailable { padding: 14px; border: 1px dashed #d5e0ed;
+  background: #fafcff; border-radius: 7px; color: #61738c; font-size: .83rem; margin: 0; }
+.business-preview-identity { display: grid; grid-template-columns: repeat(2,minmax(0,1fr)); gap: 10px; margin: 0; }
+.business-preview-identity > div { min-width: 0; padding: 12px;
+  background: #f8faff; border: 1px solid #e5ebf5; border-radius: 7px; }
 .business-preview-identity dt { font-size: .72rem; color: #7689a1; font-weight: 720; }
-.business-preview-identity dd { margin: 0; font-size: .89rem; color: #1f3656; font-weight: 750; overflow-wrap: anywhere; }
-.business-preview-footer { display: flex; align-items: flex-start; gap: 8px; font-size: .72rem; color: #8290a5;
-  border-top: 1px solid #e8edf4; margin-top: 21px; padding-top: 15px; line-height: 1.5; }
-.business-preview-footer svg { color: #438c69; flex-shrink: 0; }
-.business-preview-guidance > h3 { color: #263a5b; font-size: 1.04rem; margin: 9px 0 10px; font-weight: 780; }
-.business-preview-guidance > p { color: #73839d; font-size: .81rem; line-height: 1.6; margin-bottom: 20px; }
-.business-preview-guidance > div { display: flex; align-items: center; gap: 9px; padding: 12px 0;
-  color: #4b6384; font-size: .8rem; font-weight: 690; border-top: 1px solid #e8edf5; }
-.business-preview-guidance > div svg { color: #2861b6; }
-@media (max-width: 1120px) {
-  .business-preview-layout { grid-template-columns: 1fr; }
-}
+.business-preview-identity dd { font-size: .88rem; color: #1f3656; font-weight: 710;
+  margin: 4px 0 0; overflow-wrap: anywhere; }
 @media (max-width: 680px) {
-  .business-preview-intro { padding: 17px; align-items: flex-start; gap: 12px; }
-  .business-preview-symbol { width: 45px; height: 45px; flex-basis: 45px; }
-  .business-preview-tabs { display: grid; grid-template-columns: repeat(2,minmax(0,1fr)); gap: 8px; }
-  .business-preview-tabs button { min-width: 0; font-size: .74rem; padding: 9px 10px; }
-  .business-preview-identity { grid-template-columns: 1fr; gap: 9px; }
-  .business-shell .business-preview-content, .business-shell .business-preview-guidance { padding: 17px; }
+  .business-preview-tabs { display: grid; grid-template-columns: repeat(2,minmax(0,1fr)); }
+  .business-preview-tabs button { min-width: 0; }
+  .business-preview-identity { grid-template-columns: 1fr; }
 }
-
