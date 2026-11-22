@@ -231,7 +231,7 @@ export default function CashCheckout({ userId, dashboard, onExit }: {
       <button type="button" className="btn btn-outline-danger btn-sm" onClick={onExit}>Discard and exit</button>
       <button type="button" className="btn btn-outline-secondary btn-sm" onClick={() => setExitArmed(false)}>Stay in POS</button>
     </div>}
-    {error && <div role="alert" className="alert alert-danger">{error}</div>}
+    {error && !showPayment && <div role="alert" className="alert alert-danger">{error}</div>}
     {pending ? <section className="content-section pos-pending" aria-label="Pending sale recovery">
       <div className="pos-panel-heading"><h2>Pending cash sale</h2><span>Reference held for safe retry</span></div>
       <ul>{pending.lines.map(line => <li key={line.productId}>{line.name} · {line.quantity} × {money(line.expectedUnitPrice)}</li>)}</ul>
@@ -277,7 +277,7 @@ export default function CashCheckout({ userId, dashboard, onExit }: {
           {products.length ? <div className="pos-products-grid">
             {products.map(item => {
               const inBasket = basket.find(line => line.productId === item.id)?.quantity ?? 0
-              const canAdd = dashboard.canOperate && !busy && item.available > inBasket &&
+              const canAdd = dashboard.canOperate && !busy && item.available >= inBasket + 1 &&
                 (inBasket > 0 || basket.length < 100)
               return <button key={item.id} type="button" className="pos-product-card" disabled={!canAdd}
                 aria-label={`Add ${item.name}, ${money(item.salePrice)}, ${item.available} available`}
@@ -359,7 +359,7 @@ export default function CashCheckout({ userId, dashboard, onExit }: {
       </section>
     </div>}
     {showPayment && !pending && !receipt && <PosCashPaymentDialog amount={total}
-      cash={cash} currency={business.currencyCode} lineCount={itemCount} busy={busy}
+      cash={cash} currency={business.currencyCode} lineCount={itemCount} busy={busy} error={error}
       onCashChange={setCash} onCancel={() => setShowPayment(false)}
       onConfirm={() => void recordSale()} />}
   </section>
