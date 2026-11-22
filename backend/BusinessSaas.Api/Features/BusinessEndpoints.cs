@@ -8,6 +8,11 @@ namespace BusinessSaas.Api.Features;
 
 public sealed record BusinessMarket(string Code, string Name, string[] Currencies, string[] TimeZones);
 
+// These numbers cover recorded cash receipts only, not all future payment methods.
+public sealed record CashReceiptSummary(long Id, long LocationId, decimal Total, DateTime PostedAtUtc);
+public sealed record OwnerCashSalesToday(decimal Total, int BillCount, DateOnly BusinessDate,
+    IReadOnlyList<CashReceiptSummary> RecentReceipts);
+
 public static class BusinessEndpoints
 {
     private static readonly BusinessMarket[] Markets = LoadMarkets();
@@ -208,7 +213,34 @@ public static class BusinessEndpoints
             var hasProducts = roleCode != "Cashier" && await db.RetailProducts.AnyAsync(x => x.BusinessId == businessId);
             var pendingApprovals = roleCode == "Owner" ? await db.RetailPurchaseOrders.CountAsync(x =>
                 x.BusinessId == businessId && x.Status == "Draft") : 0;
-            return Results.Ok(new { hasProducts, pendingApprovals, business = details, roleCode, locations, subscription, accessStatus, canOperate, cashSaleEnabled = environment.IsDevelopment() });
+
+            OwnerCashSalesToday? cashSalesToday = null;
+            // Cash posting is currently development-only; never present these as
+            // all-channel production sales or disclose financial data to cashiers.
+            if (roleCode == "Owner" && environment.IsDevelopment() && details.TypeCode == "RETAIL")
+            {
+                var nowUtc = DateTime.UtcNow;
+                var zone = TimeZoneInfo.FindSystemTimeZoneById(details.TimeZoneId);
+                var localDate = TimeZoneInfo.ConvertTimeFromUtc(nowUtc, zone).Date;
+                var startUtc = TimeZoneInfo.ConvertTimeToUtc(localDate, zone);
+                var endUtc = TimeZoneInfo.ConvertTimeToUtc(localDate.AddDays(1), zone);
+                var today = db.RetailCashSales.AsNoTracking().Where(x =>
+                    x.BusinessId == businessId && x.PostedAtUtc >= startUtc &&
+                    x.PostedAtUtc < endUtc && x.PostedAtUtc <= nowUtc);
+                var total = await today.SumAsync(x => (decimal?)x.Total) ?? 0m;
+                var bills = await today.CountAsync();
+                var recent = await db.RetailCashSales.AsNoTracking()
+                    .Where(x => x.BusinessId == businessId && x.PostedAtUtc <= nowUtc)
+                    .OrderByDescending(x => x.PostedAtUtc).ThenByDescending(x => x.Id)
+                    .Take(5)
+                    .Select(x => new CashReceiptSummary(x.Id, x.LocationId, x.Total, x.PostedAtUtc))
+                    .ToListAsync();
+                cashSalesToday = new OwnerCashSalesToday(total, bills, DateOnly.FromDateTime(localDate), recent);
+            }
+
+            return Results.Ok(new { hasProducts, pendingApprovals, cashSalesToday,
+                business = details, roleCode, locations, subscription, accessStatus,
+                canOperate, cashSaleEnabled = environment.IsDevelopment() });
         });
     }
 
