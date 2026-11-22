@@ -416,3 +416,70 @@ button:focus-visible, a:focus-visible, input:focus-visible, select:focus-visible
   .entry-option { transition: none; }
   .entry-option:hover { transform: none; }
 }
+
+/* SA-03–08 — Enterprise business provisioning. Matches approved dense stepper/form language. */
+.provision-heading { margin-bottom: 22px; }
+.provision-security { display: inline-flex; align-items: center; gap: 7px; font-size: .77rem;
+  font-weight: 700; border: 1px solid #d8e6f8; color: #315b8f; background: #edf4fe;
+  border-radius: 999px; padding: 7px 12px; }
+.provision-steps { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr));
+  gap: 0; margin-bottom: 22px; background: #fff; border: 1px solid #e0e7f0;
+  border-radius: 10px; padding: 17px 18px; }
+.provision-step { display: flex; align-items: center; gap: 9px; color: #8796ab; min-width: 0;
+  font-size: .82rem; font-weight: 650; position: relative; }
+.provision-step:not(:last-child)::after { content: ""; height: 1px; flex: 1; margin: 0 15px;
+  background: #dce5f2; }
+.provision-step-number { display: grid; place-items: center; flex: 0 0 28px;
+  width: 28px; height: 28px; border-radius: 50%; border: 1px solid #dce4ef;
+  background: #f4f7fa; font-size: .8rem; font-weight: 750; color: #8796ab; }
+.provision-step.is-current { color: #152b55; }
+.provision-step.is-current .provision-step-number { background: #225acb; border-color: #225acb; color: #fff; }
+.provision-step.is-complete .provision-step-number { background: #e7f6ed; border-color: #badfc7; color: #228454; }
+.provision-grid { display: grid; grid-template-columns: minmax(0, 1fr) minmax(225px, .38fr); gap: 20px; align-items: start; }
+.provision-form { min-height: 390px; padding: 28px; }
+.provision-form-intro { display: flex; align-items: flex-start; gap: 14px; margin: 0 0 24px; }
+.provision-intro-icon { width: 49px; height: 49px; flex: 0 0 49px; display: grid; place-items: center;
+  color: #225ec6; background: #edf3fe; border-radius: 11px; }
+.provision-form .provision-form-intro h2 { font-size: 1.1rem; padding: 0; margin: 0 0 5px; border: 0; }
+.provision-form-intro p { margin: 0; font-size: .82rem; line-height: 1.5; color: #687d98; }
+.provision-form .form-grid { gap: 19px; }
+.provision-form .form-control, .provision-form .form-select { min-height: 43px; border-radius: 7px; }
+.provision-form .form-footer { margin-top: 26px; }
+.provision-plan-card { display: flex; align-items: center; justify-content: space-between; gap: 16px; padding: 18px;
+  margin-bottom: 23px; border: 1px solid #aac6f4; border-radius: 11px; background: #f6f9ff; }
+.provision-plan-card strong { display: block; color: #20365c; font-size: 1rem; }
+.provision-plan-card small { display: block; color: #657c9d; font-size: .77rem; margin-top: 5px; line-height: 1.4; }
+.provision-plan-selected { display: inline-flex; align-items: center; gap: 5px; color: #1e794d;
+  background: #e6f5ea; padding: 5px 9px; border-radius: 999px; font-weight: 750; font-size: .73rem; }
+.provision-review { margin: 0; border-top: 1px solid #e7edf5; }
+.provision-review > div { display: flex; align-items: baseline; justify-content: space-between; gap: 18px;
+  border-bottom: 1px solid #e7edf5; padding: 13px 0; font-size: .9rem; }
+.provision-review dt { font-weight: 500; color: #667a96; }
+.provision-review dd { margin: 0; text-align: right; font-weight: 700; color: #1c3150; overflow-wrap: anywhere; }
+.provision-verified { color: #237b4d; background: #e6f5eb; border-radius: 999px;
+  padding: 3px 8px; font-size: .72rem; margin-left: 8px; white-space: nowrap; }
+.provision-submit-note { display: flex; align-items: flex-start; gap: 9px; color: #536b87;
+  font-size: .8rem; line-height: 1.5; margin: 18px 0 0; }
+.provision-submit-note svg { flex: 0 0 auto; color: #1960b8; }
+.provision-aside { padding: 25px; }
+.provision-side-kicker { color: #4269a1; font-size: .67rem; font-weight: 750; letter-spacing: .12em; }
+.provision-aside h2 { border: 0; padding: 0; margin: 10px 0 12px; font-size: 1.15rem; line-height: 1.4; }
+.provision-aside p { color: #697d96; font-size: .85rem; line-height: 1.7; margin-bottom: 22px; }
+.provision-side-row { display: flex; align-items: center; gap: 9px; margin: 11px 0;
+  color: #385371; font-size: .83rem; font-weight: 600; }
+.provision-side-row svg { color: #27946d; flex: 0 0 auto; }
+.provision-side-warning { margin-top: 24px; padding: 14px; background: #fbf7ef;
+  color: #85612b; font-size: .78rem; line-height: 1.6; border: 1px solid #f0e1c5; border-radius: 8px; }
+@media (max-width: 1050px) {
+  .provision-grid { grid-template-columns: minmax(0, 1fr); }
+  .provision-aside { display: none; }
+}
+@media (max-width: 680px) {
+  .provision-steps { grid-template-columns: repeat(4, minmax(0, 1fr)); padding: 13px 7px; }
+  .provision-step { flex-direction: column; gap: 5px; font-size: .63rem; text-align: center; }
+  .provision-step:not(:last-child)::after { display: none; }
+  .provision-step-number { flex-basis: 27px; }
+  .provision-form { padding: 19px 16px; }
+  .provision-heading .provision-security { max-width: 100%; }
+  .provision-review > div { gap: 9px; font-size: .8rem; }
+}
