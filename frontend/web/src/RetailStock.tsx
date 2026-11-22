@@ -1,6 +1,7 @@
 import { useEffect, useRef, useState, type FormEvent } from 'react'
 import { api, post, SessionExpiredError } from './api'
 import RetailStockAdjustments from './RetailStockAdjustments'
+import { Boxes, MapPin, Search } from 'lucide-react'
 
 interface Location {
   id: number
@@ -177,14 +178,17 @@ export default function RetailStock({ businessId, locations, canOperate, isOwner
     </section>
 
   return (
-    <section className="content-section retail-masters" aria-label="Retail stock">
-      <div className="masters-heading">
-        <div>
-          <h2>Stock</h2>
-          <p>View current quantities and record initial stock once per product and location.</p>
+    <section className="content-section retail-masters business-module-card" aria-label="Retail stock">
+      <div className="masters-heading business-module-heading">
+        <div className="business-module-title">
+          <span className="business-module-icon"><Boxes size={23} /></span>
+          <div><span className="business-eyebrow">LOCATION INVENTORY</span>
+            <h2>Inventory</h2>
+            <p>Verify actual stock balances, opening quantities and stock movement history by location.</p>
+          </div>
         </div>
-        <div>
-          <label className="form-label" htmlFor="stock-location">Location</label>
+        <div className="business-location-picker">
+          <label className="form-label" htmlFor="stock-location"><MapPin size={16} /> Location</label>
           <select id="stock-location" className="form-select" value={locationId}
             onChange={event => setLocationId(Number(event.target.value))}>
             {locations.map(location => <option key={location.id} value={location.id}>
@@ -226,25 +230,28 @@ export default function RetailStock({ businessId, locations, canOperate, isOwner
         </div>
       </form>}
 
-      <form className="masters-search" onSubmit={event => {
+      <form className="masters-search business-stock-search" onSubmit={event => {
         event.preventDefault()
         setPage(1)
         setQuery(search.trim())
       }}>
         <label htmlFor="stock-search" className="visually-hidden">Search stock products</label>
+        <Search size={18} className="business-filter-icon" aria-hidden="true" />
         <input id="stock-search" className="form-control" type="search" maxLength={100}
           placeholder="Product name, SKU or barcode" value={search}
           onChange={event => setSearch(event.target.value)} />
         <button type="submit" className="btn btn-outline-secondary">Search</button>
       </form>
 
-      {loading ? <p role="status" className="text-secondary">Loading stock…</p>
+      {loading ? <div role="status" className="business-module-loading">Loading inventory…</div>
         : error ? null
-          : items.length === 0 ? <p className="masters-empty">
-            {query ? 'No matching products.' : 'No products yet. Add products in Catalog first.'}
-          </p>
+          : items.length === 0 ? <div className="business-empty-state" role="status">
+            <Boxes size={28} /><strong>{query ? 'No matching products' : 'No products in this inventory'}</strong>
+            <p>{query ? 'Try a different product name or SKU.' :
+              'Add actual products in your catalog, then return to record opening quantities.'}</p>
+          </div>
             : <div className="table-responsive">
-              <table className="table table-sm align-middle">
+              <table className="table table-sm align-middle business-record-table">
                 <thead><tr><th scope="col">Product</th><th scope="col">SKU</th>
                   <th scope="col" className="text-end">Available stock</th>
                   <th scope="col" className="text-end">Actions</th></tr></thead>
@@ -256,7 +263,7 @@ export default function RetailStock({ businessId, locations, canOperate, isOwner
                       ? <strong className={item.quantity > 0 ? 'text-success' : ''}>
                         {item.quantity.toFixed(3)}
                       </strong>
-                      : <span className="text-secondary">Not initialized</span>}
+                      : <span className="business-record-status is-inactive">Not initialized</span>}
                   </td>
                   <td className="text-end text-nowrap">
                     {canOperate && item.isActive && !item.hasStockRecord &&
