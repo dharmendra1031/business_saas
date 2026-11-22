@@ -63,6 +63,15 @@
 .business-kpi-card strong { color: #193457; font-size: 1.45rem; line-height: 1.2; font-weight: 800; }
 .business-kpi-card span { color: #526983; font-size: .8rem; line-height: 1.4; }
 .business-dashboard-panel { margin-bottom: 14px; }
+.business-receipt-activity { margin: 0; padding: 0; list-style: none; }
+.business-receipt-activity li { display: flex; justify-content: space-between;
+  align-items: center; flex-wrap: wrap; gap: 9px; padding: 10px 0;
+  border-top: 1px solid #e6ecf4; color: #254263; font-size: .85rem; }
+.business-receipt-activity li:first-child { border-top: 0; }
+.business-receipt-activity small { display: block; color: #7285a0;
+  font-size: .74rem; margin-top: 3px; }
+.business-receipt-activity strong { font-weight: 760; white-space: nowrap; }
+
 .business-attention-action { display: grid; grid-template-columns: 17px minmax(0,1fr) 16px;
   align-items: center; gap: 9px; width: 100%; padding: 0; border: 0; background: none;
   color: #205ab1; font-size: .86rem; font-weight: 720; text-align: left; }
