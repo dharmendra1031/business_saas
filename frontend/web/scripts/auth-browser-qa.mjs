@@ -344,6 +344,10 @@ try {
     await t.login()
     await t.page.getByRole('heading', { name: 'Choose a business' }).waitFor()
     assert.equal(await t.page.locator('.business-row').count(), 2)
+    assert.equal(await t.page.getByText('Select an assigned business to continue.').count(), 0,
+      'Business selector must not repeat obvious instructions')
+    assert.equal(await t.page.getByRole('button', { name: 'Open Sample Retail as Manager' }).count(), 1,
+      'Business choice must have an accessible name and role')
     await t.screenshot('multi-business-picker')
     const firstRowHeight = await t.page.locator('.business-row').first().evaluate(el => el.getBoundingClientRect().height)
     assert.ok(firstRowHeight <= 85, 'Business selector rows should stay compact')
