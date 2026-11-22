@@ -1,5 +1,5 @@
 import { useEffect, useRef, useState, type FormEvent } from 'react'
-import { ArrowRight, Banknote, Check, Minus, Package, Plus, ReceiptText, Search, ShoppingBag, Trash2 } from 'lucide-react'
+import { ArrowLeft, ArrowRight, Banknote, Check, Minus, Package, Plus, ReceiptText, Search, ShoppingBag, Trash2 } from 'lucide-react'
 import PosCashPaymentDialog from './PosCashPaymentDialog'
 import { api, ApiResponseError, operationKey, post, type RetailDashboard } from './api'
 
@@ -42,7 +42,9 @@ function restore(key: string): SaleRequest | null {
   }
 }
 
-export default function CashCheckout({ userId, dashboard }: { userId: number; dashboard: RetailDashboard }) {
+export default function CashCheckout({ userId, dashboard, onExit }: {
+  userId: number; dashboard: RetailDashboard; onExit: () => void
+}) {
   const { business, locations } = dashboard
   const key = `cash-checkout:${userId}:${business.id}`
   const base = `/businesses/${business.id}/cash-sales`
@@ -56,6 +58,7 @@ export default function CashCheckout({ userId, dashboard }: { userId: number; da
   const [products, setProducts] = useState<Product[]>([])
   const [showPayment, setShowPayment] = useState(false)
   const [clearArmed, setClearArmed] = useState(false)
+  const [exitArmed, setExitArmed] = useState(false)
   const [scanBusy, setScanBusy] = useState(false)
   const [cash, setCash] = useState(pending ? String(pending.tendered) : '')
   const [error, setError] = useState('')
@@ -114,6 +117,7 @@ export default function CashCheckout({ userId, dashboard }: { userId: number; da
     setCash('')
     setError('')
     setClearArmed(false)
+    setExitArmed(false)
     setSearch('')
     searchInput.current?.focus()
   }
@@ -214,8 +218,19 @@ export default function CashCheckout({ userId, dashboard }: { userId: number; da
         <p>{pending ? 'Check the previous transaction before recording it again.' :
           'Select products, review your basket and collect cash payment.'}</p>
       </div>
-      <span className="pos-mode"><Check size={15} /> Cash checkout · {business.currencyCode}</span>
+      <div className="pos-header-actions">
+        <span className="pos-mode"><Check size={15} /> Cash checkout · {business.currencyCode}</span>
+        <button type="button" className="btn btn-outline-secondary btn-sm pos-exit-button"
+          disabled={busy || !!pending} onClick={() => basket.length ? setExitArmed(true) : onExit()}>
+          <ArrowLeft size={15} /> Exit POS
+        </button>
+      </div>
     </header>
+    {exitArmed && <div className="pos-exit-confirm" role="alert">
+      <span>Unposted basket items will be discarded when you leave checkout.</span>
+      <button type="button" className="btn btn-outline-danger btn-sm" onClick={onExit}>Discard and exit</button>
+      <button type="button" className="btn btn-outline-secondary btn-sm" onClick={() => setExitArmed(false)}>Stay in POS</button>
+    </div>}
     {error && <div role="alert" className="alert alert-danger">{error}</div>}
     {pending ? <section className="content-section pos-pending" aria-label="Pending sale recovery">
       <div className="pos-panel-heading"><h2>Pending cash sale</h2><span>Reference held for safe retry</span></div>
