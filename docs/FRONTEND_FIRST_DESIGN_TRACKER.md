@@ -133,6 +133,12 @@ This is a visual scope tracker, **not** a statement that all frontend screens ar
 
 **Code batch CI evidence (22 Nov):** [Actions run 45008520111](https://github.com/dharmendra1031/business_saas/actions/runs/45008520111) — **frontend TypeScript/build PASS, backend integration PASS, isolated SQL Server PASS** on frontend code commit `9982ba7f`. These results verify build/integration checks only; browser visual/image comparison is still pending.
 
+## Consistent readability and card geometry (22 November 2026)
+
+- Adjusted scoped Business Owner/Admin, Platform Super Admin and POS styles for more readable body/secondary labels and consistent heights for comparable cards within a single grid. Increased visibility of dashboard status text, metric descriptions, table headings/rows and module toolbar labels.
+- Business module header rows now have a shared minimum height, and business-selection cards, KPI tiles, platform metric/plan cards and POS product tiles stretch evenly within each row. This does NOT force forms, tables or different-sized charts into equal fixed heights. POS 61/39 panel geometry retained.
+- No new CSS library, no new component abstraction, no business logic/API/database changes. Dashboard structure unchanged. Chromium screenshots and owner sign-off required before any screen is marked final.
+
 ## 6. Business Owner/Manager frontend batch — 22 November 2026
 
 **Scope:** `BUS-01..04`, `AUTH-11`, `BUS-06..08`, `BUS-10..15`, `BUS-17..18`, `BUS-20..25`, `BUS-27..32` UI refinements, plus frontend design navigation for previously missing sales/register/report/settings screens. No backend/database files were changed.

@@ -522,3 +522,12 @@
   .platform-shell .platform-operations-card { min-height: 0; padding: 17px; }
 }
 
+
+/* Similar cards align within each grid; stronger secondary text without altering layout. */
+.platform-shell .platform-metric-grid > .platform-metric,
+.platform-shell .platform-plan-cards > .platform-plan-card,
+.platform-shell .platform-customer-summary > section { height: 100%; min-width: 0; }
+.platform-shell .platform-metric-content > small { color: #536984; font-size: .78rem; }
+.platform-shell .platform-plan-card > p { color: #52647f; font-size: .8rem; }
+.platform-shell .platform-plan-card-details > div { color: #526684; font-size: .8rem; }
+.platform-shell .platform-customer-summary > section > small { color: #546983; font-size: .8rem; }
