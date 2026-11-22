@@ -482,7 +482,7 @@ export default function App() {
                   onNavigate={section => { setApprovalList(false); setRetailPage(section) }}
                   onReviewApprovals={() => { setApprovalList(true); setRetailPage('purchases') }} />
                 {dashboard.roleCode === 'Owner' && <details className="content-section business-subscription-panel" onToggle={event => setBillingOpen(event.currentTarget.open)}>
-                  <summary><CreditCard size={17} /> Subscription payment and billing status</summary>
+                  <summary><CreditCard size={17} /> Subscription & billing</summary>
                   {billingOpen && <SubscriptionCheckout key={dashboard.business.id} businessId={dashboard.business.id} />}
                 </details>}
               </>}
