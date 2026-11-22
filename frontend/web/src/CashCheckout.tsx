@@ -360,7 +360,7 @@ export default function CashCheckout({ userId, dashboard, onExit }: {
     </div>}
     {showPayment && !pending && !receipt && <PosCashPaymentDialog amount={total}
       cash={cash} currency={business.currencyCode} lineCount={itemCount} busy={busy} error={error}
-      onCashChange={setCash} onCancel={() => setShowPayment(false)}
+      onCashChange={value => { setCash(value); setError('') }} onCancel={() => setShowPayment(false)}
       onConfirm={() => void recordSale()} />}
   </section>
 }
