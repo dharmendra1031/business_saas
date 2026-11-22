@@ -356,7 +356,7 @@ export default function App() {
                 page === 'retail' && dashboard?.roleCode === 'Cashier' ? 'POINT OF SALE' :
                 page === 'retail' ? dashboard?.roleCode === 'Owner' ? 'BUSINESS ADMIN' : 'STORE MANAGER' :
                 'BUSINESS ACCOUNT'}</small>}
-              <strong>{page === 'retail' ? isBusinessOverview ? 'Business Dashboard' : `${dashboard?.business.name} / ${retailTitles[retailPage]}` :
+              <strong>{page === 'retail' ? isBusinessOverview ? 'Dashboard' : `${dashboard?.business.name} / ${retailTitles[retailPage]}` :
                 page === 'platform' ? 'Platform Management' : 'My Businesses'}</strong>
             </span>
           </div>

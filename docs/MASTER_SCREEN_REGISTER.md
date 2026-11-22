@@ -169,7 +169,7 @@ The mockup pictures display illustrative controls (Card, UPI, Split, Services, d
 
 | ID | Screen / interaction | Type | Current | Priority | Required outcome / guardrail |
 | --- | --- | --- | --- | --- | --- |
-| BUS-01 | Business Dashboard | Page | Partial | P0 | Real business/location sales, stock alerts, pending POs, quick actions and no platform KPIs. |
+| BUS-01 | Business Dashboard | Page | Partial | P0 | One compact status row and actual onboarding steps (when needed); redundant welcome/cards removed. Desktop/360px Chromium QA passed; real stock/sales KPI APIs, owner approval and authenticated E2E pending. |
 | BUS-02 | First-run business setup checklist | Page | Missing | P0 | Provisioned business readiness: first location, products, opening stock, receipt settings; resume safely. |
 | BUS-03 | Business selector / context switch | Page | Partial | P0 | Membership-filtered existing businesses, clear active role/location; owners cannot create tenants. |
 | BUS-04 | Locations — list and active location | Page | Partial | P1 | Only authorized locations; branch status and current scope clear. |

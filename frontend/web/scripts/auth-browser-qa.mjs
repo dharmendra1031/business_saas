@@ -16,7 +16,10 @@ const dashboard = role => ({
     countryCode: 'IN', currencyCode: 'INR', timeZoneId: 'Asia/Kolkata'
   },
   roleCode: role, locations: [{ id: 1, name: 'Main Shop', code: 'MAIN' }],
-  subscription: null, accessStatus: 'Trial', canOperate: true,
+  subscription: { planCode: 'STARTER', status: 'Trial',
+    trialEndsAtUtc: new Date(Date.now() + 14 * 24 * 60 * 60 * 1000).toISOString(),
+    paidStartsAtUtc: null, paidEndsAtUtc: null, paidPlanVersionId: null },
+  accessStatus: 'Trial', canOperate: true,
   hasProducts: false, pendingApprovals: 0, cashSaleEnabled: role === 'Cashier'
 })
 const overview = {
@@ -179,6 +182,8 @@ try {
     assert.ok(dashboardTop && dashboardTop.y < 200, 'Dashboard summary must begin near the top')
     assert.equal(await t.page.locator('.business-action-card').count(), 0, 'No duplicated navigation cards')
     assert.equal(await t.page.getByRole('heading', { name: 'Business Dashboard', exact: true }).count(), 1)
+    assert.equal(await t.page.getByText('No plan', { exact: false }).count(), 0,
+      'Trial fixture must show an actual plan rather than conflicting No plan status')
     assert.equal(await t.page.getByText('Welcome to Sample Retail').count(), 0)
     await t.screenshot('owner-workspace')
     await t.check()

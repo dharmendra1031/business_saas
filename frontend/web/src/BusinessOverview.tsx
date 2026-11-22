@@ -25,7 +25,7 @@ export default function BusinessOverview({ dashboard, onNavigate, onReviewApprov
           })}
         </>}
       </span>
-      <span>Locations: {locations.length}</span>
+      {locations.length > 1 && <span>Locations: {locations.length}</span>}
       <span>Products: {hasProducts ? 'Added' : 'Not started'}</span>
     </div>
     {isOwner && pendingApprovals > 0 && <button type="button" className="business-approval-cta"
