@@ -1,6 +1,6 @@
 import { useEffect, useRef, useState } from 'react'
 import { Activity, ArrowLeft, ArrowRight, BarChart3, Boxes, Building2, CheckCircle2, CreditCard, KeyRound, LayoutDashboard, LogOut, Menu, Package, ReceiptText, Search, Settings2, ShieldCheck, ShoppingCart, Store, Tags, Truck, UserRound, Users, Wallet } from 'lucide-react'
-import { api, resetCsrf, SessionExpiredError, setSessionExpiredHandler, type Business, type RetailDashboard, type User } from './api'
+import { api, ApiResponseError, resetCsrf, SessionExpiredError, setSessionExpiredHandler, type Business, type RetailDashboard, type User } from './api'
 import CashCheckout from './CashCheckout'
 import TeamMembers from './TeamMembers'
 import SubscriptionCheckout from './SubscriptionCheckout'
@@ -11,7 +11,7 @@ import PlatformAdmin, { type PlatformSection } from './PlatformAdmin'
 import PlatformMfaSetup from './PlatformMfaSetup'
 import AuthPage from './AuthPage'
 
-type Page = 'loading' | 'login' | 'register' | 'mfa-setup' | 'businesses' | 'retail' | 'platform'
+type Page = 'loading' | 'unavailable' | 'login' | 'register' | 'mfa-setup' | 'businesses' | 'retail' | 'platform'
 
 type RetailPage = RetailSection | 'cash' | 'overview' | 'team' | BusinessPreviewModule
 const retailTitles: Record<RetailPage, string> = {
@@ -28,7 +28,10 @@ export default function App() {
   const [page, setPage] = useState<Page>('loading')
   const [user, setUser] = useState<User | null>(null)
   const [businesses, setBusinesses] = useState<Business[]>([])
-  const [canViewPlatform, setCanViewPlatform] = useState(false)
+  const canViewPlatform = !!user?.isPlatformOwner && user.mfaVerified
+  const [sessionError, setSessionError] = useState('')
+  const [businessesLoading, setBusinessesLoading] = useState(false)
+  const [businessesError, setBusinessesError] = useState('')
   const [platformSection, setPlatformSection] = useState<PlatformSection>('overview')
   const [platformBusinessId, setPlatformBusinessId] = useState<number | null>(null)
   const [platformStartCreate, setPlatformStartCreate] = useState(false)
@@ -50,45 +53,44 @@ export default function App() {
     setSessionExpiredHandler(() => {
       resetCsrf()
       setUser(null)
-      setCanViewPlatform(false)
       setBusinesses([])
       setDashboard(null)
       setMenuOpen(false)
       setError('')
+      setBusinessesError('')
       setSessionExpired(true)
       setAuthNotice('')
       setPage('login')
     })
-
-    api<User>('/auth/me')
-      .then(async me => {
-        setUser(me)
-        if (me.isPlatformOwner) {
-          setBusinesses([])
-          setCanViewPlatform(me.mfaVerified)
-          setPlatformSection('overview')
-          setPage(me.mfaVerified ? 'platform' : 'mfa-setup')
-          return
-        }
-        const list = await api<Business[]>('/businesses')
-        setBusinesses(list)
-        if (list.length === 1) await openBusiness(list[0].id)
-        else setPage('businesses')
-      })
-      .catch(() => setPage('login'))
+    void initializeSession()
     return () => setSessionExpiredHandler(null)
   }, [])
 
-  useEffect(() => {
-    if (!user) return
-    let active = true
-
-    api<{ canViewBusinesses: boolean }>('/platform/access')
-      .then(access => { if (active) setCanViewPlatform(access.canViewBusinesses) })
-      .catch(() => { if (active) setCanViewPlatform(false) })
-
-    return () => { active = false }
-  }, [user])
+  async function initializeSession() {
+    setPage('loading')
+    setSessionError('')
+    try {
+      const me = await api<User>('/auth/me')
+      setUser(me)
+      setSessionExpired(false)
+      if (me.isPlatformOwner) {
+        setBusinesses([])
+        setPlatformSection('overview')
+        setPage(me.mfaVerified ? 'platform' : 'mfa-setup')
+      } else {
+        await loadBusinesses(true)
+      }
+    } catch (cause) {
+      setUser(null)
+      setBusinesses([])
+      if (cause instanceof ApiResponseError && cause.status === 401) {
+        setPage('login')
+      } else {
+        setSessionError(message(cause))
+        setPage('unavailable')
+      }
+    }
+  }
 
   useEffect(() => {
     if (!menuOpen) return
@@ -104,15 +106,21 @@ export default function App() {
     return () => window.removeEventListener('keydown', onKeyDown)
   }, [menuOpen])
 
-  async function loadBusinesses() {
+  async function loadBusinesses(openSingle = false) {
+    setError('')
+    setBusinessesError('')
+    setBusinessesLoading(true)
+    setPage('businesses')
     try {
       const list = await api<Business[]>('/businesses')
       setBusinesses(list)
       setDashboard(null)
-      setPage('businesses')
+      if (openSingle && list.length === 1) await openBusiness(list[0].id)
     } catch (cause) {
       if (!(cause instanceof SessionExpiredError))
-        setError(message(cause))
+        setBusinessesError(message(cause))
+    } finally {
+      setBusinessesLoading(false)
     }
   }
 
@@ -143,14 +151,11 @@ export default function App() {
       await api<void>('/auth/logout', { method: 'POST' })
       resetCsrf()
       setUser(null)
-      setCanViewPlatform(false)
       setDashboard(null)
       setBusinesses([])
       setPage('login')
-      const url = new URL(window.location.href)
-      url.searchParams.delete('workspace')
-      window.history.replaceState(null, '', url)
       setSessionExpired(false)
+      setBusinessesError('')
       setAuthNotice('')
       setError('')
       setNotice('')
@@ -159,31 +164,28 @@ export default function App() {
     }
   }
 
-  function onSignedIn(next: User, list: Business[]) {
-    resetCsrf()
-    setUser(next)
-    setCanViewPlatform(next.isPlatformOwner && next.mfaVerified)
-    setBusinesses(next.isPlatformOwner ? [] : list)
-    setSessionExpired(false)
-    setAuthNotice('')
-    setPlatformSection('overview')
-    setPage(next.isPlatformOwner ? (next.mfaVerified ? 'platform' : 'mfa-setup') : 'businesses')
-    setError('')
-    if (!next.isPlatformOwner && list.length === 1) void openBusiness(list[0].id)
-  }
-
   if (page === 'loading')
     return <main className="center-screen" aria-live="polite">Loading your workspace…</main>
 
+  if (page === 'unavailable')
+    return <main className="auth-layout">
+      <section className="auth-form-container">
+        <div className="auth-card" role="alert">
+          <h1>Unable to load your session</h1>
+          <p className="form-hint">{sessionError || 'Please check your connection and try again.'}</p>
+          <button type="button" className="btn btn-primary w-100" onClick={() => void initializeSession()}>Retry connection</button>
+        </div>
+      </section>
+    </main>
+
   if (page === 'login' || page === 'register')
-    return <AuthPage key={page} mode={page} onChange={setPage} onSignedIn={onSignedIn}
+    return <AuthPage key={page} mode={page} onChange={setPage} onAuthenticated={() => void initializeSession()}
       sessionExpired={sessionExpired} authNotice={authNotice} onRegistered={setAuthNotice} />
 
   if (page === 'mfa-setup')
     return <PlatformMfaSetup onFinished={() => {
       resetCsrf()
       setUser(null)
-      setCanViewPlatform(false)
       setPage('login')
     }} />
 
@@ -370,17 +372,6 @@ export default function App() {
             <button type="submit" aria-label="Run business search">Search</button>
           </form>}
           <div className="topbar-account">
-            {canViewPlatform && !user?.isPlatformOwner && page !== 'platform' && <button
-              type="button" className="btn btn-outline-primary btn-sm workspace-switch" onClick={() => {
-                setDashboard(null)
-                setPlatformSection('overview')
-                setPlatformBusinessId(null)
-                setBillingBusiness(null)
-                setPage('platform')
-              }}><ShieldCheck size={16} /> Super Admin</button>}
-            {page === 'platform' && !user?.isPlatformOwner && <button
-              type="button" className="btn btn-outline-secondary btn-sm workspace-switch"
-              onClick={() => { void loadBusinesses() }}><Building2 size={16} /> Business Workspace</button>}<UserRound size={17} />
             <span className="account-email">{user?.isPlatformOwner ? 'Platform Owner · ' : ''}{user?.email}</span>
             <button className="btn btn-outline-secondary btn-sm" onClick={() => void logout()}><LogOut size={15} /> Sign out</button>
           </div>
@@ -412,7 +403,17 @@ export default function App() {
                 <div><h1>My Assigned Businesses</h1><p>Select a business assigned to your account. New businesses are provisioned by the Platform Super Admin.</p></div>
 
               </div>
-              {businesses.length === 0 ? (
+              {businessesLoading ? (
+                <section className="empty-state" role="status">
+                  <p>Loading assigned businesses…</p>
+                </section>
+              ) : businessesError ? (
+                <section className="empty-state" role="alert">
+                  <h2>Unable to load businesses</h2>
+                  <p>{businessesError}</p>
+                  <button className="btn btn-primary" onClick={() => void loadBusinesses()}>Retry loading businesses</button>
+                </section>
+              ) : businesses.length === 0 ? (
                 <section className="empty-state">
                   <Store size={32} />
                   <h2>No business access yet</h2>

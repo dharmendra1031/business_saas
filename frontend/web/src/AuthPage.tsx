@@ -1,11 +1,11 @@
 import { useEffect, useState, type FormEvent } from 'react'
 import { ArrowRight } from 'lucide-react'
-import { api, post, resetCsrf, type Business, type User } from './api'
+import { api, post, resetCsrf } from './api'
 
-export default function AuthPage({ mode, onChange, onSignedIn, sessionExpired, authNotice, onRegistered }: {
+export default function AuthPage({ mode, onChange, onAuthenticated, sessionExpired, authNotice, onRegistered }: {
   mode: 'login' | 'register'
   onChange: (page: 'login' | 'register') => void
-  onSignedIn: (user: User, businesses: Business[]) => void
+  onAuthenticated: () => void
   sessionExpired: boolean
   authNotice: string
   onRegistered: (notice: string) => void
@@ -51,9 +51,7 @@ export default function AuthPage({ mode, onChange, onSignedIn, sessionExpired, a
           }
         }
         resetCsrf()
-        const me = await api<User>('/auth/me')
-        const list = me.isPlatformOwner ? [] : await api<Business[]>('/businesses')
-        onSignedIn(me, list)
+        onAuthenticated()
       }
     } catch (cause) {
       setError(cause instanceof Error ? cause.message : 'Something went wrong. Please try again.')
