@@ -29,6 +29,8 @@ export default function PosCashPaymentDialog({
 
   useEffect(() => {
     const previouslyFocused = document.activeElement instanceof HTMLElement ? document.activeElement : null
+    const previousOverflow = document.body.style.overflow
+    document.body.style.overflow = 'hidden'
     cashRef.current?.focus()
     function onKeyDown(event: KeyboardEvent) {
       if (event.key === 'Escape' && !busyRef.current) {
@@ -54,6 +56,7 @@ export default function PosCashPaymentDialog({
     document.addEventListener('keydown', onKeyDown)
     return () => {
       document.removeEventListener('keydown', onKeyDown)
+      document.body.style.overflow = previousOverflow
       previouslyFocused?.focus()
     }
   }, [])
