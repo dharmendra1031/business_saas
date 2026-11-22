@@ -10,6 +10,13 @@ export default function BusinessOverview({ dashboard, onNavigate, onReviewApprov
 }) {
   const { roleCode, locations, subscription, accessStatus, hasProducts, pendingApprovals } = dashboard
   const isOwner = roleCode === 'Owner'
+  const cash = dashboard.cashSalesToday
+  const money = new Intl.NumberFormat(undefined, {
+    style: 'currency', currency: dashboard.business.currencyCode
+  })
+  const receiptDate = new Intl.DateTimeFormat(undefined, {
+    dateStyle: 'medium', timeStyle: 'short', timeZone: dashboard.business.timeZoneId
+  })
   const status = accessStatus === 'Trial' ? 'Trial active' :
     accessStatus === 'TrialExpired' ? 'Trial expired' :
     accessStatus === 'Suspended' ? 'Suspended' :
@@ -44,8 +51,14 @@ export default function BusinessOverview({ dashboard, onNavigate, onReviewApprov
         <h2 id="business-overview-title">Business Overview</h2>
         <div className="business-kpi-grid">
           {isOwner && <>
-            <div className="business-kpi-card"><small>Today's Sales</small><strong>—</strong><span>Reporting not connected</span></div>
-            <div className="business-kpi-card"><small>Total Bills</small><strong>—</strong><span>Reporting not connected</span></div>
+            <div className="business-kpi-card"><small>Today's Cash Sales</small>
+              <strong>{cash ? money.format(cash.total) : '—'}</strong>
+              <span>{cash ? 'Posted cash receipts only' : 'Cash reporting not enabled'}</span>
+            </div>
+            <div className="business-kpi-card"><small>Cash Bills Today</small>
+              <strong>{cash ? cash.billCount.toLocaleString() : '—'}</strong>
+              <span>{cash ? `Business date: ${cash.businessDate}` : 'Cash reporting not enabled'}</span>
+            </div>
             <div className="business-kpi-card"><small>Draft Purchase Orders</small><strong>{pendingApprovals.toLocaleString()}</strong><span>Owner review</span></div>
           </>}
           <div className="business-kpi-card"><small>Stock Alerts</small><strong>—</strong><span>Reorder limits not configured</span></div>
@@ -66,7 +79,22 @@ export default function BusinessOverview({ dashboard, onNavigate, onReviewApprov
 
       <section className="content-section business-dashboard-panel" aria-labelledby="business-activity-title">
         <h2 id="business-activity-title">Recent Activity</h2>
-        <p>Activity summary is not connected yet. Detailed records remain in their modules.</p>
+        {cash && cash.recentReceipts.length ? (
+          <ul className="business-receipt-activity" aria-label="Recent recorded cash sales">
+            {cash.recentReceipts.map(receipt => (
+              <li key={receipt.id}>
+                <span>Cash receipt #{receipt.id}
+                  <small><time dateTime={receipt.postedAtUtc}>
+                    {receiptDate.format(new Date(receipt.postedAtUtc))}
+                  </time></small>
+                </span>
+                <strong>{money.format(receipt.total)}</strong>
+              </li>
+            ))}
+          </ul>
+        ) : <p>{cash
+          ? 'No recorded cash sales yet.'
+          : 'Cash receipt activity is not available in this environment.'}</p>}
       </section>
     </>}
     {locations.length === 0 && !hasProducts && <p className="business-location-warning" role="status">
