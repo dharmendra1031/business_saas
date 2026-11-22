@@ -442,7 +442,7 @@ export default function PlatformAdmin({ section, selectedBusinessId, onViewBusin
 }) {
   if (section === 'overview') return <PlatformOverview onViewBusiness={onViewBusiness}
     onSeeBusinesses={onSeeBusinesses} onCreateBusiness={onStartCreate} />
-  if (section === 'customers') return <PlatformCustomers />
+  if (section === 'customers') return <PlatformCustomers onViewBusiness={onViewBusiness} />
   if (section === 'plans') return <PlatformPlans business={billingBusiness} onChooseBusiness={onChooseBusiness} />
   if (section === 'audit') return <PlatformAudit />
   if (section === 'operations') return <PlatformOperations />
