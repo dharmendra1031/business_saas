@@ -285,16 +285,11 @@ export default function App() {
             ['customers', 'Customers', Users],
             ['businesses', 'Businesses', Building2],
             ['plans', 'Plans & Billing', CreditCard],
-            [null, 'Licenses', KeyRound],
-            [null, 'Platform Settings', Settings2],
+            ['licenses', 'Licenses', KeyRound],
+            ['settings', 'Platform Settings', Settings2],
             ['audit', 'Security & Audit', ShieldCheck],
             ['operations', 'Operations', Activity]
-          ] as const).map(([section, label, Icon]) => section === null
-            ? <button key={label} type="button" className="nav-entry nav-entry-planned"
-                disabled title={`${label} — planned, not yet implemented`}>
-                <Icon size={18} /> <span>{label}</span><small>Planned</small>
-              </button>
-            : <button key={section}
+          ] as const).map(([section, label, Icon]) => <button key={section}
                 ref={section === 'overview' && user?.isPlatformOwner ? businessNav : undefined}
                 type="button"
                 className={`nav-entry${page === 'platform' && platformSection === section ? ' active' : ''}`}
