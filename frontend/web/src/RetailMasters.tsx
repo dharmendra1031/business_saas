@@ -1,6 +1,5 @@
 import { useEffect, useRef, useState, type FormEvent } from 'react'
 import { api, post, SessionExpiredError } from './api'
-import { Tags } from 'lucide-react'
 
 type MasterType = 'categories' | 'units'
 
@@ -125,11 +124,7 @@ export default function RetailMasters({ businessId, canOperate }: {
   return (
     <section className="content-section retail-masters business-module-card" aria-label="Retail master data">
       <div className="masters-heading business-module-heading">
-        <div className="business-module-title">
-          <span className="business-module-icon"><Tags size={23} /></span>
-          <div><span className="business-eyebrow">PRODUCT MASTER DATA</span><h2>Categories & Units</h2>
-            <p>Organize products using categories and stock/sales units.</p></div>
-        </div>
+        <h2>Categories & Units</h2>
         <div className="btn-group business-master-tabs" role="group" aria-label="Catalog master type">
           <button type="button" className={`btn btn-sm ${isUnit ? 'btn-outline-secondary' : 'btn-primary'}`}
             aria-pressed={!isUnit} onClick={() => changeType('categories')}>Categories</button>
