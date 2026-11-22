@@ -182,13 +182,17 @@ export default function RetailStock({ businessId, locations, canOperate, isOwner
       <div className="masters-heading business-module-heading">
         <h2>Inventory</h2>
         <div className="business-location-picker">
-          <label className="form-label" htmlFor="stock-location"><MapPin size={16} /> Location</label>
-          <select id="stock-location" className="form-select" value={locationId}
-            onChange={event => setLocationId(Number(event.target.value))}>
-            {locations.map(location => <option key={location.id} value={location.id}>
-              {location.name} ({location.code})
-            </option>)}
-          </select>
+          {locations.length === 1
+            ? <span className="business-location-name"><MapPin size={16} aria-hidden="true" /> {locations[0].name}</span>
+            : <>
+              <label className="form-label" htmlFor="stock-location"><MapPin size={16} /> Stock location</label>
+              <select id="stock-location" className="form-select" value={locationId}
+                onChange={event => setLocationId(Number(event.target.value))}>
+                {locations.map(location => <option key={location.id} value={location.id}>
+                  {location.name} ({location.code})
+                </option>)}
+              </select>
+            </>}
         </div>
       </div>
 

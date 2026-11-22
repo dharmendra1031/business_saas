@@ -26,7 +26,6 @@ export default function BusinessOverview({ dashboard, onNavigate, onReviewApprov
           })}
         </>}
       </span>
-      {locations.length > 1 && <span>{locations.length} locations</span>}
     </div>
 
     {!hasProducts ? <section className="content-section business-setup-panel" aria-labelledby="business-setup-title">

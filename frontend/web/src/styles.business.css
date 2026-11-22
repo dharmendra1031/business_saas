@@ -96,6 +96,7 @@
 .business-location-picker { display: grid; gap: 4px; min-width: 190px; }
 .business-location-picker label { display: inline-flex; gap: 7px; align-items: center; margin: 0; font-size: .84rem; color: #425b79; }
 .business-location-picker .form-select { min-width: 185px; }
+.business-location-name { display: inline-flex; align-items: center; gap: 6px; color: #405b79; font-size: .84rem; }
 .business-shell .business-module-card > .alert,
 .business-shell .business-module-card > .product-form,
 .business-shell .business-module-card > .masters-form,

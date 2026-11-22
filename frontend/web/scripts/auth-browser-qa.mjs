@@ -10,12 +10,15 @@ const business = role => ({
   id: 1, name: 'Sample Retail', typeCode: 'RETAIL', typeName: 'Retail',
   countryCode: 'IN', currencyCode: 'INR', timeZoneId: 'Asia/Kolkata', roleCode: role
 })
-const dashboard = (role, hasProducts = false, pendingApprovals = 0, selectedBusinessId = 1) => ({
+const dashboard = (role, hasProducts = false, pendingApprovals = 0, selectedBusinessId = 1, locationCount = 1) => ({
   business: {
     id: selectedBusinessId, name: selectedBusinessId === 2 ? 'Second Retail' : 'Sample Retail', typeCode: 'RETAIL', typeName: 'Retail',
     countryCode: 'IN', currencyCode: 'INR', timeZoneId: 'Asia/Kolkata'
   },
-  roleCode: role, locations: [{ id: 1, name: 'Main Shop', code: 'MAIN' }],
+  roleCode: role, locations: [
+    { id: 1, name: 'Main Shop', code: 'MAIN' },
+    ...(locationCount > 1 ? [{ id: 2, name: 'Second Location', code: 'SECOND' }] : [])
+  ],
   subscription: { planCode: 'STARTER', status: 'Trial',
     trialEndsAtUtc: new Date(Date.now() + 14 * 24 * 60 * 60 * 1000).toISOString(),
     paidStartsAtUtc: null, paidEndsAtUtc: null, paidPlanVersionId: null },
@@ -40,7 +43,8 @@ const browser = await chromium.launch({ headless: true })
 async function scenario(name, {
   width = 1366, height = 768, role = 'Owner', initialFailure = false,
   businessFailure = false, multiple = false, challenge = false, verified = true,
-  badPassword = false, lockedPassword = false, badMfa = false, hasProducts = false, pendingApprovals = 0
+  badPassword = false, lockedPassword = false, badMfa = false, hasProducts = false, pendingApprovals = 0,
+  locationCount = 1
 } = {}) {
   const context = await browser.newContext({ viewport: { width, height }, deviceScaleFactor: 1 })
   const page = await context.newPage()
@@ -49,6 +53,7 @@ async function scenario(name, {
   const state = { authenticated: false, initialFailure, businessFailure, challengePending: false,
     badPassword, lockedPassword, badMfa, lastMfaRequest: null }
   let businessRequests = 0
+  const stockPaths = []
 
   await page.route('**/api/**', route => {
     const path = new URL(route.request().url()).pathname.replace(/^\/api/, '')
@@ -99,7 +104,11 @@ async function scenario(name, {
       const first = business(role)
       return response(route, 200, multiple ? [first, { ...first, id: 2, name: 'Second Retail' }] : [first])
     }
-    if (/^\/businesses\/\d+\/dashboard$/.test(path)) return response(route, 200, dashboard(role, hasProducts, pendingApprovals, Number(path.split('/')[2])))
+    if (/^\/businesses\/\d+\/dashboard$/.test(path)) return response(route, 200, dashboard(role, hasProducts, pendingApprovals, Number(path.split('/')[2]), locationCount))
+    if (/^\/businesses\/\d+\/stock\/locations\/\d+$/.test(path)) {
+      stockPaths.push(path)
+      return response(route, 200, { items: [], total: 0, page: 1, pageSize: 20 })
+    }
     if (/^\/businesses\/\d+\/cash-sales\/products$/.test(path)) return response(route, 200, [])
     if (path === '/platform/overview') return response(route, 200, overview)
     if (path === '/platform/businesses') return response(route, 200, { items: [], total: 0 })
@@ -122,7 +131,7 @@ async function scenario(name, {
     if (viaKeyboard) await page.getByLabel('Password').press('Enter')
     else await page.getByRole('button', { name: /^Sign in/ }).click()
   }
-  return { page, context, state, screenshot, check, login, get businessRequests() { return businessRequests } }
+  return { page, context, state, screenshot, check, login, get businessRequests() { return businessRequests }, stockPaths }
 }
 
 try {
@@ -338,6 +347,43 @@ try {
     await t.check()
     await t.context.close()
     console.log('PASS BUS-03 responsive business selector and tenant navigation')
+  }
+
+  {
+    const t = await scenario('BUS-04-one-location', { role: 'Owner', locationCount: 1 })
+    await t.login()
+    await t.page.getByRole('heading', { name: 'Business Dashboard', exact: true }).waitFor()
+    await t.page.locator('.app-sidebar .nav-entry').filter({ hasText: 'Inventory' }).click()
+    await t.page.getByRole('heading', { name: 'Inventory', level: 2 }).waitFor()
+    assert.equal(await t.page.locator('#stock-location').count(), 0,
+      'Single location must not show an unnecessary dropdown')
+    await t.page.getByText('Main Shop', { exact: true }).last().waitFor()
+    await t.check()
+    await t.context.close()
+    console.log('PASS BUS-04 single assigned location shown without redundant selector')
+  }
+
+  {
+    const t = await scenario('BUS-04-two-locations', {
+      role: 'Owner', locationCount: 2, hasProducts: true, width: 360, height: 780
+    })
+    await t.login()
+    await t.page.getByRole('heading', { name: 'Business Dashboard', exact: true }).waitFor()
+    await t.page.getByRole('button', { name: 'Open navigation' }).click()
+    await t.page.locator('.app-sidebar .nav-entry').filter({ hasText: 'Inventory' }).click()
+    await t.page.getByRole('heading', { name: 'Inventory', level: 2 }).waitFor()
+    assert.equal(await t.page.locator('.workspace-identity').getByText('2 locations').count(), 1,
+      'Multi-branch role context must not claim the first branch is active')
+    await t.page.getByLabel('Stock location').selectOption('2')
+    await t.page.waitForFunction(() => document.querySelector('#stock-location')?.value === '2')
+    assert.ok(t.stockPaths.some(path => path.endsWith('/locations/2')),
+      'Stock fetch must use selected authorized location')
+    assert.ok(await t.page.evaluate(() => document.documentElement.scrollWidth) <= 361,
+      'Location selector must fit 360px')
+    await t.screenshot('BUS-04-stock-location-mobile-360')
+    await t.check()
+    await t.context.close()
+    console.log('PASS BUS-04 authorized multi-location stock scope mobile')
   }
 
   {

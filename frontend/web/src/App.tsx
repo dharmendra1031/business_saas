@@ -209,7 +209,9 @@ export default function App() {
           <span>{dashboard.roleCode === 'Cashier' ? 'POINT OF SALE' :
             dashboard.roleCode === 'Owner' ? 'BUSINESS ADMIN' : 'STORE MANAGER'}</span>
           <strong>{dashboard.business.name}</strong>
-          <small>{dashboard.roleCode} · {dashboard.locations[0]?.name ?? 'No location assigned'}</small>
+          <small>{dashboard.roleCode} · {dashboard.locations.length > 1
+            ? `${dashboard.locations.length} locations`
+            : dashboard.locations[0]?.name ?? 'No location assigned'}</small>
         </div>}
         {!user?.isPlatformOwner && page !== 'platform' && (page === 'businesses' || businesses.length > 1) && <div className="sidebar-heading">ACCOUNT</div>}
         {!user?.isPlatformOwner && page !== 'platform' && (page === 'businesses' || businesses.length > 1) && <button type="button" ref={businessNav}
