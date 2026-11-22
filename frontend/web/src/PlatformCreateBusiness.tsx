@@ -81,10 +81,11 @@ export default function PlatformCreateBusiness({ onCancel, onCreated }: {
       })
       onCreated(result.id)
     } catch (cause) {
-      if (!(cause instanceof SessionExpiredError))
+      if (!(cause instanceof SessionExpiredError)) {
         const uncertain = cause instanceof Error && /connection lost|incomplete|timed out|network/i.test(cause.message)
         setSubmissionUncertain(uncertain)
         setError(cause instanceof Error ? cause.message : 'Unable to create business. Check status before retry.')
+      }
     } finally { setBusy(false) }
   }
 
