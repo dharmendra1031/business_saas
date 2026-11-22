@@ -7,13 +7,14 @@ interface PosCashPaymentDialogProps {
   currency: string
   lineCount: number
   busy: boolean
+  error: string
   onCashChange: (value: string) => void
   onCancel: () => void
   onConfirm: () => void
 }
 
 export default function PosCashPaymentDialog({
-  amount, cash, currency, lineCount, busy, onCashChange, onCancel, onConfirm
+  amount, cash, currency, lineCount, busy, error, onCashChange, onCancel, onConfirm
 }: PosCashPaymentDialogProps) {
   const dialogRef = useRef<HTMLDivElement>(null)
   const cashRef = useRef<HTMLInputElement>(null)
@@ -80,6 +81,7 @@ export default function PosCashPaymentDialog({
       </div>
       <form onSubmit={submit}>
         <div className="pos-dialog-body">
+          {error && <div className="alert alert-danger" role="alert">{error}</div>}
           <div className="pos-dialog-total"><span>Total Payable</span><strong>{money(amount)}</strong>
             <small>Cash-only checkout · {currency}</small></div>
           <div className="pos-dialog-method"><span><Banknote size={21} /> Cash</span>
