@@ -1,5 +1,6 @@
 import { useEffect, useRef, useState, type FormEvent } from 'react'
 import { api, post, SessionExpiredError } from './api'
+import { Tags } from 'lucide-react'
 
 type MasterType = 'categories' | 'units'
 
@@ -122,10 +123,14 @@ export default function RetailMasters({ businessId, canOperate }: {
   const label = isUnit ? 'Unit' : 'Category'
 
   return (
-    <section className="content-section retail-masters" aria-label="Retail master data">
-      <div className="masters-heading">
-        <div><h2>Catalog setup</h2><p>Manage categories and stock units for this business.</p></div>
-        <div className="btn-group" role="group" aria-label="Catalog master type">
+    <section className="content-section retail-masters business-module-card" aria-label="Retail master data">
+      <div className="masters-heading business-module-heading">
+        <div className="business-module-title">
+          <span className="business-module-icon"><Tags size={23} /></span>
+          <div><span className="business-eyebrow">PRODUCT MASTER DATA</span><h2>Categories & Units</h2>
+            <p>Organize products using categories and stock/sales units.</p></div>
+        </div>
+        <div className="btn-group business-master-tabs" role="group" aria-label="Catalog master type">
           <button type="button" className={`btn btn-sm ${isUnit ? 'btn-outline-secondary' : 'btn-primary'}`}
             aria-pressed={!isUnit} onClick={() => changeType('categories')}>Categories</button>
           <button type="button" className={`btn btn-sm ${isUnit ? 'btn-primary' : 'btn-outline-secondary'}`}
@@ -188,7 +193,7 @@ export default function RetailMasters({ businessId, canOperate }: {
       {loading ? <p className="text-secondary" role="status">Loading {type}…</p>
         : loadError ? null : items.length === 0 ? <p className="masters-empty">No {type} found. {canOperate && !query ? `Add your first ${label.toLowerCase()} above.` : ''}</p>
           : <div className="table-responsive">
-            <table className="table table-sm align-middle">
+            <table className="table table-sm align-middle business-record-table">
               <thead><tr><th scope="col">Name</th>{isUnit && <th scope="col">Code</th>}
                 <th scope="col">Status</th>{canOperate && <th scope="col" className="text-end">Action</th>}</tr></thead>
               <tbody>{items.map(item => <tr key={item.id}>
