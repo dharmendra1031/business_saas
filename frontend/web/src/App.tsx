@@ -29,6 +29,10 @@ const retailTitles: Record<RetailPage, string> = {
   masters: 'Categories & Units', suppliers: 'Suppliers', customers: 'Customers', team: 'Staff & Access',
   sales: 'Sales & Returns', register: 'Cash Register', reports: 'Reports', settings: 'Business Settings'
 }
+function isRetailSection(value: RetailPage): value is RetailSection {
+  return value === 'products' || value === 'masters' || value === 'stock' ||
+    value === 'purchases' || value === 'suppliers' || value === 'customers'
+}
 
 export default function App() {
   const [page, setPage] = useState<Page>('loading')
@@ -491,7 +495,7 @@ export default function App() {
                 </section>}
               {retailPage === 'cash' && dashboard.cashSaleEnabled && user && <CashCheckout
                 key={user.id + '-' + dashboard.business.id} userId={user.id} dashboard={dashboard} />}
-              {retailPage !== 'cash' && retailPage !== 'overview' && retailPage !== 'team' && dashboard.roleCode !== 'Cashier' &&
+              {isRetailSection(retailPage) && dashboard.roleCode !== 'Cashier' &&
                 <RetailCatalog key={dashboard.business.id + '-' + retailPage} section={retailPage} approvalsOnly={approvalList}
                   businessId={dashboard.business.id} canOperate={dashboard.canOperate}
                   currencyCode={dashboard.business.currencyCode} locations={dashboard.locations}
