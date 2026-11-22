@@ -33,7 +33,7 @@ Approved on 17 November 2026. The left sidebar has **exactly eight** main module
 | Businesses | Business directory/details, audited trial extensions and suspend/reactivate | Working core controls |
 | Plans & Billing | Plan drafts, immutable catalog publication, future billing, invoices and payments | Plan controls working; billing unavailable |
 | Licenses | Offline license lifecycle and history | Planned; sidebar disabled |
-| Platform Settings | Business types, modules, country/timezone rules, trial policy, languages | Planned; sidebar disabled |
+| Platform Settings | Business type release availability, module lifecycle, scoped maintenance, public announcements, regions, languages | Navigable **frontend design preview only**; no live policy/maintenance publishing API yet |
 | Security & Audit | MFA, sign-in audit, administrative change history | Working foundation |
 | Operations | API/database readiness, future monitoring, backup/restore and support | Readiness working; other controls planned |
 
@@ -42,6 +42,14 @@ There are **no separate top-level** Trials, Subscriptions, Payments, Invoices, M
 Dashboard alerts only navigate to the existing business or audit details; Customers can link to owned businesses but cannot change operational records. Prices, payments, backup success, system health and support tickets must never use fabricated data.
 
 **Security boundary:** Super Admin controls the platform—not a shop's products, stock, sales or returns. Sensitive writes require MFA-authorized server checks, an explicit reason and transactional audit.
+
+## 2A. Platform release & maintenance management — owner decision DR-002 (22 November 2026)
+
+The user requested centralized, long-lived controls for which business types may be created, which types/modules are **Under Construction / Coming Soon**, when the platform is under maintenance and what customer-facing update banners are displayed. This is **part of Platform Settings**, not another top-level sidebar item. Keep **exactly eight** Platform Super Admin modules.
+
+Nested design tabs: Business Types, Modules & Access, **Maintenance**, **Announcements** (on-screen banners), General, Languages, Notifications (transactional emails). Separate **Business Type availability**, **Module release status**, **maintenance availability**, and **notice publication**. A banner must never accidentally disable a real module, and pausing new provisioned types must not disable existing tenants. The Super Admin must have a review, impact summary, reason, confirmed publish, audit history and safe rollback.
+
+The current `PlatformAvailabilityPreview.tsx` only shows interactive, *unsaved local drafts*; the business-type list is obtained from the existing catalogue API and no availability policy is yet supplied. No settings or maintenance window are live. See [Platform Release & Maintenance SRS](./PLATFORM_RELEASE_AND_MAINTENANCE_SRS.md) for stable states, server-side authority, role/market/plan prerequisites, message scheduling and safety tests.
 
 ## 3. Approved Overview structure (match reference images)
 
