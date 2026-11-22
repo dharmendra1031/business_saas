@@ -427,7 +427,7 @@ function PlatformBusinesses({ selectedBusinessId, onBilling, startCreate, onCrea
 
 export default function PlatformAdmin({ section, selectedBusinessId, onViewBusiness, onBilling,
   billingBusiness, onChooseBusiness, onSeeBusinesses, onStartCreate, startCreate, onCreateHandled,
-  businessSearch }: {
+  businessSearch, onViewAudit }: {
   billingBusiness: { id: number; name: string } | null
   onBilling: (business: BusinessRow) => void
   onChooseBusiness: () => void
@@ -439,13 +439,14 @@ export default function PlatformAdmin({ section, selectedBusinessId, onViewBusin
   startCreate: boolean
   onCreateHandled: () => void
   businessSearch: string
+  onViewAudit: () => void
 }) {
   if (section === 'overview') return <PlatformOverview onViewBusiness={onViewBusiness}
     onSeeBusinesses={onSeeBusinesses} onCreateBusiness={onStartCreate} />
   if (section === 'customers') return <PlatformCustomers onViewBusiness={onViewBusiness} />
   if (section === 'plans') return <PlatformPlans business={billingBusiness} onChooseBusiness={onChooseBusiness} />
   if (section === 'audit') return <PlatformAudit />
-  if (section === 'operations') return <PlatformOperations />
+  if (section === 'operations') return <PlatformOperations onViewAudit={onViewAudit} />
   if (section === 'licenses' || section === 'settings') return <PlatformModulePreview module={section} />
   return <PlatformBusinesses onBilling={onBilling} selectedBusinessId={selectedBusinessId}
     startCreate={startCreate} onCreateHandled={onCreateHandled} incomingSearch={businessSearch} />
