@@ -43,3 +43,17 @@
 - [ ] Product owner signs off the visual/browser result before status becomes **DONE**.
 
 **Screen progress:** SA-03…SA-08 remain **PARTIAL**, not DONE; visual and workflow gaps are explicitly open.
+
+## 22 November follow-up: wizard UI/UX refinement
+
+**Reference checked:** approved final Super Admin Businesses/Create Business design decisions in `APPROVED_UI_UX.md` and the earlier composite comparison above. This pass is **source-to-reference requirements comparison**, not a newly captured browser screenshot or pixel-perfect image diff.
+
+- **Review & Create:** added an explicit owner/business confirmation checkbox; the final submit button is disabled until the operator confirms. Matches the reference's deliberate, single primary action and prevents accidental provisioning.
+- **Owner verification:** the wizard now rejects a lookup response unless `verified` is true; server-side verified-owner enforcement remains mandatory.
+- **Business details:** the wizard checks the selected business type against the actually loaded API list, not just a positive numeric ID.
+- **Network uncertainty:** a warning now explains that an interrupted create request may have succeeded and that retries reuse the same idempotency key. The warning is not a claim that the operation failed.
+- **Accessibility:** added a screen-reader-readable step count and a keyboard-focusable, labeled confirmation control.
+- **Visual scope:** new confirmation styling is restricted to the platform wizard; it does not change the approved POS layout or Business Owner dashboard.
+
+**Still not accepted:** real-browser screenshot comparison at 1536/1366/768/360, owner invitation delivery, non-Starter plan selection, payment activation, and product-owner sign-off. Keep SA-03…SA-08 **Partial**.
+
