@@ -21,23 +21,9 @@ button:focus-visible, a:focus-visible, input:focus-visible, select:focus-visible
 .form-control:focus, .form-select:focus { border-color: #77a6cb; box-shadow: 0 0 0 .2rem #175d921c; }
 .form-label { font-size: .91rem; font-weight: 600; margin-bottom: 6px; }
 .center-screen { min-height: 100vh; display: grid; place-items: center; color: var(--muted); }
-.auth-layout { display: grid; grid-template-columns: minmax(300px, .85fr) minmax(350px, 1fr); min-height: 100vh; }
-.auth-aside { display: flex; flex-direction: column; background: var(--sidebar); color: #d6e7f5; padding: 36px 48px; }
 .brand { display: flex; gap: 12px; align-items: center; font-size: 1.1rem; font-weight: 750; line-height: 1.15; color: white; }
 .brand small { display: block; color: #bfd4e7; font-size: .72rem; font-weight: 400; margin-top: 4px; }
 .brand-mark { display: grid; place-items: center; width: 39px; height: 39px; border-radius: 7px; background: #2b6e9c; color: white; font-size: 1.3rem; }
-.auth-intro { margin: auto 0; max-width: 510px; }
-.auth-overline { font-size: .8rem; letter-spacing: .13em; font-weight: 700; color: #a9d7f5; margin-bottom: 18px; }
-.auth-intro h1 { color: white; font-size: clamp(2rem, 3.6vw, 3.3rem); line-height: 1.18; }
-.auth-intro p { line-height: 1.7; margin-top: 20px; max-width: 380px; }
-.auth-bottom { font-size: .82rem; color: #adc5da; }
-.auth-content { display: grid; place-items: center; padding: 32px 20px; }
-.auth-card { width: min(410px, 100%); }
-.form-eyebrow { color: var(--brand); font-size: .72rem; font-weight: 750; letter-spacing: .11em; }
-.auth-card h2 { font-weight: 750; font-size: 1.85rem; margin-top: 12px; margin-bottom: 8px; }
-.form-hint { color: var(--muted); margin-bottom: 30px; }
-.auth-switch { text-align: center; color: var(--muted); font-size: .9rem; margin-top: 24px; }
-.auth-switch button, .back-link { color: var(--brand); background: none; border: 0; font-weight: 600; padding: 0; }
 .app-shell { display: flex; min-height: 100vh; }
 .app-sidebar { position: sticky; top: 0; height: 100vh; overflow-y: auto; width: 245px; flex: 0 0 245px; background: var(--sidebar); padding: 22px 15px; color: #dbeaf6; display: flex; flex-direction: column; }
 .app-sidebar .brand { padding: 0 12px 28px; border-bottom: 1px solid #ffffff1e; }
@@ -88,7 +74,7 @@ button:focus-visible, a:focus-visible, input:focus-visible, select:focus-visible
 .location-row svg { color: var(--brand); }
 .location-row strong, .location-row small { display: block; }
 .location-row small { margin-top: 3px; color: var(--muted); }
-.back-link { display: inline-flex; align-items: center; gap: 6px; margin-bottom: 12px; font-size: .85rem; }
+.back-link { color: var(--brand); background: none; border: 0; font-weight: 600; padding: 0; display: inline-flex; align-items: center; gap: 6px; margin-bottom: 12px; font-size: .85rem; }
 .workspace-state { display: inline-flex; align-items: center; gap: 7px; border: 1px solid #b6dcc5; border-radius: 20px; padding: 7px 12px; color: #20673f; font-size: .8rem; font-weight: 600; }
 .workspace-state.inactive { border-color: #e5c98d; color: #795413; }
 .team-form { display: grid; grid-template-columns: minmax(200px, 2fr) minmax(150px, 1fr) auto; gap: 12px; align-items: end; }
@@ -98,10 +84,6 @@ button:focus-visible, a:focus-visible, input:focus-visible, select:focus-visible
   .team-form { grid-template-columns: 1fr; }
 }
 @media (max-width: 900px) {
-  .auth-layout { grid-template-columns: 1fr; }
-  .auth-aside { padding: 18px 25px; }
-  .auth-intro, .auth-bottom { display: none; }
-  .auth-content { min-height: calc(100vh - 78px); }
   .app-sidebar { width: 195px; flex-basis: 195px; padding: 20px 10px; }
   .app-sidebar .brand { padding: 0 8px 24px; }
   .app-sidebar .brand > div { font-size: .95rem; }

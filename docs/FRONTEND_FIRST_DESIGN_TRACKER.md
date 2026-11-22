@@ -24,6 +24,14 @@
 - `Integration pending`: design ready, but APIs/security/tests not complete.
 - `DONE`: defined by Master Screen Register, after actual business flow and all tests.
 
+## First-screen simplification (22 November 2026)
+
+- Removed the redundant three-workspace selection gateway and role-specific login copies. There is **one** sign-in screen for Platform Owner, Business Owner/Manager and Cashier; access is determined from the authenticated server session.
+- A Platform Owner goes to MFA setup or the Super Admin shell. Other users see their real assigned businesses; a sole business opens automatically and its role determines the Owner/Manager dashboard or Cashier POS.
+- Users assigned multiple businesses choose one *after* signing in; no role-choice form or login-then-logout on mismatched roles.
+- Reused the existing identity/MFA APIs and business selection. Removed obsolete gateway code and CSS; no new library or backend changes.
+- **Visual QA pending:** confirm responsive layout in browser and final user approval before marking this screen complete.
+
 ## 2. Exact approved-image references examined
 
 The following original images are available as **conversation-attached design references**, not currently GitHub-tracked assets. Do not claim the images are committed to the repo without an explicit verified binary upload.

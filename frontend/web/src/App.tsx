@@ -9,21 +9,10 @@ import BusinessOverview from './BusinessOverview'
 import BusinessPreview, { type BusinessPreviewModule } from './BusinessPreview'
 import PlatformAdmin, { type PlatformSection } from './PlatformAdmin'
 import PlatformMfaSetup from './PlatformMfaSetup'
-import { WorkspaceEntry, type AccessPortal } from './WorkspaceEntry'
 import AuthPage from './AuthPage'
 
-type Page = 'loading' | 'gateway' | 'login' | 'register' | 'mfa-setup' | 'businesses' | 'retail' | 'platform'
+type Page = 'loading' | 'login' | 'register' | 'mfa-setup' | 'businesses' | 'retail' | 'platform'
 
-function visibleBusinessesForPortal(items: Business[], portal: AccessPortal | null): Business[] {
-  if (portal === 'pos') return items.filter(item => item.roleCode === 'Cashier')
-  if (portal === 'business') return items.filter(item => item.roleCode === 'Owner' || item.roleCode === 'Manager')
-  return items
-}
-
-function selectedPortalFromUrl(): AccessPortal | null {
-  const value = new URLSearchParams(window.location.search).get('workspace')
-  return value === 'platform' || value === 'business' || value === 'pos' ? value : null
-}
 type RetailPage = RetailSection | 'cash' | 'overview' | 'team' | BusinessPreviewModule
 const retailTitles: Record<RetailPage, string> = {
   cash: 'POS Checkout', overview: 'Business Dashboard', products: 'Products', stock: 'Stock', purchases: 'Purchase Orders',
@@ -37,7 +26,6 @@ function isRetailSection(value: RetailPage): value is RetailSection {
 
 export default function App() {
   const [page, setPage] = useState<Page>('loading')
-  const [accessPortal, setAccessPortal] = useState<AccessPortal | null>(selectedPortalFromUrl)
   const [user, setUser] = useState<User | null>(null)
   const [businesses, setBusinesses] = useState<Business[]>([])
   const [canViewPlatform, setCanViewPlatform] = useState(false)
@@ -69,7 +57,7 @@ export default function App() {
       setError('')
       setSessionExpired(true)
       setAuthNotice('')
-      setPage('gateway')
+      setPage('login')
     })
 
     api<User>('/auth/me')
@@ -82,12 +70,12 @@ export default function App() {
           setPage(me.mfaVerified ? 'platform' : 'mfa-setup')
           return
         }
-        const list = visibleBusinessesForPortal(await api<Business[]>('/businesses'), selectedPortalFromUrl())
+        const list = await api<Business[]>('/businesses')
         setBusinesses(list)
         if (list.length === 1) await openBusiness(list[0].id)
         else setPage('businesses')
       })
-      .catch(() => setPage(selectedPortalFromUrl() ? 'login' : 'gateway'))
+      .catch(() => setPage('login'))
     return () => setSessionExpiredHandler(null)
   }, [])
 
@@ -118,7 +106,7 @@ export default function App() {
 
   async function loadBusinesses() {
     try {
-      const list = visibleBusinessesForPortal(await api<Business[]>('/businesses'), accessPortal)
+      const list = await api<Business[]>('/businesses')
       setBusinesses(list)
       setDashboard(null)
       setPage('businesses')
@@ -158,8 +146,7 @@ export default function App() {
       setCanViewPlatform(false)
       setDashboard(null)
       setBusinesses([])
-      setPage('gateway')
-      setAccessPortal(null)
+      setPage('login')
       const url = new URL(window.location.href)
       url.searchParams.delete('workspace')
       window.history.replaceState(null, '', url)
@@ -172,40 +159,24 @@ export default function App() {
     }
   }
 
-  function chooseWorkspace(next: AccessPortal | null) {
-    setAccessPortal(next)
-    setAuthNotice('')
-    setError('')
-    const url = new URL(window.location.href)
-    if (next) url.searchParams.set('workspace', next)
-    else url.searchParams.delete('workspace')
-    window.history.replaceState(null, '', url)
-    setPage(next ? 'login' : 'gateway')
-  }
-
   function onSignedIn(next: User, list: Business[]) {
     resetCsrf()
     setUser(next)
     setCanViewPlatform(next.isPlatformOwner && next.mfaVerified)
-    const visible = visibleBusinessesForPortal(list, accessPortal)
-    setBusinesses(next.isPlatformOwner ? [] : visible)
+    setBusinesses(next.isPlatformOwner ? [] : list)
     setSessionExpired(false)
     setAuthNotice('')
     setPlatformSection('overview')
     setPage(next.isPlatformOwner ? (next.mfaVerified ? 'platform' : 'mfa-setup') : 'businesses')
     setError('')
-    if (!next.isPlatformOwner && visible.length === 1) void openBusiness(visible[0].id)
+    if (!next.isPlatformOwner && list.length === 1) void openBusiness(list[0].id)
   }
 
   if (page === 'loading')
     return <main className="center-screen" aria-live="polite">Loading your workspace…</main>
 
-  if (page === 'gateway' || ((page === 'login' || page === 'register') && !accessPortal))
-    return <WorkspaceEntry onChoose={chooseWorkspace} />
-
-  if ((page === 'login' || page === 'register') && accessPortal)
-    return <AuthPage key={page + '-' + accessPortal} portal={accessPortal} mode={page}
-      onBack={() => chooseWorkspace(null)} onChange={setPage} onSignedIn={onSignedIn}
+  if (page === 'login' || page === 'register')
+    return <AuthPage key={page} mode={page} onChange={setPage} onSignedIn={onSignedIn}
       sessionExpired={sessionExpired} authNotice={authNotice} onRegistered={setAuthNotice} />
 
   if (page === 'mfa-setup')
@@ -444,10 +415,8 @@ export default function App() {
               {businesses.length === 0 ? (
                 <section className="empty-state">
                   <Store size={32} />
-                  <h2>{accessPortal === 'pos' ? 'No cashier assignment found' : 'No business access yet'}</h2>
-                  <p>{accessPortal === 'pos'
-                    ? 'Ask your Business Owner to assign your Cashier account to an active Retail location.'
-                    : 'A Platform Super Admin must provision your business and assign you as Owner or Manager.'}</p>
+                  <h2>No business access yet</h2>
+                  <p>Ask your administrator to assign your account to a business and role.</p>
                   <p className="small">Signed in as {user?.email}. Refresh after your administrator grants access.</p>
                   <button className="btn btn-outline-secondary me-2" onClick={() => void loadBusinesses()}>Refresh access</button>
 
