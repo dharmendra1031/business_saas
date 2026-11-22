@@ -50,18 +50,18 @@ export default function BusinessOverview({ dashboard, onNavigate, onReviewApprov
       <section className="business-operational-section" aria-labelledby="business-overview-title">
         <h2 id="business-overview-title">Business Overview</h2>
         <div className="business-kpi-grid">
-          {isOwner && <>
+          {isOwner && cash && <>
             <div className="business-kpi-card"><small>Today's Cash Sales</small>
-              <strong>{cash ? money.format(cash.total) : '—'}</strong>
-              <span>{cash ? 'Posted cash receipts only' : 'Cash reporting not enabled'}</span>
+              <strong>{money.format(cash.total)}</strong>
+              <span>Posted cash receipts only</span>
             </div>
             <div className="business-kpi-card"><small>Cash Bills Today</small>
-              <strong>{cash ? cash.billCount.toLocaleString() : '—'}</strong>
-              <span>{cash ? `Business date: ${cash.businessDate}` : 'Cash reporting not enabled'}</span>
+              <strong>{cash.billCount.toLocaleString()}</strong>
+              <span>Posted cash bills only</span>
             </div>
-            <div className="business-kpi-card"><small>Draft Purchase Orders</small><strong>{pendingApprovals.toLocaleString()}</strong><span>Owner review</span></div>
           </>}
-          <div className="business-kpi-card"><small>Stock Alerts</small><strong>—</strong><span>Reorder limits not configured</span></div>
+          {isOwner && <div className="business-kpi-card"><small>Draft Purchase Orders</small>
+            <strong>{pendingApprovals.toLocaleString()}</strong><span>Owner review</span></div>}
         </div>
       </section>
 
@@ -77,9 +77,9 @@ export default function BusinessOverview({ dashboard, onNavigate, onReviewApprov
         {locations.length === 0 && <p role="status">No location assigned. Contact your business administrator.</p>}
       </section>
 
-      <section className="content-section business-dashboard-panel" aria-labelledby="business-activity-title">
+      {cash && <section className="content-section business-dashboard-panel" aria-labelledby="business-activity-title">
         <h2 id="business-activity-title">Recent Activity</h2>
-        {cash && cash.recentReceipts.length ? (
+        {cash.recentReceipts.length ? (
           <ul className="business-receipt-activity" aria-label="Recent recorded cash sales">
             {cash.recentReceipts.map(receipt => (
               <li key={receipt.id}>
@@ -92,10 +92,8 @@ export default function BusinessOverview({ dashboard, onNavigate, onReviewApprov
               </li>
             ))}
           </ul>
-        ) : <p>{cash
-          ? 'No recorded cash sales yet.'
-          : 'Cash receipt activity is not available in this environment.'}</p>}
-      </section>
+        ) : <p>No recorded cash sales yet.</p>}
+      </section>}
     </>}
     {locations.length === 0 && !hasProducts && <p className="business-location-warning" role="status">
       No location assigned. Ask your administrator to review access.
