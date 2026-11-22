@@ -256,18 +256,12 @@ try {
     const t = await scenario('owner-operational', { role: 'Owner', hasProducts: true, pendingApprovals: 3 })
     await t.login()
     await t.page.getByRole('heading', { name: 'Business Overview' }).waitFor()
-    assert.equal(await t.page.locator('.business-kpi-card').count(), 4)
-    const cardHeights = await t.page.locator('.business-kpi-card').evaluateAll(cards =>
-      cards.map(card => card.getBoundingClientRect().height))
-    assert.ok(Math.max(...cardHeights) - Math.min(...cardHeights) <= 1,
-      'Business KPI cards should be equal height in the desktop row')
-    const labelFont = await t.page.locator('.business-kpi-card small').first()
-      .evaluate(card => parseFloat(getComputedStyle(card).fontSize))
-    assert.ok(labelFont >= 13, 'KPI labels should be readable, not tiny captions')
-    assert.equal(await t.page.locator('.business-kpi-card').first().locator('strong').innerText(), '—',
-      'Never fabricate sales figures before reporting integration')
+    assert.equal(await t.page.locator('.business-kpi-card').count(), 1,
+      'Unsupported sales and stock KPIs should not consume dashboard space')
+    assert.equal(await t.page.locator('.business-kpi-card strong').first().innerText(), '3')
     await t.page.getByRole('heading', { name: 'Attention Needed' }).waitFor()
-    await t.page.getByRole('heading', { name: 'Recent Activity' }).waitFor()
+    assert.equal(await t.page.getByRole('heading', { name: 'Recent Activity' }).count(), 0,
+      'An unsupported activity feed must not be an empty panel')
     assert.equal(await t.page.getByRole('heading', { name: 'Complete store setup' }).count(), 0)
     assert.equal(await t.page.locator('.business-action-card').count(), 0)
     await t.screenshot('BUS-01-owner-operational-desktop')
@@ -284,6 +278,12 @@ try {
     })
     await t.login()
     await t.page.getByRole('heading', { name: 'Business Overview' }).waitFor()
+    assert.equal(await t.page.locator('.business-kpi-card').count(), 3,
+      'Only verified cash and draft-order metrics should be shown')
+    const heights = await t.page.locator('.business-kpi-card').evaluateAll(cards =>
+      cards.map(card => card.getBoundingClientRect().height))
+    assert.ok(Math.max(...heights) - Math.min(...heights) <= 1,
+      'Verified KPI cards stay aligned in the desktop row')
     assert.ok((await t.page.locator('.business-kpi-card').first().innerText()).includes('150.25'),
       'Cash total must come from the API response')
     assert.ok((await t.page.locator('.business-kpi-card').nth(1).innerText()).includes('2'),
