@@ -5,6 +5,14 @@
 > This is a **planning, UX-acceptance and traceability register**. No entry marked **DONE**; source components, API handlers and passing CI alone do not prove real browser/production acceptance.
 > This document is the single reference for **which screen belongs to which workspace, its purpose, its flow, current observed implementation and the required quality gate**. Keep screen IDs stable while development progresses.
 
+## Frontend-first design phase (owner update: 22 Nov 2026)
+
+The owner approved designing and visually accepting all released screens **before building their missing backend features**. The per-screen source of truth is still this stable 145-item register; the separate [Frontend-First Design & Visual QA Tracker](./FRONTEND_FIRST_DESIGN_TRACKER.md) tracks frontend-only visual implementation versus API-integrated readiness.
+
+**Iteration 1 committed on `development`:** `SA-01` Dashboard visual hierarchy, `SA-03` Businesses directory and fully navigable eight-module platform shell. Existing backend APIs supply actual dashboard/business records; no backend changes were made. `SA-29..39` Licenses and Platform Settings now have explicitly marked **frontend-only design previews** with working tab navigation but **no live save or license issuance**. These screens remain **Partial/Missing for full product release**, not `DONE`.
+
+**Visual QA remaining:** Compare real authenticated browser captures at 1536×864, 1366×768, 768px and 360px to approved reference images. A matching CSS source and green CI build do **not** certify pixel-level fidelity or owner approval.
+
 ## 0. Non-negotiable product decision and conflict resolution
 
 **Decision DR-001 (latest owner direction, 21 Nov 2026):** Only **Platform Super Admin** creates/provisions a new business and assigns its Business Owner; the Business Owner/Admin logs into a separate business workspace and manages only authorized business operations. A POS/Cashier has a separate login *experience* and dedicated checkout workspace.
