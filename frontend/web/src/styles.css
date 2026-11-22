@@ -1282,3 +1282,91 @@ button:focus-visible, a:focus-visible, input:focus-visible, select:focus-visible
   .business-preview-identity { grid-template-columns: 1fr; gap: 9px; }
   .business-shell .business-preview-content, .business-shell .business-preview-guidance { padding: 17px; }
 }
+
+/* Platform Settings: business availability, module release, scoped maintenance & notices.
+   Frontend-only design previews: never imply these choices are persisted/enforced. */
+.platform-preview-columns.is-release-management { grid-template-columns: minmax(0, 1fr); }
+.platform-preview-columns.is-release-management > .platform-preview-side { display: none; }
+.platform-shell .platform-preview-columns.is-release-management .platform-preview-main { padding: 24px; }
+.platform-release-controls { min-width: 0; }
+.release-caution { display: flex; align-items: flex-start; gap: 10px; background: #fff9ed; color: #6b532d;
+  border: 1px solid #ebddbf; border-radius: 9px; padding: 13px 15px; margin: 0 0 18px;
+  font-size: .79rem; line-height: 1.55; }
+.release-caution svg { flex: 0 0 auto; margin-top: 2px; }
+.release-layout { display: grid; grid-template-columns: minmax(290px, 1.1fr) minmax(305px, 1fr); gap: 16px; align-items: start; }
+.release-list, .release-editor { min-width: 0; background: #fff; border: 1px solid #e1e7f1;
+  border-radius: 11px; overflow: hidden; }
+.release-editor { padding: 18px; }
+.release-panel-heading { display: flex; justify-content: space-between; align-items: center; gap: 12px;
+  margin: 0 0 16px; }
+.release-list .release-panel-heading { padding: 18px 18px 0; }
+.platform-shell .release-panel-heading h3 { margin: 0; font-size: .94rem; font-weight: 790; color: #243354; }
+.release-panel-heading > span { color: #66739c; background: #f0f2fb; border-radius: 20px;
+  padding: 5px 9px; font-size: .68rem; font-weight: 750; white-space: nowrap; }
+.release-list-toolbar { display: flex; gap: 8px; padding: 0 18px 15px; }
+.release-list-toolbar input { min-width: 0; min-height: 40px; }
+.release-list-toolbar button { min-width: 41px; display: grid; place-items: center; }
+.release-type-list { display: grid; }
+.release-type-item { display: flex; align-items: center; gap: 12px; width: 100%; text-align: left;
+  padding: 14px 17px; border: 0; border-top: 1px solid #edf0f6; background: #fff; color: #2c4061; }
+.release-type-item:hover { background: #f8f9fd; }
+.release-type-item.is-selected { background: #f2f0ff; box-shadow: inset 3px 0 0 #5c46d4; }
+.release-type-item:focus-visible { outline: 2px solid #8375e6; outline-offset: -3px; }
+.release-type-item > span:nth-child(2) { display: grid; gap: 4px; min-width: 0; flex: 1; }
+.release-type-item strong { font-size: .83rem; color: #243753; font-weight: 770; }
+.release-type-item small { font-size: .72rem; line-height: 1.45; color: #75869f; overflow-wrap: anywhere; }
+.release-type-item > svg:last-child { color: #7886a8; flex-shrink: 0; }
+.release-type-symbol { display: grid; place-items: center; width: 37px; height: 37px;
+  flex: 0 0 37px; border-radius: 9px; background: #efedff; color: #5a47c7; }
+.release-empty { padding: 17px 18px; font-size: .82rem; color: #72809a; line-height: 1.55; }
+.release-selected { display: grid; gap: 5px; padding: 13px 14px; background: #f7f8fc;
+  border: 1px solid #e5e8f0; border-radius: 9px; margin-bottom: 18px; }
+.release-selected strong { font-weight: 780; color: #243653; font-size: .95rem; }
+.release-selected small { color: #7887a0; font-size: .72rem; }
+.release-editor .form-label { font-size: .79rem; font-weight: 740; color: #354765; margin-bottom: 7px; }
+.release-editor .form-control, .release-editor .form-select { min-height: 42px; border-radius: 8px;
+  border-color: #dbe2ed; font-size: .84rem; }
+.release-preview-card { display: grid; justify-items: start; gap: 11px; margin-top: 18px;
+  padding: 16px; border: 1px solid #dedff5; background: #f9f8ff; border-radius: 10px; }
+.release-preview-card .release-preview-label { display: inline-flex; align-items: center; gap: 6px;
+  color: #5542b6; font-size: .7rem; font-weight: 760; }
+.release-preview-card p { margin: 0; line-height: 1.5; color: #435475; font-size: .82rem; }
+.release-preview-card > small { line-height: 1.5; font-size: .73rem; color: #74829b; }
+.release-state-badge { display: inline-flex; align-items: center; padding: 6px 11px; border-radius: 999px;
+  font-size: .72rem; font-weight: 770; }
+.release-state-badge.is-available { background: #e8f7ed; color: #1f774a; }
+.release-state-badge.is-pending { background: #fff2dc; color: #8b6428; }
+.release-state-badge.is-paused { background: #f9e9eb; color: #a1495d; }
+.release-form-grid { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 16px; }
+.release-field-wide { grid-column: 1 / -1; }
+.release-input-hint { display: block; font-size: .72rem; line-height: 1.55; color: #7b89a0; margin-top: 7px; }
+.release-validation { margin: 14px 0 0; color: #b63750; font-size: .8rem; font-weight: 700; }
+.release-maintenance-sign { display: flex; align-items: center; gap: 9px; color: #43328f; }
+.release-maintenance-sign strong { font-size: .92rem; }
+.release-policy-info { display: grid; gap: 10px; margin-top: 18px; padding-top: 14px;
+  border-top: 1px solid #e7ecf3; }
+.release-policy-info span { display: flex; align-items: center; gap: 9px;
+  color: #60728c; font-size: .75rem; line-height: 1.5; }
+.release-policy-info svg { flex: 0 0 auto; color: #6f5dc4; }
+.release-public-banner { display: flex; align-items: flex-start; gap: 12px; padding: 17px;
+  border: 1px solid #cbdcec; border-radius: 9px; background: #eef6fd; color: #215a87; }
+.release-public-banner.release-level-warning { color: #95610f; background: #fff7e5; border-color: #eedbad; }
+.release-public-banner.release-level-critical { color: #a33c4e; background: #fff0f2; border-color: #f1c9d0; }
+.release-public-banner > svg { flex: 0 0 auto; margin-top: 1px; }
+.release-public-banner strong { display: block; font-size: .88rem; margin-bottom: 7px; overflow-wrap: anywhere; }
+.release-public-banner p { margin: 0; font-size: .79rem; line-height: 1.6; overflow-wrap: anywhere; }
+.release-architecture-note { display: flex; align-items: flex-start; gap: 10px; margin-top: 17px;
+  background: #f7f9fc; border: 1px dashed #d8e0ed; border-radius: 9px; color: #60718f;
+  padding: 13px 15px; font-size: .77rem; line-height: 1.55; }
+.release-architecture-note svg { flex: 0 0 auto; margin-top: 1px; color: #4a7b6b; }
+@media (max-width: 900px) {
+  .release-layout { grid-template-columns: 1fr; }
+}
+@media (max-width: 600px) {
+  .platform-shell .platform-preview-columns.is-release-management .platform-preview-main { padding: 14px; }
+  .release-form-grid { grid-template-columns: 1fr; gap: 12px; }
+  .release-editor { padding: 14px; }
+  .release-list .release-panel-heading { padding: 15px 14px 0; }
+  .release-list-toolbar { padding-left: 14px; padding-right: 14px; }
+  .release-type-item { padding: 12px 13px; gap: 9px; }
+}
