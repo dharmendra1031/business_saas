@@ -58,7 +58,7 @@ export default function BusinessOverview({ dashboard, onNavigate, onReviewApprov
         {isOwner && pendingApprovals > 0
           ? <button type="button" className="business-attention-action" onClick={onReviewApprovals}>
               <ClipboardCheck size={17} aria-hidden="true" />
-              Review {pendingApprovals} draft purchase {pendingApprovals === 1 ? 'order' : 'orders'}
+              <span>Review {pendingApprovals} draft purchase {pendingApprovals === 1 ? 'order' : 'orders'}</span>
               <ArrowRight size={16} aria-hidden="true" />
             </button>
           : <p>{isOwner ? 'No draft purchase orders awaiting review.' : 'No assigned actions to show yet.'}</p>}
