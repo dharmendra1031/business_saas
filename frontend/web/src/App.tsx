@@ -14,11 +14,6 @@ import AuthPage from './AuthPage'
 type Page = 'loading' | 'unavailable' | 'login' | 'register' | 'mfa-setup' | 'businesses' | 'retail' | 'platform'
 
 type RetailPage = RetailSection | 'cash' | 'overview' | 'team' | BusinessPreviewModule
-const retailTitles: Record<RetailPage, string> = {
-  cash: 'POS Checkout', overview: 'Business Dashboard', products: 'Products', stock: 'Stock', purchases: 'Purchase Orders',
-  masters: 'Categories & Units', suppliers: 'Suppliers', customers: 'Customers', team: 'Staff & Access',
-  sales: 'Sales & Returns', register: 'Cash Register', reports: 'Reports', settings: 'Business Settings'
-}
 function isRetailSection(value: RetailPage): value is RetailSection {
   return value === 'products' || value === 'masters' || value === 'stock' ||
     value === 'purchases' || value === 'suppliers' || value === 'customers'
