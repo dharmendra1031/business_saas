@@ -1,6 +1,7 @@
 import { useEffect, useState, type FormEvent } from 'react'
 import { api, post, SessionExpiredError } from './api'
 import PlatformBilling from './PlatformBilling'
+import { BadgeCheck, Building2, CheckCircle2, CreditCard, RefreshCw, Store, Users } from 'lucide-react'
 
 interface PlanDraft {
   id: number
@@ -66,6 +67,12 @@ function formFromDraft(draft: PlanDraft | null): DraftForm {
     maxProducts: draft?.maxProducts?.toString() ?? '',
     reason: ''
   }
+}
+
+function planMoney(amount: number | null, currency: string | null): string {
+  if (amount === null || !currency) return 'Not configured'
+  try { return new Intl.NumberFormat('en-IN', { style: 'currency', currency, maximumFractionDigits: 2 }).format(amount) }
+  catch { return `${currency} ${amount.toFixed(2)}` }
 }
 
 function numberOrNull(value: string): number | null {
@@ -186,31 +193,68 @@ export default function PlatformPlans({ business, onChooseBusiness }: { business
 
   return <>
     <div className="page-header">
-      <div><h1>Plans & Billing</h1>
-        <p>Manage published plans and prepare safe internal billing drafts.</p>
+      <div><span className="platform-kicker">PLATFORM MANAGEMENT</span><h1>Plans & Billing</h1>
+        <p>Review real plan prices, publish audited versions and prepare internal billing drafts.</p>
       </div>
       <button type="button" className="btn btn-outline-secondary btn-sm"
-        disabled={loading || busy} onClick={() => setReload(value => value + 1)}>Refresh</button>
+        disabled={loading || busy} onClick={() => setReload(value => value + 1)}><RefreshCw size={15} /> Refresh</button>
     </div>
     {notice && <div className="alert alert-success" role="status">{notice}</div>}
     {error && <div className="alert alert-danger" role="alert">{error}
       {!editing && !publishing && <button type="button" className="btn btn-outline-secondary btn-sm ms-2"
         onClick={() => setReload(value => value + 1)}>Retry</button>}
     </div>}
-    <div className="d-flex gap-2 mb-3" role="tablist" aria-label="Plans and billing">
+    <div className="platform-preview-tabs platform-plan-tabs" role="tablist" aria-label="Plans and billing">
       <button type="button" role="tab" aria-selected={activeTab === 'catalog'}
-        className={activeTab === 'catalog' ? 'btn btn-primary btn-sm' : 'btn btn-outline-primary btn-sm'}
-        onClick={() => setActiveTab('catalog')}>Plan Catalog</button>
+        className={activeTab === 'catalog' ? 'is-active' : ''}
+        onClick={() => { setEditing(null); setPublishing(null); setActiveTab('catalog') }}><BadgeCheck size={17} /> Plan Catalog</button>
       <button type="button" role="tab" aria-selected={activeTab === 'billing'}
-        className={activeTab === 'billing' ? 'btn btn-primary btn-sm' : 'btn btn-outline-primary btn-sm'}
+        className={activeTab === 'billing' ? 'is-active' : ''}
         onClick={() => { setEditing(null); setPublishing(null); setActiveTab('billing') }}>
-        Billing Drafts
+        <CreditCard size={17} /> Billing Drafts
       </button>
     </div>
     {activeTab === 'billing' ? <PlatformBilling business={business} onChooseBusiness={onChooseBusiness} /> : <>
-    <section className="content-section">
-      <h2>Subscription Plans</h2>
-      {loading ? <p role="status">Loading plans…</p> : data && <>
+    <section className="content-section platform-plans-section">
+      <div className="platform-plans-intro">
+        <div><h2>Subscription Plans</h2>
+          <p>Published prices, actual assigned-business counts and version history.</p></div>
+        {data && !loading && <span className="platform-data-tag">{data.items.length} plan types</span>}
+      </div>
+      {loading ? <div className="platform-directory-loading" role="status">
+        <span className="spinner-border spinner-border-sm" aria-hidden="true" /> Loading subscription plans…
+      </div> : data && <>
+        <div className="platform-plan-cards" aria-label="Subscription plan summary">
+          {data.items.map(plan => {
+            const published = plan.published
+            return <article className="platform-plan-card" key={plan.code}>
+              <div className="platform-plan-card-top">
+                <span className="platform-plan-card-icon"><BadgeCheck size={20} /></span>
+                <span className={`platform-state-pill ${published ? 'is-active' : 'is-muted'}`}>
+                  {published ? `Published v${published.version}` : 'Not published'}
+                </span>
+              </div>
+              <h3>{plan.name}</h3>
+              <p>{plan.isPublic ? 'Public subscription plan' : 'Custom / contracted offering'}</p>
+              <div className="platform-plan-card-price">
+                <strong>{planMoney(published?.monthlyPrice ?? null, published?.currencyCode ?? null)}</strong>
+                {published && <small>/ month</small>}
+              </div>
+              <div className="platform-plan-card-details">
+                <div><Building2 size={15} /><span>Businesses</span><strong>{plan.assignedBusinesses.toLocaleString()}</strong></div>
+                <div><Store size={15} /><span>Locations</span><strong>{published?.maxLocations ?? 'Not set'}</strong></div>
+                <div><Users size={15} /><span>Users</span><strong>{published?.maxUsers ?? 'Not set'}</strong></div>
+                <div><CheckCircle2 size={15} /><span>Draft</span><strong>{plan.draft ? `v${plan.draft.revision}` : 'None'}</strong></div>
+              </div>
+              <button type="button" className="btn btn-outline-secondary btn-sm w-100"
+                disabled={busy} onClick={() => openDraft(plan)}>Configure Draft</button>
+            </article>
+          })}
+        </div>
+        <div className="platform-plan-table-heading">
+          <h3>Plan Catalog & Versions</h3>
+          <p>Draft edits and publishing use existing audited platform operations.</p>
+        </div>
         <div className="table-responsive">
           <table className="table platform-table align-middle">
             <thead><tr><th>Plan</th><th>Visibility</th><th>Assigned Businesses</th>
