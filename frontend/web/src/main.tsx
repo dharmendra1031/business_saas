@@ -6,6 +6,7 @@ import './styles.auth.css'
 import './styles.platform.css'
 import './styles.business.css'
 import './styles.release.css'
+import './styles.pos.css'
 import App from './App'
 
 ReactDOM.createRoot(document.getElementById('root')!).render(
