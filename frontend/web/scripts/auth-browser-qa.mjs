@@ -10,7 +10,7 @@ const business = role => ({
   id: 1, name: 'Sample Retail', typeCode: 'RETAIL', typeName: 'Retail',
   countryCode: 'IN', currencyCode: 'INR', timeZoneId: 'Asia/Kolkata', roleCode: role
 })
-const dashboard = role => ({
+const dashboard = (role, hasProducts = false, pendingApprovals = 0) => ({
   business: {
     id: 1, name: 'Sample Retail', typeCode: 'RETAIL', typeName: 'Retail',
     countryCode: 'IN', currencyCode: 'INR', timeZoneId: 'Asia/Kolkata'
@@ -20,7 +20,7 @@ const dashboard = role => ({
     trialEndsAtUtc: new Date(Date.now() + 14 * 24 * 60 * 60 * 1000).toISOString(),
     paidStartsAtUtc: null, paidEndsAtUtc: null, paidPlanVersionId: null },
   accessStatus: 'Trial', canOperate: true,
-  hasProducts: false, pendingApprovals: 0, cashSaleEnabled: role === 'Cashier'
+  hasProducts, pendingApprovals, cashSaleEnabled: role === 'Cashier'
 })
 const overview = {
   totalCustomers: 0, totalBusinesses: 0, activeSubscriptions: 0, activeTrials: 0,
@@ -40,7 +40,7 @@ const browser = await chromium.launch({ headless: true })
 async function scenario(name, {
   width = 1366, height = 768, role = 'Owner', initialFailure = false,
   businessFailure = false, multiple = false, challenge = false, verified = true,
-  badPassword = false, lockedPassword = false, badMfa = false
+  badPassword = false, lockedPassword = false, badMfa = false, hasProducts = false, pendingApprovals = 0
 } = {}) {
   const context = await browser.newContext({ viewport: { width, height }, deviceScaleFactor: 1 })
   const page = await context.newPage()
@@ -99,7 +99,7 @@ async function scenario(name, {
       const first = business(role)
       return response(route, 200, multiple ? [first, { ...first, id: 2, name: 'Second Retail' }] : [first])
     }
-    if (/^\/businesses\/\d+\/dashboard$/.test(path)) return response(route, 200, dashboard(role))
+    if (/^\/businesses\/\d+\/dashboard$/.test(path)) return response(route, 200, dashboard(role, hasProducts, pendingApprovals))
     if (/^\/businesses\/\d+\/cash-sales\/products$/.test(path)) return response(route, 200, [])
     if (path === '/platform/overview') return response(route, 200, overview)
     if (path === '/platform/businesses') return response(route, 200, { items: [], total: 0 })
@@ -181,6 +181,8 @@ try {
     const dashboardTop = await t.page.locator('.business-dashboard-summary').boundingBox()
     assert.ok(dashboardTop && dashboardTop.y < 200, 'Dashboard summary must begin near the top')
     assert.equal(await t.page.locator('.business-action-card').count(), 0, 'No duplicated navigation cards')
+    await t.page.getByRole('heading', { name: 'Complete store setup' }).waitFor()
+    assert.equal(await t.page.locator('.business-kpi-card').count(), 0, 'New businesses must not show empty KPI tiles')
     assert.equal(await t.page.getByRole('heading', { name: 'Business Dashboard', exact: true }).count(), 1)
     assert.equal(await t.page.getByText('No plan', { exact: false }).count(), 0,
       'Trial fixture must show an actual plan rather than conflicting No plan status')
@@ -202,10 +204,44 @@ try {
     const summary = await t.page.locator('.business-dashboard-summary').boundingBox()
     assert.ok(summary && summary.y < 210, 'Mobile summary must be visible without a large hero')
     assert.equal(await t.page.locator('.business-action-card').count(), 0, 'No duplicate menu cards')
+    assert.equal(await t.page.locator('.business-kpi-card').count(), 0, 'Mobile new-store view must not show KPI tiles')
     await t.screenshot('BUS-01-owner-dashboard-mobile-360')
     await t.check()
     await t.context.close()
     console.log('PASS BUS-01 compact business dashboard at 360px')
+  }
+
+  {
+    const t = await scenario('owner-operational', { role: 'Owner', hasProducts: true, pendingApprovals: 3 })
+    await t.login()
+    await t.page.getByRole('heading', { name: 'Business Overview' }).waitFor()
+    assert.equal(await t.page.locator('.business-kpi-card').count(), 4)
+    assert.equal(await t.page.locator('.business-kpi-card').first().locator('strong').innerText(), '—',
+      'Never fabricate sales figures before reporting integration')
+    await t.page.getByRole('heading', { name: 'Attention Needed' }).waitFor()
+    await t.page.getByRole('heading', { name: 'Recent Activity' }).waitFor()
+    assert.equal(await t.page.getByRole('heading', { name: 'Complete store setup' }).count(), 0)
+    assert.equal(await t.page.locator('.business-action-card').count(), 0)
+    await t.screenshot('BUS-01-owner-operational-desktop')
+    await t.page.getByRole('button', { name: /Review 3 draft purchase orders/ }).click()
+    await t.page.getByRole('heading', { name: 'Purchase Orders' }).waitFor()
+    await t.check()
+    await t.context.close()
+    console.log('PASS BUS-01 operational owner three sections and review action')
+  }
+
+  {
+    const t = await scenario('owner-operational-mobile', {
+      role: 'Owner', hasProducts: true, pendingApprovals: 1, width: 360, height: 780
+    })
+    await t.login()
+    await t.page.getByRole('heading', { name: 'Business Overview' }).waitFor()
+    assert.ok(await t.page.evaluate(() => document.documentElement.scrollWidth) <= 361,
+      'Operational overview should fit 360px mobile')
+    await t.screenshot('BUS-01-owner-operational-mobile-360')
+    await t.check()
+    await t.context.close()
+    console.log('PASS BUS-01 operational owner mobile layout')
   }
 
   {
