@@ -1,5 +1,5 @@
 import { useEffect, useRef, useState } from 'react'
-import { Activity, ArrowLeft, ArrowRight, BarChart3, Boxes, Building2, CheckCircle2, CreditCard, KeyRound, LayoutDashboard, LogOut, Menu, Package, ReceiptText, Search, Settings2, ShieldCheck, ShoppingCart, Store, Tags, Truck, UserRound, Users, Wallet } from 'lucide-react'
+import { Activity, ArrowRight, BarChart3, Boxes, Building2, CreditCard, KeyRound, LayoutDashboard, LogOut, Menu, Package, ReceiptText, Search, Settings2, ShieldCheck, ShoppingCart, Store, Tags, Truck, UserRound, Users, Wallet } from 'lucide-react'
 import { api, ApiResponseError, resetCsrf, SessionExpiredError, setSessionExpiredHandler, type Business, type RetailDashboard, type User } from './api'
 import CashCheckout from './CashCheckout'
 import TeamMembers from './TeamMembers'
@@ -320,11 +320,11 @@ export default function App() {
                   setPage('platform')
                 }}><Icon size={18} /> {label}</button>)}
         </>}
-        <div className="sidebar-footer">{page === 'platform'
+        {page === 'platform' && <div className="sidebar-footer">{page === 'platform'
           ? <>Platform Administration <small className="d-block mt-1">Manage SaaS accounts, not shop transactions</small></>
           : page === 'retail' && dashboard
             ? <>{dashboard.roleCode === 'Cashier' ? 'Cashier checkout' : 'Shop operations'}<small className="d-block mt-1">Signed in as {dashboard.roleCode}</small></>
-            : 'Select a business to manage.'}</div>
+            : 'Select a business to manage.'}</div>}
       </aside>}
 
       <div className="app-main">
@@ -356,11 +356,11 @@ export default function App() {
               <Menu size={20} />
             </button>
             <span className="topbar-workspace">
-              {!isBusinessOverview && <small>{page === 'platform' ? 'PLATFORM SUPER ADMIN' :
+              {page !== 'retail' && <small>{page === 'platform' ? 'PLATFORM SUPER ADMIN' :
                 page === 'retail' && dashboard?.roleCode === 'Cashier' ? 'POINT OF SALE' :
                 page === 'retail' ? dashboard?.roleCode === 'Owner' ? 'BUSINESS ADMIN' : 'STORE MANAGER' :
                 'BUSINESS ACCOUNT'}</small>}
-              <strong>{page === 'retail' ? isBusinessOverview ? 'Dashboard' : `${dashboard?.business.name} / ${retailTitles[retailPage]}` :
+              <strong>{page === 'retail' ? retailTitles[retailPage] :
                 page === 'platform' ? 'Platform Management' : 'My Businesses'}</strong>
             </span>
           </div>
@@ -444,20 +444,6 @@ export default function App() {
 
           {page === 'retail' && dashboard && (
             <>
-              {!isPosView && !isBusinessOverview && <div className={`page-header${dashboard.roleCode !== 'Cashier' ? ' business-page-header' : ''}`}>
-                <div>{!isBusinessOverview && <button className="back-link" onClick={() => { setNotice(''); void loadBusinesses() }}><ArrowLeft size={16} /> All businesses</button>}
-                  {!isBusinessOverview && dashboard.roleCode !== 'Cashier' && <span className="business-eyebrow">BUSINESS OPERATIONS · {dashboard.business.name}</span>}
-                  <h1>{isBusinessOverview ? 'Dashboard' : retailTitles[retailPage]}</h1>
-                  {isBusinessOverview
-                    ? <p>{dashboard.locations.length === 1 ? dashboard.locations[0].name : `${dashboard.locations.length} locations`}</p>
-                    : <p>{dashboard.business.name} · {dashboard.roleCode === 'Cashier' ? 'POS / Cashier' : dashboard.roleCode === 'Owner' ? 'Business Admin' : 'Store Manager'} · {dashboard.locations[0]?.name ?? 'No location assigned'}</p>}
-                </div>
-                {!isBusinessOverview && (dashboard.canOperate
-                  ? <span className="workspace-state"><CheckCircle2 size={16} /> {dashboard.accessStatus === 'Trial' ? 'Trial active' : 'Plan active'}</span>
-                  : <span className="workspace-state inactive">
-                    {dashboard.accessStatus === 'TrialExpired' ? 'Trial expired' : 'Subscription inactive'}
-                  </span>)}
-              </div>}
               {!dashboard.canOperate && <div className="alert alert-warning" role="status">
                 {dashboard.accessStatus === 'TrialExpired'
                   ? 'Your free trial has ended. Ask the platform administrator to prepare a subscription payment request.'
@@ -465,18 +451,6 @@ export default function App() {
                     ? 'This business is suspended. Contact the platform administrator for assistance.'
                     : 'This business has no active subscription. Contact the platform administrator for help.'}
               </div>}
-              {!isPosView && !isBusinessOverview && dashboard.subscription && <p className="small text-secondary">
-                {dashboard.subscription.planCode} · {dashboard.accessStatus === 'TrialExpired'
-                  ? 'Trial expired' : dashboard.subscription.status}
-                {dashboard.subscription.status === 'Trial' &&
-                  ` · ${dashboard.accessStatus === 'TrialExpired' ? 'Ended' : 'Ends'} ${new Date(dashboard.subscription.trialEndsAtUtc).toLocaleString(undefined, {
-                    dateStyle: 'medium', timeStyle: 'short', timeZone: dashboard.business.timeZoneId
-                  })}`}
-                {dashboard.subscription.paidEndsAtUtc &&
-                  ` · Paid through ${new Date(dashboard.subscription.paidEndsAtUtc).toLocaleString(undefined, {
-                    dateStyle: 'medium', timeStyle: 'short', timeZone: dashboard.business.timeZoneId
-                  })}`}
-              </p>}
               {retailPage === 'overview' && dashboard.roleCode !== 'Cashier' && <>
                 <BusinessOverview dashboard={dashboard}
                   onNavigate={section => { setApprovalList(false); setRetailPage(section) }}
