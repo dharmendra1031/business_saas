@@ -352,11 +352,11 @@ export default function App() {
               <Menu size={20} />
             </button>
             <span className="topbar-workspace">
-              <small>{page === 'platform' ? 'PLATFORM SUPER ADMIN' :
+              {!isBusinessOverview && <small>{page === 'platform' ? 'PLATFORM SUPER ADMIN' :
                 page === 'retail' && dashboard?.roleCode === 'Cashier' ? 'POINT OF SALE' :
                 page === 'retail' ? dashboard?.roleCode === 'Owner' ? 'BUSINESS ADMIN' : 'STORE MANAGER' :
-                'BUSINESS ACCOUNT'}</small>
-              <strong>{page === 'retail' ? isBusinessOverview ? dashboard?.business.name : `${dashboard?.business.name} / ${retailTitles[retailPage]}` :
+                'BUSINESS ACCOUNT'}</small>}
+              <strong>{page === 'retail' ? isBusinessOverview ? 'Business Dashboard' : `${dashboard?.business.name} / ${retailTitles[retailPage]}` :
                 page === 'platform' ? 'Platform Management' : 'My Businesses'}</strong>
             </span>
           </div>
@@ -440,7 +440,7 @@ export default function App() {
 
           {page === 'retail' && dashboard && (
             <>
-              {!isPosView && <div className={`page-header${dashboard.roleCode !== 'Cashier' ? ' business-page-header' : ''}`}>
+              {!isPosView && !isBusinessOverview && <div className={`page-header${dashboard.roleCode !== 'Cashier' ? ' business-page-header' : ''}`}>
                 <div>{!isBusinessOverview && <button className="back-link" onClick={() => { setNotice(''); void loadBusinesses() }}><ArrowLeft size={16} /> All businesses</button>}
                   {!isBusinessOverview && dashboard.roleCode !== 'Cashier' && <span className="business-eyebrow">BUSINESS OPERATIONS · {dashboard.business.name}</span>}
                   <h1>{isBusinessOverview ? 'Business Dashboard' : retailTitles[retailPage]}</h1>

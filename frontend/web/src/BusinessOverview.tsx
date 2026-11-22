@@ -1,73 +1,47 @@
-import { ArrowRight, Boxes, ClipboardCheck, CreditCard, Package, ShoppingCart, Store, Tags, Truck, Users } from 'lucide-react'
+import { ArrowRight, ClipboardCheck } from 'lucide-react'
 import type { RetailDashboard } from './api'
 
-type BusinessAction = 'products' | 'purchases' | 'stock' | 'masters' | 'suppliers' |
-  'customers' | 'team' | 'cash'
+type SetupAction = 'masters' | 'products' | 'stock'
 
 export default function BusinessOverview({ dashboard, onNavigate, onReviewApprovals }: {
   dashboard: RetailDashboard
-  onNavigate: (page: BusinessAction) => void
+  onNavigate: (page: SetupAction) => void
   onReviewApprovals: () => void
 }) {
-  const { business, locations, roleCode, subscription, accessStatus, canOperate, hasProducts, pendingApprovals } = dashboard
+  const { roleCode, locations, subscription, accessStatus, hasProducts, pendingApprovals } = dashboard
   const isOwner = roleCode === 'Owner'
-  const actions = [
-    { key: 'products', label: 'Products', Icon: Package },
-    { key: 'purchases', label: 'Purchases', Icon: ShoppingCart },
-    { key: 'stock', label: 'Inventory', Icon: Boxes },
-    { key: 'masters', label: 'Categories & Units', Icon: Tags },
-    { key: 'suppliers', label: 'Suppliers', Icon: Truck },
-    { key: 'customers', label: 'Customers', Icon: Users }
-  ] as const
-  const status = accessStatus === 'Trial' ? 'Trial active'
-    : accessStatus === 'TrialExpired' ? 'Trial expired'
-      : canOperate ? 'Plan active' : 'Subscription inactive'
-  const trialEnd = subscription?.status === 'Trial' &&
-    new Date(subscription.trialEndsAtUtc).toLocaleDateString(undefined, {
-      dateStyle: 'medium', timeZone: business.timeZoneId
-    })
-  const paidEnd = subscription?.paidEndsAtUtc &&
-    new Date(subscription.paidEndsAtUtc).toLocaleDateString(undefined, {
-      dateStyle: 'medium', timeZone: business.timeZoneId
-    })
+  const status = accessStatus === 'Trial' ? 'Trial active' :
+    accessStatus === 'TrialExpired' ? 'Trial expired' :
+    dashboard.canOperate ? 'Plan active' : 'Subscription inactive'
 
   return <div className="business-overview">
-    <div className="business-dashboard-summary" aria-label="Verified business status">
-      <span><CreditCard size={16} aria-hidden="true" />
-        <strong>{subscription?.planCode ?? 'No plan'}</strong> · {status}
-        {trialEnd && ` · ${accessStatus === 'TrialExpired' ? 'Ended' : 'Ends'} ${trialEnd}`}
-        {paidEnd && ` · Paid through ${paidEnd}`}
+    <h1 className="visually-hidden">Business Dashboard</h1>
+    <div className="business-dashboard-summary" aria-label="Business status">
+      <span>{subscription?.planCode ?? 'No plan'} · {status}
+        {subscription?.status === 'Trial' && <>
+          {' · '}{accessStatus === 'TrialExpired' ? 'Ended' : 'Ends'}{' '}
+          {new Date(subscription.trialEndsAtUtc).toLocaleDateString(undefined, {
+            dateStyle: 'medium', timeZone: dashboard.business.timeZoneId
+          })}
+        </>}
       </span>
-      <span><Package size={16} aria-hidden="true" /> {hasProducts ? 'Products added' : 'No products yet'}</span>
-      <span><Store size={16} aria-hidden="true" /> {locations.length} {locations.length === 1 ? 'location' : 'locations'}</span>
+      <span>Locations: {locations.length}</span>
+      <span>Products: {hasProducts ? 'Added' : 'Not started'}</span>
     </div>
-
     {isOwner && pendingApprovals > 0 && <button type="button" className="business-approval-cta"
       onClick={onReviewApprovals}>
-      <ClipboardCheck size={17} /> Review {pendingApprovals} draft purchase {pendingApprovals === 1 ? 'order' : 'orders'}
-      <ArrowRight size={16} />
+      <ClipboardCheck size={17} aria-hidden="true" />
+      Review {pendingApprovals} draft purchase {pendingApprovals === 1 ? 'order' : 'orders'}
+      <ArrowRight size={16} aria-hidden="true" />
     </button>}
-
-    <section className="content-section business-actions-panel" aria-labelledby="business-actions-title">
-      <div className="business-dashboard-toolbar">
-        <h2 id="business-actions-title">Quick access</h2>
-        {dashboard.cashSaleEnabled && <button type="button" className="btn btn-primary btn-sm"
-          disabled={!canOperate} onClick={() => onNavigate('cash')}>
-          <ShoppingCart size={16} /> Open POS
-        </button>}
-      </div>
-      <div className="business-action-grid">
-        {actions.map(({ key, label, Icon }) => <button type="button" key={key}
-          className="business-action-card" onClick={() => onNavigate(key)}>
-          <span className="business-action-icon"><Icon size={19} aria-hidden="true" /></span>
-          <strong>{label}</strong><ArrowRight size={16} className="business-action-arrow" aria-hidden="true" />
-        </button>)}
-      </div>
-      {isOwner && <button type="button" className="business-team-link" onClick={() => onNavigate('team')}>
-        <Users size={16} aria-hidden="true" /> Staff & Access <ArrowRight size={15} aria-hidden="true" />
-      </button>}
-    </section>
-
+    {!hasProducts && <section className="content-section business-onboarding" aria-labelledby="business-onboarding-heading">
+      <h2 id="business-onboarding-heading">Set up your store</h2>
+      <ol className="business-onboarding-steps">
+        <li><span>1</span><button type="button" onClick={() => onNavigate('masters')}>Categories &amp; units <ArrowRight size={15} /></button></li>
+        <li><span>2</span><button type="button" onClick={() => onNavigate('products')}>Add products <ArrowRight size={15} /></button></li>
+        <li><span>3</span><button type="button" onClick={() => onNavigate('stock')}>Review stock <ArrowRight size={15} /></button></li>
+      </ol>
+    </section>}
     {locations.length === 0 && <p className="business-location-warning" role="status">
       No location assigned. Ask your administrator to review access.
     </p>}
