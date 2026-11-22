@@ -404,8 +404,7 @@ export default function App() {
           {page === 'businesses' && (
             <>
               <div className="page-header business-picker-header">
-                <div><h1>Choose a business</h1>{!businessesLoading && !businessesError && businesses.length > 1 && <p>Select an assigned business to continue.</p>}</div>
-
+                <div><h1>Choose a business</h1></div>
               </div>
               {businessesLoading ? (
                 <section className="empty-state" role="status">
@@ -429,11 +428,12 @@ export default function App() {
                 <div className="business-list business-assigned-list" aria-label="Assigned business workspaces">
                   {businesses.map(business => (
                     <button className="business-row" type="button" key={business.id}
+                      aria-label={`Open ${business.name} as ${business.roleCode}`}
                       disabled={openingBusinessId !== null} aria-busy={openingBusinessId === business.id}
                       onClick={() => void openBusiness(business.id)}>
                       <span className="shop-symbol"><Store size={22} /></span>
                       <span className="business-summary"><strong>{business.name}</strong><small>{business.typeName} · {business.countryCode}</small></span>
-                      <span className="business-assigned-role">{business.roleCode}</span>
+                      <span className="business-assigned-role">{business.roleCode === 'Owner' ? 'Owner' : business.roleCode === 'Manager' ? 'Manager' : business.roleCode === 'Cashier' ? 'Cashier' : business.roleCode}</span>
                       {openingBusinessId === business.id
                         ? <span className="business-opening-label">Opening…</span>
                         : <ArrowRight size={18} aria-hidden="true" />}
