@@ -687,3 +687,55 @@ button:focus-visible, a:focus-visible, input:focus-visible, select:focus-visible
   .platform-quick-stat-list > div { padding: 10px 9px; }
   .platform-quick-stat-list dt { font-size: .7rem; }
 }
+
+/* SA-03 frontend-first business directory — approved enterprise table treatment. */
+.platform-business-directory > .page-header { margin-bottom: 22px; }
+.platform-business-directory > .page-header .platform-kicker { display: block; margin-bottom: 5px; }
+.platform-shell .platform-directory-card { padding: 0; overflow: hidden; }
+.platform-directory-heading { display: flex; align-items: center; justify-content: space-between;
+  gap: 14px; padding: 20px 23px 0; }
+.platform-shell .platform-directory-heading h2 { margin: 0 0 4px; border: 0; padding: 0;
+  color: #172440; font-size: 1.02rem; font-weight: 770; }
+.platform-directory-heading p { color: #75859f; font-size: .77rem; margin: 0; }
+.platform-directory-search { padding: 18px 23px; margin: 0; display: flex; align-items: center; }
+.platform-directory-search-field { position: relative; flex: 1 1 300px; max-width: 410px; }
+.platform-directory-search-field > svg { position: absolute; color: #73849f; top: 12px; left: 13px; pointer-events: none; }
+.platform-directory-search-field input.form-control { width: 100%; min-height: 43px;
+  padding-left: 42px; border-radius: 8px; border-color: #d9e1ef; }
+.platform-directory-search .btn { min-height: 42px; }
+.platform-shell .platform-directory-table { margin: 0; border-color: #edf0f6; }
+.platform-shell .platform-directory-table th { background: #f6f7fc; color: #64718b;
+  border-top: 1px solid #e7ecf5; padding: 12px 15px; font-weight: 700; font-size: .75rem; }
+.platform-shell .platform-directory-table td { padding: 13px 15px; vertical-align: middle;
+  color: #223452; border-bottom: 1px solid #eef1f6; font-size: .82rem; }
+.platform-directory-table tr:hover td { background: #fafaff; }
+.platform-business-cell { display: flex; align-items: center; gap: 11px; min-width: 155px; }
+.platform-business-symbol { display: grid; place-items: center; width: 36px; height: 36px; border-radius: 9px;
+  background: #efedff; color: #5945d3; flex-shrink: 0; }
+.platform-business-cell > span:last-child { min-width: 0; display: grid; gap: 3px; }
+.platform-business-cell strong { color: #1b2947; font-weight: 760; }
+.platform-business-cell small { color: #7a89a2; font-size: .71rem; }
+.platform-plan-pill { display: inline-block; padding: 5px 9px; border-radius: 7px;
+  background: #f2efff; color: #5846bb; font-size: .73rem; font-weight: 730; white-space: nowrap; }
+.platform-directory-pagination { border-top: 1px solid #e9edf5; padding: 15px 23px; }
+.platform-directory-pages { display: flex; align-items: center; gap: 11px; }
+.platform-directory-pages > span { font-size: .79rem; color: #546885; font-weight: 690; }
+.platform-directory-loading { display: flex; min-height: 150px; align-items: center; justify-content: center;
+  gap: 11px; color: #74829b; font-size: .86rem; }
+.platform-directory-empty { display: grid; justify-items: center; text-align: center; padding: 58px 18px 70px; }
+.platform-directory-empty > svg { color: #5945d3; margin-bottom: 15px; }
+.platform-directory-empty h3 { font-size: 1.03rem; font-weight: 770; }
+.platform-directory-empty p { font-size: .85rem; color: #70809a; max-width: 430px; line-height: 1.5; }
+.platform-directory-note { margin: 13px 2px 0; color: #7b8aa3; font-size: .74rem; line-height: 1.6; }
+@media (max-width: 790px) {
+  .platform-directory-heading { padding: 16px 14px 0; }
+  .platform-directory-search { padding: 14px; }
+  .platform-shell .platform-directory-table th, .platform-shell .platform-directory-table td { padding: 11px; }
+  .platform-directory-pagination { padding: 14px; }
+}
+@media (max-width: 600px) {
+  .platform-directory-search-field { flex: 1 1 100%; max-width: none; }
+  .platform-directory-search .btn { flex: 1 1 100px; }
+  .platform-directory-pagination { flex-direction: column; align-items: flex-start; }
+  .platform-directory-pages { width: 100%; justify-content: space-between; }
+}
