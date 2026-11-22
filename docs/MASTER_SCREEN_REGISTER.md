@@ -10,7 +10,7 @@
 **Decision DR-001 (latest owner direction, 21 Nov 2026):** Only **Platform Super Admin** creates/provisions a new business and assigns its Business Owner; the Business Owner/Admin logs into a separate business workspace and manages only authorized business operations. A POS/Cashier has a separate login *experience* and dedicated checkout workspace.
 
 - This supersedes the **earlier revisions** of `BUSINESS_SAAS_MASTER_SRS.md` §4 and `APPROVED_UI_UX.md` §5 that allowed owner self-service creation. Those documents have now been textually aligned with this decision; **application code and access-control tests are still pending**. Do not reinstate the superseded self-service path.
-- **Current code mismatch:** `frontend/web/src/App.tsx` still shows `Create Business` to business users; `backend/BusinessSaas.Api/Features/BusinessEndpoints.cs` `POST /api/businesses` currently uses the logged-in actor as the owner. Platform `Create Business` is not implemented. **P0**; UI-only hiding is NOT sufficient. Plan safe, audited server-side Super Admin-only provisioning and owner assignment, migration/compatibility implications and tests before activation.
+- **Current implementation (22 Nov):** The Owner-facing `Create Business` UI was removed; `POST /api/businesses` is now forbidden by default. Only legacy **Development integration fixtures** may opt into that route using `Tests:AllowLegacyBusinessCreation`; remove this test-compatibility path when fixtures migrate. Platform MFA-only `POST /api/platform/businesses` creates a Starter trial business with an existing verified Owner, first location, audit and idempotency. **P0 gaps**: email verification/invitation delivery, wider plan/entitlement selection, browser UX acceptance and retired fixture compatibility.
 - Super Admin manages SaaS-level businesses, customer accounts, plans/billing, licensing, settings, security and operations **but never edits a tenant's stock, retail sales or POS transactions**. "Only Super Admin creates business" means **exclusive business creation permission**, not removal of all other platform-management functions.
 - Login entry pages are visually separate for Super Admin, Owner/Admin and Cashier, with **one underlying secure authentication system** and server-verified roles/MFA. A role picker does not grant permissions. One ASP.NET API, one React frontend, one underlying business/tenant authorization model; **no duplicate applications or over-engineering**.
 - **Super Admin has exactly eight canonical main sidebar modules**: **Dashboard, Customers, Businesses, Plans & Billing, Licenses, Platform Settings, Security & Audit, Operations**. The mockups' standalone Users, Subscriptions, Payments, Invoices, Reports, Announcements and System Health are **sub-screens/tabs within these modules**, NOT extra top-level navigation. `Customers` refers to SaaS account owners, while `Business Customers` are that shop's retail customers.
@@ -51,8 +51,8 @@ The mockup pictures display illustrative controls (Card, UPI, Split, Services, d
 
 | Current evidence status | Count |
 | --- | ---: |
-| Missing | 66 |
-| Partial | 65 |
+| Missing | 61 |
+| Partial | 70 |
 | Deferred | 14 |
 
 ### A. Entry, authentication and cross-workspace navigation
@@ -84,11 +84,11 @@ The mockup pictures display illustrative controls (Card, UPI, Split, Services, d
 | SA-01 | Dashboard — Platform Overview | Page | Partial | P0 | Live KPIs, business growth, plans, expiring trials, recent audited activity; no fake revenue. |
 | SA-02 | Dashboard — report drill-down | Panel | Missing | P2 | Date filters and verified platform aggregate detail, NOT another top-level Reports menu. |
 | SA-03 | Businesses — directory | Page | Partial | P0 | Search/filter/paginate by name, owner, type, status and plan; one Create Business action. |
-| SA-04 | Businesses — Create Business: identity | Wizard step | Missing | P0 | Enter name, business type, country, timezone, currency; supported market only. |
-| SA-05 | Businesses — Create Business: owner assignment | Wizard step | Missing | P0 | Find verified user or issue owner invite; business creator is platform, owner is assigned account. |
-| SA-06 | Businesses — Create Business: plan and starting location | Wizard step | Missing | P0 | Select published compatible plan/trial and first location; visible entitlements and expiry. |
-| SA-07 | Businesses — Create Business: review / provision | Wizard step | Missing | P0 | Validate everything, confirm once, idempotent business/location/membership/subscription creation. |
-| SA-08 | Businesses — creation result / provisioning retry | State | Missing | P0 | Show numeric BusinessId, owner invite outcome, retry unknown outcomes without duplicate tenant. |
+| SA-04 | Businesses — Create Business: identity | Wizard step | Partial | P0 | Enter name, business type, country, timezone, currency; supported market only. |
+| SA-05 | Businesses — Create Business: owner assignment | Wizard step | Partial | P0 | Find verified user or issue owner invite; business creator is platform, owner is assigned account. |
+| SA-06 | Businesses — Create Business: plan and starting location | Wizard step | Partial | P0 | Select published compatible plan/trial and first location; visible entitlements and expiry. |
+| SA-07 | Businesses — Create Business: review / provision | Wizard step | Partial | P0 | Validate everything, confirm once, idempotent business/location/membership/subscription creation. |
+| SA-08 | Businesses — creation result / provisioning retry | State | Partial | P0 | Show numeric BusinessId, owner invite outcome, retry unknown outcomes without duplicate tenant. |
 | SA-09 | Businesses — business details | Page | Partial | P0 | Owner, country, locations summary, trial/subscription, status and audited platform actions; no stock editing. |
 | SA-10 | Businesses — extend trial | Modal | Partial | P1 | Expiry before/after, reason, MFA/server permission, confirmed audit ID. |
 | SA-11 | Businesses — suspend/reactivate | Modal | Partial | P1 | Scope and impact explained; reason, confirmation and audit; no silent rollback. |
@@ -244,6 +244,19 @@ The mockup pictures display illustrative controls (Card, UPI, Split, Services, d
 
 **Important:** This change does not yet implement Super Admin-only business creation; the prior Owner creation path and API must be replaced in **SA-04 through SA-08** with server-enforced authorization and safe owner assignment.
 
+## 3B. Super Admin visual implementation, evidence and remaining gaps (22 Nov)
+
+**Reference:** User-approved final 12-screen Super Admin montage from 21 Nov 2026. **Detailed, itemized UI comparison:** [Businesses and Create Business Visual QA](./SUPER_ADMIN_BUSINESS_VISUAL_QA.md).
+
+- `SA-03`: Business directory includes real server-paginated table and new Create Business CTA; plan/status filters and browser screenshot sign-off pending.
+- `SA-04`: business name, type, country, currency and timezone wizard step built.
+- `SA-05`: verified existing owner lookup built; **owner invitation/email verification flow missing**.
+- `SA-06`: Starter trial + named first location built; general published-plan selection missing.
+- `SA-07`: review screen and MFA-required transactional platform API built; server event audit and duplicate-request protection tested.
+- `SA-08`: newly created business opens real details; dedicated success/recovery state and browser visual check pending.
+
+All these entries remain **PARTIAL, not DONE**. Frontend/backend/SQL CI passed for provisioning and security test code on [run 44988100644](https://github.com/dharmendra1031/business_saas/actions/runs/44988100644); later style/docs commits require their own final checks. Real browser screenshots have not been compared pixel by pixel.
+
 ## 4. Critical end-to-end journeys — do not lose these
 
 ### Journey J-01: Super Admin provisions a business (P0)
@@ -308,7 +321,7 @@ Status: Partial | Missing | Deferred | DONE
 
 | Mismatch | Source checked | Correct outcome |
 | --- | --- | --- |
-| Owner creates tenant, whereas latest approved decision makes Super Admin the exclusive creator | `frontend/web/src/App.tsx`, `backend/BusinessSaas.Api/Features/BusinessEndpoints.cs` | P0: platform-only server provisioning, owner assignment/invitation, updated old SRS and role tests |
+| Owner create was present in UI/API | `App.tsx` now hides/removes it; `BusinessEndpoints.cs` denies it by default, integration tests use temporary Development flag | P0: finish legacy fixture migration, verified owner invite and end-to-end login/provision tests |
 | Shared sidebar persists in POS | `frontend/web/src/App.tsx` | P0: dedicated cashier shell, no admin sidebar; approved 61/39 design |
 | Product-search dropdown instead of approved catalogue cards | `frontend/web/src/CashCheckout.tsx` | P0: real image/category cards, scan/search and exact prices |
 | Cash tender inside page instead of approved Payment Popup | `frontend/web/src/CashCheckout.tsx` | P0: accessible modal and safe cash submit/retry |
