@@ -39,6 +39,7 @@ export default function App() {
   const [platformBusinessSearch, setPlatformBusinessSearch] = useState('')
   const [dashboard, setDashboard] = useState<RetailDashboard | null>(null)
   const [approvalList, setApprovalList] = useState(false)
+  const [billingOpen, setBillingOpen] = useState(false)
   const [billingBusiness, setBillingBusiness] = useState<{ id: number; name: string } | null>(null)
   const [retailPage, setRetailPage] = useState<RetailPage>('overview')
   const [error, setError] = useState('')
@@ -135,6 +136,7 @@ export default function App() {
         return
       }
       setApprovalList(false)
+      setBillingOpen(false)
       setDashboard(details)
       setRetailPage(!showOverview && details.cashSaleEnabled && details.roleCode === 'Cashier' ? 'cash' : 'overview')
       setPage('retail')
@@ -152,6 +154,7 @@ export default function App() {
       resetCsrf()
       setUser(null)
       setDashboard(null)
+      setBillingOpen(false)
       setBusinesses([])
       setPage('login')
       setSessionExpired(false)
@@ -458,7 +461,9 @@ export default function App() {
               {!dashboard.canOperate && <div className="alert alert-warning" role="status">
                 {dashboard.accessStatus === 'TrialExpired'
                   ? 'Your free trial has ended. Ask the platform administrator to prepare a subscription payment request.'
-                  : 'This business has no active subscription. Contact the platform administrator for help.'}
+                  : dashboard.accessStatus === 'Suspended'
+                    ? 'This business is suspended. Contact the platform administrator for assistance.'
+                    : 'This business has no active subscription. Contact the platform administrator for help.'}
               </div>}
               {!isPosView && !isBusinessOverview && dashboard.subscription && <p className="small text-secondary">
                 {dashboard.subscription.planCode} · {dashboard.accessStatus === 'TrialExpired'
@@ -476,9 +481,9 @@ export default function App() {
                 <BusinessOverview dashboard={dashboard}
                   onNavigate={section => { setApprovalList(false); setRetailPage(section) }}
                   onReviewApprovals={() => { setApprovalList(true); setRetailPage('purchases') }} />
-                {dashboard.roleCode === 'Owner' && <details className="content-section business-subscription-panel">
+                {dashboard.roleCode === 'Owner' && <details className="content-section business-subscription-panel" onToggle={event => setBillingOpen(event.currentTarget.open)}>
                   <summary><CreditCard size={17} /> Subscription payment and billing status</summary>
-                  <SubscriptionCheckout key={dashboard.business.id} businessId={dashboard.business.id} />
+                  {billingOpen && <SubscriptionCheckout key={dashboard.business.id} businessId={dashboard.business.id} />}
                 </details>}
               </>}
               {retailPage === 'overview' && dashboard.roleCode === 'Cashier' && !dashboard.cashSaleEnabled &&
