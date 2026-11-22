@@ -11,6 +11,7 @@ For a fresh Windows development run with a separate test database, use the [loca
 | Document | Purpose |
 | --- | --- |
 | [Master Screen Register — 145 tracked UI items](docs/MASTER_SCREEN_REGISTER.md) | **Canonical screen IDs, role boundaries, page/tab/modal flows, statuses, acceptance protocol and one-screen-at-a-time development queue** |
+| [Frontend-First Visual QA Tracker](docs/FRONTEND_FIRST_DESIGN_TRACKER.md) | Approved-image hashes, platform UI design progress, design-freeze requirements and backend-later release order |
 | [Approved POS + Payment Popup](docs/APPROVED_POS_UI_UX.md) | Approved full-width Ibdaa-inspired 61/39 checkout design and payment dialog acceptance |
 | [Business SaaS Master SRS](docs/BUSINESS_SAAS_MASTER_SRS.md) | **Authoritative** product requirements and the multi-business model |
 | [Database Architecture](docs/DATABASE_ARCHITECTURE.md) | **Authoritative** BusinessId tenant isolation, numeric SQL identity IDs, schema rules |
