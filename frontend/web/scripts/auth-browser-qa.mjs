@@ -36,13 +36,15 @@ const browser = await chromium.launch({ headless: true })
 
 async function scenario(name, {
   width = 1366, height = 768, role = 'Owner', initialFailure = false,
-  businessFailure = false, multiple = false, challenge = false, verified = true
+  businessFailure = false, multiple = false, challenge = false, verified = true,
+  badPassword = false, lockedPassword = false, badMfa = false
 } = {}) {
   const context = await browser.newContext({ viewport: { width, height }, deviceScaleFactor: 1 })
   const page = await context.newPage()
   const errors = []
   page.on('pageerror', error => errors.push(error.message))
-  const state = { authenticated: false, initialFailure, businessFailure, challengePending: false }
+  const state = { authenticated: false, initialFailure, businessFailure, challengePending: false,
+    badPassword, lockedPassword, badMfa, lastMfaRequest: null }
   let businessRequests = 0
 
   await page.route('**/api/**', route => {
@@ -58,6 +60,14 @@ async function scenario(name, {
     if (path === '/auth/options') return response(route, 200, { canRegister: false })
     if (path === '/auth/csrf') return response(route, 200, { token: 'qa-test-csrf' })
     if (path === '/auth/login') {
+      if (state.badPassword) {
+        state.badPassword = false
+        return response(route, 401, { message: 'Unauthorized' })
+      }
+      if (state.lockedPassword) {
+        state.lockedPassword = false
+        return response(route, 429, { detail: 'Account temporarily locked. Try again later.' })
+      }
       if (challenge) {
         state.challengePending = true
         return response(route, 200, { requiresTwoFactor: true })
@@ -67,6 +77,11 @@ async function scenario(name, {
     }
     if (path === '/auth/mfa/verify') {
       assert.ok(state.challengePending, 'MFA must follow the password challenge')
+      state.lastMfaRequest = route.request().postDataJSON()
+      if (state.badMfa) {
+        state.badMfa = false
+        return response(route, 401, { message: 'Invalid verification code' })
+      }
       state.authenticated = true
       state.challengePending = false
       return response(route, 204)
@@ -223,6 +238,76 @@ try {
     await t.check()
     await t.context.close()
     console.log('PASS Super Admin MFA challenge')
+  }
+
+  {
+    const t = await scenario('platform-bad-password', { role: 'Platform', badPassword: true })
+    await t.login()
+    await t.page.getByRole('alert').getByText('Incorrect email or password.').waitFor()
+    assert.equal(await t.page.locator('.platform-shell').count(), 0, 'Failed login cannot enter platform')
+    await t.login()
+    await t.page.locator('.platform-shell').waitFor()
+    await t.check()
+    await t.context.close()
+    console.log('PASS AUTH-02 invalid password then successful login')
+  }
+
+  {
+    const t = await scenario('platform-password-lockout', { role: 'Platform', lockedPassword: true })
+    await t.login()
+    await t.page.getByRole('alert').getByText('Account temporarily locked. Try again later.').waitFor()
+    assert.equal(await t.page.locator('.platform-shell').count(), 0)
+    await t.check()
+    await t.context.close()
+    console.log('PASS AUTH-02 rate-limit / lockout response')
+  }
+
+  {
+    const t = await scenario('platform-invalid-mfa', {
+      role: 'Platform', challenge: true, badMfa: true, width: 360, height: 780
+    })
+    await t.login()
+    await t.page.getByRole('heading', { name: 'Verify your sign in' }).waitFor()
+    assert.equal(await t.page.locator('.platform-shell').count(), 0, 'MFA cannot be skipped')
+    const input = t.page.getByLabel('6-digit authenticator code')
+    await input.fill('abcdef')
+    assert.equal(await input.evaluate(element => element.checkValidity()), false,
+      'Authenticator challenge must reject malformed text before submission')
+    await input.fill('123456')
+    await t.screenshot('AUTH-02-mfa-challenge-mobile')
+    const width = await t.page.evaluate(() => document.documentElement.scrollWidth)
+    assert.ok(width <= 361, 'MFA challenge should fit 360px mobile viewport')
+    await t.page.getByRole('button', { name: 'Verify and sign in' }).click()
+    await t.page.getByRole('alert').getByText('Invalid code or expired verification session. Please sign in again if needed.').waitFor()
+    assert.equal(await t.page.locator('.platform-shell').count(), 0, 'Invalid MFA cannot enter platform')
+    await input.fill('654321')
+    await t.page.getByRole('button', { name: 'Verify and sign in' }).click()
+    await t.page.locator('.platform-shell').waitFor()
+    assert.equal(t.state.lastMfaRequest.code, '654321')
+    await t.check()
+    await t.context.close()
+    console.log('PASS AUTH-02 MFA validation, invalid retry, mobile fit and authorization gate')
+  }
+
+  {
+    const t = await scenario('platform-mfa-reset-and-recovery', { role: 'Platform', challenge: true })
+    await t.login()
+    await t.page.getByRole('heading', { name: 'Verify your sign in' }).waitFor()
+    await t.page.getByRole('button', { name: 'Use a recovery code' }).click()
+    await t.page.getByLabel('Recovery code').fill('recovery-12345')
+    await t.page.getByRole('button', { name: 'Back to password sign in' }).click()
+    await t.login()
+    await t.page.getByLabel('6-digit authenticator code').waitFor()
+    await t.page.getByRole('button', { name: 'Use a recovery code' }).click()
+    await t.page.getByLabel('Recovery code').fill('recovery-67890')
+    await t.screenshot('AUTH-02-recovery-code-desktop')
+    await t.page.getByRole('button', { name: 'Verify and sign in' }).click()
+    await t.page.locator('.platform-shell').waitFor()
+    assert.equal(t.state.lastMfaRequest.recoveryCode, 'recovery-67890')
+    assert.equal(t.state.lastMfaRequest.code, null)
+    await t.check()
+    await t.context.close()
+    console.log('PASS AUTH-02 recovery code, back and fresh MFA mode')
   }
 
   console.log('PASS all first-screen browser QA scenarios')

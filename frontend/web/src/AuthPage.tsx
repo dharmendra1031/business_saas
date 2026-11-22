@@ -46,6 +46,7 @@ export default function AuthPage({ mode, onChange, onAuthenticated, sessionExpir
           if (result?.requiresTwoFactor) {
             setPassword('')
             setVerificationCode('')
+            setUsingRecovery(false)
             setSecondFactor(true)
             return
           }
@@ -74,7 +75,7 @@ export default function AuthPage({ mode, onChange, onAuthenticated, sessionExpir
             : mode === 'register' ? 'Create an account to request business access.'
               : 'Use your assigned email and password.'}</p>
           {error && <div className="alert alert-danger" role="alert">{error}</div>}
-          {sessionExpired && mode === 'login' && <div className="alert alert-warning" role="status">Your session expired. Please sign in again.</div>}
+          {sessionExpired && mode === 'login' && !secondFactor && <div className="alert alert-warning" role="status">Your session expired. Please sign in again.</div>}
           {authNotice && mode === 'login' && <div className="alert alert-success" role="status">{authNotice}</div>}
           {secondFactor ? <>
             <label className="form-label" htmlFor="verification-code">
@@ -82,8 +83,9 @@ export default function AuthPage({ mode, onChange, onAuthenticated, sessionExpir
             </label>
             <input className="form-control" id="verification-code" type="text"
               inputMode={usingRecovery ? 'text' : 'numeric'} autoComplete="one-time-code"
-              maxLength={usingRecovery ? 32 : 6} value={verificationCode}
-              onChange={event => setVerificationCode(event.target.value)} required autoFocus />
+              maxLength={usingRecovery ? 32 : 6} pattern={usingRecovery ? undefined : '[0-9]{6}'}
+              spellCheck={false} value={verificationCode}
+              onChange={event => { setVerificationCode(event.target.value); setError('') }} required autoFocus />
             <button type="button" className="btn btn-link btn-sm ps-0 mt-2"
               onClick={() => { setUsingRecovery(value => !value); setVerificationCode(''); setError('') }}>
               {usingRecovery ? 'Use authenticator app instead' : 'Use a recovery code'}
@@ -91,17 +93,17 @@ export default function AuthPage({ mode, onChange, onAuthenticated, sessionExpir
           </> : <>
             <label className="form-label" htmlFor="email">Email address</label>
             <input className="form-control" id="email" type="email" autoComplete="email" value={email}
-              onChange={event => setEmail(event.target.value)} required autoFocus />
+              onChange={event => { setEmail(event.target.value); setError('') }} required autoFocus />
             <label className="form-label mt-3" htmlFor="password">Password</label>
             <input className="form-control" id="password" type="password"
               autoComplete={mode === 'login' ? 'current-password' : 'new-password'} minLength={8}
-              value={password} onChange={event => setPassword(event.target.value)} required />
+              value={password} onChange={event => { setPassword(event.target.value); setError('') }} required />
           </>}
           <button className="btn btn-primary w-100 mt-4" type="submit" disabled={busy}>
             {busy ? 'Please wait…' : secondFactor ? 'Verify and sign in' : mode === 'login' ? 'Sign in' : 'Create account'} <ArrowRight size={16} />
           </button>
           {secondFactor && <button type="button" className="btn btn-link w-100 mt-2"
-            onClick={() => { setSecondFactor(false); setVerificationCode(''); setError('') }}>
+            onClick={() => { setSecondFactor(false); setUsingRecovery(false); setVerificationCode(''); setError('') }}>
             Back to password sign in
           </button>}
           {!secondFactor && registrationEnabled && (
