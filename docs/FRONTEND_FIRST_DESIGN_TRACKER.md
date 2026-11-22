@@ -46,9 +46,9 @@ The following original images are available as **conversation-attached design re
 | `SA-04..08` Create Business Wizard | Four steps, clean forms, explicit review/confirmation, owner assignment | Existing `PlatformCreateBusiness.tsx`, recent validation/retry/confirmation UX. Uses existing real platform provisioning API. | **Partial; visual QA pending**. Verified invitation delivery, extra plans and screenshot comparison missing. |
 | `SA-29..32` Licenses | Platform license screen with directory, issue/activation, lifecycle, history sections | `PlatformModulePreview.tsx` creates responsive navigable section layouts. | **Preview only.** No issuance, activation, license data or fake success. Backend integration deferred. |
 | `SA-33..39` Platform Settings | Global configuration, business templates, modules, localization and notifications | `PlatformModulePreview.tsx` creates navigable, clearly read-only design tabs. | **Preview only.** No saving, fake global settings, unpublished translation upload or notification delivery. |
-| `SA-14..16` Customers | Approved searchable account directory + details | Existing `PlatformCustomers.tsx` retained | **Design planned / existing partial**, detailed redesign later. |
-| `SA-17..28` Plans & Billing | Approved pricing cards, subscriptions and prepared billing workflows | Existing `PlatformPlans.tsx`, `PlatformBilling.tsx` retained | **Design planned / existing partial**, no sample money or unsafe payment success. |
-| `SA-40..46` Audit/Operations | Premium security activity and platform health | Existing `PlatformAudit.tsx`, `PlatformOperations.tsx` retained | **Design planned / existing partial**; only actual API data should display. |
+| `SA-14..15` Customers | Approved compact account directory, verification status, business count and customer details | `PlatformCustomers.tsx` redesigned with server-paginated search, status badges, customer profile, assigned-business links to existing platform business detail. | **UI source implemented; visual QA pending.** Backend does not supply customer names, phone numbers or account suspension, so the mockup's fields/actions are NOT invented. `SA-16` account restriction remains deferred. |
+| `SA-17..20` Plans & Billing | Approved plan-card pricing grid, limit rows, versioned published catalog and edit/publish actions | `PlatformPlans.tsx` now shows responsive API-backed plan cards, published prices/limits/status, existing audited draft/publish forms with scroll-to-panel UX; `PlatformBilling.tsx` retains real draft/payment/reconciliation UI. | **UI source implemented; visual QA pending.** Plans without published pricing say Not configured. Real subscription directory/invoices/refunds (`SA-21..28`) remain partial or missing; mock paid prices are NOT used. |
+| `SA-40..46` Audit/Operations | Premium audit logs, MFA status, real readiness and six-card operations layout | `PlatformAudit.tsx` now reads actual `/auth/mfa/status`, shows audit table with expand-to-read reason/raw before/after values; `PlatformOperations.tsx` displays genuine `/ready` and six cards with an actual Audit navigation action. | **UI source implemented; visual QA pending.** Search/date filters, backup/monitoring/job data and announcements are not available, so those remain labeled design previews. Fixed `Invalid Date` bug for non-date audit values. |
 | `BUS-* / POS-*` | Separate Business Owner/Admin and Ibdaa-style full-width Cashier POS | Existing partial screens retained untouched during this first platform batch | **Next frontend batches**, then visual acceptance and backend gaps. |
 
 ### Scope and implementation safeguards
@@ -64,10 +64,22 @@ The following original images are available as **conversation-attached design re
 ## 4. Next frontend-only design order
 
 1. Refine `SA-01`, `SA-03`, `SA-04..08` using real browser screenshots at all four widths; compare directly with final approved reference.
-2. Redesign `SA-14..16` Customers and `SA-17..28` Plans & Billing, ensuring disabled/unavailable features are honest.
-3. Redesign `SA-40..46` Audit / Operations; improve `SA-29..39` preview tabs into approved detailed visual screens before API work.
+2. **Second platform frontend batch implemented in source:** Customers directory/details (`SA-14..15`), real priced plan cards/catalog (`SA-17..20`) and Audit/Operations (`SA-40..46`). Next visually QA at 1536/1366/768/360 before approving; add remaining nested billing flows and UX states without fictional data.
+3. Improve `SA-29..39` Licenses/Settings preview tabs and remaining `SA-16`, `SA-21..28` customer/billing UX only when relevant contract is clear; do not present preview or missing APIs as working.
 4. Complete `BUS-01..55` Retail Owner/Admin UI: dashboard, catalog/masters, suppliers, purchase, stock, reports, settings.
 5. Complete `POS-01..18` using exact approved **61/39** image, Payment Popup, held bills/history/returns/register design; do not change transaction backend yet.
 6. Obtain design sign-off for all released screens, then begin backend integration and E2E tests.
 
 This is a visual scope tracker, **not** a statement that all frontend screens are finished.
+
+
+## 5. Second frontend batch — approved-image gap check (22 Nov 2026)
+
+| Reference tile | Visual hierarchy implemented in source | Backend-limited omissions — intentionally not faked | Browser acceptance |
+| --- | --- | --- | --- |
+| **4: Customers (Owners)** | Enterprise header, compact email search, verification pills, server pagination, customer profile, owned business table with real Details links | Mockup shows name/mobile/active-suspended status; current API exposes email, emailConfirmed and owned-business count only. No fake account status, no Add Customer button. | **Pending** real captured screenshot and mobile/keyboard tests |
+| **5: Plans & Pricing** | Responsive plan cards, published monthly currency prices, assigned business/limits, documented draft/immutable publish action, tabs for Catalog & Billing Drafts | Mockup prices/tier features unverified. No invented ₹499, UPI, subscriptions payment capture or disabled fake toggles. | **Pending** |
+| **9: Operations** | Six-card grid matching visual density; actual readiness status and Audit Trail link | Tenant databases, backup/restore, jobs, incident monitoring, announcements deliberately tagged Design preview; no fake healthy status. | **Pending** |
+| **11: Activity Logs** | Security header, real MFA state, audited events with expandable reason/previous/new data and pagination | No backend global search, date/action/user filters or fabricated named actors. Fixed prior logic that incorrectly formatted non-date old/new values as timestamps. | **Pending** |
+
+**Quality gates:** React TypeScript build + .NET/SQL CI is a necessary build gate, not visual proof. Actual approved-reference **image-versus-browser screenshots**, keyboard/tab/mobile checks and product-owner design acceptance are still required. No image file or screenshot of the running app is asserted here.
