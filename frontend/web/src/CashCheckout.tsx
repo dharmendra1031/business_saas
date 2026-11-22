@@ -1,4 +1,6 @@
-import { useEffect, useRef, useState } from 'react'
+import { useEffect, useRef, useState, type FormEvent } from 'react'
+import { ArrowRight, Banknote, Check, Minus, Package, Plus, ReceiptText, Search, ShoppingBag, Trash2 } from 'lucide-react'
+import PosCashPaymentDialog from './PosCashPaymentDialog'
 import { api, ApiResponseError, operationKey, post, type RetailDashboard } from './api'
 
 interface Product {
@@ -52,14 +54,16 @@ export default function CashCheckout({ userId, dashboard }: { userId: number; da
   const [basket, setBasket] = useState<Line[]>(pending?.lines ?? [])
   const [search, setSearch] = useState('')
   const [products, setProducts] = useState<Product[]>([])
-  const [product, setProduct] = useState<Product | null>(null)
-  const [quantity, setQuantity] = useState('1')
+  const [showPayment, setShowPayment] = useState(false)
+  const [clearArmed, setClearArmed] = useState(false)
+  const [scanBusy, setScanBusy] = useState(false)
   const [cash, setCash] = useState(pending ? String(pending.tendered) : '')
   const [error, setError] = useState('')
   const [hint, setHint] = useState('')
   const [busy, setBusy] = useState(false)
   const lock = useRef(false)
-  const qtyInput = useRef<HTMLInputElement>(null)
+  const searchInput = useRef<HTMLInputElement>(null)
+  const payButtonRef = useRef<HTMLButtonElement>(null)
   const total = basket.reduce((sum, line) => sum + Math.round(line.expectedUnitPrice * 100) * line.quantity, 0) / 100
   const money = (amount: number) => business.currencyCode + ' ' + amount.toFixed(2)
 
@@ -88,31 +92,60 @@ export default function CashCheckout({ userId, dashboard }: { userId: number; da
           if (!active) return
           setProducts(items)
           setHint(items.length ? '' : 'No eligible products found.')
-          const exact = search.trim() && items.find(x => x.barcode === search.trim().toUpperCase())
-          if (exact) { setProduct(exact); qtyInput.current?.focus() }
+          // Product cards and barcode entry use the same verified product collection.
         }).catch(cause => { if (active) setHint(cause.message) })
     }, 200)
     return () => { active = false; clearTimeout(timer) }
   }, [base, search, locationId, dashboard.canOperate, pending, receipt])
 
-  function addItem() {
-    if (!product) return
-    const count = Number(quantity)
-    const existing = basket.find(line => line.productId === product.id)
-    const combined = count + (existing?.quantity ?? 0)
-    if (!Number.isSafeInteger(count) || count < 1 || !Number.isSafeInteger(combined) ||
-      combined > Math.min(product.available, 1000000)) {
-      setError('Choose a whole quantity within the available stock.')
+  function addProduct(item: Product) {
+    if (!dashboard.canOperate || busy || pending || receipt) return
+    const existing = basket.find(line => line.productId === item.id)
+    const nextQty = (existing?.quantity ?? 0) + 1
+    if (!Number.isSafeInteger(nextQty) || nextQty > Math.min(item.available, 1000000)) {
+      setError('Insufficient available stock for this product.')
       return
     }
-    if (!existing && basket.length >= 100) { setError('A receipt supports up to 100 products.'); return }
-    const line = { productId: product.id, name: product.name, quantity: combined, expectedUnitPrice: product.salePrice }
-    setBasket(existing ? basket.map(item => item === existing ? line : item) : [...basket, line])
+    if (!existing && basket.length >= 100) {
+      setError('A receipt supports up to 100 products.')
+      return
+    }
+    const line = { productId: item.id, name: item.name, quantity: nextQty, expectedUnitPrice: item.salePrice }
+    setBasket(existing ? basket.map(previous => previous.productId === item.id ? line : previous) : [...basket, line])
     setError('')
-    setProduct(null)
+    setClearArmed(false)
     setSearch('')
-    setQuantity('1')
+    searchInput.current?.focus()
   }
+
+  async function submitBarcode(event: FormEvent) {
+    event.preventDefault()
+    const code = search.trim().toUpperCase()
+    if (!code || scanBusy || busy || !dashboard.canOperate || !locationId) return
+    setScanBusy(true)
+    try {
+      const matching = products.find(x => x.barcode?.toUpperCase() === code || x.sku.toUpperCase() === code) ??
+        (await api<Product[]>(`${base}/products?locationId=${locationId}&search=${encodeURIComponent(code)}`))
+          .find(x => x.barcode?.toUpperCase() === code || x.sku.toUpperCase() === code)
+      if (matching) addProduct(matching)
+      else setHint('No exact barcode or SKU match. Select a product card from the results.')
+    } catch (cause) {
+      setHint(cause instanceof Error ? cause.message : 'Unable to verify barcode.')
+    } finally { setScanBusy(false) }
+  }
+
+  function updateQuantity(line: Line, quantity: number) {
+    if (!Number.isSafeInteger(quantity) || quantity < 1 || quantity > 1000000) return
+    const knownStock = products.find(x => x.id === line.productId)?.available
+    if (knownStock !== undefined && quantity > knownStock) {
+      setError('Quantity is greater than available stock.')
+      return
+    }
+    setBasket(previous => previous.map(x => x.productId === line.productId ? { ...x, quantity } : x))
+    setError('')
+  }
+
+  const itemCount = basket.reduce((sum, line) => sum + line.quantity, 0)
 
   async function recordSale() {
     const received = Number(cash)
@@ -121,7 +154,7 @@ export default function CashCheckout({ userId, dashboard }: { userId: number; da
       !Number.isSafeInteger(line.quantity) || line.quantity < 1 ||
       !Number.isFinite(line.expectedUnitPrice) || line.expectedUnitPrice < 0) ||
       !Number.isFinite(total) || total <= 0 || !Number.isFinite(received) ||
-      !Number.isInteger(Math.round(received * 100)) || received < total)) {
+      Math.abs(Math.round(received * 100) - received * 100) > 0.000001 || received < total)) {
       setError('Check basket quantities and enter enough cash before recording the sale.')
       return
     }
@@ -167,115 +200,150 @@ export default function CashCheckout({ userId, dashboard }: { userId: number; da
         setCash('')
       }
       setReceipt(null)
-      setProduct(null)
       setSearch('')
-      setQuantity('1')
+      setShowPayment(false)
     }}>{pending ? 'New sale' : 'Back to checkout'}</button>
   </section>
 
   return <section className="pos-checkout" aria-label="Point of Sale checkout">
     <header className="pos-header">
       <div>
-        <p className="pos-kicker">RETAIL / POINT OF SALE</p>
-        <h2>{pending ? 'Recover Pending Sale' : 'New Cash Sale'}</h2>
-        <p>{pending ? 'Verify the previous transaction before submitting again.' :
-          'Search or scan products, review the basket and collect payment.'}</p>
+        <p className="pos-kicker">RETAIL · POINT OF SALE</p>
+        <h2>{pending ? 'Recover Pending Sale' : 'New Sale'}</h2>
+        <p>{pending ? 'Check the previous transaction before recording it again.' :
+          'Select products, review your basket and collect cash payment.'}</p>
       </div>
-      <span className="pos-mode">Cash-only checkout · {business.currencyCode}</span>
+      <span className="pos-mode"><Check size={15} /> Cash checkout · {business.currencyCode}</span>
     </header>
-    {error && <p role="alert" className="alert alert-danger">{error}</p>}
-    {pending ? <section className="content-section" aria-label="Pending sale recovery">
-      <h2>Pending cash sale</h2>
+    {error && <div role="alert" className="alert alert-danger">{error}</div>}
+    {pending ? <section className="content-section pos-pending" aria-label="Pending sale recovery">
+      <div className="pos-panel-heading"><h2>Pending cash sale</h2><span>Reference held for safe retry</span></div>
       <ul>{pending.lines.map(line => <li key={line.productId}>{line.name} · {line.quantity} × {money(line.expectedUnitPrice)}</li>)}</ul>
       <p><strong>Total {money(total)}</strong> · Cash received {money(pending.tendered)}</p>
       <p role="status">{busy ? 'Recording sale…' : lookupState === 'missing' ? 'No posted receipt found for this sale.'
-        : lookupState === 'unknown' ? 'Receipt status could not be verified.' : 'Checking for a posted receipt…'}</p>
-      {lookupState === 'missing' && <button type="button" className="btn btn-primary me-2" disabled={busy || !dashboard.canOperate}
-        onClick={() => void recordSale()}>Record this sale</button>}
+        : lookupState === 'unknown' ? 'Receipt status could not be verified. Do not create another sale.' : 'Checking for the posted receipt…'}</p>
+      {lookupState === 'missing' && <button type="button" className="btn btn-primary me-2"
+        disabled={busy || !dashboard.canOperate} onClick={() => void recordSale()}>Record original request</button>}
       <button type="button" className="btn btn-outline-secondary" disabled={busy || lookupState === 'checking'}
         onClick={() => { setLookupState('checking'); setRefresh(n => n + 1) }}>Check status again</button>
     </section> : <div className="pos-grid">
       <section className="content-section pos-catalog" aria-label="Product selection">
-        <div className="pos-panel-heading"><h2>Find products</h2><span>Search and add items</span></div>
+        <div className="pos-panel-heading">
+          <div><h2>Products</h2><small>Tap a product to add it to this sale</small></div>
+          <span className="pos-count-pill">{products.length} shown</span>
+        </div>
         <div className="pos-location-row">
-          <label className="form-label">Store location
-            <select className="form-select" value={locationId} disabled={busy || basket.length > 0}
-              onChange={e => { setLocation(Number(e.target.value)); setProduct(null) }}>
-              {locations.map(l => <option key={l.id} value={l.id}>{l.name}</option>)}
+          <label className="form-label" htmlFor="pos-location">Store location
+            <select id="pos-location" className="form-select" value={locationId}
+              disabled={busy || basket.length > 0} onChange={event => setLocation(Number(event.target.value))}>
+              {locations.map(location => <option key={location.id} value={location.id}>{location.name}</option>)}
             </select>
           </label>
           <button type="button" className="btn btn-outline-secondary btn-sm" disabled={busy || !locationId}
-            onClick={() => void lastReceipt()}>Last receipt</button>
+            onClick={() => void lastReceipt()}><ReceiptText size={16} /> Last Receipt</button>
         </div>
-        <form onSubmit={e => { e.preventDefault(); addItem() }}>
-          <fieldset className="pos-fields" disabled={!dashboard.canOperate || busy}>
-            <legend className="visually-hidden">Add a product</legend>
-            <label className="form-label">Product name, SKU or barcode
-              <input autoFocus className="form-control" type="search" value={search} maxLength={150}
-                placeholder="Search or scan barcode"
-                onChange={e => { setSearch(e.target.value); setProduct(null) }} />
-            </label>
-            <label className="form-label">Matching product
-              <select className="form-select" value={product?.id ?? ''} required
-                onChange={e => setProduct(products.find(x => x.id === Number(e.target.value)) ?? null)}>
-                <option value="">Choose a product</option>{products.map(x =>
-                  <option key={x.id} value={x.id}>{x.name} · {x.sku} · {money(x.salePrice)}</option>)}
-              </select>
-            </label>
-            {hint && <p className="pos-field-status" role="status">{hint}</p>}
-            {product && <p className="pos-field-status">Available at this location: <strong>{product.available}</strong></p>}
-            <div className="pos-add-row">
-              <label className="form-label">Quantity
-                <input ref={qtyInput} className="form-control" type="number" min="1" step="1" required
-                  value={quantity} onChange={e => setQuantity(e.target.value)} />
-              </label>
-              <button type="submit" className="btn btn-outline-primary" disabled={!product}>Add to basket</button>
-            </div>
-          </fieldset>
+        <form className="pos-search" role="search" onSubmit={event => void submitBarcode(event)}>
+          <label className="visually-hidden" htmlFor="pos-product-search">Search product or scan barcode</label>
+          <Search size={19} aria-hidden="true" />
+          <input ref={searchInput} id="pos-product-search" autoFocus className="form-control" type="search"
+            placeholder="Search product, SKU or scan barcode…" maxLength={150} value={search}
+            disabled={!dashboard.canOperate || busy} onChange={event => setSearch(event.target.value)} />
+          <button type="submit" className="btn btn-outline-primary btn-sm"
+            disabled={!search.trim() || scanBusy || busy || !dashboard.canOperate} aria-label="Add exact barcode or SKU">
+            {scanBusy ? 'Checking…' : 'Scan / Enter'}
+          </button>
         </form>
+        {hint && <p className="pos-field-status" role="status">{hint}</p>}
+        {!dashboard.canOperate && <p className="alert alert-warning" role="status">
+          Your business is not enabled for checkout. Product selection is read-only.
+        </p>}
+        <div className="pos-catalog-results">
+          {products.length ? <div className="pos-products-grid">
+            {products.map(item => {
+              const inBasket = basket.find(line => line.productId === item.id)?.quantity ?? 0
+              const canAdd = dashboard.canOperate && !busy && item.available > inBasket &&
+                (inBasket > 0 || basket.length < 100)
+              return <button key={item.id} type="button" className="pos-product-card" disabled={!canAdd}
+                aria-label={`Add ${item.name}, ${money(item.salePrice)}, ${item.available} available`}
+                onClick={() => addProduct(item)}>
+                <span className="pos-product-visual"><Package size={33} aria-hidden="true" />
+                  {inBasket > 0 && <span className="pos-product-in-cart">{inBasket} in cart</span>}
+                </span>
+                <span className="pos-product-meta">
+                  <strong>{item.name}</strong>
+                  <small>{item.sku}</small>
+                  <span className="pos-product-bottom"><b>{money(item.salePrice)}</b>
+                    <span>{item.available > 0 ? `${item.available} in stock` : 'Out of stock'}</span></span>
+                </span>
+                <span className="pos-product-plus" aria-hidden="true"><Plus size={15} /></span>
+              </button>
+            })}
+          </div> : <div className="pos-products-empty">
+            <Package size={30} /><strong>No products to display</strong>
+            <p>{hint || 'Only available products for the selected location can be sold.'}</p>
+          </div>}
+        </div>
+        <p className="pos-catalog-note">Product image and category filters require verified catalogue data; no sample images are shown.</p>
       </section>
-      <section className="content-section pos-basket" aria-label="Sale basket and cash payment">
-        <div className="pos-panel-heading"><h2>Current basket</h2><span>{basket.length} products</span></div>
-        {!basket.length && <p className="pos-basket-empty">No products added yet. Search for a product to begin this sale.</p>}
+      <section className="content-section pos-basket" aria-label="Current sale basket">
+        <div className="pos-panel-heading">
+          <div><h2>Current Sale</h2><small>Cash payment · {business.currencyCode}</small></div>
+          <span className="pos-count-pill">{itemCount} items</span>
+        </div>
+        <div className="pos-basket-toolbar">
+          <span><ShoppingBag size={16} /> {basket.length} {basket.length === 1 ? 'product' : 'products'}</span>
+          {basket.length > 0 && !clearArmed && <button type="button" className="pos-basket-clear"
+            disabled={busy} onClick={() => setClearArmed(true)}><Trash2 size={15} /> Clear</button>}
+          {clearArmed && <div className="pos-clear-confirm">
+            <span>Clear this basket?</span>
+            <button type="button" disabled={busy} onClick={() => { setBasket([]); setClearArmed(false); setCash('') }}>Yes, clear</button>
+            <button type="button" onClick={() => setClearArmed(false)}>Cancel</button>
+          </div>}
+        </div>
+        {!basket.length && <div className="pos-basket-empty">
+          <ShoppingBag size={34} /><strong>Your basket is empty</strong>
+          <p>Select a product from the catalogue to start this sale.</p>
+        </div>}
         {basket.length > 0 && <ul className="pos-basket-lines">{basket.map(line =>
           <li key={line.productId} className="pos-basket-line">
             <div className="pos-line-description">
               <strong>{line.name}</strong>
-              <small>{money(line.expectedUnitPrice)} each · {money(line.expectedUnitPrice * line.quantity)}</small>
+              <small>{money(line.expectedUnitPrice)} each</small>
+              <b>{money(Math.round(line.expectedUnitPrice * 100) * line.quantity / 100)}</b>
             </div>
-            <label className="pos-line-quantity">Qty
-              <input className="form-control form-control-sm" aria-label={'Quantity of ' + line.name}
-                type="number" min="1" max="1000000" step="1" disabled={busy}
-                value={line.quantity || ''} onChange={e => {
-                  const count = Number(e.target.value)
-                  if (Number.isSafeInteger(count) && count >= 0 && count <= 1000000)
-                    setBasket(basket.map(x => x.productId === line.productId ? { ...x, quantity: count } : x))
-                }} />
-            </label>
-            <button type="button" className="btn btn-link btn-sm" disabled={busy}
-              aria-label={'Remove ' + line.name}
-              onClick={() => setBasket(basket.filter(x => x.productId !== line.productId))}>Remove</button>
+            <div className="pos-quantity-control" aria-label={`Quantity of ${line.name}`}>
+              <button type="button" aria-label={`Decrease quantity of ${line.name}`}
+                disabled={busy || line.quantity <= 1}
+                onClick={() => updateQuantity(line, line.quantity - 1)}><Minus size={15} /></button>
+              <input className="form-control form-control-sm" aria-label={`Quantity of ${line.name}`}
+                type="number" min="1" max="1000000" step="1" disabled={busy} value={line.quantity}
+                onChange={event => updateQuantity(line, Number(event.target.value))} />
+              <button type="button" aria-label={`Increase quantity of ${line.name}`}
+                disabled={busy || line.quantity >= 1000000}
+                onClick={() => updateQuantity(line, line.quantity + 1)}><Plus size={15} /></button>
+            </div>
+            <button type="button" className="pos-remove-item" disabled={busy}
+              aria-label={`Remove ${line.name}`} onClick={() => {
+                setBasket(previous => previous.filter(x => x.productId !== line.productId))
+                setClearArmed(false)
+              }}><Trash2 size={16} /></button>
           </li>)}</ul>}
-        <form className="pos-payment" onSubmit={e => { e.preventDefault(); void recordSale() }}>
-          <fieldset className="pos-fields" disabled={busy || !dashboard.canOperate || !basket.length}>
-            <legend className="visually-hidden">Cash payment</legend>
-            <div className="pos-total-row"><span>Amount to collect</span><strong>{money(total)}</strong></div>
-            <label className="form-label">Cash received
-              <input className="form-control" type="number" min={total} step="0.01" required
-                value={cash} onChange={e => setCash(e.target.value)} />
-            </label>
-            <div className="pos-change-row">Change to return
-              <strong>{money(cash.trim() && Number.isFinite(Number(cash)) ? Math.max(0, Number(cash) - total) : 0)}</strong>
-            </div>
-            <button className="btn btn-primary pos-record-button" type="submit"
-              disabled={!Number.isFinite(Number(cash)) || cash.trim() === '' || Number(cash) < total ||
-                !Number.isFinite(total) || total <= 0 ||
-                basket.some(line => !Number.isSafeInteger(line.quantity) || line.quantity < 1)}>
-              {busy ? 'Recording…' : 'Record cash sale'}
-            </button>
-          </fieldset>
-        </form>
+        <div className="pos-basket-checkout">
+          <div className="pos-subtotal-row"><span>Subtotal</span><strong>{money(total)}</strong></div>
+          <div className="pos-total-row"><span>Total Payable</span><strong>{money(total)}</strong></div>
+          <p className="pos-no-discount-note">Additional discounts and payment methods are not enabled for this checkout.</p>
+          <button ref={payButtonRef} type="button" className="btn btn-primary pos-record-button"
+            disabled={!dashboard.canOperate || busy || !basket.length || !Number.isFinite(total) || total <= 0 ||
+              basket.some(line => !Number.isSafeInteger(line.quantity) || line.quantity < 1)}
+            onClick={() => { setError(''); setShowPayment(true) }}>
+            <Banknote size={19} /> Pay / Checkout <ArrowRight size={18} />
+          </button>
+        </div>
       </section>
     </div>}
+    {showPayment && !pending && !receipt && <PosCashPaymentDialog amount={total}
+      cash={cash} currency={business.currencyCode} lineCount={itemCount} busy={busy}
+      onCashChange={setCash} onCancel={() => setShowPayment(false)}
+      onConfirm={() => void recordSale()} />}
   </section>
 }
