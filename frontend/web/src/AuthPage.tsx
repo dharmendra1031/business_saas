@@ -81,8 +81,8 @@ export default function AuthPage({ mode, onChange, onAuthenticated, sessionExpir
             <label className="form-label" htmlFor="verification-code">
               {usingRecovery ? 'Recovery code' : '6-digit authenticator code'}
             </label>
-            <input className="form-control" id="verification-code" type="text"
-              inputMode={usingRecovery ? 'text' : 'numeric'} autoComplete="one-time-code"
+            <input className="form-control" id="verification-code" type={usingRecovery ? 'password' : 'text'}
+              inputMode={usingRecovery ? 'text' : 'numeric'} autoComplete={usingRecovery ? 'off' : 'one-time-code'}
               maxLength={usingRecovery ? 32 : 6} pattern={usingRecovery ? undefined : '[0-9]{6}'}
               spellCheck={false} value={verificationCode}
               onChange={event => { setVerificationCode(event.target.value); setError('') }} required autoFocus />

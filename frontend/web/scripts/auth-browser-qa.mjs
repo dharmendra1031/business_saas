@@ -300,6 +300,8 @@ try {
     await t.page.getByLabel('6-digit authenticator code').waitFor()
     await t.page.getByRole('button', { name: 'Use a recovery code' }).click()
     await t.page.getByLabel('Recovery code').fill('recovery-67890')
+    assert.equal(await t.page.getByLabel('Recovery code').getAttribute('type'), 'password',
+      'Recovery codes should not be visible on screen by default')
     await t.screenshot('AUTH-02-recovery-code-desktop')
     await t.page.getByRole('button', { name: 'Verify and sign in' }).click()
     await t.page.locator('.platform-shell').waitFor()
