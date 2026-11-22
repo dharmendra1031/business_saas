@@ -1,5 +1,6 @@
 import { useEffect, useRef, useState, type FormEvent } from 'react'
 import { api, post, SessionExpiredError } from './api'
+import { Truck, Users } from 'lucide-react'
 
 type ContactType = 'suppliers' | 'customers'
 
@@ -111,13 +112,18 @@ export default function RetailContacts({ businessId, canOperate, type }: {
   }
 
   return (
-    <section className="content-section retail-masters" aria-label={type}>
-      <div className="masters-heading">
-        <div>
-          <h2>{label}s</h2>
-          <p>{supplier
-            ? 'Add suppliers before purchase receiving. A phone number or email is required.'
-            : 'Customers are optional. Walk-in sales will not require a customer.'}</p>
+    <section className="content-section retail-masters business-module-card" aria-label={type}>
+      <div className="masters-heading business-module-heading">
+        <div className="business-module-title">
+          <span className="business-module-icon">
+            {supplier ? <Truck size={23} /> : <Users size={23} />}
+          </span>
+          <div><span className="business-eyebrow">{supplier ? 'PURCHASING CONTACTS' : 'RETAIL CONTACTS'}</span>
+            <h2>{label}s</h2>
+            <p>{supplier
+              ? 'Manage purchasing contacts. A supplier must have a phone number or an email.'
+              : 'Manage store customer records. Walk-in sales do not require a customer.'}</p>
+          </div>
         </div>
       </div>
 
@@ -184,7 +190,7 @@ export default function RetailContacts({ businessId, canOperate, type }: {
             {query ? 'No matching records.' : `No ${type} yet.`}
           </p>
             : <div className="table-responsive">
-              <table className="table table-sm align-middle">
+              <table className="table table-sm align-middle business-record-table">
                 <thead><tr>
                   <th scope="col">Name</th><th scope="col">Phone</th><th scope="col">Email</th>
                   <th scope="col">Status</th>
