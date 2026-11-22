@@ -52,9 +52,17 @@ public static class BusinessEndpoints
                           }).ToListAsync();
         });
 
+        // The former owner self-service endpoint is retired for all real deployments.
+        // Only legacy in-process integration fixtures may opt in while tests migrate
+        // to /api/platform/businesses. Never enable from appsettings or production.
         group.MapPost("/businesses", async (CreateBusinessRequest request,
-            ClaimsPrincipal principal, AppDbContext db, IConfiguration configuration) =>
+            ClaimsPrincipal principal, AppDbContext db, IConfiguration configuration,
+            IWebHostEnvironment environment) =>
         {
+            if (!environment.IsDevelopment() ||
+                !configuration.GetValue<bool>("Tests:AllowLegacyBusinessCreation"))
+                return Results.Forbid();
+
             var userId = CurrentUserId(principal);
             var name = request.Name?.Trim() ?? "";
             var country = request.CountryCode?.Trim().ToUpperInvariant() ?? "";
