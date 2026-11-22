@@ -217,13 +217,7 @@ export default function RetailProducts({ businessId, canOperate, currencyCode }:
   return (
     <section className="content-section retail-products business-module-card" aria-label="Product master">
       <div className="masters-heading business-module-heading">
-        <div className="business-module-title">
-          <span className="business-module-icon"><Package size={23} /></span>
-          <div><span className="business-eyebrow">PRODUCT CATALOG</span>
-            <h2>Products</h2>
-            <p>Manage retail products, selling prices and catalog availability. Stock is recorded separately by location.</p>
-          </div>
-        </div>
+        <h2>Products</h2>
         <div className="business-module-actions">
           {!loading && !loadError && <span className="business-module-count">{total.toLocaleString()} matching products</span>}
           {canOperate && !formOpen && <button type="button" className="btn btn-primary"
