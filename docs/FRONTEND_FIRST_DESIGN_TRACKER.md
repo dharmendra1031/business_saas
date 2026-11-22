@@ -107,3 +107,5 @@ This is a visual scope tracker, **not** a statement that all frontend screens ar
 - Existing read/write APIs are preserved. **Not** working yet: posted-sales lists, daily cash register closure, reports API, receipt/tax/payment settings writes; these are visibly preview-only.
 - Catalog and business overview checks are **source-level comparison with the approved design decisions**, not new browser screenshots or owner visual sign-off.
 - Next focus: review mobile visual fidelity and continue the **dedicated POS** based on approved Ibdaa inspiration, without enabling unintegrated payment options.
+
+**Business UI batch CI evidence (22 Nov):** [GitHub Actions run 45009702082](https://github.com/dharmendra1031/business_saas/actions/runs/45009702082) at code commit `218ef9c`: frontend TypeScript and Vite production build **PASSED**, backend tests **PASSED**, isolated SQL Server integration **PASSED**. Earlier failed runs in this batch were TypeScript route narrowing errors; the final `isRetailSection` guard fixed them. CI does not substitute for screenshot/pixel-level visual acceptance.
