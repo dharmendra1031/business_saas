@@ -35,6 +35,7 @@ export default function App() {
   const [canViewPlatform, setCanViewPlatform] = useState(false)
   const [platformSection, setPlatformSection] = useState<PlatformSection>('overview')
   const [platformBusinessId, setPlatformBusinessId] = useState<number | null>(null)
+  const [platformStartCreate, setPlatformStartCreate] = useState(false)
   const [dashboard, setDashboard] = useState<RetailDashboard | null>(null)
   const [approvalList, setApprovalList] = useState(false)
   const [billingBusiness, setBillingBusiness] = useState<{ id: number; name: string } | null>(null)
@@ -304,6 +305,7 @@ export default function App() {
                   setNotice('')
                   setBillingBusiness(null)
                   setPlatformBusinessId(null)
+                  setPlatformStartCreate(false)
                   setPlatformSection(section)
                   setPage('platform')
                 }}><Icon size={18} /> {label}</button>)}
@@ -354,9 +356,13 @@ export default function App() {
 
           {page === 'platform' && canViewPlatform && <PlatformAdmin section={platformSection}
             selectedBusinessId={platformBusinessId} billingBusiness={billingBusiness}
+            startCreate={platformStartCreate} onCreateHandled={() => setPlatformStartCreate(false)}
+            onSeeBusinesses={() => { setPlatformStartCreate(false); setPlatformBusinessId(null); setPlatformSection('businesses') }}
+            onStartCreate={() => { setPlatformBusinessId(null); setPlatformStartCreate(true); setPlatformSection('businesses') }}
             onBilling={business => { setBillingBusiness(business); setPlatformSection('plans') }}
-            onChooseBusiness={() => { setPlatformBusinessId(null); setPlatformSection('businesses') }}
+            onChooseBusiness={() => { setPlatformBusinessId(null); setPlatformStartCreate(false); setPlatformSection('businesses') }}
             onViewBusiness={id => {
+              setPlatformStartCreate(false)
               setPlatformBusinessId(id)
               setPlatformSection('businesses')
             }} />}
