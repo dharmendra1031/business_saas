@@ -475,6 +475,8 @@ try {
       'Edit action must remain visible without horizontal swiping')
     assert.equal(await t.page.getByRole('columnheader', { name: 'SKU / barcode' }).isVisible(), false,
       'SKU moves below product name on mobile')
+    const filterWidth = await t.page.locator('#product-filter-status').evaluate(el => el.getBoundingClientRect().width)
+    assert.ok(filterWidth > 245, 'Status filter must remain readable at 360px')
     assert.equal(await t.page.getByText('Active', { exact: true }).count() > 0, true)
     await t.screenshot('BUS-06-products-list-mobile-360')
     await t.check()

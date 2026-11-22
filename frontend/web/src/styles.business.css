@@ -205,6 +205,9 @@
   .business-shell .retail-products .business-record-table td:first-child { overflow-wrap: anywhere; }
   .business-shell .retail-products .business-record-table td .btn { min-height: 29px; padding: 3px 7px; font-size: .73rem; }
 }
+@media (max-width: 420px) {
+  .business-shell .retail-products .product-filters { grid-template-columns: minmax(0, 1fr); }
+}
 
 /* Preview-only modules: functional tabs, without decorative dashboards. */
 .business-shell .business-preview-nav { gap: 10px; }
