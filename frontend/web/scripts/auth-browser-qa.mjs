@@ -311,6 +311,21 @@ try {
   }
 
   {
+    const t = await scenario('owner-cash-summary-mobile', {
+      role: 'Owner', hasProducts: true, cashSalesFixture: true, width: 360, height: 780
+    })
+    await t.login()
+    await t.page.getByRole('heading', { name: 'Business Overview' }).waitFor()
+    await t.page.getByText('Cash receipt #41').waitFor()
+    assert.ok(await t.page.evaluate(() => document.documentElement.scrollWidth) <= 361,
+      'Connected cash reporting must not cause horizontal mobile overflow')
+    await t.screenshot('BUS-01-owner-cash-summary-mobile-360')
+    await t.check()
+    await t.context.close()
+    console.log('PASS BUS-01 connected cash reporting on 360px mobile')
+  }
+
+  {
     const t = await scenario('business-owner-all-tabs', { role: 'Owner', hasProducts: true })
     await t.login()
     await t.page.getByRole('heading', { name: 'Business Overview' }).waitFor()
