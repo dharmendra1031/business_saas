@@ -57,10 +57,18 @@
 - The preview-only Sales/Returns, Cash Register, Reports and Business Settings tabs retain working tab selection and genuine read-only business identity when available. Decorative preview welcome cards, empty chart-like panels, and developer-facing implementation guardrails were removed. Missing features remain visibly **Under construction**, with no fake numbers or saves.
 - No backend, SQL, permissions, new UI library or routing framework added. Real browser testing at 1366px/360px and user acceptance are separate; **not DONE** based on source changes alone.
 
+## Frontend + backend integration — first verified vertical slice (22 Nov 2026)
+
+- Extended the existing authorized business dashboard response rather than adding another endpoint or new data models.
+- Queries are scoped to authenticated Owner and BusinessId, use business timezone day boundaries, and avoid future-dated receipts.
+- Added an API integration test covering different tenants, cashier visibility, unauthenticated requests and previous-day data, plus a Chromium API-contract rendering test.
+- Cash-only sales and recent receipts are explicitly distinguished from full revenue reporting; no database migration or frontend dependency was introduced.
+- Still pending: verified inventory reorder thresholds, other payment methods, production rollout and real deployed browser acceptance.
+
 ## BUS-01 — owner-approved dashboard direction (22 November 2026)
 
 - Established stores: **Business Overview**, **Attention Needed**, **Recent Activity**. Maximum four compact KPI slots and no duplicated sidebar navigation. New stores: a separate first-run setup panel with working Categories/Units and Products links; stock comes after products and receipt settings is marked unavailable.
-- **No fabricated metrics:** The current dashboard API does not provide Today's Sales, Bill Count, low-stock thresholds or a recent-activity feed. These show explicit unavailable states, not false zeros or invented transactions. The only verified operational count currently available is owner Draft Purchase Orders; drafts are not presented as approved purchases.
+- **Cash-sales API integrated (22 Nov):** The tenant-scoped dashboard response now supplies Owner-only cash total, cash bill count, business-local date and the latest five posted cash receipts in Development. Data comes from recorded sales; no fake values. Production cash posting remains disabled, so this is not all-channel production revenue. Stock alert thresholds and cross-module activity remain unavailable. Draft purchase orders remain labelled Draft.
 - Billing/payment module is preserved inside the existing collapsed disclosure but now **loads only when opened**, preventing unnecessary background checkout requests. Suspended subscription access is handled distinctly.
 - No backend/SQL migrations or new libraries. Frontend-first design state; browser QA and owner visual acceptance remain separate from integration and DONE.
 
