@@ -219,7 +219,7 @@ export default function RetailProducts({ businessId, canOperate, currencyCode }:
       <div className="masters-heading business-module-heading">
         <h2>Products</h2>
         <div className="business-module-actions">
-          {!loading && !loadError && <span className="business-module-count">{total.toLocaleString()} matching products</span>}
+          {!loading && !loadError && total > 0 && <span className="business-module-count">{total.toLocaleString()} products</span>}
           {canOperate && !formOpen && <button type="button" className="btn btn-primary"
             disabled={!canCreate || optionsLoading} onClick={startCreate}><Plus size={17} /> Add Product</button>}
         </div>
@@ -383,8 +383,8 @@ export default function RetailProducts({ businessId, canOperate, currencyCode }:
             </table>
           </div>}
 
-        {!loading && !loadError && total > 0 && <div className="masters-pages">
-          <span className="small text-secondary">Page {page} · {total} products</span>
+        {!loading && !loadError && total > 20 && <div className="masters-pages">
+          <span className="small text-secondary">Page {page} of {Math.ceil(total / 20)}</span>
           <div className="btn-group">
             <button className="btn btn-sm btn-outline-secondary" type="button" disabled={page === 1}
               onClick={() => setPage(value => value - 1)}>Previous</button>

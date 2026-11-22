@@ -44,7 +44,7 @@ async function scenario(name, {
   width = 1366, height = 768, role = 'Owner', initialFailure = false,
   businessFailure = false, multiple = false, challenge = false, verified = true,
   badPassword = false, lockedPassword = false, badMfa = false, hasProducts = false, pendingApprovals = 0,
-  locationCount = 1
+  locationCount = 1, productsFixture = false
 } = {}) {
   const context = await browser.newContext({ viewport: { width, height }, deviceScaleFactor: 1 })
   const page = await context.newPage()
@@ -108,6 +108,32 @@ async function scenario(name, {
     if (/^\/businesses\/\d+\/stock\/locations\/\d+$/.test(path)) {
       stockPaths.push(path)
       return response(route, 200, { items: [], total: 0, page: 1, pageSize: 20 })
+    }
+    if (productsFixture && /^\/businesses\/\d+\/products\/options$/.test(path))
+      return response(route, 200, {
+        categories: [{ id: 1, name: 'General' }, { id: 2, name: 'Clothing' }],
+        units: [{ id: 1, name: 'Item', code: 'ITEM' }]
+      })
+    if (productsFixture && /^\/businesses\/\d+\/products$/.test(path)) {
+      const params = new URL(route.request().url()).searchParams
+      let items = [
+        { id: 11, name: 'Blue Shirt', sku: 'BLUE-11', barcode: '100001', categoryId: 2,
+          categoryName: 'Clothing', unitId: 1, unitCode: 'ITEM', salePrice: 450,
+          taxClassification: '', isActive: true },
+        { id: 12, name: 'Red Bag', sku: 'BAG-12', barcode: null, categoryId: 1,
+          categoryName: 'General', unitId: 1, unitCode: 'ITEM', salePrice: 220,
+          taxClassification: '', isActive: false }
+      ]
+      const term = (params.get('search') ?? '').toLowerCase()
+      if (term) items = items.filter(item =>
+        item.name.toLowerCase().includes(term) || item.sku.toLowerCase().includes(term) ||
+        item.barcode?.includes(term))
+      const status = params.get('status')
+      if (status === 'active') items = items.filter(item => item.isActive)
+      if (status === 'inactive') items = items.filter(item => !item.isActive)
+      const category = Number(params.get('categoryId') || 0)
+      if (category > 0) items = items.filter(item => item.categoryId === category)
+      return response(route, 200, { items, total: items.length, page: 1, pageSize: 20 })
     }
     if (/^\/businesses\/\d+\/cash-sales\/products$/.test(path)) return response(route, 200, [])
     if (path === '/platform/overview') return response(route, 200, overview)
@@ -385,6 +411,59 @@ try {
     await t.check()
     await t.context.close()
     console.log('PASS BUS-04 authorized multi-location stock scope mobile')
+  }
+
+  {
+    const t = await scenario('BUS-06-products-real-fixture', {
+      role: 'Owner', hasProducts: true, productsFixture: true
+    })
+    await t.login()
+    await t.page.locator('.app-sidebar .nav-entry').filter({ hasText: 'Products' }).first().click()
+    await t.page.getByRole('heading', { name: 'Products', level: 2 }).waitFor()
+    await t.page.getByText('Blue Shirt').waitFor()
+    await t.page.getByText('Red Bag').waitFor()
+    assert.equal(await t.page.locator('.business-record-table tbody tr').count(), 2)
+    assert.equal(await t.page.locator('.masters-pages').count(), 0,
+      'Do not display a pagination bar when all products fit one page')
+    await t.screenshot('BUS-06-products-list-desktop')
+    await t.page.locator('#product-filter-status').selectOption('inactive')
+    await t.page.getByText('Red Bag').waitFor()
+    assert.equal(await t.page.locator('.business-record-table tbody tr').count(), 1,
+      'Inactive status must filter actual records')
+    await t.page.locator('#product-filter-status').selectOption('all')
+    await t.page.locator('#product-filter-category').selectOption('2')
+    await t.page.getByText('Blue Shirt').waitFor()
+    assert.equal(await t.page.locator('.business-record-table tbody tr').count(), 1,
+      'Category selection must filter records')
+    await t.page.locator('#product-filter-category').selectOption('0')
+    await t.page.locator('#product-search').fill('BLUE-11')
+    await t.page.getByRole('button', { name: 'Search', exact: true }).click()
+    await t.page.getByText('Blue Shirt').waitFor()
+    assert.equal(await t.page.locator('.business-record-table tbody tr').count(), 1,
+      'SKU search must filter server results')
+    await t.page.getByRole('button', { name: 'Add Product' }).click()
+    await t.page.getByRole('heading', { name: 'New product' }).waitFor()
+    await t.page.getByRole('button', { name: 'Cancel' }).click()
+    await t.page.getByRole('heading', { name: 'Products', level: 2 }).waitFor()
+    await t.check()
+    await t.context.close()
+    console.log('PASS BUS-06 product list, filters, search, create/cancel and truthful pagination')
+  }
+
+  {
+    const t = await scenario('BUS-06-products-mobile-fixture', {
+      role: 'Owner', hasProducts: true, productsFixture: true, width: 360, height: 780
+    })
+    await t.login()
+    await t.page.getByRole('button', { name: 'Open navigation' }).click()
+    await t.page.locator('.app-sidebar .nav-entry').filter({ hasText: 'Products' }).first().click()
+    await t.page.getByText('Blue Shirt').waitFor()
+    assert.ok(await t.page.evaluate(() => document.documentElement.scrollWidth) <= 361,
+      'Products listing should not overflow the 360px page')
+    await t.screenshot('BUS-06-products-list-mobile-360')
+    await t.check()
+    await t.context.close()
+    console.log('PASS BUS-06 product list at 360px mobile')
   }
 
   {
