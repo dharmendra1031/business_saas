@@ -411,7 +411,7 @@ export default function App() {
                 <section className="empty-state" role="alert">
                   <h2>Unable to load businesses</h2>
                   <p>{businessesError}</p>
-                  <button className="btn btn-primary" onClick={() => void loadBusinesses()}>Retry loading businesses</button>
+                  <button className="btn btn-primary" onClick={() => void loadBusinesses(true)}>Retry loading businesses</button>
                 </section>
               ) : businesses.length === 0 ? (
                 <section className="empty-state">
