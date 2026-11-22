@@ -1,5 +1,6 @@
 import { useEffect, useRef, useState, type FormEvent } from 'react'
 import { api, post, SessionExpiredError } from './api'
+import { Package, Plus, Search } from 'lucide-react'
 
 interface Product {
   id: number
@@ -214,11 +215,20 @@ export default function RetailProducts({ businessId, canOperate, currencyCode }:
   const canCreate = options.categories.length > 0 && options.units.length > 0
 
   return (
-    <section className="content-section retail-products" aria-label="Product master">
-      <div className="masters-heading">
-        <div><h2>Products</h2><p>Add items for your shop. Opening stock is managed in Stock; POS billing is coming later.</p></div>
-        {canOperate && !formOpen && <button type="button" className="btn btn-primary"
-          disabled={!canCreate || optionsLoading} onClick={startCreate}>New product</button>}
+    <section className="content-section retail-products business-module-card" aria-label="Product master">
+      <div className="masters-heading business-module-heading">
+        <div className="business-module-title">
+          <span className="business-module-icon"><Package size={23} /></span>
+          <div><span className="business-eyebrow">PRODUCT CATALOG</span>
+            <h2>Products</h2>
+            <p>Manage retail products, selling prices and catalog availability. Stock is recorded separately by location.</p>
+          </div>
+        </div>
+        <div className="business-module-actions">
+          {!loading && !loadError && <span className="business-module-count">{total.toLocaleString()} matching products</span>}
+          {canOperate && !formOpen && <button type="button" className="btn btn-primary"
+            disabled={!canCreate || optionsLoading} onClick={startCreate}><Plus size={17} /> Add Product</button>}
+        </div>
       </div>
 
       {!canOperate && <div className="alert alert-warning" role="status">
@@ -329,6 +339,7 @@ export default function RetailProducts({ businessId, canOperate, currencyCode }:
         }}>
           <div className="product-filter-search">
             <label className="visually-hidden" htmlFor="product-search">Product name, SKU or barcode</label>
+            <Search className="business-filter-icon" size={18} aria-hidden="true" />
             <input id="product-search" className="form-control" type="search"
               placeholder="Search name, SKU or scan barcode"
               maxLength={150} value={search} onChange={event => setSearch(event.target.value)} />
@@ -353,11 +364,15 @@ export default function RetailProducts({ businessId, canOperate, currencyCode }:
           <button type="submit" className="btn btn-outline-secondary">Search</button>
         </form>
 
-        {loading ? <p className="text-secondary" role="status">Loading products…</p>
-          : loadError ? null : products.length === 0 ? <p className="masters-empty">
-            {query || status !== 'all' || categoryFilter ? 'No products match these filters.' : 'No products yet. Add your first product to get started.'}
-          </p> : <div className="table-responsive">
-            <table className="table table-sm align-middle">
+        {loading ? <div className="business-module-loading" role="status">Loading products…</div>
+          : loadError ? null : products.length === 0 ? <div className="business-empty-state" role="status">
+            <Package size={28} /><strong>{query || status !== 'all' || categoryFilter
+              ? 'No matching products' : 'No products yet'}</strong>
+            <p>{query || status !== 'all' || categoryFilter
+              ? 'Adjust the name, status or category filters to find your product.'
+              : 'Add your first product using the button above. Opening stock is managed in Inventory.'}</p>
+          </div> : <div className="table-responsive">
+            <table className="table table-sm align-middle business-record-table">
               <thead><tr><th scope="col">Product</th><th scope="col">SKU / barcode</th>
                 <th scope="col">Category / unit</th><th scope="col" className="text-end">Sale price</th>
                 <th scope="col">Status</th>{canOperate && <th scope="col" className="text-end">Action</th>}</tr></thead>
@@ -366,7 +381,8 @@ export default function RetailProducts({ businessId, canOperate, currencyCode }:
                 <td><span>{item.sku}</span>{item.barcode && <small className="product-secondary">{item.barcode}</small>}</td>
                 <td>{item.categoryName}<small className="product-secondary">{item.unitCode}</small></td>
                 <td className="text-end text-nowrap">{currencyCode} {item.salePrice.toFixed(2)}</td>
-                <td>{item.isActive ? 'Active' : 'Inactive'}</td>
+                <td><span className={`business-record-status ${item.isActive ? 'is-active' : 'is-inactive'}`}>
+                  {item.isActive ? 'Active' : 'Inactive'}</span></td>
                 {canOperate && <td className="text-end"><button type="button"
                   className="btn btn-sm btn-outline-secondary" onClick={() => startEdit(item)}>Edit</button></td>}
               </tr>)}</tbody>
