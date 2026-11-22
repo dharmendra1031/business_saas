@@ -1,4 +1,4 @@
-import { ClipboardList, Plus } from 'lucide-react'
+import { Plus } from 'lucide-react'
 import { useEffect, useState, type FormEvent } from 'react'
 import { api, post, operationKey, SessionExpiredError } from './api'
 
@@ -330,13 +330,7 @@ export default function RetailPurchases({ businessId, canOperate, locations, rol
   return (
     <section className="content-section retail-masters business-module-card" aria-label="Purchase orders">
       <div className="masters-heading business-module-heading">
-        <div className="business-module-title">
-          <span className="business-module-icon"><ClipboardList size={23} /></span>
-          <div><span className="business-eyebrow">PROCUREMENT WORKFLOW</span>
-            <h2>Purchase Orders</h2>
-            <p>Create orders, review approvals and receive goods. Only posted receiving updates stock.</p>
-          </div>
-        </div>
+        <h2>Purchase Orders</h2>
         {canOperate && !creating && <button type="button" className="btn btn-primary"
           onClick={() => { setOrderKey(operationKey()); setCreating(true); setError(''); setNotice('') }}>
           <Plus size={17} /> New Purchase Order</button>}
