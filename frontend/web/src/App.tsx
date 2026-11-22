@@ -356,7 +356,7 @@ export default function App() {
             </button>
             <span className="topbar-workspace">
               {page !== 'retail' && <small>{page === 'platform' ? 'PLATFORM SUPER ADMIN' : 'BUSINESS ACCOUNT'}</small>}
-              <strong>{page === 'retail' ? retailTitles[retailPage] :
+              <strong>{page === 'retail' ? (isBusinessOverview ? 'Dashboard' : dashboard?.business.name) :
                 page === 'platform' ? 'Platform Management' : 'My Businesses'}</strong>
             </span>
           </div>
