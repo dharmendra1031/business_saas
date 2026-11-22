@@ -41,14 +41,15 @@ function statusLabel(status: string | null, trialEnds: string | null = null) {
   return status ?? 'No subscription'
 }
 
-function PlatformBusinesses({ selectedBusinessId, onBilling, startCreate, onCreateHandled }: {
+function PlatformBusinesses({ selectedBusinessId, onBilling, startCreate, onCreateHandled, incomingSearch }: {
   selectedBusinessId: number | null
   onBilling: (business: BusinessRow) => void
   startCreate: boolean
   onCreateHandled: () => void
+  incomingSearch: string
 }) {
-  const [search, setSearch] = useState('')
-  const [term, setTerm] = useState('')
+  const [search, setSearch] = useState(incomingSearch)
+  const [term, setTerm] = useState(incomingSearch)
   const [page, setPage] = useState(1)
   const [reload, setReload] = useState(0)
   const [list, setList] = useState<BusinessPage | null>(null)
@@ -67,6 +68,12 @@ function PlatformBusinesses({ selectedBusinessId, onBilling, startCreate, onCrea
   const [creating, setCreating] = useState(startCreate)
 
   useEffect(() => { if (startCreate) setCreating(true) }, [startCreate])
+  useEffect(() => {
+    setSearch(incomingSearch)
+    setTerm(incomingSearch)
+    setPage(1)
+    setDetails(null)
+  }, [incomingSearch])
 
   useEffect(() => {
     let active = true
@@ -397,7 +404,8 @@ function PlatformBusinesses({ selectedBusinessId, onBilling, startCreate, onCrea
 }
 
 export default function PlatformAdmin({ section, selectedBusinessId, onViewBusiness, onBilling,
-  billingBusiness, onChooseBusiness, onSeeBusinesses, onStartCreate, startCreate, onCreateHandled }: {
+  billingBusiness, onChooseBusiness, onSeeBusinesses, onStartCreate, startCreate, onCreateHandled,
+  businessSearch }: {
   billingBusiness: { id: number; name: string } | null
   onBilling: (business: BusinessRow) => void
   onChooseBusiness: () => void
@@ -408,6 +416,7 @@ export default function PlatformAdmin({ section, selectedBusinessId, onViewBusin
   onStartCreate: () => void
   startCreate: boolean
   onCreateHandled: () => void
+  businessSearch: string
 }) {
   if (section === 'overview') return <PlatformOverview onViewBusiness={onViewBusiness}
     onSeeBusinesses={onSeeBusinesses} onCreateBusiness={onStartCreate} />
@@ -416,5 +425,5 @@ export default function PlatformAdmin({ section, selectedBusinessId, onViewBusin
   if (section === 'audit') return <PlatformAudit />
   if (section === 'operations') return <PlatformOperations />
   return <PlatformBusinesses onBilling={onBilling} selectedBusinessId={selectedBusinessId}
-    startCreate={startCreate} onCreateHandled={onCreateHandled} />
+    startCreate={startCreate} onCreateHandled={onCreateHandled} incomingSearch={businessSearch} />
 }
