@@ -97,11 +97,12 @@ async function scenario(name, {
   async function check() {
     assert.deepEqual(errors, [], name + ': uncaught browser errors')
   }
-  async function login() {
+  async function login(viaKeyboard = false) {
     await page.getByRole('heading', { name: 'Sign in' }).waitFor()
     await page.getByLabel('Email address').fill('qa@example.test')
     await page.getByLabel('Password').fill('TestPassword!234')
-    await page.getByRole('button', { name: /^Sign in/ }).click()
+    if (viaKeyboard) await page.getByLabel('Password').press('Enter')
+    else await page.getByRole('button', { name: /^Sign in/ }).click()
   }
   return { page, context, state, screenshot, check, login, get businessRequests() { return businessRequests } }
 }
@@ -157,7 +158,7 @@ try {
 
   {
     const t = await scenario('business-owner', { role: 'Owner' })
-    await t.login()
+    await t.login(true)
     await t.page.getByRole('heading', { name: 'Welcome to Sample Retail' }).waitFor()
     await t.screenshot('owner-workspace')
     await t.check()
@@ -182,6 +183,7 @@ try {
     const t = await scenario('cashier', { role: 'Cashier' })
     await t.login()
     await t.page.locator('.pos-shell').waitFor()
+    await t.page.getByText('Loading products…').waitFor({ state: 'hidden' })
     await t.screenshot('cashier-pos-workspace')
     assert.equal(await t.page.locator('.app-sidebar').count(), 0,
       'cashier POS must not show business/admin sidebar')

@@ -112,7 +112,6 @@ export default function AuthPage({ mode, onChange, onAuthenticated, sessionExpir
             </p>
           )}
         </form>
-        <p className="auth-helper-note">Your workspace opens automatically based on assigned access.</p>
       </div>
     </main>
   )

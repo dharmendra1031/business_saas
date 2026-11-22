@@ -16,8 +16,6 @@
 .auth-form-container .auth-card > .btn-primary { min-height: 48px; border-radius: 8px; }
 .auth-switch { margin: 22px 0 0; text-align: center; color: #62758d; font-size: .89rem; }
 .auth-switch button { background: none; border: 0; color: #165ed4; font-weight: 650; padding: 0; }
-.auth-helper-note { margin: 20px auto 0; text-align: center; color: #71829a;
-  font-size: .83rem; line-height: 1.5; }
 @media (max-width: 480px) {
   .auth-layout { padding: 18px; }
   .auth-form-container .auth-card { padding: 24px 20px; }
