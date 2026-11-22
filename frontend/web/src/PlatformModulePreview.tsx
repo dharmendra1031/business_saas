@@ -56,7 +56,7 @@ function PlatformSettingsPreview() {
         <item.Icon size={17} /> {item.name}
       </button>)}
     </div>
-    <div className="platform-preview-columns">
+    <div className={`platform-preview-columns${tab === 'types' || tab === 'modules' || tab === 'maintenance' || tab === 'announcements' ? ' is-release-management' : ''}`}>
       <section className="content-section platform-preview-main" role="tabpanel">
         {tab === 'general' && <>
           <div className="platform-preview-panel-title">
