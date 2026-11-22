@@ -10,7 +10,7 @@ const business = role => ({
   id: 1, name: 'Sample Retail', typeCode: 'RETAIL', typeName: 'Retail',
   countryCode: 'IN', currencyCode: 'INR', timeZoneId: 'Asia/Kolkata', roleCode: role
 })
-const dashboard = (role, hasProducts = false, pendingApprovals = 0, selectedBusinessId = 1, locationCount = 1) => ({
+const dashboard = (role, hasProducts = false, pendingApprovals = 0, selectedBusinessId = 1, locationCount = 1, cashSalesFixture = false) => ({
   business: {
     id: selectedBusinessId, name: selectedBusinessId === 2 ? 'Second Retail' : 'Sample Retail', typeCode: 'RETAIL', typeName: 'Retail',
     countryCode: 'IN', currencyCode: 'INR', timeZoneId: 'Asia/Kolkata'
@@ -23,7 +23,13 @@ const dashboard = (role, hasProducts = false, pendingApprovals = 0, selectedBusi
     trialEndsAtUtc: new Date(Date.now() + 14 * 24 * 60 * 60 * 1000).toISOString(),
     paidStartsAtUtc: null, paidEndsAtUtc: null, paidPlanVersionId: null },
   accessStatus: 'Trial', canOperate: true,
-  hasProducts, pendingApprovals, cashSaleEnabled: role === 'Cashier'
+  hasProducts, pendingApprovals, cashSaleEnabled: role === 'Cashier',
+  cashSalesToday: cashSalesFixture && role === 'Owner' ? {
+    total: 150.25, billCount: 2, businessDate: '2026-11-22',
+    recentReceipts: [
+      { id: 41, locationId: 1, total: 150.25, postedAtUtc: '2026-11-22T12:00:00Z' }
+    ]
+  } : null
 })
 const overview = {
   totalCustomers: 0, totalBusinesses: 0, activeSubscriptions: 0, activeTrials: 0,
@@ -44,7 +50,7 @@ async function scenario(name, {
   width = 1366, height = 768, role = 'Owner', initialFailure = false,
   businessFailure = false, multiple = false, challenge = false, verified = true,
   badPassword = false, lockedPassword = false, badMfa = false, hasProducts = false, pendingApprovals = 0,
-  locationCount = 1, productsFixture = false
+  locationCount = 1, productsFixture = false, cashSalesFixture = false
 } = {}) {
   const context = await browser.newContext({ viewport: { width, height }, deviceScaleFactor: 1 })
   const page = await context.newPage()
@@ -104,7 +110,7 @@ async function scenario(name, {
       const first = business(role)
       return response(route, 200, multiple ? [first, { ...first, id: 2, name: 'Second Retail' }] : [first])
     }
-    if (/^\/businesses\/\d+\/dashboard$/.test(path)) return response(route, 200, dashboard(role, hasProducts, pendingApprovals, Number(path.split('/')[2]), locationCount))
+    if (/^\/businesses\/\d+\/dashboard$/.test(path)) return response(route, 200, dashboard(role, hasProducts, pendingApprovals, Number(path.split('/')[2]), locationCount, cashSalesFixture))
     if (/^\/businesses\/\d+\/stock\/locations\/\d+$/.test(path)) {
       stockPaths.push(path)
       return response(route, 200, { items: [], total: 0, page: 1, pageSize: 20 })
@@ -270,6 +276,24 @@ try {
     await t.check()
     await t.context.close()
     console.log('PASS BUS-01 operational owner three sections and review action')
+  }
+
+  {
+    const t = await scenario('owner-cash-summary-integrated', {
+      role: 'Owner', hasProducts: true, cashSalesFixture: true
+    })
+    await t.login()
+    await t.page.getByRole('heading', { name: 'Business Overview' }).waitFor()
+    assert.ok((await t.page.locator('.business-kpi-card').first().innerText()).includes('150.25'),
+      'Cash total must come from the API response')
+    assert.ok((await t.page.locator('.business-kpi-card').nth(1).innerText()).includes('2'),
+      'Bill count must come from the API response')
+    await t.page.getByText('Cash receipt #41').waitFor()
+    assert.equal(await t.page.locator('.business-receipt-activity li').count(), 1)
+    await t.screenshot('BUS-01-cash-summary-integrated-desktop')
+    await t.check()
+    await t.context.close()
+    console.log('PASS BUS-01 owner summary consumes the cash API contract')
   }
 
   {
