@@ -320,11 +320,10 @@ export default function App() {
                   setPage('platform')
                 }}><Icon size={18} /> {label}</button>)}
         </>}
-        {page === 'platform' && <div className="sidebar-footer">{page === 'platform'
-          ? <>Platform Administration <small className="d-block mt-1">Manage SaaS accounts, not shop transactions</small></>
-          : page === 'retail' && dashboard
-            ? <>{dashboard.roleCode === 'Cashier' ? 'Cashier checkout' : 'Shop operations'}<small className="d-block mt-1">Signed in as {dashboard.roleCode}</small></>
-            : 'Select a business to manage.'}</div>}
+        {page === 'platform' && <div className="sidebar-footer">
+          Platform Administration
+          <small className="d-block mt-1">Manage SaaS accounts, not shop transactions</small>
+        </div>}
       </aside>}
 
       <div className="app-main">
@@ -356,10 +355,7 @@ export default function App() {
               <Menu size={20} />
             </button>
             <span className="topbar-workspace">
-              {page !== 'retail' && <small>{page === 'platform' ? 'PLATFORM SUPER ADMIN' :
-                page === 'retail' && dashboard?.roleCode === 'Cashier' ? 'POINT OF SALE' :
-                page === 'retail' ? dashboard?.roleCode === 'Owner' ? 'BUSINESS ADMIN' : 'STORE MANAGER' :
-                'BUSINESS ACCOUNT'}</small>}
+              {page !== 'retail' && <small>{page === 'platform' ? 'PLATFORM SUPER ADMIN' : 'BUSINESS ACCOUNT'}</small>}
               <strong>{page === 'retail' ? retailTitles[retailPage] :
                 page === 'platform' ? 'Platform Management' : 'My Businesses'}</strong>
             </span>
