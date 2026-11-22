@@ -96,7 +96,7 @@ The mockup pictures display illustrative controls (Card, UPI, Split, Services, d
 | ID | Screen / interaction | Type | Current | Priority | Required outcome / guardrail |
 | --- | --- | --- | --- | --- | --- |
 | AUTH-01 | Shared sign-in / session bootstrap / unavailable state | Page/state | Partial | P0 | One login entry; 401 prompts login, transient errors offer Retry. Chromium fixture-based responsive/keyboard/role-flow tests passed (22 Nov 2026); authenticated production E2E and owner visual approval pending. |
-| AUTH-02 | Super Admin sign-in branch | Flow | Partial | P0 | Shared login; configured platform owner + MFA, then platform shell. No pre-login role selector. |
+| AUTH-02 | Super Admin sign-in branch | Flow | Partial | P0 | Shared login to configured platform owner + MFA then platform shell. Chromium QA passed for password errors/lockout, invalid MFA/retry, recovery code/back navigation and mobile width. Production account E2E and visual owner approval still pending. |
 | AUTH-03 | Business Owner / Manager sign-in branch | Flow | Partial | P0 | Shared login; server memberships determine authorized business dashboard or business picker. |
 | AUTH-04 | Cashier sign-in branch | Flow | Partial | P0 | Shared login; server-assigned Cashier role leads to available POS; no business-management sidebar. |
 | AUTH-05 | Platform MFA setup and recovery codes | Page | Partial | P0 | MFA enrolment verified against server; securely handle recovery codes. |

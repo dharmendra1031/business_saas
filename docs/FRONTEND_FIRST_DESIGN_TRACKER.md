@@ -42,6 +42,13 @@
 - **Visual inspection:** shared centered login is compact without unnecessary workspace-entry cards; 360px fields and CTA fit. Removed redundant explanatory footer after screenshot review.
 - **Screen state: Partial / Visual QA evidence captured; not DONE.** Still required: genuine authenticated environment with test accounts for each role, owner review of the actual images, browser verification of server policy denials and accessible session recovery across deployment.
 
+## AUTH-02 — Super Admin login branch QA (22 November 2026)
+
+- **Implementation:** [MFA form fixes](https://github.com/dharmendra1031/business_saas/commit/68fe5c7148c1035f29c4c1e85a65d7f42a9e105e) and [masked recovery code input](https://github.com/dharmendra1031/business_saas/commit/ff2b6e701e3fa2f4e7c875b4ba79f363899b8144). Only the existing shared `AuthPage.tsx` was changed; no extra Super Admin page, library, backend endpoint or new architecture.
+- **Browser checks:** [Chromium run 45015039409](https://github.com/dharmendra1031/business_saas/actions/runs/45015039409) **PASS** using isolated API fixtures: invalid password -> retry, lockout response, MFA cannot be skipped, malformed 6-digit code validation, bad code -> valid code, recovery-code flow and reset to authenticator when restarting password sign-in. Captured 360px MFA challenge and 1366px recovery screenshot, including input masking. The run retains other shared-login role/mobile tests.
+- **Source/build verification:** [Build run 45015039397](https://github.com/dharmendra1031/business_saas/actions/runs/45015039397) **PASS** (frontend, backend, SQL Server jobs). The browser fixture does not constitute production server MFA enforcement testing.
+- **Status:** `AUTH-02 = Partial`, browser UI QA evidenced; still needs real SQL-backed Super Admin credentials, server-side deny/lockout cases in authenticated E2E, and product owner approval of the actual browser captures. Do not mark DONE.
+
 ## 2. Exact approved-image references examined
 
 The following original images are available as **conversation-attached design references**, not currently GitHub-tracked assets. Do not claim the images are committed to the repo without an explicit verified binary upload.
