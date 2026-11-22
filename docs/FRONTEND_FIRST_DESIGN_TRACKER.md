@@ -120,3 +120,20 @@ This is a visual scope tracker, **not** a statement that all frontend screens ar
 - **Visual QA:** Based on approved navy/violet Super Admin visual system (compact cards, state labels, responsive forms). **Actual 1536/1366/768/360 browser screenshot comparison and product-owner approval pending.** Do not mark `SA-33..39` as DONE.
 
 **DR-002 code CI:** [GitHub Actions run 45010167667](https://github.com/dharmendra1031/business_saas/actions/runs/45010167667) on CSS/frontend commit `f67a70f`: frontend TypeScript/build, backend checks and SQL Server integration all **PASSED**. The latest documentation commits do not alter app code. Browser screenshots and actual operator/visitor policy enforcement are still **not verified or implemented**.
+
+
+## 8. Clean-code / over-engineering audit (22 Nov 2026)
+
+**Reviewed:** `App.tsx`, `PlatformAvailabilityPreview.tsx`, `PlatformModulePreview.tsx`, `BusinessOverview.tsx`, `BusinessPreview.tsx`, styles, connected API contracts and GitHub CI.
+
+**Findings and corrections actually committed:**
+
+- **CSS monolith (High, mitigated):** Original `styles.css` was **102,589 characters / 1,373 lines** with styles for all roles and growing appended screen-specific overrides. Split into exactly **five scope-based files**: shared `styles.css` (21,332 chars), `styles.auth.css` (7,306), `styles.platform.css` (40,025), `styles.business.css` (26,962), `styles.release.css` (6,637). `main.tsx` imports in the **original cascade order**. No framework, runtime CSS injector or new styling dependency. Removed 327 characters of proven obsolete `.nav-entry-planned` rules; total CSS character count is now **102,262**, *not a claim of bundle shrinkage*. Future cleanup can target actual duplicate selectors only after browser comparisons.
+- **App/UI coupling (High, mitigated):** Original `App.tsx` was 670 lines and mixed global workspace coordination with sign-in form/MFA UI. Extracted existing auth form unchanged in behavior into **`AuthPage.tsx`**, leaving `App.tsx` at **521 lines**. Remaining platform/business/cashier navigation and state coordination should be split only along real stable role boundaries after screen flow approval, not replaced with an abstract router/config framework by default.
+- **Frontend-only policy previews (Medium, intentional temporary):** `PlatformAvailabilityPreview.tsx` is a four-section local design preview. It reads only the registered type catalogue and has **no Save, Publish or enforcement**. When backend integration begins, remove superseded draft-only placeholders rather than leaving a second source of truth.
+- **Dead code (Low, partially addressed):** Removed obsolete planned-navigation styling. Do not declare the entire CSS/source tree free of dead rules without automated unused-class analysis plus runtime coverage; dynamic conditional classes complicate static inspection.
+- **Architecture (acceptable for current stage):** One React app, one ASP.NET Core API, SQL Server, existing auth and existing platform audit. Proposed registries/policy endpoints/tables for future availability and maintenance are **not implemented**; resist microservices, multi-app duplication, generic plugin engines, arbitrary database-defined modules and duplicate policy flags.
+
+**Clean-code rule:** Each working action uses one source of truth. UI-only previews remain clearly labeled. Do not invent data, save handlers, API responses or deployment health. Enforce business roles/tenant scoping in the API. Any cleanup must preserve behavior, approved responsive layout, accessibility and existing production-protected transaction logic.
+
+**Pending acceptance:** TypeScript/Vite build, backend/SQL checks for the final auth extraction; browser screenshot comparison across 1536/1366/768/360 and full role-specific E2E. A green compiler is **not visual approval**. Do not describe the project as finished or the full tree as zero-duplication yet.
