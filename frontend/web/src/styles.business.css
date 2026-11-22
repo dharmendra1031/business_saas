@@ -65,8 +65,9 @@
 .business-kpi-card strong { color: #193457; font-size: 1.45rem; line-height: 1.2; font-weight: 800; }
 .business-kpi-card span { color: #8190a4; font-size: .72rem; line-height: 1.4; }
 .business-dashboard-panel { margin-bottom: 14px; }
-.business-attention-action { display: inline-flex; align-items: center; flex-wrap: wrap; gap: 9px;
-  padding: 0; border: 0; background: none; color: #205ab1; font-size: .86rem; font-weight: 720; text-align: left; }
+.business-attention-action { display: grid; grid-template-columns: 17px minmax(0,1fr) 16px;
+  align-items: center; gap: 9px; width: 100%; padding: 0; border: 0; background: none;
+  color: #205ab1; font-size: .86rem; font-weight: 720; text-align: left; }
 .business-attention-action:hover { text-decoration: underline; }
 .business-location-warning { font-size: .84rem; margin: 12px 0; color: #8a561e; }
 .business-shell .business-subscription-panel { margin-top: 14px; padding: 0; }
