@@ -48,6 +48,19 @@ The product owner approved the generated POS mockup shown on 21 November 2026 an
 
 The owner said Super Admin should be for business creation and the Owner/Admin should have a separate login. Treat this as a product requirement to reconcile with existing platform controls and authentication before changing backend permissions. Do not silently remove existing security/admin controls on the strength of a mockup.
 
+## Frontend implementation evidence — 22 November 2026
+
+The following source-level changes have been committed on `development` against this target:
+
+- `App.tsx`: POS-specific topbar and full-width cashier route **without permanent admin sidebar**; Owner/Manager can return to the business dashboard, Cashier can switch to assigned businesses, with unposted basket discard confirmation.
+- `CashCheckout.tsx`: real products rendered in a grid; barcode/SKU exact-search action; stock-aware card selection, cart quantity/remove/clear, total and payment-modal trigger. Real API supplies up to 30 matching active products per query with SKU, barcode, sale price and selected-location stock.
+- `PosCashPaymentDialog.tsx`: cash-only tender dialog, change and total, keyboard Tab/Escape and focus-return behavior, background-scroll lock, cancel without posting and confirmation using the original receipt-posting function.
+- `styles.pos.css`: scoped 61/39 desktop grid, compact cards, sticky basket, short-screen/mobile stacking and centered responsive modal.
+
+**Intentional gaps:** the server currently does **not** return product images, category facets or a customer selector for this cash-sale API, so the UI uses plain product icons and does not invent categories, customer data, discounts, Card/UPI/Split or real production availability. Pending-sale reconciliation, idempotent posting and receipt printing reuse existing logic. The API is still Development-only.
+
+**Acceptance status remains not done:** no authenticated desktop/mobile browser screenshot comparison to the approved PNG, live cash transaction E2E or receipt-printer acceptance has been recorded yet. Keep the checklist below unchecked until those actual tests pass.
+
 ## 4. Implementation acceptance checklist
 
 - [ ] POS uses the approved full-width **61/39** layout; **no permanent sidebar**.
