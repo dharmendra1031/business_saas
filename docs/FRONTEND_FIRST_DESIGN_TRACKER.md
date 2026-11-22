@@ -49,6 +49,13 @@
 - **Source/build verification:** [Build run 45015039397](https://github.com/dharmendra1031/business_saas/actions/runs/45015039397) **PASS** (frontend, backend, SQL Server jobs). The browser fixture does not constitute production server MFA enforcement testing.
 - **Status:** `AUTH-02 = Partial`, browser UI QA evidenced; still needs real SQL-backed Super Admin credentials, server-side deny/lockout cases in authenticated E2E, and product owner approval of the actual browser captures. Do not mark DONE.
 
+## BUS-01 — Business Owner dashboard density cleanup (22 November 2026)
+
+- Removed repeat business-name welcome hero, repeated role badges, four tall status cards, verbose setup/checklist and duplicate location panel. Business identity remains in the existing workspace shell and the page title; the dashboard now starts with a compact truthful status line and the real module shortcuts.
+- Preserved the existing six working management navigation actions, Owner-only Staff & Access, Development-only POS entry where available, Owner-only draft purchase review when nonzero, and optional multi-location details. The platform subscription and billing section remains unchanged.
+- Subscription/plan state appears once in the compact status line on BUS-01; other business pages keep their existing header labels. No extra data/API calls, no duplicated component abstraction or invented metrics.
+- Added browser QA assertions for quick-actions vertical position, desktop/mobile layout and 360px overflow. **Approval remains pending** until actual browser screenshot review and user acceptance; browser fixtures are not production-authenticated end-to-end tests.
+
 ## 2. Exact approved-image references examined
 
 The following original images are available as **conversation-attached design references**, not currently GitHub-tracked assets. Do not claim the images are committed to the repo without an explicit verified binary upload.

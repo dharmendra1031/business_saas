@@ -165,7 +165,7 @@ try {
     assert.equal(await t.page.getByText('Temporary business service outage').count(), 1)
     await t.screenshot('assigned-business-outage')
     await t.page.getByRole('button', { name: 'Retry loading businesses' }).click()
-    await t.page.getByRole('heading', { name: 'Welcome to Sample Retail' }).waitFor()
+    await t.page.getByRole('heading', { name: 'Business Dashboard', exact: true }).waitFor()
     await t.check()
     await t.context.close()
     console.log('PASS authenticated business outage / retry / direct workspace')
@@ -174,11 +174,32 @@ try {
   {
     const t = await scenario('business-owner', { role: 'Owner' })
     await t.login(true)
-    await t.page.getByRole('heading', { name: 'Welcome to Sample Retail' }).waitFor()
+    await t.page.getByRole('heading', { name: 'Business Dashboard', exact: true }).waitFor()
+    const dashboardTop = await t.page.locator('.business-actions-panel').boundingBox()
+    assert.ok(dashboardTop && dashboardTop.y < 360,
+      'Owner quick actions must appear near the top of the desktop dashboard')
+    assert.equal(await t.page.locator('.business-action-card').count(), 6)
+    assert.equal(await t.page.getByText('Welcome to Sample Retail').count(), 0)
     await t.screenshot('owner-workspace')
     await t.check()
     await t.context.close()
     console.log('PASS owner automatic destination')
+  }
+
+
+  {
+    const t = await scenario('business-owner-mobile', { role: 'Owner', width: 360, height: 780 })
+    await t.login()
+    await t.page.getByRole('heading', { name: 'Business Dashboard', exact: true }).waitFor()
+    const width = await t.page.evaluate(() => document.documentElement.scrollWidth)
+    assert.ok(width <= 361, 'Business dashboard must not overflow 360px mobile')
+    const firstAction = await t.page.locator('.business-actions-panel').boundingBox()
+    assert.ok(firstAction && firstAction.y < 360, 'Mobile dashboard shortcuts must be visible without a large hero')
+    assert.equal(await t.page.locator('.business-action-card').count(), 6)
+    await t.screenshot('BUS-01-owner-dashboard-mobile-360')
+    await t.check()
+    await t.context.close()
+    console.log('PASS BUS-01 compact business dashboard at 360px')
   }
 
   {
@@ -188,7 +209,7 @@ try {
     assert.equal(await t.page.locator('.business-row').count(), 2)
     await t.screenshot('multi-business-picker')
     await t.page.locator('.business-row').first().click()
-    await t.page.getByRole('heading', { name: 'Welcome to Sample Retail' }).waitFor()
+    await t.page.getByRole('heading', { name: 'Business Dashboard', exact: true }).waitFor()
     await t.check()
     await t.context.close()
     console.log('PASS multi-business select / manager workspace')

@@ -190,6 +190,7 @@ export default function App() {
     }} />
 
   const isPosView = page === 'retail' && retailPage === 'cash' && !!dashboard?.cashSaleEnabled
+  const isBusinessOverview = page === 'retail' && retailPage === 'overview' && !!dashboard && dashboard.roleCode !== 'Cashier'
 
   return (
     <div className={`app-shell${page === 'platform' ? ' platform-shell' : ''}${isPosView ? ' pos-shell' : ''}${page === 'retail' && dashboard?.roleCode !== 'Cashier' ? ' business-shell' : ''}`}>
@@ -355,7 +356,7 @@ export default function App() {
                 page === 'retail' && dashboard?.roleCode === 'Cashier' ? 'POINT OF SALE' :
                 page === 'retail' ? dashboard?.roleCode === 'Owner' ? 'BUSINESS ADMIN' : 'STORE MANAGER' :
                 'BUSINESS ACCOUNT'}</small>
-              <strong>{page === 'retail' ? `${dashboard?.business.name} / ${retailTitles[retailPage]}` :
+              <strong>{page === 'retail' ? isBusinessOverview ? dashboard?.business.name : `${dashboard?.business.name} / ${retailTitles[retailPage]}` :
                 page === 'platform' ? 'Platform Management' : 'My Businesses'}</strong>
             </span>
           </div>
@@ -378,7 +379,7 @@ export default function App() {
           </>}
         </header>
 
-        <main className="page-content">
+        <main className={`page-content${isBusinessOverview ? ' business-dashboard-page' : ''}`}>
           {error && <div className="alert alert-danger" role="alert">{error}</div>}
           {notice && <div className="alert alert-success" role="status">{notice}</div>}
 
@@ -440,22 +441,25 @@ export default function App() {
           {page === 'retail' && dashboard && (
             <>
               {!isPosView && <div className={`page-header${dashboard.roleCode !== 'Cashier' ? ' business-page-header' : ''}`}>
-                <div><button className="back-link" onClick={() => { setNotice(''); void loadBusinesses() }}><ArrowLeft size={16} /> All businesses</button>
-                  {dashboard.roleCode !== 'Cashier' && <span className="business-eyebrow">BUSINESS OPERATIONS · {dashboard.business.name}</span>}
-                  <h1>{retailTitles[retailPage]}</h1><p>{dashboard.business.name} · {dashboard.roleCode === 'Cashier' ? 'POS / Cashier' : dashboard.roleCode === 'Owner' ? 'Business Admin' : 'Store Manager'} · {dashboard.locations[0]?.name ?? 'No location assigned'}</p>
+                <div>{!isBusinessOverview && <button className="back-link" onClick={() => { setNotice(''); void loadBusinesses() }}><ArrowLeft size={16} /> All businesses</button>}
+                  {!isBusinessOverview && dashboard.roleCode !== 'Cashier' && <span className="business-eyebrow">BUSINESS OPERATIONS · {dashboard.business.name}</span>}
+                  <h1>{isBusinessOverview ? 'Business Dashboard' : retailTitles[retailPage]}</h1>
+                  {isBusinessOverview
+                    ? <p>{dashboard.locations.length === 1 ? dashboard.locations[0].name : `${dashboard.locations.length} locations`}</p>
+                    : <p>{dashboard.business.name} · {dashboard.roleCode === 'Cashier' ? 'POS / Cashier' : dashboard.roleCode === 'Owner' ? 'Business Admin' : 'Store Manager'} · {dashboard.locations[0]?.name ?? 'No location assigned'}</p>}
                 </div>
-                {dashboard.canOperate
+                {!isBusinessOverview && (dashboard.canOperate
                   ? <span className="workspace-state"><CheckCircle2 size={16} /> {dashboard.accessStatus === 'Trial' ? 'Trial active' : 'Plan active'}</span>
                   : <span className="workspace-state inactive">
                     {dashboard.accessStatus === 'TrialExpired' ? 'Trial expired' : 'Subscription inactive'}
-                  </span>}
+                  </span>)}
               </div>}
               {!dashboard.canOperate && <div className="alert alert-warning" role="status">
                 {dashboard.accessStatus === 'TrialExpired'
                   ? 'Your free trial has ended. Ask the platform administrator to prepare a subscription payment request.'
                   : 'This business has no active subscription. Contact the platform administrator for help.'}
               </div>}
-              {!isPosView && dashboard.subscription && <p className="small text-secondary">
+              {!isPosView && !isBusinessOverview && dashboard.subscription && <p className="small text-secondary">
                 {dashboard.subscription.planCode} · {dashboard.accessStatus === 'TrialExpired'
                   ? 'Trial expired' : dashboard.subscription.status}
                 {dashboard.subscription.status === 'Trial' &&
