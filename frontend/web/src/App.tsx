@@ -1,11 +1,12 @@
 import { useEffect, useRef, useState, type FormEvent } from 'react'
-import { Activity, ArrowLeft, ArrowRight, Boxes, Building2, CheckCircle2, CreditCard, KeyRound, LayoutDashboard, LogOut, Menu, Package, Search, Settings2, ShieldCheck, ShoppingCart, Store, Tags, Truck, UserRound, Users } from 'lucide-react'
+import { Activity, ArrowLeft, ArrowRight, BarChart3, Boxes, Building2, CheckCircle2, CreditCard, KeyRound, LayoutDashboard, LogOut, Menu, Package, ReceiptText, Search, Settings2, ShieldCheck, ShoppingCart, Store, Tags, Truck, UserRound, Users, Wallet } from 'lucide-react'
 import { api, post, resetCsrf, SessionExpiredError, setSessionExpiredHandler, type Business, type RetailDashboard, type User } from './api'
 import CashCheckout from './CashCheckout'
 import TeamMembers from './TeamMembers'
 import SubscriptionCheckout from './SubscriptionCheckout'
 import RetailCatalog, { type RetailSection } from './RetailCatalog'
 import BusinessOverview from './BusinessOverview'
+import BusinessPreview, { type BusinessPreviewModule } from './BusinessPreview'
 import PlatformAdmin, { type PlatformSection } from './PlatformAdmin'
 import PlatformMfaSetup from './PlatformMfaSetup'
 import { WorkspaceEntry, accessContent, type AccessPortal } from './WorkspaceEntry'
@@ -22,10 +23,11 @@ function selectedPortalFromUrl(): AccessPortal | null {
   const value = new URLSearchParams(window.location.search).get('workspace')
   return value === 'platform' || value === 'business' || value === 'pos' ? value : null
 }
-type RetailPage = RetailSection | 'cash' | 'overview' | 'team'
+type RetailPage = RetailSection | 'cash' | 'overview' | 'team' | BusinessPreviewModule
 const retailTitles: Record<RetailPage, string> = {
   cash: 'POS Checkout', overview: 'Business Dashboard', products: 'Products', stock: 'Stock', purchases: 'Purchase Orders',
-  masters: 'Categories & Units', suppliers: 'Suppliers', customers: 'Customers', team: 'Staff & Access'
+  masters: 'Categories & Units', suppliers: 'Suppliers', customers: 'Customers', team: 'Staff & Access',
+  sales: 'Sales & Returns', register: 'Cash Register', reports: 'Reports', settings: 'Business Settings'
 }
 
 export default function App() {
@@ -272,6 +274,21 @@ export default function App() {
                 setRetailPage(section)
               }}><Icon size={18} /> {label}</button>)}
           </>}
+          {dashboard.roleCode !== 'Cashier' && <>
+            <div className="sidebar-heading">SALES & REPORTING</div>
+            {([
+              ['sales', 'Sales & Returns', ReceiptText],
+              ['register', 'Cash Register', Wallet],
+              ['reports', 'Reports', BarChart3]
+            ] as const).map(([section, label, Icon]) => <button key={section} type="button"
+              className={`nav-entry business-preview-nav${retailPage === section ? ' active' : ''}`}
+              aria-current={retailPage === section ? 'page' : undefined}
+              onClick={() => {
+                if (menuOpen) menuToggle.current?.focus()
+                setMenuOpen(false)
+                setRetailPage(section)
+              }}><Icon size={18} /> <span>{label}</span><small>Preview</small></button>)}
+          </>}
           {dashboard.roleCode === 'Owner' && <button type="button"
             className={`nav-entry${retailPage === 'team' ? ' active' : ''}`}
             aria-current={retailPage === 'team' ? 'page' : undefined}
@@ -280,6 +297,14 @@ export default function App() {
               setMenuOpen(false)
               setRetailPage('team')
             }}><UserRound size={18} /> Staff & Access</button>}
+          {dashboard.roleCode === 'Owner' && <button type="button"
+            className={`nav-entry business-preview-nav${retailPage === 'settings' ? ' active' : ''}`}
+            aria-current={retailPage === 'settings' ? 'page' : undefined}
+            onClick={() => {
+              if (menuOpen) menuToggle.current?.focus()
+              setMenuOpen(false)
+              setRetailPage('settings')
+            }}><Settings2 size={18} /> <span>Business Settings</span><small>Preview</small></button>}
         </>}
         {canViewPlatform && page === 'platform' && <>
           <div className="sidebar-heading">SUPER ADMIN MODULES</div>
@@ -473,6 +498,10 @@ export default function App() {
                   roleCode={dashboard.roleCode} />}
               {retailPage === 'team' && dashboard.roleCode === 'Owner' &&
                 <TeamMembers businessId={dashboard.business.id} canOperate={dashboard.canOperate} cashSaleEnabled={!!dashboard.cashSaleEnabled} />}
+              {(retailPage === 'sales' || retailPage === 'register' || retailPage === 'reports' ||
+                (retailPage === 'settings' && dashboard.roleCode === 'Owner')) &&
+                dashboard.roleCode !== 'Cashier' && <BusinessPreview key={retailPage}
+                  module={retailPage} dashboard={dashboard} />}
             </>
           )}
         </main>
