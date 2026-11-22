@@ -216,6 +216,13 @@ try {
     await t.login()
     await t.page.getByRole('heading', { name: 'Business Overview' }).waitFor()
     assert.equal(await t.page.locator('.business-kpi-card').count(), 4)
+    const cardHeights = await t.page.locator('.business-kpi-card').evaluateAll(cards =>
+      cards.map(card => card.getBoundingClientRect().height))
+    assert.ok(Math.max(...cardHeights) - Math.min(...cardHeights) <= 1,
+      'Business KPI cards should be equal height in the desktop row')
+    const labelFont = await t.page.locator('.business-kpi-card small').first()
+      .evaluate(card => parseFloat(getComputedStyle(card).fontSize))
+    assert.ok(labelFont >= 13, 'KPI labels should be readable, not tiny captions')
     assert.equal(await t.page.locator('.business-kpi-card').first().locator('strong').innerText(), '—',
       'Never fabricate sales figures before reporting integration')
     await t.page.getByRole('heading', { name: 'Attention Needed' }).waitFor()
@@ -268,6 +275,11 @@ try {
         label + ': duplicated page hero must not render')
       assert.equal(await t.page.locator('.business-module-title').count(), 0,
         label + ': old icon/title/description hero must not render')
+      if (await t.page.locator('.business-module-heading').count() > 0) {
+        const headerHeight = await t.page.locator('.business-module-heading').first()
+          .evaluate(header => header.getBoundingClientRect().height)
+        assert.ok(headerHeight >= 63, label + ': common module header should be 64px minimum')
+      }
       if (shot) await t.screenshot(shot)
     }
     await t.check()
@@ -323,6 +335,11 @@ try {
     await t.login()
     await t.page.locator('.platform-shell').waitFor()
     await t.page.getByText('SUPER ADMIN MODULES').waitFor()
+    const platformCardHeights = await t.page.locator('.platform-metric-grid > .platform-metric')
+      .evaluateAll(cards => cards.map(card => card.getBoundingClientRect().height))
+    if (platformCardHeights.length > 1)
+      assert.ok(Math.max(...platformCardHeights) - Math.min(...platformCardHeights) <= 1,
+        'Super Admin metric tiles in the same row must align')
     await t.screenshot('platform-super-admin-workspace')
     await t.check()
     await t.context.close()
