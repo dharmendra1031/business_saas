@@ -56,7 +56,7 @@
 .business-setup-list li > span:nth-child(2) { padding-top: 3px; }
 .business-setup-list small { display: block; color: #526a84; font-size: .81rem; margin-top: 3px; }
 .business-operational-section { margin-bottom: 14px; }
-.business-kpi-grid { display: grid; grid-template-columns: repeat(4,minmax(0,1fr)); gap: 11px; }
+.business-kpi-grid { display: grid; grid-template-columns: repeat(3,minmax(0,1fr)); gap: 11px; }
 .business-kpi-card { display: flex; flex-direction: column; gap: 5px; min-width: 0; min-height: 122px; height: 100%; padding: 14px;
   border: 1px solid #e1e7f1; border-radius: 9px; background: #fff; }
 .business-kpi-card small { color: #415a79; font-size: .84rem; font-weight: 720; }
