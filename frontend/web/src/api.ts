@@ -55,7 +55,7 @@ export interface RetailDashboard {
     paidEndsAtUtc: string | null
     paidPlanVersionId: number | null
   } | null
-  accessStatus: 'Trial' | 'TrialExpired' | 'Active' | 'Inactive'
+  accessStatus: 'Trial' | 'TrialExpired' | 'Active' | 'Inactive' | 'Suspended'
   hasProducts: boolean
   pendingApprovals: number
   cashSaleEnabled?: boolean
