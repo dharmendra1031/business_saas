@@ -34,6 +34,14 @@
 - **Unnecessary access call removed:** no redundant authenticated `/platform/access` request or stale workspace query cleanup. `/auth/me` remains the authoritative owner/MFA identity source; backend authorization is unchanged.
 - **Visual QA pending:** confirm responsive layout in browser and final user approval before marking this screen complete.
 
+## AUTH-01 — actual browser screenshot QA evidence (22 November 2026)
+
+- **Source:** React/Vite development commit [45241cb](https://github.com/dharmendra1031/business_saas/commit/45241cb85348aab2c74912b7ae2f0361ef1608ab), validated in [Chromium Browser QA run 45014299057](https://github.com/dharmendra1031/business_saas/actions/runs/45014299057) (**PASS**).
+- Actual browser screenshots: 1536×864 desktop, 1366×768 desktop, 768×1024 tablet, 360×780 mobile; archived in the run's auth-browser-screenshots artifact. Tested no horizontal overflow on login, keyboard Tab order and Enter-to-submit, outage + retry, authenticated business API failure + retry, Owner/Manager routes, multi-business picker, Cashier direct POS with no admin sidebar, Super Admin dashboard and MFA paths. Uncaught browser JavaScript errors were checked.
+- Browser scenarios used **controlled API fixtures**, not actual application SQL Server users, so they verify implemented UI routing and presentation only. Existing backend/SQL CI checks remain separate. A screenshot with fixture data does not certify real role enforcement.
+- **Visual inspection:** shared centered login is compact without unnecessary workspace-entry cards; 360px fields and CTA fit. Removed redundant explanatory footer after screenshot review.
+- **Screen state: Partial / Visual QA evidence captured; not DONE.** Still required: genuine authenticated environment with test accounts for each role, owner review of the actual images, browser verification of server policy denials and accessible session recovery across deployment.
+
 ## 2. Exact approved-image references examined
 
 The following original images are available as **conversation-attached design references**, not currently GitHub-tracked assets. Do not claim the images are committed to the repo without an explicit verified binary upload.
