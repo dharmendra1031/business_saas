@@ -1102,3 +1102,82 @@ button:focus-visible, a:focus-visible, input:focus-visible, select:focus-visible
   .business-owner-link { align-items: flex-start; flex-direction: column; }
 }
 @media (prefers-reduced-motion: reduce) { .business-action-card { transition: none; } }
+
+/* BUS-06–32: shared retail module surfaces. One coherent design language for real forms/tables. */
+.business-shell .business-module-card { padding: 0 0 18px; overflow: hidden; margin-top: 0; }
+.business-shell .business-module-heading { display: flex; align-items: center; justify-content: space-between; gap: 18px;
+  padding: 21px 23px; margin: 0 0 18px; border-bottom: 1px solid #e5ebf4; background: #fff; }
+.business-module-title { display: flex; align-items: center; gap: 14px; min-width: 0; }
+.business-module-title > div { min-width: 0; }
+.business-module-icon { display: grid; place-items: center; flex: 0 0 50px; width: 50px; height: 50px;
+  border-radius: 12px; background: #e9f1fd; color: #2964bb; }
+.business-shell .business-module-title h2 { font-size: 1.13rem; color: #1a3151; font-weight: 790; padding: 0; margin: 4px 0 5px; border: 0; }
+.business-module-title p { font-size: .8rem; line-height: 1.45; color: #7889a0; margin: 0; }
+.business-module-actions { display: flex; align-items: center; flex-wrap: wrap; justify-content: flex-end; gap: 12px; }
+.business-module-count { white-space: nowrap; color: #697c99; font-size: .75rem; font-weight: 710; }
+.business-module-heading .btn-primary { min-height: 40px; font-size: .83rem; font-weight: 730; }
+.business-location-picker { display: grid; gap: 4px; min-width: 190px; }
+.business-location-picker label { display: inline-flex; gap: 7px; align-items: center; margin: 0; font-size: .77rem; color: #58718d; }
+.business-location-picker .form-select { min-width: 185px; }
+.business-shell .business-module-card > .alert,
+.business-shell .business-module-card > .product-form,
+.business-shell .business-module-card > .masters-form,
+.business-shell .business-module-card > .masters-search,
+.business-shell .business-module-card > .product-filters,
+.business-shell .business-module-card > .masters-empty,
+.business-shell .business-module-card > .masters-pages,
+.business-shell .business-module-card > .business-module-loading,
+.business-shell .business-module-card > .business-empty-state { margin-left: 22px; margin-right: 22px; }
+.business-shell .business-module-card > .alert { margin-bottom: 15px; }
+.business-shell .business-module-card .product-form { background: #fcfdff; border: 1px solid #dce6f3;
+  border-radius: 10px; padding: 19px; margin-top: 16px; }
+.business-shell .business-module-card .product-form h3 { color: #1e3352; font-size: 1.03rem; font-weight: 770; }
+.business-shell .business-module-card .product-filters { gap: 9px; margin-top: 16px; margin-bottom: 19px; align-items: stretch; }
+.business-shell .business-module-card .product-filters > div { flex: 1 1 145px; }
+.business-shell .business-module-card .product-filters .product-filter-search { position: relative; flex: 2 1 260px; }
+.business-shell .business-module-card .product-filters .product-filter-search input { min-height: 41px; padding-left: 42px; }
+.business-filter-icon { color: #768aa5; position: absolute; top: 12px; left: 12px; z-index: 1; pointer-events: none; }
+.business-shell .business-module-card .product-filters > button { min-height: 41px; }
+.business-shell .business-module-card .masters-search { position: relative; max-width: 520px; align-items: stretch; }
+.business-shell .business-module-card .masters-search input { min-height: 41px; }
+.business-shell .business-stock-search input { padding-left: 42px; }
+.business-shell .business-module-card .masters-form { padding: 18px; border: 1px solid #e0e7f0; border-radius: 10px;
+  background: #fbfcff; margin-top: 15px; }
+.business-shell .business-master-tabs .btn { min-height: 39px; font-weight: 730; }
+.business-shell .business-module-card .table-responsive { max-width: 100%; }
+.business-shell .business-record-table { margin: 0; border-color: #e9edf4; }
+.business-shell .business-record-table thead th { background: #f6f8fc; color: #62748d; font-weight: 750; font-size: .76rem;
+  padding: 13px 15px; white-space: nowrap; border-bottom: 1px solid #e3e9f3; }
+.business-shell .business-record-table tbody td { vertical-align: middle; padding: 12px 15px; font-size: .82rem; color: #2c415e; }
+.business-shell .business-record-table tbody tr:hover { background: #f9fbff; }
+.business-shell .business-record-table tbody td strong { font-size: .82rem; font-weight: 730; color: #203453; }
+.business-shell .business-record-table tbody td .btn { min-height: 33px; }
+.business-record-status { display: inline-flex; align-items: center; padding: 5px 9px; border-radius: 999px;
+  font-size: .71rem; font-weight: 730; white-space: nowrap; }
+.business-record-status.is-active { color: #15784b; background: #e6f7ed; }
+.business-record-status.is-inactive { color: #64778f; background: #ecf0f6; }
+.business-shell .business-module-card .masters-pages { padding-top: 16px; margin-top: 16px; border-top: 1px solid #e7edf4; }
+.business-module-loading { display: flex; align-items: center; justify-content: center; min-height: 130px;
+  color: #677a95; font-size: .86rem; }
+.business-empty-state { display: grid; place-items: center; gap: 10px; padding: 37px 16px;
+  border: 1px dashed #dce6f3; border-radius: 10px; background: #fafcff; text-align: center; }
+.business-empty-state > svg { color: #3a73c4; }
+.business-empty-state strong { color: #294261; font-size: .96rem; font-weight: 780; }
+.business-empty-state p { margin: 0; color: #7a8da7; font-size: .8rem; line-height: 1.55; max-width: 440px; }
+@media (max-width: 790px) {
+  .business-shell .business-module-heading { flex-wrap: wrap; align-items: flex-start; gap: 13px; padding: 17px; }
+  .business-module-title { align-items: flex-start; }
+  .business-module-icon { flex-basis: 43px; width: 43px; height: 43px; }
+  .business-module-actions { width: 100%; justify-content: space-between; }
+  .business-location-picker { width: 100%; }
+  .business-location-picker select { width: 100%; }
+  .business-shell .business-module-card > .alert,
+  .business-shell .business-module-card > .product-form,
+  .business-shell .business-module-card > .masters-form,
+  .business-shell .business-module-card > .masters-search,
+  .business-shell .business-module-card > .product-filters,
+  .business-shell .business-module-card > .masters-empty,
+  .business-shell .business-module-card > .masters-pages,
+  .business-shell .business-module-card > .business-module-loading,
+  .business-shell .business-module-card > .business-empty-state { margin-left: 16px; margin-right: 16px; }
+}
