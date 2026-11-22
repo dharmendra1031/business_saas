@@ -22,6 +22,14 @@ The owner approved designing and visually accepting all released screens **befor
 - Business Owner/Admin and Cashier navigation are separated further: with checkout enabled a Cashier no longer sees Business Dashboard in the sidebar. The full-width approved POS shell is still a separate unfinished frontend milestone.
 - **No screen becomes DONE** from this source implementation or passing build alone. Exact image comparison requires authenticated browser screenshots at 1536×864, 1366×768, 768px and 360px and owner sign-off. See [Frontend Design Tracker](./FRONTEND_FIRST_DESIGN_TRACKER.md).
 
+### Decision DR-002 — Platform availability and maintenance (22 November 2026)
+
+Platform Super Admin needs central controls for registered **Business Type creation availability**, independently released modules, **Maintenance** schedules/modes and targeted **Announcements** (“Under Construction”, “Site is being updated”, “Coming Soon”). This is an extension of the existing **Platform Settings** tab; **no ninth top-level sidebar item**.
+
+- `SA-33..39` Platform Settings now has read-only/interactive-local frontend design previews via `PlatformAvailabilityPreview.tsx`, integrated in `PlatformModulePreview.tsx`. `GET /api/business-types` remains the only live business-type catalogue data; no published release/maintenance policies exist.
+- Every new business provisioning path, module write and public notice will ultimately use the same server-owned policy and audited versions; frontend-only status choices cannot authorize or block actions. Existing tenants must not lose data/access because new type creation is paused.
+- Backend model, statuses, safe maintenance modes, notices, precedence and tests are specified in [Platform Release & Maintenance SRS](./PLATFORM_RELEASE_AND_MAINTENANCE_SRS.md). All related screens remain **Partial/Missing** until browser visual acceptance and full backend tests.
+
 ## 0. Non-negotiable product decision and conflict resolution
 
 **Decision DR-001 (latest owner direction, 21 Nov 2026):** Only **Platform Super Admin** creates/provisions a new business and assigns its Business Owner; the Business Owner/Admin logs into a separate business workspace and manages only authorized business operations. A POS/Cashier has a separate login *experience* and dedicated checkout workspace.
