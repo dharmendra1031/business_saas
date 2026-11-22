@@ -181,6 +181,13 @@
   border-radius: 8px; font-weight: 750; font-size: .83rem; }
 .pos-dialog-footer .btn-primary { background: #503bc7; border-color: #503bc7; }
 .pos-dialog-footer .btn-primary:hover { background: #3e2ca7; border-color: #3e2ca7; }
+.pos-header-actions { display: flex; flex-wrap: wrap; justify-content: flex-end; align-items: center; gap: 8px; }
+.pos-shell .pos-exit-button { display: inline-flex; align-items: center; gap: 6px; min-height: 34px;
+  background: #fff; border-color: #dce2ef; color: #556781; font-size: .73rem; font-weight: 740; }
+.pos-exit-confirm { display: flex; align-items: center; justify-content: flex-start; flex-wrap: wrap; gap: 10px;
+  border: 1px solid #f0d3ba; border-radius: 9px; padding: 12px 14px; background: #fff7eb; }
+.pos-exit-confirm span { flex: 1; min-width: 205px; color: #8b5c27; font-size: .79rem; line-height: 1.5; }
+.pos-exit-confirm button { font-size: .74rem; }
 @media (max-width: 1150px) {
   .pos-shell .pos-grid { grid-template-columns: minmax(0, 1fr) minmax(330px, .9fr); }
   .pos-products-grid { grid-template-columns: repeat(auto-fill, minmax(145px, 1fr)); }
