@@ -244,7 +244,9 @@ export default function App() {
             ['purchases', 'Purchase Orders', ShoppingCart],
             ['stock', 'Inventory', Boxes],
             ['cash', 'Open POS Checkout', ShoppingCart]
-          ] as const).filter(([section]) => section === 'cash' ? dashboard.cashSaleEnabled : dashboard.roleCode !== 'Cashier' || section === 'overview')
+          ] as const).filter(([section]) => dashboard.roleCode === 'Cashier'
+            ? (section === 'cash' ? dashboard.cashSaleEnabled : section === 'overview' && !dashboard.cashSaleEnabled)
+            : (section !== 'cash' || dashboard.cashSaleEnabled))
             .map(([section, label, Icon]) => <button key={section} type="button"
               className={`nav-entry${section === 'cash' ? ' pos-nav-entry' : ''}${retailPage === section ? ' active' : ''}`}
               aria-current={retailPage === section ? 'page' : undefined}
@@ -388,7 +390,7 @@ export default function App() {
 
           {page === 'businesses' && (
             <>
-              <div className="page-header">
+              <div className="page-header business-picker-header">
                 <div><h1>My Assigned Businesses</h1><p>Select a business assigned to your account. New businesses are provisioned by the Platform Super Admin.</p></div>
 
               </div>
@@ -404,11 +406,12 @@ export default function App() {
 
                 </section>
               ) : (
-                <div className="business-list">
+                <div className="business-list business-assigned-list" aria-label="Assigned business workspaces">
                   {businesses.map(business => (
-                    <button className="business-row" key={business.id} onClick={() => void openBusiness(business.id)}>
+                    <button className="business-row" type="button" key={business.id} onClick={() => void openBusiness(business.id)}>
                       <span className="shop-symbol"><Store size={22} /></span>
-                      <span className="business-summary"><strong>{business.name}</strong><small>{business.typeName} · {business.roleCode} · {business.countryCode}</small></span>
+                      <span className="business-summary"><strong>{business.name}</strong><small>{business.typeName} · {business.countryCode}</small></span>
+                      <span className="business-assigned-role">{business.roleCode}</span>
                       <ArrowRight size={18} />
                     </button>
                   ))}
@@ -419,9 +422,10 @@ export default function App() {
 
           {page === 'retail' && dashboard && (
             <>
-              <div className="page-header">
+              <div className={`page-header${dashboard.roleCode !== 'Cashier' ? ' business-page-header' : ''}`}>
                 <div><button className="back-link" onClick={() => { setNotice(''); void loadBusinesses() }}><ArrowLeft size={16} /> All businesses</button>
-                  <h1>{retailTitles[retailPage]}</h1><p>{dashboard.business.name} · {dashboard.roleCode === 'Cashier' ? 'POS / Cashier' : dashboard.roleCode === 'Owner' ? 'Business Admin' : 'Store Manager'}</p>
+                  {dashboard.roleCode !== 'Cashier' && <span className="business-eyebrow">BUSINESS OPERATIONS · {dashboard.business.name}</span>}
+                  <h1>{retailTitles[retailPage]}</h1><p>{dashboard.business.name} · {dashboard.roleCode === 'Cashier' ? 'POS / Cashier' : dashboard.roleCode === 'Owner' ? 'Business Admin' : 'Store Manager'} · {dashboard.locations[0]?.name ?? 'No location assigned'}</p>
                 </div>
                 {dashboard.canOperate
                   ? <span className="workspace-state"><CheckCircle2 size={16} /> {dashboard.accessStatus === 'Trial' ? 'Trial active' : 'Plan active'}</span>
