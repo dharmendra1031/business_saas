@@ -1,4 +1,4 @@
-import { useEffect, useState, type FormEvent } from 'react'
+import { useEffect, useRef, useState, type FormEvent } from 'react'
 import { api, post, SessionExpiredError } from './api'
 import PlatformBilling from './PlatformBilling'
 import { BadgeCheck, Building2, CheckCircle2, CreditCard, RefreshCw, Store, Users } from 'lucide-react'
@@ -91,6 +91,11 @@ export default function PlatformPlans({ business, onChooseBusiness }: { business
   const [publishing, setPublishing] = useState<Plan | null>(null)
   const [publishReason, setPublishReason] = useState('')
   const [form, setForm] = useState<DraftForm>(formFromDraft(null))
+  const actionSection = useRef<HTMLElement | null>(null)
+
+  useEffect(() => {
+    if (editing || publishing) actionSection.current?.scrollIntoView({ behavior: 'smooth', block: 'start' })
+  }, [editing, publishing])
 
   useEffect(() => {
     let active = true
@@ -286,7 +291,7 @@ export default function PlatformPlans({ business, onChooseBusiness }: { business
       </>}
     </section>
 
-    {publishing?.draft && <section className="content-section mt-3" aria-label="Publish plan">
+    {publishing?.draft && <section ref={actionSection} className="content-section mt-3 platform-plan-action-panel" aria-label="Publish plan">
       <h2>Publish {publishing.name} — Version {(publishing.published?.version ?? 0) + 1}</h2>
       <p className="small text-secondary">
         Review draft v{publishing.draft.revision}. Publication freezes these terms as a new
@@ -332,7 +337,7 @@ export default function PlatformPlans({ business, onChooseBusiness }: { business
       </p>
     </section>
 
-    {editing && <section className="content-section mt-3" aria-label="Edit plan draft">
+    {editing && <section ref={actionSection} className="content-section mt-3 platform-plan-action-panel" aria-label="Edit plan draft">
       <h2>{editing.name} — Draft Configuration</h2>
       <p className="small text-secondary">
         {editing.draft ? `Editing draft v${editing.draft.revision}.` : 'New draft.'}
