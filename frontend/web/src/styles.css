@@ -804,3 +804,31 @@ button:focus-visible, a:focus-visible, input:focus-visible, select:focus-visible
   .platform-shell .platform-preview-main { padding: 16px; }
   .platform-preview-feature-list > div { padding: 12px; }
 }
+
+/* SA-14–15: Customer accounts visual treatment, matching approved Super Admin table language. */
+.platform-customer-page > .page-header .platform-kicker { display: block; margin-bottom: 6px; }
+.platform-customer-page .platform-state-pill { display: inline-flex; align-items: center; gap: 5px; }
+.platform-customer-avatar { display: grid; place-items: center; flex-shrink: 0; width: 37px; height: 37px;
+  color: #6050d5; background: #f1eefe; border-radius: 10px; }
+.platform-customer-avatar.is-large { width: 68px; height: 68px; border-radius: 14px; }
+.platform-shell .platform-customer-profile { display: flex; align-items: center; gap: 19px; padding: 23px; margin-bottom: 17px; }
+.platform-customer-profile-info { flex: 1; min-width: 0; }
+.platform-shell .platform-customer-profile-info h2 { color: #192b4b; font-size: 1.23rem; font-weight: 760;
+  margin: 0 0 5px; padding: 0; border: 0; overflow-wrap: anywhere; }
+.platform-customer-profile-info p { margin: 0 0 12px; color: #73819b; font-size: .79rem; }
+.platform-customer-account-state { display: inline-flex; align-items: center; gap: 8px;
+  border: 1px solid #dfe5f2; border-radius: 999px; padding: 7px 11px;
+  color: #586a89; font-size: .73rem; font-weight: 720; white-space: nowrap; }
+.platform-customer-summary { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 16px; margin-bottom: 17px; }
+.platform-customer-summary > section { display: flex; flex-direction: column; gap: 9px; padding: 22px; }
+.platform-customer-summary-value { display: flex; align-items: center; gap: 9px;
+  font-weight: 750; font-size: .85rem; color: #344a6a; }
+.platform-customer-summary-value svg { color: #5947d6; }
+.platform-customer-summary > section > strong { color: #162845; font-weight: 800; font-size: 1.55rem; line-height: 1.25; }
+.platform-customer-summary > section > small { color: #8290a6; font-size: .74rem; }
+@media (max-width: 650px) {
+  .platform-shell .platform-customer-profile { flex-wrap: wrap; padding: 17px; gap: 13px; }
+  .platform-customer-account-state { width: 100%; justify-content: center; }
+  .platform-customer-summary { grid-template-columns: 1fr; gap: 10px; }
+  .platform-customer-summary > section { padding: 17px; }
+}
