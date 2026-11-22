@@ -504,3 +504,10 @@ button:focus-visible, a:focus-visible, input:focus-visible, select:focus-visible
 .platform-shell .btn-primary { --bs-btn-bg: #5b42de; --bs-btn-border-color: #5b42de;
   --bs-btn-hover-bg: #4a33c6; --bs-btn-hover-border-color: #4a33c6;
   --bs-btn-active-bg: #452fb9; --bs-btn-active-border-color: #452fb9; }
+
+/* Super Admin provision wizard: explicit confirmation without visual clutter. */
+.provision-confirm-label { display: flex; align-items: flex-start; gap: 12px; padding: 15px 16px;
+  border: 1px solid #d7e1ef; border-radius: 9px; background: #f7f9fd; color: #263b5b;
+  font-size: .9rem; font-weight: 600; line-height: 1.5; cursor: pointer; }
+.provision-confirm-label .form-check-input { flex: 0 0 auto; margin: 3px 0 0; width: 18px; height: 18px; }
+.provision-confirm-label:focus-within { outline: 2px solid #7aa9f3; outline-offset: 2px; }
