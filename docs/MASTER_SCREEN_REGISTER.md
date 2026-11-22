@@ -169,7 +169,7 @@ The mockup pictures display illustrative controls (Card, UPI, Split, Services, d
 
 | ID | Screen / interaction | Type | Current | Priority | Required outcome / guardrail |
 | --- | --- | --- | --- | --- | --- |
-| BUS-01 | Business Dashboard | Page | Partial | P0 | Owner-approved three-section operational layout and separate first-run setup; missing Sales/Bills/Stock Alerts/Recent Activity data remains explicitly unavailable, never fake. Browser QA, authenticated E2E and integration status tracked separately. |
+| BUS-01 | Business Dashboard | Page | Partial | P0 | Owner dashboard now consumes real posted cash-sales total, cash bill count and latest five cash receipts through existing server-owned dashboard API in Development; draft orders already integrated. Stock alerts, other payment channels and production E2E pending. No invented data. |
 | BUS-02 | First-run business setup checklist | Page | Missing | P0 | Provisioned business readiness: first location, products, opening stock, receipt settings; resume safely. |
 | BUS-03 | Business selector / context switch | Page | Partial | P0 | Compact membership-only rows with business name/type/role; no owner tenant creation. Repeated clicks guarded and prior context cleared; Chromium fixture QA passed. Real tenant-revocation/authorization E2E and visual owner sign-off pending. |
 | BUS-04 | Locations — list and active location | Page | Partial | P1 | Authorized stock location selection and one-location label verified in Chromium; sidebar uses count for multi-branch rather than assuming first is active. Separate location management/list and authoritative primary/active scope still missing. |
