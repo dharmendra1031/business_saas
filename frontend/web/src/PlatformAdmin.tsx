@@ -6,9 +6,10 @@ import PlatformAudit from './PlatformAudit'
 import PlatformPlans from './PlatformPlans'
 import PlatformOperations from './PlatformOperations'
 import PlatformCreateBusiness from './PlatformCreateBusiness'
+import PlatformModulePreview from './PlatformModulePreview'
 import { Building2, Plus, Search } from 'lucide-react'
 
-export type PlatformSection = 'overview' | 'customers' | 'businesses' | 'plans' | 'audit' | 'operations'
+export type PlatformSection = 'overview' | 'customers' | 'businesses' | 'plans' | 'licenses' | 'settings' | 'audit' | 'operations'
 
 interface BusinessRow {
   id: number
@@ -445,6 +446,7 @@ export default function PlatformAdmin({ section, selectedBusinessId, onViewBusin
   if (section === 'plans') return <PlatformPlans business={billingBusiness} onChooseBusiness={onChooseBusiness} />
   if (section === 'audit') return <PlatformAudit />
   if (section === 'operations') return <PlatformOperations />
+  if (section === 'licenses' || section === 'settings') return <PlatformModulePreview module={section} />
   return <PlatformBusinesses onBilling={onBilling} selectedBusinessId={selectedBusinessId}
     startCreate={startCreate} onCreateHandled={onCreateHandled} incomingSearch={businessSearch} />
 }
