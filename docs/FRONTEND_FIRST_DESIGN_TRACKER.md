@@ -137,3 +137,24 @@ This is a visual scope tracker, **not** a statement that all frontend screens ar
 **Clean-code rule:** Each working action uses one source of truth. UI-only previews remain clearly labeled. Do not invent data, save handlers, API responses or deployment health. Enforce business roles/tenant scoping in the API. Any cleanup must preserve behavior, approved responsive layout, accessibility and existing production-protected transaction logic.
 
 **Verified CI:** [Actions run 45010747303](https://github.com/dharmendra1031/business_saas/actions/runs/45010747303), commit `1967df76`, finished with **frontend TypeScript/Vite PASS, backend PASS, isolated SQL Server PASS** after CSS/AuthPage extraction. **Still pending:** browser screenshot comparison across 1536/1366/768/360 and full role-specific E2E. A green compiler is **not visual approval**. Do not describe the project as finished or the full tree as zero-duplication yet.
+
+
+## 9. POS frontend implementation against final approved 21-Nov reference (22 November 2026)
+
+**Source-level design pass:** `CashCheckout.tsx`, `PosCashPaymentDialog.tsx`, `App.tsx`, `styles.pos.css`, `main.tsx`.
+**Approved reference:** [APPROVED POS UI/UX](./APPROVED_POS_UI_UX.md), exact `BusinessSaaS_POS_Approved_2026-11-21.png` SHA `b0bab91781b7bb2eb285a3813e863399f21855a32621f7e2e7aefcf7c003bc53`.
+**Frontend only:** No database, server payment gateway, refund, stock movement or authorization behavior changed.
+
+| Approved surface | Implementation from real source | Unfinished / acceptance condition |
+| --- | --- | --- |
+| **POS-01** Full-width cashier navigation | `App.tsx` uses `isPosView` to remove the permanent admin sidebar, render a navy cashier header with actual business/location and user, and give POS full viewport width. | Actual browser compare at 1536×864, 1366×768, 768px and 360px **pending**. |
+| **POS-01** 61/39 catalogue/basket | Scoped `styles.pos.css` gives grid `61fr / 39fr` desktop, responsive tablet/mobile stack, independent catalogue scroll and sticky basket on desktop. | Visual/pixel QA **pending**. Product photographs and categories intentionally absent: existing `/cash-sales/products` API supplies name, SKU, barcode, salePrice and location available stock, not image/category. |
+| **POS-01, POS-05** Product selection/cart | Product card buttons use actual product API, honest icon fallback, real price/stock badges, exact barcode/SKU scan action, basket quantity stepper/editor, remove and guarded Clear. Subtotal/total calculated from real priced line items. | No fictional sample prices or stock; product filters, photos, customer picker require server contract. Real browser keyboard/barcode/stock tests **pending**. |
+| **POS-06** Cash Payment Popup | `PosCashPaymentDialog.tsx` adds centered modal with amount due, cash received, change, cash-only indicator, Confirm and Back to Cart, focus containment, Escape and background-scroll lock. Modal opens only on Pay/Checkout and does not post on open. | Full browser accessibility + payment E2E **pending**; no fake Card/UPI/Split. |
+| **POS-07, POS-09, POS-10, POS-18** Transaction status and receipt | Existing `recordSale`, original requestKey persistence, receipt lookup for pending/unknown sale, committed receipt print and New Sale reset preserved; cash modal calls the original `recordSale` only after validation. Cash tender is reset when changing basket contents. | Cash API is Development-only, real production launch requires approved backend integration, server/SQL test evidence, receipt printer validation and complete error-state browser QA. Do not mark DONE. |
+
+**Observed API limitation:** `RetailCashSales.Search` returns up to 30 active, tax-classification-compatible products at a time. Do not invent pagination or category filter controls without an authoritative backend contract. This product card grid is suitable for real search and scan entry at present; a complete large-catalog browsing contract remains for integration.
+
+**Frontend performance/engineering:** Kept one `CashCheckout` money/pending-sale source of truth; payment modal is purely presentational and returns a confirmed user action to the existing posting handler. Isolated POS styles into one scoped CSS file rather than adding another design library or building duplicate checkout logic.
+
+**Visual QA still required:** load an authenticated cashier account with controlled real products; screenshot capture at the four approved widths; verify basket scroll, full-width page without admin sidebar, Enter scan, tab/shift-tab/Escape, cashier with inactive subscription, modal focus restoration, totals and correct printer output. Approval remains **Partial**, not `DONE`.
