@@ -1,6 +1,5 @@
 import { useEffect, useRef, useState, type FormEvent } from 'react'
 import { api, post, SessionExpiredError } from './api'
-import { Truck, Users } from 'lucide-react'
 
 type ContactType = 'suppliers' | 'customers'
 
@@ -114,17 +113,7 @@ export default function RetailContacts({ businessId, canOperate, type }: {
   return (
     <section className="content-section retail-masters business-module-card" aria-label={type}>
       <div className="masters-heading business-module-heading">
-        <div className="business-module-title">
-          <span className="business-module-icon">
-            {supplier ? <Truck size={23} /> : <Users size={23} />}
-          </span>
-          <div><span className="business-eyebrow">{supplier ? 'PURCHASING CONTACTS' : 'RETAIL CONTACTS'}</span>
-            <h2>{label}s</h2>
-            <p>{supplier
-              ? 'Manage purchasing contacts. A supplier must have a phone number or an email.'
-              : 'Manage store customer records. Walk-in sales do not require a customer.'}</p>
-          </div>
-        </div>
+        <h2>{label}s</h2>
       </div>
 
       {!canOperate && <div className="alert alert-warning" role="status">
