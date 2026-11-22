@@ -433,7 +433,7 @@ export default function App() {
                       onClick={() => void openBusiness(business.id)}>
                       <span className="shop-symbol"><Store size={22} /></span>
                       <span className="business-summary"><strong>{business.name}</strong><small>{business.typeName} · {business.countryCode}</small></span>
-                      <span className="business-assigned-role">{business.roleCode === 'Owner' ? 'Owner' : business.roleCode === 'Manager' ? 'Manager' : business.roleCode === 'Cashier' ? 'Cashier' : business.roleCode}</span>
+                      <span className="business-assigned-role">{business.roleCode}</span>
                       {openingBusinessId === business.id
                         ? <span className="business-opening-label">Opening…</span>
                         : <ArrowRight size={18} aria-hidden="true" />}
