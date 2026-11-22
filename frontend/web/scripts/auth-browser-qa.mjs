@@ -224,7 +224,7 @@ try {
     assert.equal(await t.page.locator('.business-action-card').count(), 0)
     await t.screenshot('BUS-01-owner-operational-desktop')
     await t.page.getByRole('button', { name: /Review 3 draft purchase orders/ }).click()
-    await t.page.getByRole('heading', { name: 'Purchase Orders' }).waitFor()
+    await t.page.getByRole('heading', { name: 'Purchase Orders', level: 1 }).waitFor()
     await t.check()
     await t.context.close()
     console.log('PASS BUS-01 operational owner three sections and review action')
