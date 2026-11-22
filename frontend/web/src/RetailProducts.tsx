@@ -367,15 +367,22 @@ export default function RetailProducts({ businessId, canOperate, currencyCode }:
               : 'Add your first product using the button above. Opening stock is managed in Inventory.'}</p>
           </div> : <div className="table-responsive">
             <table className="table table-sm align-middle business-record-table">
-              <thead><tr><th scope="col">Product</th><th scope="col">SKU / barcode</th>
-                <th scope="col">Category / unit</th><th scope="col" className="text-end">Sale price</th>
-                <th scope="col">Status</th>{canOperate && <th scope="col" className="text-end">Action</th>}</tr></thead>
+              <thead><tr><th scope="col">Product</th><th scope="col" className="product-detail-column">SKU / barcode</th>
+                <th scope="col" className="product-detail-column">Category / unit</th><th scope="col" className="text-end">Sale price</th>
+                <th scope="col" className="product-status-column">Status</th>{canOperate && <th scope="col" className="text-end">Action</th>}</tr></thead>
               <tbody>{products.map(item => <tr key={item.id}>
-                <td><strong>{item.name}</strong></td>
-                <td><span>{item.sku}</span>{item.barcode && <small className="product-secondary">{item.barcode}</small>}</td>
-                <td>{item.categoryName}<small className="product-secondary">{item.unitCode}</small></td>
+                <td><strong>{item.name}</strong>
+                  <small className="product-mobile-meta">
+                    <span>{item.sku}</span>
+                    <span className={`business-record-status ${item.isActive ? 'is-active' : 'is-inactive'}`}>
+                      {item.isActive ? 'Active' : 'Inactive'}
+                    </span>
+                  </small>
+                </td>
+                <td className="product-detail-column"><span>{item.sku}</span>{item.barcode && <small className="product-secondary">{item.barcode}</small>}</td>
+                <td className="product-detail-column">{item.categoryName}<small className="product-secondary">{item.unitCode}</small></td>
                 <td className="text-end text-nowrap">{currencyCode} {item.salePrice.toFixed(2)}</td>
-                <td><span className={`business-record-status ${item.isActive ? 'is-active' : 'is-inactive'}`}>
+                <td className="product-status-column"><span className={`business-record-status ${item.isActive ? 'is-active' : 'is-inactive'}`}>
                   {item.isActive ? 'Active' : 'Inactive'}</span></td>
                 {canOperate && <td className="text-end"><button type="button"
                   className="btn btn-sm btn-outline-secondary" onClick={() => startEdit(item)}>Edit</button></td>}

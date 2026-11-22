@@ -187,6 +187,25 @@
 }
 @media (prefers-reduced-motion: reduce) { .business-assigned-list .business-row { transition: none; } }
 
+/* BUS-06: preserve price and edit actions on phones without duplicating table components. */
+.product-mobile-meta { display: none; }
+@media (max-width: 600px) {
+  .business-shell .retail-products .product-filters { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 9px; }
+  .business-shell .retail-products .product-filters .product-filter-search { grid-column: 1 / -1; }
+  .business-shell .retail-products .product-filters > button { grid-column: 1 / -1; }
+  .business-shell .retail-products .product-detail-column,
+  .business-shell .retail-products .product-status-column { display: none; }
+  .business-shell .retail-products .product-mobile-meta { display: flex; align-items: center;
+    flex-wrap: wrap; gap: 3px 6px; margin-top: 5px; color: #647a93; font-size: .69rem; }
+  .business-shell .retail-products .product-mobile-meta .business-record-status { font-size: .63rem; padding: 2px 5px; }
+  .business-shell .retail-products .business-record-table { width: 100%; }
+  .business-shell .retail-products .business-record-table th,
+  .business-shell .retail-products .business-record-table td { padding: 10px 7px; font-size: .76rem; }
+  .business-shell .retail-products .business-record-table th:first-child { width: 45%; }
+  .business-shell .retail-products .business-record-table td:first-child { overflow-wrap: anywhere; }
+  .business-shell .retail-products .business-record-table td .btn { min-height: 29px; padding: 3px 7px; font-size: .73rem; }
+}
+
 /* Preview-only modules: functional tabs, without decorative dashboards. */
 .business-shell .business-preview-nav { gap: 10px; }
 .business-shell .business-preview-nav span { flex: 1; }

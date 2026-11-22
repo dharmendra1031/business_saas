@@ -469,6 +469,13 @@ try {
     await t.page.getByText('Blue Shirt').waitFor()
     assert.ok(await t.page.evaluate(() => document.documentElement.scrollWidth) <= 361,
       'Products listing should not overflow the 360px page')
+    assert.equal(await t.page.getByRole('columnheader', { name: 'Sale price' }).isVisible(), true,
+      'Sale price must remain visible without horizontal swiping')
+    assert.equal(await t.page.getByRole('columnheader', { name: 'Action' }).isVisible(), true,
+      'Edit action must remain visible without horizontal swiping')
+    assert.equal(await t.page.getByRole('columnheader', { name: 'SKU / barcode' }).isVisible(), false,
+      'SKU moves below product name on mobile')
+    assert.equal(await t.page.getByText('Active', { exact: true }).count() > 0, true)
     await t.screenshot('BUS-06-products-list-mobile-360')
     await t.check()
     await t.context.close()
