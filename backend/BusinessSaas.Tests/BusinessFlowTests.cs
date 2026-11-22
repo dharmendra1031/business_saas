@@ -1811,6 +1811,111 @@ public sealed class BusinessFlowTests
         Assert.Equal(HttpStatusCode.BadRequest, response.StatusCode);
     }
 
+    [Fact]
+    public async Task Platform_provisioning_requires_mfa_verified_owner_and_is_idempotent()
+    {
+        using var database = new SqliteConnection("Data Source=:memory:");
+        await database.OpenAsync();
+        using var factory = new WebApplicationFactory<Program>().WithWebHostBuilder(builder =>
+        {
+            builder.UseEnvironment("Development");
+            builder.ConfigureServices(services =>
+            {
+                services.RemoveAll<DbContextOptions<AppDbContext>>();
+                services.RemoveAll<IDbContextOptionsConfiguration<AppDbContext>>();
+                services.AddDbContext<AppDbContext>(options => options.UseSqlite(database));
+            });
+        });
+        using var admin = factory.CreateClient();
+        using var owner = factory.CreateClient();
+        using var outsider = factory.CreateClient();
+
+        await RegisterAndLogin(admin, "platform-creation-admin@example.test");
+        await RegisterAndLogin(owner, "platform-creation-owner@example.test");
+        await RegisterAndLogin(outsider, "platform-creation-outsider@example.test");
+
+        long ownerId;
+        using (var scope = factory.Services.CreateScope())
+        {
+            var db = scope.ServiceProvider.GetRequiredService<AppDbContext>();
+            var platformId = await db.Users.Where(x => x.Email == "platform-creation-admin@example.test")
+                .Select(x => x.Id).SingleAsync();
+            var account = await db.Users.SingleAsync(x => x.Email == "platform-creation-owner@example.test");
+            account.EmailConfirmed = true; // Fixture: verified by an external email-verification flow.
+            ownerId = account.Id;
+            await db.SaveChangesAsync();
+            scope.ServiceProvider.GetRequiredService<IConfiguration>()["Platform:OwnerUserId"] =
+                platformId.ToString();
+        }
+
+        var body = new
+        {
+            name = "Assigned Retail Shop",
+            businessTypeId = 1,
+            countryCode = "IN",
+            currencyCode = "INR",
+            timeZoneId = "Asia/Kolkata",
+            ownerEmail = "platform-creation-owner@example.test",
+            locationName = "Kanpur Main",
+            planCode = "STARTER",
+            requestKey = "platform-provision-verified-0001"
+        };
+
+        Assert.Equal(HttpStatusCode.Forbidden,
+            (await Post(outsider, "/api/platform/businesses", body)).StatusCode);
+        Assert.Equal(HttpStatusCode.Forbidden,
+            (await Post(owner, "/api/platform/businesses", body)).StatusCode);
+        Assert.Equal(HttpStatusCode.Forbidden,
+            (await Post(admin, "/api/platform/businesses", body)).StatusCode);
+
+        await EnableOwnerMfaAndSignIn(admin, "platform-creation-admin@example.test");
+        var verified = await admin.GetFromJsonAsync<JsonElement>(
+            "/api/platform/owner-lookup?email=platform-creation-owner%40example.test");
+        Assert.Equal(ownerId, verified.GetProperty("id").GetInt64());
+        Assert.True(verified.GetProperty("verified").GetBoolean());
+
+        var first = await Post(admin, "/api/platform/businesses", body);
+        Assert.Equal(HttpStatusCode.Created, first.StatusCode);
+        var businessId = (await first.Content.ReadFromJsonAsync<JsonElement>())
+            .GetProperty("id").GetInt64();
+        Assert.True(businessId > 0);
+
+        var retry = await Post(admin, "/api/platform/businesses", body);
+        Assert.Equal(HttpStatusCode.OK, retry.StatusCode);
+        var repeatId = (await retry.Content.ReadFromJsonAsync<JsonElement>())
+            .GetProperty("id").GetInt64();
+        Assert.Equal(businessId, repeatId);
+
+        var changed = await Post(admin, "/api/platform/businesses", new
+        {
+            name = "Changed Shop Name",
+            body.businessTypeId, body.countryCode, body.currencyCode,
+            body.timeZoneId, body.ownerEmail, body.locationName, body.planCode, body.requestKey
+        });
+        Assert.Equal(HttpStatusCode.Conflict, changed.StatusCode);
+
+        using (var scope = factory.Services.CreateScope())
+        {
+            var db = scope.ServiceProvider.GetRequiredService<AppDbContext>();
+            Assert.Equal(1, await db.Businesses.CountAsync(x => x.Id == businessId));
+            Assert.Equal(ownerId, await db.Businesses.Where(x => x.Id == businessId)
+                .Select(x => x.CreatedByUserId).SingleAsync());
+            Assert.Equal(1, await db.BusinessUsers.CountAsync(x => x.BusinessId == businessId &&
+                x.UserId == ownerId && x.RoleCode == "Owner"));
+            Assert.Equal(1, await db.BusinessLocations.CountAsync(x => x.BusinessId == businessId &&
+                x.Name == "Kanpur Main"));
+            Assert.Equal(1, await db.PlatformAuditEvents.CountAsync(x =>
+                x.TargetId == businessId && x.Action == "Business.Provisioned"));
+        }
+
+        Assert.Equal(HttpStatusCode.OK,
+            (await owner.GetAsync($"/api/businesses/{businessId}/dashboard")).StatusCode);
+        Assert.Equal(HttpStatusCode.NotFound,
+            (await outsider.GetAsync($"/api/businesses/{businessId}/dashboard")).StatusCode);
+        Assert.Equal(HttpStatusCode.Forbidden,
+            (await admin.GetAsync($"/api/businesses/{businessId}/dashboard")).StatusCode);
+    }
+
     private sealed class StubRazorpayGateway : IRazorpayGateway
     {
         public int OrderCalls { get; private set; }
