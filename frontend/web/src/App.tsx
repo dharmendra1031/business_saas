@@ -357,7 +357,7 @@ export default function App() {
             </div>
             <div className="pos-topbar-store"><Store size={17} />
               <span><strong>{dashboard.business.name}</strong>
-                <small>{dashboard.locations[0]?.name ?? 'No assigned location'} · {dashboard.roleCode}</small></span>
+                <small>{dashboard.locations.length === 1 ? dashboard.locations[0].name : 'Location selected below'} · {dashboard.roleCode}</small></span>
             </div>
             <div className="pos-topbar-account">
               <span className="pos-topbar-email">{user?.email}</span>
