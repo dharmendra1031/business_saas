@@ -1,3 +1,4 @@
+import { ClipboardList, Plus } from 'lucide-react'
 import { useEffect, useState, type FormEvent } from 'react'
 import { api, post, operationKey, SessionExpiredError } from './api'
 
@@ -327,14 +328,18 @@ export default function RetailPurchases({ businessId, canOperate, locations, rol
   }
 
   return (
-    <section className="content-section retail-masters" aria-label="Purchase orders">
-      <div className="masters-heading">
-        <div>
-          <h2>Purchase orders</h2>
-          <p>Create a supplier order, approve it, and receive goods in parts. Only posting updates stock.</p>
+    <section className="content-section retail-masters business-module-card" aria-label="Purchase orders">
+      <div className="masters-heading business-module-heading">
+        <div className="business-module-title">
+          <span className="business-module-icon"><ClipboardList size={23} /></span>
+          <div><span className="business-eyebrow">PROCUREMENT WORKFLOW</span>
+            <h2>Purchase Orders</h2>
+            <p>Create orders, review approvals and receive goods. Only posted receiving updates stock.</p>
+          </div>
         </div>
         {canOperate && !creating && <button type="button" className="btn btn-primary"
-          onClick={() => { setOrderKey(operationKey()); setCreating(true); setError(''); setNotice('') }}>New purchase order</button>}
+          onClick={() => { setOrderKey(operationKey()); setCreating(true); setError(''); setNotice('') }}>
+          <Plus size={17} /> New Purchase Order</button>}
       </div>
       {!canOperate && <div className="alert alert-warning" role="status">
         Subscription is inactive. Purchase records are read-only.
@@ -426,7 +431,7 @@ export default function RetailPurchases({ businessId, canOperate, locations, rol
             </div>
           </div>
           {lines.length > 0 && <div className="table-responsive">
-            <table className="table table-sm align-middle">
+            <table className="table table-sm align-middle business-record-table">
               <thead><tr><th>Product</th><th>Order quantity</th>
                 <th>Unit cost ({currencyCode})</th><th></th></tr></thead>
               <tbody>{lines.map(line => <tr key={line.productId}>
@@ -468,7 +473,7 @@ export default function RetailPurchases({ businessId, canOperate, locations, rol
           : loadError ? null
             : !orders.length ? <p className="masters-empty">No purchase orders yet.</p>
               : <div className="table-responsive">
-                <table className="table table-sm align-middle">
+                <table className="table table-sm align-middle business-record-table">
                   <thead><tr><th>Order</th><th>Supplier</th><th>Location</th><th>Status</th><th></th></tr></thead>
                   <tbody>{orders.map(order => <tr key={order.id}>
                     <td>#{order.id}</td><td>{order.supplierName}</td>
@@ -511,7 +516,7 @@ export default function RetailPurchases({ businessId, canOperate, locations, rol
             <button type="button" className="btn btn-primary mb-3" disabled={busy}
               onClick={() => void approve()}>{busy ? 'Saving…' : 'Approve purchase order'}</button>}
           <div className="table-responsive">
-            <table className="table table-sm align-middle">
+            <table className="table table-sm align-middle business-record-table">
               <thead><tr><th>Product</th><th className="text-end">Ordered</th>
                 <th className="text-end">Received</th><th className="text-end">Remaining</th>
                 <th className="text-end">Unit cost</th></tr></thead>
@@ -546,7 +551,7 @@ export default function RetailPurchases({ businessId, canOperate, locations, rol
                 )}>Receive all remaining</button>
                 <p className="field-help">Enter only the quantities delivered. Saving a draft does not change stock.</p>
                 <div className="table-responsive">
-                  <table className="table table-sm align-middle">
+                  <table className="table table-sm align-middle business-record-table">
                     <thead><tr><th>Product</th><th className="text-end">Remaining</th>
                       <th>Receive now</th></tr></thead>
                     <tbody>{detail.lines.filter(x => x.remainingQuantity > 0).map(line => <tr key={line.id}>
@@ -568,7 +573,7 @@ export default function RetailPurchases({ businessId, canOperate, locations, rol
             <h3>Receiving history</h3>
             {!detail.receivings.length ? <p className="masters-empty">No receiving vouchers yet.</p>
               : <div className="table-responsive">
-                <table className="table table-sm align-middle">
+                <table className="table table-sm align-middle business-record-table">
                   <thead><tr><th>Receiving</th><th>Status</th><th></th></tr></thead>
                   <tbody>{detail.receivings.map(receipt => <tr key={receipt.id}>
                     <td>#{receipt.id}</td><td>{receipt.status}</td>
