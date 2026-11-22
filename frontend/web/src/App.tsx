@@ -1,5 +1,5 @@
 import { useEffect, useRef, useState, type FormEvent } from 'react'
-import { Activity, ArrowLeft, ArrowRight, Boxes, Building2, CheckCircle2, CreditCard, KeyRound, LayoutDashboard, LogOut, Menu, Package, Settings2, ShieldCheck, ShoppingCart, Store, Tags, Truck, UserRound, Users } from 'lucide-react'
+import { Activity, ArrowLeft, ArrowRight, Boxes, Building2, CheckCircle2, CreditCard, KeyRound, LayoutDashboard, LogOut, Menu, Package, Search, Settings2, ShieldCheck, ShoppingCart, Store, Tags, Truck, UserRound, Users } from 'lucide-react'
 import { api, post, resetCsrf, SessionExpiredError, setSessionExpiredHandler, type Business, type RetailDashboard, type User } from './api'
 import CashCheckout from './CashCheckout'
 import TeamMembers from './TeamMembers'
@@ -36,6 +36,8 @@ export default function App() {
   const [platformSection, setPlatformSection] = useState<PlatformSection>('overview')
   const [platformBusinessId, setPlatformBusinessId] = useState<number | null>(null)
   const [platformStartCreate, setPlatformStartCreate] = useState(false)
+  const [platformSearchDraft, setPlatformSearchDraft] = useState('')
+  const [platformBusinessSearch, setPlatformBusinessSearch] = useState('')
   const [dashboard, setDashboard] = useState<RetailDashboard | null>(null)
   const [approvalList, setApprovalList] = useState(false)
   const [billingBusiness, setBillingBusiness] = useState<{ id: number; name: string } | null>(null)
@@ -318,7 +320,14 @@ export default function App() {
       </aside>
 
       <div className="app-main">
-        <header className={`app-topbar${user?.isPlatformOwner ? ' platform-topbar' : ''}`}>
+        <header className={`app-topbar${page === 'platform' ? ' platform-topbar' : ''}`}>
+          {page === 'platform' && <div className="platform-topbar-brand">
+            <span className="platform-topbar-logo" aria-hidden="true">B</span>
+            <strong>Business SaaS</strong>
+            <span className="platform-topbar-badge">Super Admin</span>
+            <span className="platform-topbar-divider" aria-hidden="true" />
+            <span className="platform-topbar-caption">Platform Administration</span>
+          </div>}
           <div className="topbar-title">
             <button type="button" ref={menuToggle} className="mobile-menu-toggle" aria-label={menuOpen ? 'Close navigation' : 'Open navigation'}
               aria-controls="main-navigation" aria-expanded={menuOpen} onClick={() => setMenuOpen(open => !open)}>
@@ -333,6 +342,18 @@ export default function App() {
                 page === 'platform' ? 'Platform Management' : 'My Businesses'}</strong>
             </span>
           </div>
+          {page === 'platform' && <form className="platform-global-search" role="search" onSubmit={event => {
+            event.preventDefault()
+            setPlatformStartCreate(false)
+            setPlatformBusinessId(null)
+            setPlatformBusinessSearch(platformSearchDraft.trim())
+            setPlatformSection('businesses')
+          }}>
+            <Search size={17} aria-hidden="true" />
+            <input type="search" aria-label="Search businesses" value={platformSearchDraft}
+              maxLength={100} placeholder="Search businesses…" onChange={event => setPlatformSearchDraft(event.target.value)} />
+            <button type="submit" aria-label="Run business search">Search</button>
+          </form>}
           <div className="topbar-account">
             {canViewPlatform && !user?.isPlatformOwner && page !== 'platform' && <button
               type="button" className="btn btn-outline-primary btn-sm workspace-switch" onClick={() => {
@@ -356,7 +377,8 @@ export default function App() {
 
           {page === 'platform' && canViewPlatform && <PlatformAdmin section={platformSection}
             selectedBusinessId={platformBusinessId} billingBusiness={billingBusiness}
-            startCreate={platformStartCreate} onCreateHandled={() => setPlatformStartCreate(false)}
+            startCreate={platformStartCreate} businessSearch={platformBusinessSearch}
+            onCreateHandled={() => setPlatformStartCreate(false)}
             onSeeBusinesses={() => { setPlatformStartCreate(false); setPlatformBusinessId(null); setPlatformSection('businesses') }}
             onStartCreate={() => { setPlatformBusinessId(null); setPlatformStartCreate(true); setPlatformSection('businesses') }}
             onBilling={business => { setBillingBusiness(business); setPlatformSection('plans') }}
