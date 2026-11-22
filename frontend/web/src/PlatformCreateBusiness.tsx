@@ -1,0 +1,261 @@
+import { useEffect, useState, type FormEvent } from 'react'
+import { ArrowLeft, ArrowRight, Building2, CheckCircle2, ShieldCheck, Store, UserRound } from 'lucide-react'
+import { api, operationKey, post, SessionExpiredError, type BusinessMarket, type BusinessType } from './api'
+
+type VerifiedOwner = { id: number; email: string; verified: boolean }
+const steps = ['Business Details', 'Owner & Access', 'Plan & Location', 'Review']
+
+export default function PlatformCreateBusiness({ onCancel, onCreated }: {
+  onCancel: () => void
+  onCreated: (id: number) => void
+}) {
+  const [step, setStep] = useState(0)
+  const [types, setTypes] = useState<BusinessType[]>([])
+  const [markets, setMarkets] = useState<BusinessMarket[]>([])
+  const [loading, setLoading] = useState(true)
+  const [loadError, setLoadError] = useState('')
+  const [refresh, setRefresh] = useState(0)
+
+  const [name, setName] = useState('')
+  const [typeId, setTypeId] = useState(0)
+  const [countryCode, setCountryCode] = useState('')
+  const market = markets.find(x => x.code === countryCode)
+  const [currency, setCurrency] = useState('')
+  const [timeZone, setTimeZone] = useState('')
+  const [ownerEmail, setOwnerEmail] = useState('')
+  const [owner, setOwner] = useState<VerifiedOwner | null>(null)
+  const [location, setLocation] = useState('Main Shop')
+  const [key] = useState(operationKey)
+  const [busy, setBusy] = useState(false)
+  const [error, setError] = useState('')
+
+  useEffect(() => {
+    let active = true
+    setLoading(true)
+    Promise.all([
+      api<BusinessType[]>('/business-types'),
+      api<BusinessMarket[]>('/business-markets')
+    ]).then(([availableTypes, availableMarkets]) => {
+      if (!active) return
+      setTypes(availableTypes)
+      setMarkets(availableMarkets)
+      setLoadError('')
+    }).catch(cause => {
+      if (!active || cause instanceof SessionExpiredError) return
+      setLoadError('Unable to load available business setup options.')
+    }).finally(() => { if (active) setLoading(false) })
+    return () => { active = false }
+  }, [refresh])
+
+  async function verifyOwner(event: FormEvent) {
+    event.preventDefault()
+    setError('')
+    setBusy(true)
+    setOwner(null)
+    try {
+      const result = await api<VerifiedOwner>('/platform/owner-lookup?email=' +
+        encodeURIComponent(ownerEmail.trim()))
+      setOwner(result)
+      setStep(2)
+    } catch (cause) {
+      if (!(cause instanceof SessionExpiredError))
+        setError(cause instanceof Error ? cause.message : 'Unable to verify owner account.')
+    } finally { setBusy(false) }
+  }
+
+  async function create(event: FormEvent) {
+    event.preventDefault()
+    if (!owner || !market) return
+    setBusy(true)
+    setError('')
+    try {
+      const result = await post<{ id: number; alreadyExists: boolean }>('/platform/businesses', {
+        name: name.trim(), businessTypeId: typeId, countryCode,
+        currencyCode: currency, timeZoneId: timeZone,
+        ownerEmail: owner.email, locationName: location.trim(),
+        planCode: 'STARTER', requestKey: key
+      })
+      onCreated(result.id)
+    } catch (cause) {
+      if (!(cause instanceof SessionExpiredError))
+        setError(cause instanceof Error ? cause.message : 'Unable to create business. Check status before retry.')
+    } finally { setBusy(false) }
+  }
+
+  const currentType = types.find(x => x.id === typeId)
+  const canProceedDetails = name.trim().length >= 2 && name.trim().length <= 150 &&
+    typeId > 0 && !!market && market.currencies.includes(currency) &&
+    market.timeZones.includes(timeZone)
+  const validLocation = location.trim().length >= 2 && location.trim().length <= 100
+
+  return <div className="platform-provision">
+    <div className="page-header provision-heading">
+      <div>
+        <button type="button" className="back-link" onClick={onCancel} disabled={busy}>
+          <ArrowLeft size={16} /> Businesses
+        </button>
+        <h1>Create Business</h1>
+        <p>Provision one independent business and assign its verified Owner.</p>
+      </div>
+      <span className="provision-security"><ShieldCheck size={16} /> Platform Owner · MFA protected</span>
+    </div>
+
+    <nav className="provision-steps" aria-label="Business creation progress">
+      {steps.map((label, index) => <div key={label}
+        className={`provision-step${index === step ? ' is-current' : ''}${index < step ? ' is-complete' : ''}`}
+        aria-current={index === step ? 'step' : undefined}>
+        <span className="provision-step-number">{index < step ? <CheckCircle2 size={18} /> : index + 1}</span>
+        <span>{label}</span>
+      </div>)}
+    </nav>
+
+    <div className="provision-grid">
+      <section className="content-section provision-form" aria-labelledby="provision-title">
+        {error && <div role="alert" className="alert alert-danger">{error}</div>}
+        {loadError && <div role="alert" className="alert alert-danger">{loadError}
+          <button type="button" className="btn btn-sm btn-outline-danger ms-2"
+            onClick={() => setRefresh(v => v + 1)}>Retry</button>
+        </div>}
+        {loading && <p role="status">Loading setup options…</p>}
+
+        {step === 0 && !loading && !loadError && <>
+          <div className="provision-form-intro">
+            <span className="provision-intro-icon"><Building2 size={23} /></span>
+            <div><h2 id="provision-title">Business Details</h2>
+              <p>Use the legal/trading identity and correct operating market.</p></div>
+          </div>
+          <form onSubmit={event => { event.preventDefault(); if (canProceedDetails) { setError(''); setStep(1) } }}>
+            <div className="form-grid">
+              <div className="form-wide">
+                <label className="form-label" htmlFor="provision-name">Business Name *</label>
+                <input id="provision-name" className="form-control" value={name} minLength={2}
+                  maxLength={150} required autoFocus placeholder="e.g. Al Noor Fashion"
+                  onChange={event => setName(event.target.value)} />
+              </div>
+              <div>
+                <label className="form-label" htmlFor="provision-type">Business Type *</label>
+                <select id="provision-type" className="form-select" required value={typeId}
+                  onChange={event => setTypeId(Number(event.target.value))}>
+                  <option value={0}>Select a supported type</option>
+                  {types.map(type => <option key={type.id} value={type.id}>{type.name}</option>)}
+                </select>
+              </div>
+              <div>
+                <label className="form-label" htmlFor="provision-country">Country *</label>
+                <select id="provision-country" className="form-select" value={countryCode} required
+                  onChange={event => {
+                    const code = event.target.value
+                    const selected = markets.find(m => m.code === code)
+                    setCountryCode(code)
+                    setCurrency(selected?.currencies[0] ?? '')
+                    setTimeZone(selected?.timeZones[0] ?? '')
+                  }}>
+                  <option value="">Select country</option>
+                  {markets.map(item => <option key={item.code} value={item.code}>{item.name}</option>)}
+                </select>
+              </div>
+              <div>
+                <label className="form-label" htmlFor="provision-currency">Currency *</label>
+                <select id="provision-currency" className="form-select" value={currency} required disabled={!market}
+                  onChange={event => setCurrency(event.target.value)}>
+                  {(market?.currencies ?? []).map(code => <option key={code} value={code}>{code}</option>)}
+                </select>
+              </div>
+              <div>
+                <label className="form-label" htmlFor="provision-time-zone">Timezone *</label>
+                <select id="provision-time-zone" className="form-select" value={timeZone} required disabled={!market}
+                  onChange={event => setTimeZone(event.target.value)}>
+                  {(market?.timeZones ?? []).map(zone => <option key={zone} value={zone}>{zone}</option>)}
+                </select>
+              </div>
+            </div>
+            <div className="form-footer"><button className="btn btn-outline-secondary" type="button" onClick={onCancel}>Cancel</button>
+              <button className="btn btn-primary" disabled={!canProceedDetails} type="submit">Next: Owner <ArrowRight size={16} /></button>
+            </div>
+          </form>
+        </>}
+
+        {step === 1 && <>
+          <div className="provision-form-intro"><span className="provision-intro-icon"><UserRound size={23} /></span>
+            <div><h2 id="provision-title">Owner & Access</h2>
+              <p>Assign a verified existing account. No automatic account or invitation is created.</p></div>
+          </div>
+          <form onSubmit={event => void verifyOwner(event)}>
+            <label className="form-label" htmlFor="provision-owner">Owner Email Address *</label>
+            <input id="provision-owner" type="email" className="form-control" required autoFocus
+              maxLength={254} value={ownerEmail}
+              placeholder="owner@company.com"
+              onChange={event => { setOwnerEmail(event.target.value); setOwner(null) }} />
+            <p className="field-help">The owner must already have a verified Business SaaS account. Invitation and email verification delivery are not implemented yet.</p>
+            <div className="form-footer"><button className="btn btn-outline-secondary" type="button" disabled={busy}
+              onClick={() => { setError(''); setStep(0) }}>Back</button>
+              <button type="submit" className="btn btn-primary" disabled={busy}>
+                {busy ? 'Checking…' : 'Verify Owner'} <ArrowRight size={16} />
+              </button></div>
+          </form>
+        </>}
+
+        {step === 2 && <>
+          <div className="provision-form-intro"><span className="provision-intro-icon"><Store size={23} /></span>
+            <div><h2 id="provision-title">Plan & First Location</h2>
+              <p>Start with the available Starter trial. Paid plan activation requires separate verified billing.</p></div>
+          </div>
+          <div className="provision-plan-card" aria-label="Selected plan">
+            <div><strong>Starter · Trial</strong><small>Trial access only — no payment or paid subscription activated</small></div>
+            <span className="provision-plan-selected"><CheckCircle2 size={16} /> Selected</span>
+          </div>
+          <form onSubmit={event => { event.preventDefault(); if (validLocation) { setError(''); setStep(3) } }}>
+            <label className="form-label" htmlFor="provision-location">First Location Name *</label>
+            <input id="provision-location" className="form-control" value={location}
+              minLength={2} maxLength={100} required
+              onChange={event => setLocation(event.target.value)} />
+            <p className="field-help">Additional locations and usage limits remain subject to the published plan and permissions.</p>
+            <div className="form-footer"><button type="button" className="btn btn-outline-secondary"
+              onClick={() => { setError(''); setStep(1) }}>Back</button>
+              <button type="submit" className="btn btn-primary" disabled={!validLocation}>
+                Review Business <ArrowRight size={16} />
+              </button>
+            </div>
+          </form>
+        </>}
+
+        {step === 3 && <>
+          <div className="provision-form-intro"><span className="provision-intro-icon"><CheckCircle2 size={23} /></span>
+            <div><h2 id="provision-title">Review & Create</h2>
+              <p>Confirm details. Provisioning creates an owner membership, first location and a trial once.</p></div>
+          </div>
+          <dl className="provision-review">
+            <div><dt>Business</dt><dd>{name.trim()}</dd></div>
+            <div><dt>Type</dt><dd>{currentType?.name}</dd></div>
+            <div><dt>Owner</dt><dd>{owner?.email} <span className="provision-verified">Verified</span></dd></div>
+            <div><dt>Market</dt><dd>{market?.name} · {currency}</dd></div>
+            <div><dt>Timezone</dt><dd>{timeZone}</dd></div>
+            <div><dt>Plan</dt><dd>Starter · Trial</dd></div>
+            <div><dt>First Location</dt><dd>{location.trim()}</dd></div>
+          </dl>
+          <p className="provision-submit-note"><ShieldCheck size={17} /> Confirming will provision a real business and log the action in Platform Audit.</p>
+          <form onSubmit={event => void create(event)}>
+            <div className="form-footer">
+              <button type="button" className="btn btn-outline-secondary" disabled={busy}
+                onClick={() => { setError(''); setStep(2) }}>Back</button>
+              <button type="submit" className="btn btn-primary" disabled={busy || !owner || !validLocation || !canProceedDetails}>
+                {busy ? 'Creating business…' : 'Confirm & Create Business'} <ArrowRight size={16} />
+              </button>
+            </div>
+          </form>
+        </>}
+      </section>
+
+      <aside className="content-section provision-aside" aria-label="Business creation guidance">
+        <span className="provision-side-kicker">PLATFORM SETUP</span>
+        <h2>One business. One secure workspace.</h2>
+        <p>The new business will be independent from other platform customers. Its Owner only gets their own permitted operations.</p>
+        <div className="provision-side-row"><CheckCircle2 size={17} /> Separate Business ID</div>
+        <div className="provision-side-row"><CheckCircle2 size={17} /> Owner membership</div>
+        <div className="provision-side-row"><CheckCircle2 size={17} /> First shop location</div>
+        <div className="provision-side-row"><CheckCircle2 size={17} /> Trial & audit record</div>
+        <div className="provision-side-warning">Existing verified owners only. Pending owner invitations and paid plan selection will be added with their secure backend flows.</div>
+      </aside>
+    </div>
+  </div>
+}
