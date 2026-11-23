@@ -15,7 +15,7 @@ public static class RetailStockEndpoints
             .RequireAuthorization();
 
         group.MapGet("/locations/{locationId:long}", async (long businessId, long locationId,
-            string? search, int? page, ClaimsPrincipal user, AppDbContext db) =>
+            string? search, int? page, bool? alertsOnly, ClaimsPrincipal user, AppDbContext db) =>
         {
             var denied = await CheckLocation(db, user, businessId, locationId, false);
             if (denied is not null) return denied;
@@ -30,6 +30,14 @@ public static class RetailStockEndpoints
             if (term.Length > 0)
                 products = products.Where(x => x.Name.ToUpper().Contains(term) ||
                     x.Sku.Contains(term) || x.Barcode != null && x.Barcode.Contains(term));
+            if (alertsOnly is true)
+                products = products.Where(product => product.IsActive &&
+                    product.ReorderLevel.HasValue &&
+                    db.RetailStockBalances.Any(balance =>
+                        balance.BusinessId == businessId &&
+                        balance.LocationId == locationId &&
+                        balance.ProductId == product.Id &&
+                        balance.Quantity <= product.ReorderLevel.Value));
 
             var total = await products.CountAsync();
             var pageQuery = products.OrderBy(x => x.Name).ThenBy(x => x.Id)
@@ -46,6 +54,7 @@ public static class RetailStockEndpoints
                                    product.Name,
                                    product.Sku,
                                    product.IsActive,
+                                   product.ReorderLevel,
                                    Quantity = balance == null ? 0m : balance.Quantity,
                                    HasStockRecord = balance != null
                                }).ToListAsync();
