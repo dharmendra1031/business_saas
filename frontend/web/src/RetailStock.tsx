@@ -257,10 +257,12 @@ export default function RetailStock({ businessId, locations, canOperate, isOwner
       {loading ? <div role="status" className="business-module-loading">Loading inventory…</div>
         : error ? null
           : items.length === 0 ? <div className="business-empty-state" role="status">
-            <Boxes size={28} /><strong>{alertsOnly ? 'No stock alerts at this location' :
+            <Boxes size={28} /><strong>{alertsOnly ? (query ? 'No matching stock alerts' : 'No stock alerts at this location') :
               query ? 'No matching products' : 'No products in this inventory'}</strong>
-            <p>{alertsOnly ? 'Only initialized stock at or below a configured reorder level appears here.' :
-              query ? 'Try a different product name or SKU.' :
+            <p>{alertsOnly
+              ? (query ? 'Try clearing the search or choosing another location.'
+                : 'Only initialized stock at or below a configured reorder level appears here.')
+              : query ? 'Try a different product name or SKU.' :
                 'Add actual products in your catalog, then return to record opening quantities.'}</p>
           </div>
             : <div className="table-responsive">
