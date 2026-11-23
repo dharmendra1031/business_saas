@@ -164,10 +164,14 @@ export async function api<T>(path: string, options: RequestInit = {}): Promise<T
       headers
     })
   } catch {
+    if (requestGeneration !== authGeneration) throw new SessionExpiredError()
     throw new Error(method === 'GET' || method === 'HEAD'
       ? 'Connection lost. Check your internet connection and try again.'
       : 'Connection lost. The action may have completed. Check the record before retrying.')
   }
+
+  // Never deliver an earlier account's response after a login or logout.
+  if (requestGeneration !== authGeneration) throw new SessionExpiredError()
 
   if (!response.ok) {
     if (response.status === 401 && !['/auth/login', '/auth/me', '/auth/mfa/verify', '/auth/mfa/setup', '/auth/mfa/enable'].includes(path)) {
@@ -192,8 +196,11 @@ export async function api<T>(path: string, options: RequestInit = {}): Promise<T
 
   if (response.status === 204) return undefined as T
   try {
-    return await response.json() as T
-  } catch {
+    const data = await response.json() as T
+    if (requestGeneration !== authGeneration) throw new SessionExpiredError()
+    return data
+  } catch (cause) {
+    if (cause instanceof SessionExpiredError) throw cause
     throw new Error(method === 'GET' || method === 'HEAD'
       ? 'The server returned an incomplete response. Please retry.'
       : 'The server response was incomplete. Check the record before retrying.')
