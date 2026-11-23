@@ -208,9 +208,21 @@ export default function RetailPurchases({ businessId, canOperate, locations, rol
     }
   }
 
+  function resetOrderDraft() {
+    setLocationId(locations[0]?.id ?? 0)
+    setSupplierId(0)
+    setSupplierSearch('')
+    setSupplierQuery('')
+    setSupplierFormOpen(false)
+    setNewSupplier({ name: '', phone: '', email: '' })
+    setProductSearch('')
+    setProductQuery('')
+    setLines([])
+  }
+
   function addLine(id: number) {
     const product = products.find(x => x.id === id)
-    if (!product || lines.some(x => x.productId === id)) return
+    if (!product || lines.some(x => x.productId === id) || lines.length >= 50) return
     setLines(value => [...value, {
       productId: product.id, name: product.name, sku: product.sku, quantity: '1', unitCost: '0'
     }])
@@ -231,9 +243,9 @@ export default function RetailPurchases({ businessId, canOperate, locations, rol
   async function createOrder(event: FormEvent) {
     event.preventDefault()
     if (!canOperate || busy) return
-    if (!locationId || !supplierId || lines.length === 0 ||
+    if (!locationId || !supplierId || lines.length === 0 || lines.length > 50 ||
         lines.some(x => Number(x.quantity) <= 0 || Number(x.unitCost) < 0)) {
-      setError('Select location, supplier and at least one valid product line.')
+      setError('Select location, supplier and 1–50 valid product lines.')
       return
     }
 
@@ -248,8 +260,7 @@ export default function RetailPurchases({ businessId, canOperate, locations, rol
       })
       setCreating(false)
       setOrderKey(operationKey())
-      setLines([])
-      setSupplierId(0)
+      resetOrderDraft()
       setNotice('Purchase order saved as Draft. Owner approval is required.')
       setPage(1)
       setSelectedId(result.id)
@@ -420,6 +431,7 @@ export default function RetailPurchases({ businessId, canOperate, locations, rol
             <div>
               <label className="form-label" htmlFor="purchase-product">Product</label>
               <select id="purchase-product" className="form-select" value={0}
+                disabled={lines.length >= 50}
                 onChange={event => addLine(Number(event.target.value))}>
                 <option value={0}>Select a product to add</option>
                 {products.filter(x => !lines.some(line => line.productId === x.id))
@@ -427,6 +439,7 @@ export default function RetailPurchases({ businessId, canOperate, locations, rol
               </select>
             </div>
           </div>
+          {lines.length >= 50 && <p className="field-help" role="status">Maximum 50 products per purchase order.</p>}
           {lines.length > 0 && <div className="table-responsive">
             <table className="table table-sm align-middle business-record-table">
               <thead><tr><th>Product</th><th>Order quantity</th>
@@ -453,8 +466,8 @@ export default function RetailPurchases({ businessId, canOperate, locations, rol
           </p>}
         </div>
         <div className="form-footer">
-          <button type="button" className="btn btn-outline-secondary"
-            onClick={() => setCreating(false)}>Cancel</button>
+          <button type="button" className="btn btn-outline-secondary" disabled={busy || addingSupplier}
+            onClick={() => { resetOrderDraft(); setCreating(false) }}>Cancel</button>
           <button type="submit" className="btn btn-primary"
             disabled={busy || !supplierId || !lines.length}>
             {busy ? 'Saving…' : 'Save draft order'}
