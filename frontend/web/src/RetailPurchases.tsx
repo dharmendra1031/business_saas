@@ -627,15 +627,28 @@ export default function RetailPurchases({ businessId, canOperate, locations, rol
             {!detail.receivings.length ? <p className="masters-empty">No receiving vouchers yet.</p>
               : <div className="table-responsive">
                 <table className="table table-sm align-middle business-record-table">
-                  <thead><tr><th>Receiving</th><th>Status</th><th></th></tr></thead>
-                  <tbody>{detail.receivings.map(receipt => <tr key={receipt.id}>
-                    <td>#{receipt.id}</td><td>{receipt.status}</td>
-                    <td>{canOperate && receipt.status === 'Draft' &&
-                      <button type="button" className="btn btn-sm btn-outline-primary" disabled={busy ||
-                        receipt.lines.some(item => item.quantity >
-                          (detail.lines.find(x => x.id === item.purchaseOrderLineId)?.remainingQuantity ?? 0))}
-                        onClick={() => void postReceiving(receipt.id)}>Post stock</button>}</td>
-                  </tr>)}</tbody>
+                  <thead><tr><th>Receiving</th><th>Items received</th><th>Status</th><th></th></tr></thead>
+                  <tbody>{detail.receivings.map(receipt => {
+                    const validLines = receipt.lines.length > 0 && receipt.lines.every(item => {
+                      const ordered = detail.lines.find(x => x.id === item.purchaseOrderLineId)
+                      return !!ordered && Number.isFinite(item.quantity) && item.quantity > 0 &&
+                        item.quantity <= ordered.remainingQuantity
+                    })
+                    return <tr key={receipt.id}>
+                      <td>#{receipt.id}</td>
+                      <td>{receipt.lines.map(item => {
+                        const ordered = detail.lines.find(x => x.id === item.purchaseOrderLineId)
+                        return <div key={item.purchaseOrderLineId}>
+                          {ordered?.name ?? 'Unknown PO item'} · {item.quantity.toFixed(3)}
+                        </div>
+                      })}</td>
+                      <td>{receipt.status}</td>
+                      <td>{canOperate && receipt.status === 'Draft' &&
+                        <button type="button" className="btn btn-sm btn-outline-primary"
+                          disabled={busy || !validLines}
+                          onClick={() => void postReceiving(receipt.id)}>Post stock</button>}</td>
+                    </tr>
+                  })}</tbody>
                 </table>
               </div>}
           </div>
