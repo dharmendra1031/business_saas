@@ -44,7 +44,7 @@ Platform Super Admin needs central controls for registered **Business Type creat
 **Decision DR-001 (latest owner direction, 21 Nov 2026):** Only **Platform Super Admin** creates/provisions a new business and assigns its Business Owner; the Business Owner/Admin logs into a separate business workspace and manages only authorized business operations. A POS/Cashier uses the shared sign-in and a dedicated checkout workspace.
 
 - This supersedes the **earlier revisions** of `BUSINESS_SAAS_MASTER_SRS.md` §4 and `APPROVED_UI_UX.md` §5 that allowed owner self-service creation. Those documents have now been textually aligned with this decision; **application code and access-control tests are still pending**. Do not reinstate the superseded self-service path.
-- **Current implementation:** Owner-facing creation is retired and `POST /api/businesses` returns Forbidden for authenticated callers in every environment. Platform MFA-only `POST /api/platform/businesses` creates a Starter trial business with an existing verified Owner, first location, audit and idempotency. **P0 gaps** include email verification/invitation delivery, wider plan/entitlement selection and hosted browser acceptance.
+- **Current implementation:** Owner-facing creation is retired and `POST /api/businesses` returns Forbidden for authenticated callers in every environment. Platform MFA-only `POST /api/platform/businesses` creates a Starter trial business with an existing verified Owner, first location, audit and idempotency. **P0 gaps** now include SMTP deployment configuration/verification, wider plan/entitlement selection and hosted browser acceptance. Expiring Owner invitation and email-link acceptance are implemented in code.
 - Super Admin manages SaaS-level businesses, customer accounts, plans/billing, licensing, settings, security and operations **but never edits a tenant's stock, retail sales or POS transactions**. "Only Super Admin creates business" means **exclusive business creation permission**, not removal of all other platform-management functions.
 - **One shared sign-in screen** for Super Admin, Owner/Admin and Cashier. The server verifies identity, MFA and role/tenant membership; the user never selects an authorization role before login. Super Admin proceeds to MFA/platform, a single assigned business opens automatically, and multiple assigned businesses require selection after login. One ASP.NET API and React frontend; no duplicated role-specific login pages.
 - **Super Admin has exactly eight canonical main sidebar modules**: **Dashboard, Customers, Businesses, Plans & Billing, Licenses, Platform Settings, Security & Audit, Operations**. The mockups' standalone Users, Subscriptions, Payments, Invoices, Reports, Announcements and System Health are **sub-screens/tabs within these modules**, NOT extra top-level navigation. `Customers` refers to SaaS account owners, while `Business Customers` are that shop's retail customers.
@@ -61,6 +61,14 @@ Platform Super Admin needs central controls for registered **Business Type creat
 | **Auth & shared** | Distinct role entry/login look; consistent design tokens/validation and role-aware navigation | `docs/UX_STANDARDS.md`, `docs/BUSINESS_SAAS_MASTER_SRS.md` |
 
 The mockup pictures display illustrative controls (Card, UPI, Split, Services, discount, coupons, reports, screenshots of sample paid invoices). **Only expose them when corresponding real APIs, permissions and transaction rules exist.**
+
+### Owner invitation implementation — 23 Nov 2026
+
+- Platform Super Admin with MFA can request one email invitation for a new Owner; existing accounts cannot be overwritten. A 10–200-character reason is audited, and duplicate requests to the same email are throttled for 10 minutes.
+- The 256-bit random invitation secret is SHA-256 hashed in the database, never returned via a platform API or audit log, and expires in 48 hours. A public acceptance page removes the token from browser history, requires a new Identity password, and marks email verified on a single successful redemption.
+- Invitation acceptance **does not** create a tenant, location, subscription or membership. The Super Admin explicitly verifies the account again and completes the existing idempotent provisioning wizard.
+- TLS SMTP and a public HTTPS origin are required; without them, issue fails with 503 and no invite is sent. Production email delivery is not claimed verified until the relay is configured and exercised. See [Owner Invitation Delivery](./OWNER_INVITATION_DELIVERY.md).
+- No completion status is upgraded to DONE until real-domain delivery, role-based browser acceptance, mobile UX and operations sign-off are verified.
 
 ## 2. Status / priority definitions
 
@@ -101,8 +109,8 @@ The mockup pictures display illustrative controls (Card, UPI, Split, Services, d
 | AUTH-04 | Cashier sign-in branch | Flow | Partial | P0 | Shared login; server-assigned Cashier role leads to available POS; no business-management sidebar. |
 | AUTH-05 | Platform MFA setup and recovery codes | Page | Partial | P0 | MFA enrolment verified against server; securely handle recovery codes. |
 | AUTH-06 | MFA verification challenge | State | Partial | P0 | Recoverable invalid/expired code and attempt limits; no bypass. |
-| AUTH-07 | Business Owner invitation / activation | Flow | Missing | P0 | Super Admin assigns an existing verified account or sends expiring owner invitation. |
-| AUTH-08 | Invitation acceptance / join business | Page | Missing | P1 | Display exact business, role, expiry and acceptance consequences; no silent duplicate account. |
+| AUTH-07 | Business Owner invitation / activation | Flow | Partial | P0 | Single-use 48-hour verified-email invitation API, Super Admin MFA, audit, rate limiting and secure accept implemented; actual SMTP delivery and hosted approval pending. |
+| AUTH-08 | Invitation acceptance / join business | Page | Partial | P1 | Secure password setup and email ownership verification implemented; business/role assignment remains separate Super Admin action, hosted acceptance pending. |
 | AUTH-09 | Password recovery / secure reset | Page | Missing | P1 | Generic response to prevent enumeration, expiring token, existing-session safety. |
 | AUTH-10 | Email/phone verification | Page | Missing | P1 | Verified contact before privileged activation; no fake verified flag. |
 | AUTH-11 | My Businesses / secure switcher | Page | Partial | P0 | Only authorized memberships; switching clears old tenant context; NO Create Business for owners. |
@@ -284,7 +292,7 @@ The mockup pictures display illustrative controls (Card, UPI, Split, Services, d
 
 - `SA-03`: Business directory supports server-side name and owner email search, business type, plan and effective subscription status filters, and filtered pagination. Expired paid subscriptions appear under Inactive. Chromium fixture QA at 1366px and 360px verified combined owner and type filters, clearing filters, and the UTC creation date. Hosted visual sign-off remains pending.
 - `SA-04`: business name, type, country, currency and timezone wizard step built.
-- `SA-05`: verified existing owner lookup built; **owner invitation/email verification flow missing**.
+- `SA-05`: verified existing owner lookup and secure email invitation/acceptance flow implemented. The Owner becomes email-verified only by a single-use link and sets their own password; separate platform provisioning still assigns the business. Email delivery is fail-closed until TLS SMTP and public HTTPS origin are configured; production mail acceptance remains pending.
 - `SA-06`: The wizard shows the server-configured Starter trial duration and captures the first location. A duration change requires the operator to review and confirm again before creating a business. Creation and recovery show the persisted trial expiry in the selected business timezone. Published-plan selection and entitlement display remain pending.
 - `SA-07`: review screen and MFA-required transactional platform API built; the wizard checks global type, required modules and blocking maintenance via the same server rules as create. Server event audit and duplicate-request protection are covered by integration tests. Chromium fixture QA verified the eligibility block and retry at 1366px and 360px. Hosted acceptance remains pending.
 - `SA-08`: creation and replay show the numeric Business ID and verified Owner assignment, with a link to real details. Chromium fixture QA verified that an interrupted response can be recovered in the open wizard with identical details and the same request key. Hosted acceptance and invitation delivery remain pending.
