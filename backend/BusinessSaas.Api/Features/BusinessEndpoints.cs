@@ -12,6 +12,9 @@ public sealed record BusinessMarket(string Code, string Name, string[] Currencie
 public sealed record CashReceiptSummary(long Id, long LocationId, decimal Total, DateTime PostedAtUtc);
 public sealed record OwnerCashSalesToday(decimal Total, int BillCount, DateOnly BusinessDate,
     IReadOnlyList<CashReceiptSummary> RecentReceipts);
+public sealed record LowStockItem(long ProductId, string ProductName, string Sku,
+    long LocationId, string LocationName, decimal Quantity, decimal ReorderLevel);
+public sealed record OwnerStockAlerts(int Count, int OutOfStockCount, IReadOnlyList<LowStockItem> Items);
 
 public static class BusinessEndpoints
 {
@@ -238,7 +241,35 @@ public static class BusinessEndpoints
                 cashSalesToday = new OwnerCashSalesToday(total, bills, DateOnly.FromDateTime(localDate), recent);
             }
 
-            return Results.Ok(new { hasProducts, pendingApprovals, cashSalesToday,
+            OwnerStockAlerts? stockAlerts = null;
+            if (roleCode == "Owner" && details.TypeCode == "RETAIL")
+            {
+                // A threshold is explicit and stock must have been initialized.
+                // An absent balance or unconfigured threshold never implies zero stock.
+                var atRisk = from balance in db.RetailStockBalances.AsNoTracking()
+                             join product in db.RetailProducts.AsNoTracking()
+                                 on balance.ProductId equals product.Id
+                             join location in db.BusinessLocations.AsNoTracking()
+                                 on balance.LocationId equals location.Id
+                             where balance.BusinessId == businessId &&
+                                   product.BusinessId == businessId &&
+                                   location.BusinessId == businessId &&
+                                   product.IsActive && product.ReorderLevel.HasValue &&
+                                   balance.Quantity <= product.ReorderLevel.Value
+                             select new LowStockItem(product.Id, product.Name, product.Sku,
+                                 location.Id, location.Name, balance.Quantity, product.ReorderLevel.Value);
+                var alertCount = await atRisk.CountAsync();
+                var zeroCount = await atRisk.CountAsync(x => x.Quantity == 0m);
+                var alertItems = await atRisk
+                    .OrderBy(x => x.Quantity != 0m)
+                    .ThenBy(x => x.ProductName)
+                    .ThenBy(x => x.LocationName)
+                    .ThenBy(x => x.ProductId)
+                    .Take(5).ToListAsync();
+                stockAlerts = new OwnerStockAlerts(alertCount, zeroCount, alertItems);
+            }
+
+            return Results.Ok(new { hasProducts, pendingApprovals, cashSalesToday, stockAlerts,
                 business = details, roleCode, locations, subscription, accessStatus,
                 canOperate, cashSaleEnabled = environment.IsDevelopment() });
         });

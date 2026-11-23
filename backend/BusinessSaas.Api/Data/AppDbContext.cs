@@ -194,6 +194,7 @@ public sealed class RetailProduct
     public string Sku { get; set; } = "";
     public string? Barcode { get; set; }
     public decimal SalePrice { get; set; }
+    public decimal? ReorderLevel { get; set; }
     public string TaxClassification { get; set; } = "";
     public bool IsActive { get; set; } = true;
 }
@@ -595,6 +596,9 @@ public sealed class AppDbContext(DbContextOptions<AppDbContext> options)
 
         builder.Entity<RetailProduct>(entity =>
         {
+            entity.ToTable(t => t.HasCheckConstraint("CK_RetailProducts_ReorderLevel",
+                "[ReorderLevel] IS NULL OR [ReorderLevel] >= 0"));
+            entity.Property(x => x.ReorderLevel).HasPrecision(18, 3);
             entity.Property(x => x.Name).HasMaxLength(150).IsRequired();
             entity.Property(x => x.Sku).HasMaxLength(50).IsRequired();
             entity.Property(x => x.Barcode).HasMaxLength(64);

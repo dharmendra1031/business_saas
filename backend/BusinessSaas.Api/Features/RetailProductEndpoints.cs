@@ -117,6 +117,7 @@ public static class RetailProductEndpoints
                 CategoryId = request.CategoryId,
                 UnitId = request.UnitId,
                 SalePrice = request.SalePrice,
+                ReorderLevel = request.ReorderLevel,
                 TaxClassification = NormalizeCode(request.TaxClassification),
                 IsActive = request.IsActive ?? true
             };
@@ -172,6 +173,7 @@ public static class RetailProductEndpoints
             product.CategoryId = request.CategoryId;
             product.UnitId = request.UnitId;
             product.SalePrice = request.SalePrice;
+            product.ReorderLevel = request.ReorderLevel;
             product.TaxClassification = NormalizeCode(request.TaxClassification);
             product.IsActive = request.IsActive.Value;
 
@@ -196,7 +198,7 @@ public static class RetailProductEndpoints
               category.BusinessId == businessId && unit.BusinessId == businessId
         select new ProductItem(product.Id, product.Name, product.Sku, product.Barcode,
             product.CategoryId, category.Name, product.UnitId, unit.Code,
-            product.SalePrice, product.TaxClassification, product.IsActive);
+            product.SalePrice, product.TaxClassification, product.IsActive, product.ReorderLevel);
 
     private static async Task<bool> ValidReferences(AppDbContext db, long businessId,
         long categoryId, long unitId, bool requireActive)
@@ -228,6 +230,10 @@ public static class RetailProductEndpoints
         if (request.SalePrice is < 0 or > 9999999999.99m ||
             decimal.Round(request.SalePrice, 2) != request.SalePrice)
             return "Sale price must be non-negative with at most two decimal places.";
+        if (request.ReorderLevel is < 0m or > 9999999999.999m ||
+            request.ReorderLevel is not null &&
+            decimal.Round(request.ReorderLevel.Value, 3) != request.ReorderLevel.Value)
+            return "Reorder level must be non-negative with at most three decimal places.";
         if (tax.Length > 30 || !tax.All(ch =>
             char.IsAsciiLetterOrDigit(ch) || ch is '-' or '_'))
             return "Tax classification must be a code of at most 30 letters, numbers, hyphens or underscores.";
@@ -248,9 +254,10 @@ public static class RetailProductEndpoints
     }
 
     private sealed record ProductRequest(string? Name, string? Sku, string? Barcode,
-        long CategoryId, long UnitId, decimal SalePrice, string? TaxClassification, bool? IsActive);
+        long CategoryId, long UnitId, decimal SalePrice, string? TaxClassification, bool? IsActive,
+        decimal? ReorderLevel = null);
 
     private sealed record ProductItem(long Id, string Name, string Sku, string? Barcode,
         long CategoryId, string CategoryName, long UnitId, string UnitCode,
-        decimal SalePrice, string TaxClassification, bool IsActive);
+        decimal SalePrice, string TaxClassification, bool IsActive, decimal? ReorderLevel);
 }

@@ -638,6 +638,10 @@ namespace BusinessSaas.Api.Data.Migrations
                         .HasMaxLength(150)
                         .HasColumnType("nvarchar(150)");
 
+                    b.Property<decimal?>("ReorderLevel")
+                        .HasPrecision(18, 3)
+                        .HasColumnType("decimal(18,3)");
+
                     b.Property<decimal>("SalePrice")
                         .HasPrecision(18, 2)
                         .HasColumnType("decimal(18,2)");
@@ -668,7 +672,11 @@ namespace BusinessSaas.Api.Data.Migrations
 
                     b.HasIndex("UnitId");
 
-                    b.ToTable("RetailProducts");
+                    b.ToTable("RetailProducts", t =>
+                        {
+                            t.HasCheckConstraint("CK_RetailProducts_ReorderLevel",
+                                "[ReorderLevel] IS NULL OR [ReorderLevel] >= 0");
+                        });
                 });
 
             modelBuilder.Entity("BusinessSaas.Api.Data.RetailSupplier", b =>
