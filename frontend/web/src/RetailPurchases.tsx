@@ -385,7 +385,11 @@ export default function RetailPurchases({ businessId, canOperate, locations, rol
               {suppliers.map(x => <option key={x.id} value={x.id}>{x.name}</option>)}
             </select>
             <button type="button" className="btn btn-sm btn-outline-secondary mt-2"
-              onClick={() => setSupplierFormOpen(open => !open)}>
+              disabled={addingSupplier}
+              onClick={() => {
+                if (supplierFormOpen) setNewSupplier({ name: '', phone: '', email: '' })
+                setSupplierFormOpen(open => !open)
+              }}>
               {supplierFormOpen ? 'Cancel adding supplier' : '+ New supplier'}
             </button>
             {supplierFormOpen && <div className="product-form" role="group" aria-label="New supplier"
