@@ -125,6 +125,13 @@ async function scenario(name, {
       return response(route, 200, multiple ? [first, { ...first, id: 2, name: 'Second Retail' }] : [first])
     }
     if (/^\/businesses\/\d+\/dashboard$/.test(path)) return response(route, 200, dashboard(role, hasProducts, pendingApprovals, Number(path.split('/')[2]), locationCount, cashSalesFixture, stockAlertsFixture, ownerPos))
+    if (/^\/businesses\/\d+\/purchase-orders$/.test(path) && route.request().method() === 'GET')
+      return response(route, 200, { items: [], total: 0, page: 1, pageSize: 20 })
+    if (/^\/businesses\/\d+\/suppliers$/.test(path) && route.request().method() === 'GET')
+      return response(route, 200, {
+        items: [{ id: 21, name: 'Wholesaler', phone: '1234567890', email: '', isActive: true }],
+        total: 1, page: 1, pageSize: 20
+      })
     if (/^\/businesses\/\d+\/stock\/locations\/\d+$/.test(path)) {
       stockPaths.push(path)
       const url = new URL(route.request().url())
