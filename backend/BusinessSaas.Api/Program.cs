@@ -16,6 +16,7 @@ if (string.IsNullOrWhiteSpace(connectionString))
     throw new InvalidOperationException("ConnectionStrings:Default is required.");
 
 builder.Services.AddDbContext<AppDbContext>(options => options.UseSqlServer(connectionString));
+builder.Services.AddSingleton<IOwnerInvitationMailer, SmtpOwnerInvitationMailer>();
 builder.Services.AddHttpClient<IRazorpayGateway, RazorpayGateway>(client =>
 {
     client.BaseAddress = new Uri("https://api.razorpay.com/v1/");
@@ -310,6 +311,7 @@ app.MapGet("/api/ready", async (AppDbContext db, ILogger<Program> logger) =>
     }
 });
 app.MapAuthEndpoints();
+app.MapOwnerInvitationEndpoints();
 app.MapBusinessEndpoints();
 app.MapBusinessStaffEndpoints();
 app.MapRetailModule();

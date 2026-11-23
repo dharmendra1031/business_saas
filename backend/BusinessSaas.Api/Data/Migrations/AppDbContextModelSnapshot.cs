@@ -140,6 +140,27 @@ namespace BusinessSaas.Api.Data.Migrations
                     b.ToTable("PlatformAnnouncements");
                 });
 
+            modelBuilder.Entity("BusinessSaas.Api.Data.PlatformOwnerInvitation", b =>
+                {
+                    b.Property<long>("Id").ValueGeneratedOnAdd().HasColumnType("bigint");
+                    SqlServerPropertyBuilderExtensions.UseIdentityColumn(b.Property<long>("Id"));
+                    b.Property<string>("Email").IsRequired().HasMaxLength(254).HasColumnType("nvarchar(254)");
+                    b.Property<string>("NormalizedEmail").IsRequired().HasMaxLength(254).HasColumnType("nvarchar(254)");
+                    b.Property<string>("TokenHash").IsRequired().HasMaxLength(64).HasColumnType("nvarchar(64)");
+                    b.Property<string>("Reason").IsRequired().HasMaxLength(200).HasColumnType("nvarchar(200)");
+                    b.Property<long>("CreatedByUserId").HasColumnType("bigint");
+                    b.Property<long?>("AcceptedUserId").HasColumnType("bigint");
+                    b.Property<DateTime>("CreatedAtUtc").HasColumnType("datetime2");
+                    b.Property<DateTime>("ExpiresAtUtc").HasColumnType("datetime2");
+                    b.Property<DateTime?>("AcceptedAtUtc").HasColumnType("datetime2");
+                    b.Property<DateTime?>("RevokedAtUtc").HasColumnType("datetime2");
+                    b.HasKey("Id");
+                    b.HasIndex("TokenHash").IsUnique();
+                    b.HasIndex("NormalizedEmail", "CreatedAtUtc");
+                    b.HasIndex("CreatedByUserId");
+                    b.ToTable("PlatformOwnerInvitations");
+                });
+
             modelBuilder.Entity("BusinessSaas.Api.Data.PlatformAuditEvent", b =>
                 {
                     b.Property<long>("Id")
@@ -1236,6 +1257,15 @@ namespace BusinessSaas.Api.Data.Migrations
                     b.HasKey("UserId", "LoginProvider", "Name");
 
                     b.ToTable("AspNetUserTokens", (string)null);
+                });
+
+            modelBuilder.Entity("BusinessSaas.Api.Data.PlatformOwnerInvitation", b =>
+                {
+                    b.HasOne("BusinessSaas.Api.Data.AppUser", null)
+                        .WithMany()
+                        .HasForeignKey("CreatedByUserId")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .IsRequired();
                 });
 
             modelBuilder.Entity("BusinessSaas.Api.Data.PlatformAuditEvent", b =>

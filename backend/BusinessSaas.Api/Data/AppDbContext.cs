@@ -6,6 +6,21 @@ namespace BusinessSaas.Api.Data;
 
 public sealed class AppUser : IdentityUser<long>;
 
+public sealed class PlatformOwnerInvitation
+{
+    public long Id { get; set; }
+    public string Email { get; set; } = "";
+    public string NormalizedEmail { get; set; } = "";
+    public string TokenHash { get; set; } = "";
+    public DateTime CreatedAtUtc { get; set; } = DateTime.UtcNow;
+    public DateTime ExpiresAtUtc { get; set; }
+    public DateTime? AcceptedAtUtc { get; set; }
+    public DateTime? RevokedAtUtc { get; set; }
+    public long CreatedByUserId { get; set; }
+    public long? AcceptedUserId { get; set; }
+    public string Reason { get; set; } = "";
+}
+
 public sealed class PlatformAuditEvent
 {
     public long Id { get; set; }
@@ -366,6 +381,7 @@ public sealed class AppDbContext(DbContextOptions<AppDbContext> options)
     : IdentityUserContext<AppUser, long>(options)
 {
     public DbSet<PlatformAuditEvent> PlatformAuditEvents => Set<PlatformAuditEvent>();
+    public DbSet<PlatformOwnerInvitation> PlatformOwnerInvitations => Set<PlatformOwnerInvitation>();
     public DbSet<PlatformModulePolicy> PlatformModulePolicies => Set<PlatformModulePolicy>();
     public DbSet<PlatformMaintenanceWindow> PlatformMaintenanceWindows => Set<PlatformMaintenanceWindow>();
     public DbSet<PlatformAnnouncement> PlatformAnnouncements => Set<PlatformAnnouncement>();
@@ -402,6 +418,18 @@ public sealed class AppDbContext(DbContextOptions<AppDbContext> options)
     protected override void OnModelCreating(ModelBuilder builder)
     {
         base.OnModelCreating(builder);
+
+        builder.Entity<PlatformOwnerInvitation>(entity =>
+        {
+            entity.Property(x => x.Email).HasMaxLength(254).IsRequired();
+            entity.Property(x => x.NormalizedEmail).HasMaxLength(254).IsRequired();
+            entity.Property(x => x.TokenHash).HasMaxLength(64).IsRequired();
+            entity.Property(x => x.Reason).HasMaxLength(200).IsRequired();
+            entity.HasIndex(x => x.TokenHash).IsUnique();
+            entity.HasIndex(x => new { x.NormalizedEmail, x.CreatedAtUtc });
+            entity.HasOne<AppUser>().WithMany()
+                .HasForeignKey(x => x.CreatedByUserId).OnDelete(DeleteBehavior.Restrict);
+        });
 
         builder.Entity<PlatformAuditEvent>(entity =>
         {
