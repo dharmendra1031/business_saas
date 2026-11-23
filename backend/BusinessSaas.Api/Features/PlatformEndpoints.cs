@@ -27,7 +27,7 @@ public static class PlatformEndpoints
         });
 
         group.MapGet("/audit", async (ClaimsPrincipal user, AppDbContext db,
-            IConfiguration configuration, int page = 1, int pageSize = 20) =>
+            IConfiguration configuration, long? eventId, long? actorUserId, int page = 1, int pageSize = 20) =>
         {
             if (!PlatformOwner.IsOwner(user, configuration))
                 return Results.Forbid();
@@ -35,8 +35,16 @@ public static class PlatformEndpoints
             if (page is < 1 or > 100000 || pageSize is < 1 or > 50)
                 return Results.BadRequest(new { message = "Choose a valid page and page size (1–50)." });
 
-            var total = await db.PlatformAuditEvents.CountAsync();
-            var items = await db.PlatformAuditEvents.AsNoTracking()
+            if (eventId is <= 0)
+                return Results.BadRequest(new { message = "Choose a valid audit event ID." });
+            if (actorUserId is <= 0)
+                return Results.BadRequest(new { message = "Choose a valid audit actor ID." });
+
+            var query = db.PlatformAuditEvents.AsNoTracking();
+            if (eventId.HasValue) query = query.Where(x => x.Id == eventId.Value);
+            if (actorUserId.HasValue) query = query.Where(x => x.ActorUserId == actorUserId.Value);
+            var total = await query.CountAsync();
+            var items = await query
                 .OrderByDescending(x => x.Id)
                 .Skip((page - 1) * pageSize).Take(pageSize)
                 .Select(x => new
@@ -69,7 +77,9 @@ public static class PlatformEndpoints
 
             var totalCustomers = await db.Users.CountAsync(x => x.Id != ownerId);
             var totalBusinesses = await db.Businesses.CountAsync();
-            var activeSubscriptions = await db.BusinessSubscriptions.CountAsync(x => x.Status == "Active");
+            var activeSubscriptions = await db.BusinessSubscriptions.CountAsync(x =>
+                x.Status == "Active" && x.PaidStartsAtUtc <= now &&
+                x.PaidEndsAtUtc > now && x.PaidPlanVersionId.HasValue);
             var activeTrials = await db.BusinessSubscriptions.CountAsync(x =>
                 x.Status == "Trial" && x.TrialEndsAtUtc > now);
             var expiredTrials = await db.BusinessSubscriptions.CountAsync(x =>
@@ -431,6 +441,11 @@ public static class PlatformEndpoints
             if (updated != 1)
                 return Results.Conflict(new { message = "Subscription changed elsewhere. Reload." });
 
+            var subscription = await db.BusinessSubscriptions.AsNoTracking()
+                .SingleAsync(x => x.BusinessId == businessId);
+            var accessStatus = SubscriptionAccess.ResolveStatus(subscription.Status, subscription.TrialEndsAtUtc,
+                subscription.PaidStartsAtUtc, subscription.PaidEndsAtUtc, subscription.PaidPlanVersionId, DateTime.UtcNow);
+
             var audit = new PlatformAuditEvent
             {
                 ActorUserId = long.Parse(user.FindFirstValue(ClaimTypes.NameIdentifier)!),
@@ -446,7 +461,7 @@ public static class PlatformEndpoints
             await db.SaveChangesAsync();
             await transaction.CommitAsync();
 
-            return Results.Ok(new { businessId, status = newStatus, auditId = audit.Id });
+            return Results.Ok(new { businessId, status = newStatus, accessStatus, auditId = audit.Id });
         });
 
         group.MapPost("/businesses/{businessId:long}/extend-trial", async (long businessId,
@@ -508,7 +523,7 @@ public static class PlatformEndpoints
         });
 
         group.MapGet("/customers", async (ClaimsPrincipal user, AppDbContext db,
-            IConfiguration configuration, string? search, int page = 1, int pageSize = 20) =>
+            IConfiguration configuration, string? search, bool? emailConfirmed, int page = 1, int pageSize = 20) =>
         {
             if (!PlatformOwner.IsOwner(user, configuration))
                 return Results.Forbid();
@@ -522,6 +537,8 @@ public static class PlatformEndpoints
 
             var ownerId = long.Parse(configuration["Platform:OwnerUserId"]!);
             var query = db.Users.AsNoTracking().Where(x => x.Id != ownerId);
+            if (emailConfirmed.HasValue)
+                query = query.Where(x => x.EmailConfirmed == emailConfirmed.Value);
             if (term.Length > 0)
                 query = query.Where(x => x.NormalizedEmail != null &&
                     x.NormalizedEmail.Contains(term));
@@ -567,14 +584,30 @@ public static class PlatformEndpoints
                                         business.Name,
                                         TypeName = type.Name,
                                         PlanCode = subscription == null ? null : subscription.PlanCode,
-                                        SubscriptionStatus = subscription == null ? null : subscription.Status
+                                        SubscriptionStatus = subscription == null ? null : subscription.Status,
+                                        TrialEndsAtUtc = subscription == null ? (DateTime?)null : subscription.TrialEndsAtUtc,
+                                        PaidStartsAtUtc = subscription == null ? null : subscription.PaidStartsAtUtc,
+                                        PaidEndsAtUtc = subscription == null ? null : subscription.PaidEndsAtUtc,
+                                        PaidPlanVersionId = subscription == null ? null : subscription.PaidPlanVersionId
                                     }).ToListAsync();
 
-            return Results.Ok(new { customer.Id, customer.Email, customer.EmailConfirmed, businesses });
+            var now = DateTime.UtcNow;
+            return Results.Ok(new
+            {
+                customer.Id, customer.Email, customer.EmailConfirmed,
+                businesses = businesses.Select(x => new
+                {
+                    x.Id, x.Name, x.TypeName, x.PlanCode, x.SubscriptionStatus,
+                    AccessStatus = x.SubscriptionStatus is null ? null : SubscriptionAccess.ResolveStatus(
+                        x.SubscriptionStatus, x.TrialEndsAtUtc, x.PaidStartsAtUtc,
+                        x.PaidEndsAtUtc, x.PaidPlanVersionId, now)
+                })
+            });
         });
 
         group.MapGet("/businesses", async (ClaimsPrincipal user, AppDbContext db, IConfiguration configuration,
-            string? search, int page = 1, int pageSize = 20) =>
+            string? search, string? ownerEmail, long? businessTypeId, string? planCode,
+            string? status, int page = 1, int pageSize = 20) =>
         {
             if (!PlatformOwner.IsOwner(user, configuration))
                 return Results.Forbid();
@@ -585,12 +618,19 @@ public static class PlatformEndpoints
             var term = search?.Trim() ?? "";
             if (term.Length > 100)
                 return Results.BadRequest(new { message = "Search must be 100 characters or less." });
+            var ownerTerm = ownerEmail?.Trim().ToUpperInvariant() ?? "";
+            if (ownerTerm.Length > 254 || businessTypeId is <= 0)
+                return Results.BadRequest(new { message = "Choose a valid owner email or business type filter." });
 
-            var query = db.Businesses.AsNoTracking()
-                .Where(x => term == "" || x.Name.Contains(term));
-            var total = await query.CountAsync();
+            var planFilter = planCode?.Trim().ToUpperInvariant() ?? "";
+            var statusFilter = status?.Trim().ToUpperInvariant() ?? "";
+            if (planFilter != "" && !Plans.Any(x => x.Code == planFilter))
+                return Results.BadRequest(new { message = "Choose a valid plan filter." });
+            if (statusFilter is not ("" or "TRIAL" or "TRIALEXPIRED" or "ACTIVE" or "INACTIVE" or "SUSPENDED" or "NONE"))
+                return Results.BadRequest(new { message = "Choose a valid subscription status filter." });
 
-            var items = await (from business in query
+            var now = DateTime.UtcNow;
+            var query = from business in db.Businesses.AsNoTracking()
                                join owner in db.Users.AsNoTracking()
                                    on business.CreatedByUserId equals owner.Id
                                join type in db.BusinessTypes.AsNoTracking()
@@ -598,19 +638,45 @@ public static class PlatformEndpoints
                                join sub in db.BusinessSubscriptions.AsNoTracking()
                                    on business.Id equals sub.BusinessId into subscriptions
                                from subscription in subscriptions.DefaultIfEmpty()
-                               orderby business.Id descending
+                               where term == "" || business.Name.Contains(term)
+                               where ownerTerm == "" || (owner.NormalizedEmail ?? "").Contains(ownerTerm)
+                               where businessTypeId == null || business.BusinessTypeId == businessTypeId
                                select new
                                {
                                    business.Id,
                                    business.Name,
                                    business.CountryCode,
+                                   CreatedAtUtc = DateTime.SpecifyKind(business.CreatedAtUtc, DateTimeKind.Utc),
                                    TypeName = type.Name,
                                    OwnerEmail = owner.Email,
                                    PlanCode = subscription == null ? null : subscription.PlanCode,
                                    SubscriptionStatus = subscription == null ? null : subscription.Status,
+                                   DirectoryStatus = subscription == null ? "No subscription"
+                                       : subscription.Status == "Trial"
+                                           ? (subscription.TrialEndsAtUtc > now ? "Trial" : "Trial expired")
+                                       : subscription.Status == "Suspended" ? "Suspended"
+                                       : subscription.Status == "Active" && subscription.PaidStartsAtUtc <= now &&
+                                           subscription.PaidEndsAtUtc > now && subscription.PaidPlanVersionId.HasValue
+                                               ? "Active" : "Inactive",
                                    TrialEndsAtUtc = subscription == null
                                        ? (DateTime?)null : subscription.TrialEndsAtUtc
-                               }).Skip((page - 1) * pageSize).Take(pageSize).ToListAsync();
+                               };
+
+            if (planFilter != "") query = query.Where(x => x.PlanCode == planFilter);
+            var directoryStatus = statusFilter switch
+            {
+                "TRIAL" => "Trial",
+                "TRIALEXPIRED" => "Trial expired",
+                "ACTIVE" => "Active",
+                "INACTIVE" => "Inactive",
+                "SUSPENDED" => "Suspended",
+                "NONE" => "No subscription",
+                _ => null
+            };
+            if (directoryStatus is not null) query = query.Where(x => x.DirectoryStatus == directoryStatus);
+            var total = await query.CountAsync();
+            var items = await query.OrderByDescending(x => x.Id)
+                .Skip((page - 1) * pageSize).Take(pageSize).ToListAsync();
 
             return Results.Ok(new { items, total, page, pageSize });
         });
@@ -638,16 +704,36 @@ public static class PlatformEndpoints
                                      business.CurrencyCode,
                                      business.TimeZoneId,
                                      business.CreatedAtUtc,
+                                     LocationCount = db.BusinessLocations.Count(x => x.BusinessId == business.Id),
+                                     PrimaryLocationName = db.BusinessLocations
+                                         .Where(x => x.BusinessId == business.Id && x.IsPrimary)
+                                         .OrderBy(x => x.Id).Select(x => x.Name).FirstOrDefault(),
                                      TypeName = type.Name,
                                      OwnerEmail = owner.Email,
                                      PlanCode = subscription == null ? null : subscription.PlanCode,
                                      SubscriptionStatus = subscription == null ? null : subscription.Status,
                                      StatusBeforeSuspension = subscription == null ? null : subscription.StatusBeforeSuspension,
+                                     PaidStartsAtUtc = subscription == null ? null : subscription.PaidStartsAtUtc,
+                                     PaidEndsAtUtc = subscription == null ? null : subscription.PaidEndsAtUtc,
+                                     PaidPlanVersionId = subscription == null ? null : subscription.PaidPlanVersionId,
+                                     PaidPlanVersion = db.PublishedPlanVersions
+                                         .Where(x => subscription != null && x.Id == subscription.PaidPlanVersionId)
+                                         .Select(x => (int?)x.Version).FirstOrDefault(),
                                      TrialEndsAtUtc = subscription == null
                                          ? (DateTime?)null : subscription.TrialEndsAtUtc
                                  }).SingleOrDefaultAsync();
 
-            return details is null ? Results.NotFound() : Results.Ok(details);
+            if (details is null) return Results.NotFound();
+            var accessStatus = SubscriptionAccess.ResolveStatus(details.SubscriptionStatus, details.TrialEndsAtUtc,
+                details.PaidStartsAtUtc, details.PaidEndsAtUtc, details.PaidPlanVersionId, DateTime.UtcNow);
+            return Results.Ok(new
+            {
+                details.Id, details.Name, details.CountryCode, details.CurrencyCode, details.TimeZoneId,
+                details.CreatedAtUtc, details.LocationCount, details.PrimaryLocationName, details.TypeName,
+                details.OwnerEmail, details.PlanCode, details.SubscriptionStatus, details.StatusBeforeSuspension,
+                details.PaidStartsAtUtc, details.PaidEndsAtUtc, details.PaidPlanVersionId, details.PaidPlanVersion,
+                details.TrialEndsAtUtc, accessStatus
+            });
         });
     }
 

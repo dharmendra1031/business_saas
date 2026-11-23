@@ -23,7 +23,6 @@ public sealed class OwnerDashboardIntegrationTests
         using var factory = new WebApplicationFactory<Program>().WithWebHostBuilder(builder =>
         {
             builder.UseEnvironment("Development");
-            builder.UseSetting("Tests:AllowLegacyBusinessCreation", "true");
             builder.ConfigureServices(services =>
             {
                 services.RemoveAll<DbContextOptions<AppDbContext>>();
@@ -42,8 +41,8 @@ public sealed class OwnerDashboardIntegrationTests
         await Login(cashier, "dashboard-cashier@example.test");
         await Login(manager, "dashboard-manager@example.test");
 
-        var businessId = await CreateBusiness(owner, "Owner Shop", "owner-dashboard-key-2026");
-        var otherId = await CreateBusiness(outsider, "Other Shop", "other-dashboard-key-2026");
+        var businessId = await BusinessFixtures.SeedAsync(factory.Services, owner, "Owner Shop", "owner-dashboard-key-2026");
+        var otherId = await BusinessFixtures.SeedAsync(factory.Services, outsider, "Other Shop", "other-dashboard-key-2026");
 
         long todayId;
         using (var scope = factory.Services.CreateScope())
@@ -145,18 +144,6 @@ public sealed class OwnerDashboardIntegrationTests
             new { email, password = "TestPassword123!" })).StatusCode);
         Assert.Equal(HttpStatusCode.NoContent, (await Send(client, "/api/auth/login",
             new { email, password = "TestPassword123!" })).StatusCode);
-    }
-
-    private static async Task<long> CreateBusiness(HttpClient client, string name, string key)
-    {
-        var response = await Send(client, "/api/businesses", new
-        {
-            name, businessTypeId = 1, countryCode = "IN", currencyCode = "INR",
-            timeZoneId = "Asia/Kolkata", requestKey = key
-        });
-        Assert.Equal(HttpStatusCode.Created, response.StatusCode);
-        return (await response.Content.ReadFromJsonAsync<JsonElement>())
-            .GetProperty("id").GetInt64();
     }
 
     private static async Task<HttpResponseMessage> Send(HttpClient client, string path, object body)

@@ -163,11 +163,13 @@ function statusClass(status: string) {
   return 'is-muted'
 }
 
+export type OverviewSubscriptionFilter = 'Active' | 'Trial' | 'TrialExpired'
+
 export default function PlatformOverview({
   onViewBusiness, onSeeBusinesses, onCreateBusiness
 }: {
   onViewBusiness: (id: number) => void
-  onSeeBusinesses: () => void
+  onSeeBusinesses: (status?: OverviewSubscriptionFilter) => void
   onCreateBusiness: () => void
 }) {
   const [months, setMonths] = useState<6 | 12>(6)
@@ -209,9 +211,9 @@ export default function PlatformOverview({
   const metrics = summary ? [
     { label: 'Total Businesses', value: summary.totalBusinesses, Icon: Building2, kind: 'blue' },
     { label: 'Total Customers', value: summary.totalCustomers, Icon: Users, kind: 'violet' },
-    { label: 'Active Subscriptions', value: summary.activeSubscriptions, Icon: BadgeCheck, kind: 'green' },
-    { label: 'Active Trials', value: summary.activeTrials, Icon: Clock3, kind: 'amber' },
-    { label: 'Expired Trials', value: summary.expiredTrials, Icon: AlertTriangle, kind: 'rose' }
+    { label: 'Active Subscriptions', value: summary.activeSubscriptions, Icon: BadgeCheck, kind: 'green', status: 'Active' as const },
+    { label: 'Active Trials', value: summary.activeTrials, Icon: Clock3, kind: 'amber', status: 'Trial' as const },
+    { label: 'Expired Trials', value: summary.expiredTrials, Icon: AlertTriangle, kind: 'rose', status: 'TrialExpired' as const }
   ] : []
 
   return <div className="platform-dashboard">
@@ -250,13 +252,14 @@ export default function PlatformOverview({
       Loading actual platform totals and activity…
     </div> : summary && <>
       <div className="platform-metric-grid">
-        {metrics.map(({ label, value, Icon, kind }) =>
+        {metrics.map(({ label, value, Icon, kind, status }) =>
           <section className="platform-metric" key={label}>
             <div className="platform-metric-badge">
               <span className={`platform-metric-icon is-${kind}`}><Icon size={23} aria-hidden="true" /></span>
               <div className="platform-metric-content">
                 <span>{label}</span><strong>{value.toLocaleString()}</strong>
-                <small>Current verified count</small>
+                {status && <button type="button" className="platform-link-action"
+                  onClick={() => onSeeBusinesses(status)}>View {label.toLowerCase()}</button>}
               </div>
             </div>
           </section>)}
@@ -285,7 +288,7 @@ export default function PlatformOverview({
           <div className="platform-panel-heading">
             <div><h2><Building2 size={19} /> Recent Businesses</h2>
               <p>Latest registered business workspaces</p></div>
-            <button className="platform-link-action" type="button" onClick={onSeeBusinesses}>
+            <button className="platform-link-action" type="button" onClick={() => onSeeBusinesses()}>
               View all <ArrowRight size={15} />
             </button>
           </div>
@@ -348,7 +351,7 @@ export default function PlatformOverview({
         <div className="platform-panel-heading">
           <div><h2><Clock3 size={19} /> Trials Expiring Soon</h2>
             <p>Next seven days · {summary.expiringTrialCount.toLocaleString()} trials</p></div>
-          <button type="button" className="platform-link-action" onClick={onSeeBusinesses}>
+          <button type="button" className="platform-link-action" onClick={() => onSeeBusinesses()}>
             Businesses <ArrowRight size={15} />
           </button>
         </div>

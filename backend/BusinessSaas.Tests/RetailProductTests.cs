@@ -24,7 +24,6 @@ public sealed class RetailProductTests
         using var factory = new WebApplicationFactory<Program>().WithWebHostBuilder(builder =>
         {
             builder.UseEnvironment("Development");
-            builder.UseSetting("Tests:AllowLegacyBusinessCreation", "true");
             builder.ConfigureServices(services =>
             {
                 services.RemoveAll<DbContextOptions<AppDbContext>>();
@@ -46,8 +45,8 @@ public sealed class RetailProductTests
         await Register(cashier, "product-cashier@example.test");
         await Register(other, "product-other@example.test");
 
-        var businessId = await CreateBusiness(owner, "Product Retail A", "product-retail-a-20261112");
-        var otherBusinessId = await CreateBusiness(other, "Product Retail B", "product-retail-b-20261112");
+        var businessId = await BusinessFixtures.SeedAsync(factory.Services, owner, "Product Retail A", "product-retail-a-20261112");
+        var otherBusinessId = await BusinessFixtures.SeedAsync(factory.Services, other, "Product Retail B", "product-retail-b-20261112");
 
         using (var scope = factory.Services.CreateScope())
         {
@@ -309,13 +308,6 @@ public sealed class RetailProductTests
             (await Post(client, "/api/auth/login",
                 new { email, password = "TestPassword123!" })).StatusCode);
     }
-
-    private static async Task<long> CreateBusiness(HttpClient client, string name, string key) =>
-        await CreateId(client, "/api/businesses", new
-        {
-            name, businessTypeId = 1, countryCode = "IN", currencyCode = "INR",
-            timeZoneId = "Asia/Kolkata", requestKey = key
-        });
 
     private static async Task<long> CreateId(HttpClient client, string url, object request)
     {

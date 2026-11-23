@@ -24,7 +24,6 @@ public sealed class RetailContactTests
         using var factory = new WebApplicationFactory<Program>().WithWebHostBuilder(builder =>
         {
             builder.UseEnvironment("Development");
-            builder.UseSetting("Tests:AllowLegacyBusinessCreation", "true");
             builder.ConfigureServices(services =>
             {
                 services.RemoveAll<DbContextOptions<AppDbContext>>();
@@ -44,8 +43,8 @@ public sealed class RetailContactTests
         await Register(other, "suppliers-other@example.test");
         await Register(manager, "suppliers-manager@example.test");
         await Register(cashier, "suppliers-cashier@example.test");
-        var businessId = await CreateBusiness(owner, "Supplier Shop", "supplier-main-20261112");
-        var otherId = await CreateBusiness(other, "Another Supplier Shop", "supplier-other-20261112");
+        var businessId = await BusinessFixtures.SeedAsync(factory.Services, owner, "Supplier Shop", "supplier-main-20261112");
+        var otherId = await BusinessFixtures.SeedAsync(factory.Services, other, "Another Supplier Shop", "supplier-other-20261112");
         // Retail APIs must reject a valid membership in a different business template.
         long salonTypeId;
         using (var scope = factory.Services.CreateScope())
@@ -56,15 +55,8 @@ public sealed class RetailContactTests
             await db.SaveChangesAsync();
             salonTypeId = salon.Id;
         }
-        var salonResponse = await Send(owner, HttpMethod.Post, "/api/businesses", new
-        {
-            name = "Separate Salon", businessTypeId = salonTypeId,
-            countryCode = "IN", currencyCode = "INR", timeZoneId = "Asia/Kolkata",
-            requestKey = "separate-salon-20261112"
-        });
-        Assert.Equal(HttpStatusCode.Created, salonResponse.StatusCode);
-        var salonId = (await salonResponse.Content.ReadFromJsonAsync<JsonElement>())
-            .GetProperty("id").GetInt64();
+        var salonId = await BusinessFixtures.SeedAsync(factory.Services, owner,
+            "Separate Salon", "separate-salon-20261112", salonTypeId);
         Assert.Equal(HttpStatusCode.NotFound,
             (await owner.GetAsync($"/api/businesses/{salonId}/categories")).StatusCode);
         Assert.Equal(HttpStatusCode.NotFound,
@@ -175,18 +167,6 @@ public sealed class RetailContactTests
         Assert.Equal(HttpStatusCode.NoContent,
             (await Send(client, HttpMethod.Post, "/api/auth/login",
                 new { email, password = "TestPassword123!" })).StatusCode);
-    }
-
-    private static async Task<long> CreateBusiness(HttpClient client, string name, string requestKey)
-    {
-        var response = await Send(client, HttpMethod.Post, "/api/businesses", new
-        {
-            name, businessTypeId = 1, countryCode = "IN", currencyCode = "INR",
-            timeZoneId = "Asia/Kolkata", requestKey
-        });
-        Assert.Equal(HttpStatusCode.Created, response.StatusCode);
-        return (await response.Content.ReadFromJsonAsync<JsonElement>())
-            .GetProperty("id").GetInt64();
     }
 
     private static async Task<HttpResponseMessage> Send(HttpClient client,

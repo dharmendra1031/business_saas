@@ -44,7 +44,7 @@ Platform Super Admin needs central controls for registered **Business Type creat
 **Decision DR-001 (latest owner direction, 21 Nov 2026):** Only **Platform Super Admin** creates/provisions a new business and assigns its Business Owner; the Business Owner/Admin logs into a separate business workspace and manages only authorized business operations. A POS/Cashier uses the shared sign-in and a dedicated checkout workspace.
 
 - This supersedes the **earlier revisions** of `BUSINESS_SAAS_MASTER_SRS.md` §4 and `APPROVED_UI_UX.md` §5 that allowed owner self-service creation. Those documents have now been textually aligned with this decision; **application code and access-control tests are still pending**. Do not reinstate the superseded self-service path.
-- **Current implementation (22 Nov):** The Owner-facing `Create Business` UI was removed; `POST /api/businesses` is now forbidden by default. Only legacy **Development integration fixtures** may opt into that route using `Tests:AllowLegacyBusinessCreation`; remove this test-compatibility path when fixtures migrate. Platform MFA-only `POST /api/platform/businesses` creates a Starter trial business with an existing verified Owner, first location, audit and idempotency. **P0 gaps**: email verification/invitation delivery, wider plan/entitlement selection, browser UX acceptance and retired fixture compatibility.
+- **Current implementation:** Owner-facing creation is retired and `POST /api/businesses` returns Forbidden for authenticated callers in every environment. Platform MFA-only `POST /api/platform/businesses` creates a Starter trial business with an existing verified Owner, first location, audit and idempotency. **P0 gaps** include email verification/invitation delivery, wider plan/entitlement selection and hosted browser acceptance.
 - Super Admin manages SaaS-level businesses, customer accounts, plans/billing, licensing, settings, security and operations **but never edits a tenant's stock, retail sales or POS transactions**. "Only Super Admin creates business" means **exclusive business creation permission**, not removal of all other platform-management functions.
 - **One shared sign-in screen** for Super Admin, Owner/Admin and Cashier. The server verifies identity, MFA and role/tenant membership; the user never selects an authorization role before login. Super Admin proceeds to MFA/platform, a single assigned business opens automatically, and multiple assigned businesses require selection after login. One ASP.NET API and React frontend; no duplicated role-specific login pages.
 - **Super Admin has exactly eight canonical main sidebar modules**: **Dashboard, Customers, Businesses, Plans & Billing, Licenses, Platform Settings, Security & Audit, Operations**. The mockups' standalone Users, Subscriptions, Payments, Invoices, Reports, Announcements and System Health are **sub-screens/tabs within these modules**, NOT extra top-level navigation. `Customers` refers to SaaS account owners, while `Business Customers` are that shop's retail customers.
@@ -85,8 +85,8 @@ The mockup pictures display illustrative controls (Card, UPI, Split, Services, d
 
 | Current evidence status | Count |
 | --- | ---: |
-| Missing | 60 |
-| Partial | 71 |
+| Missing | 58 |
+| Partial | 73 |
 | Deferred | 14 |
 
 ### A. Entry, authentication and cross-workspace navigation
@@ -282,12 +282,19 @@ The mockup pictures display illustrative controls (Card, UPI, Split, Services, d
 
 **Reference:** User-approved final 12-screen Super Admin montage from 21 Nov 2026. **Detailed, itemized UI comparison:** [Businesses and Create Business Visual QA](./SUPER_ADMIN_BUSINESS_VISUAL_QA.md).
 
-- `SA-03`: Business directory includes real server-paginated table and new Create Business CTA; plan/status filters and browser screenshot sign-off pending.
+- `SA-03`: Business directory supports server-side name and owner email search, business type, plan and effective subscription status filters, and filtered pagination. Expired paid subscriptions appear under Inactive. Chromium fixture QA at 1366px and 360px verified combined owner and type filters, clearing filters, and the UTC creation date. Hosted visual sign-off remains pending.
 - `SA-04`: business name, type, country, currency and timezone wizard step built.
 - `SA-05`: verified existing owner lookup built; **owner invitation/email verification flow missing**.
-- `SA-06`: Starter trial + named first location built; general published-plan selection missing.
-- `SA-07`: review screen and MFA-required transactional platform API built; server event audit and duplicate-request protection tested.
-- `SA-08`: newly created business opens real details; dedicated success/recovery state and browser visual check pending.
+- `SA-06`: The wizard shows the server-configured Starter trial duration and captures the first location. A duration change requires the operator to review and confirm again before creating a business. Creation and recovery show the persisted trial expiry in the selected business timezone. Published-plan selection and entitlement display remain pending.
+- `SA-07`: review screen and MFA-required transactional platform API built; the wizard checks global type, required modules and blocking maintenance via the same server rules as create. Server event audit and duplicate-request protection are covered by integration tests. Chromium fixture QA verified the eligibility block and retry at 1366px and 360px. Hosted acceptance remains pending.
+- `SA-08`: creation and replay show the numeric Business ID and verified Owner assignment, with a link to real details. Chromium fixture QA verified that an interrupted response can be recovered in the open wizard with identical details and the same request key. Hosted acceptance and invitation delivery remain pending.
+- `SA-09`: Business Details shows the location count and primary location from the platform API. Chromium fixtures verified both at 1366px and 360px. Hosted acceptance remains pending.
+- `SA-10`: Extend Trial shows current and estimated expiry in the business timezone and accepts whole days from 1 to 30. Chromium fixtures at 1366px and 360px verified the preview, submission with the prior expiry and reason, and display of the returned expiry and audit ID. Hosted acceptance remains pending.
+- `SA-11`: Suspend and reactivate require a reason and confirmation. The result shows the audit ID and whether business access was restored. Chromium fixtures verified suspension and reactivation after paid expiry at 1366px and 360px. Hosted acceptance remains pending.
+- `SA-14`: Customer directory combines email search with a server-side verification filter and paginates matching accounts with owned-business counts. Chromium fixtures verified both verification filters at 1366px and 360px. Hosted acceptance remains pending.
+- `SA-15`: Chromium fixtures at 1366px and 360px verified opening Customer Details and following its owned-business link to Business Details. Hosted acceptance remains pending.
+- `SA-41`: Trial extension and subscription status confirmations link to the exact audit record. Security & Audit supports direct event ID lookup and server-side actor filtering under its existing MFA requirement. Chromium fixtures at 1366px and 360px verified the confirmation link, record details, direct lookup, actor filtering and clearing the filter. Hosted acceptance remains pending.
+- `SA-13`: Business Details shows the assigned paid plan version, trial and paid dates in the business timezone, and effective access status using the same server rules as the business dashboard. Chromium fixtures verified paid version, expiry timezone and inactive status at 1366px and 360px. Hosted acceptance remains pending.
 
 All these entries remain **PARTIAL, not DONE**. Frontend/backend/SQL CI passed for provisioning and security test code on [run 44988100644](https://github.com/dharmendra1031/business_saas/actions/runs/44988100644); later style/docs commits require their own final checks. Real browser screenshots have not been compared pixel by pixel.
 
@@ -355,7 +362,7 @@ Status: Partial | Missing | Deferred | DONE
 
 | Mismatch | Source checked | Correct outcome |
 | --- | --- | --- |
-| Owner create was present in UI/API | `App.tsx` now hides/removes it; `BusinessEndpoints.cs` denies it by default, integration tests use temporary Development flag | P0: finish legacy fixture migration, verified owner invite and end-to-end login/provision tests |
+| Owner create was present in UI/API | The UI and creation handler have been retired. Provisioning integration tests use the MFA-protected platform endpoint and tenant feature tests seed existing businesses. | P0: verified owner invite and hosted login/provision acceptance |
 | Shared sidebar persists in POS | `frontend/web/src/App.tsx` | P0: dedicated cashier shell, no admin sidebar; approved 61/39 design |
 | Product-search dropdown instead of approved catalogue cards | `frontend/web/src/CashCheckout.tsx` | P0: real image/category cards, scan/search and exact prices |
 | Cash tender inside page instead of approved Payment Popup | `frontend/web/src/CashCheckout.tsx` | P0: accessible modal and safe cash submit/retry |

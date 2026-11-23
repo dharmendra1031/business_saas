@@ -22,6 +22,7 @@ interface OwnedBusiness {
   typeName: string
   planCode: string | null
   subscriptionStatus: string | null
+  accessStatus?: string | null
 }
 
 interface CustomerDetails {
@@ -41,6 +42,8 @@ function VerificationBadge({ confirmed }: { confirmed: boolean }) {
 export default function PlatformCustomers({ onViewBusiness }: { onViewBusiness: (businessId: number) => void }) {
   const [search, setSearch] = useState('')
   const [term, setTerm] = useState('')
+  const [verification, setVerification] = useState('')
+  const filtered = !!(term || verification)
   const [page, setPage] = useState(1)
   const [reload, setReload] = useState(0)
   const [list, setList] = useState<CustomerPage | null>(null)
@@ -53,7 +56,9 @@ export default function PlatformCustomers({ onViewBusiness }: { onViewBusiness: 
     let active = true
     setLoading(true)
     setError('')
-    api<CustomerPage>(`/platform/customers?page=${page}&search=${encodeURIComponent(term)}`)
+    const params = new URLSearchParams({ page: String(page), search: term })
+    if (verification) params.set('emailConfirmed', verification)
+    api<CustomerPage>(`/platform/customers?${params}`)
       .then(result => { if (active) setList(result) })
       .catch(cause => {
         if (!active || cause instanceof SessionExpiredError) return
@@ -62,7 +67,7 @@ export default function PlatformCustomers({ onViewBusiness }: { onViewBusiness: 
       })
       .finally(() => { if (active) setLoading(false) })
     return () => { active = false }
-  }, [term, page, reload])
+  }, [term, page, reload, verification])
 
   async function openCustomer(id: number) {
     setError('')
@@ -138,16 +143,18 @@ export default function PlatformCustomers({ onViewBusiness }: { onViewBusiness: 
           <thead><tr><th scope="col">Business</th><th scope="col">Type</th>
             <th scope="col">Plan</th><th scope="col">Subscription</th>
             <th scope="col" className="text-end">Action</th></tr></thead>
-          <tbody>{details.businesses.map(business => <tr key={business.id}>
+          <tbody>{details.businesses.map(business => {
+            const status = business.accessStatus ?? business.subscriptionStatus
+            return <tr key={business.id}>
             <td><strong>{business.name}</strong><small className="d-block text-secondary">#{business.id}</small></td>
             <td>{business.typeName}</td>
             <td><span className="platform-plan-pill">{business.planCode ?? 'Not assigned'}</span></td>
-            <td><span className={`platform-state-pill ${business.subscriptionStatus === 'Active' ? 'is-active' :
-              business.subscriptionStatus === 'Trial' ? 'is-trial' : 'is-muted'}`}>
-              {business.subscriptionStatus ?? 'No subscription'}</span></td>
+            <td><span className={`platform-state-pill ${status === 'Active' ? 'is-active' :
+              status === 'Trial' ? 'is-trial' : 'is-muted'}`}>
+              {status === 'TrialExpired' ? 'Trial expired' : status ?? 'No subscription'}</span></td>
             <td className="text-end"><button type="button" className="btn btn-outline-secondary btn-sm"
               onClick={() => onViewBusiness(business.id)}>View Business <ArrowRight size={14} /></button></td>
-          </tr>)}</tbody>
+          </tr>})}</tbody>
         </table>
       </div>}
     </section>
@@ -167,7 +174,7 @@ export default function PlatformCustomers({ onViewBusiness }: { onViewBusiness: 
     <section className="content-section platform-directory-card" aria-label="Customer account directory">
       <div className="platform-directory-heading">
         <div><h2>Customer Directory</h2><p>{list && !loading ?
-          `${list.total.toLocaleString()} accounts matching the current search` : 'Verified platform account records'}</p></div>
+          `${list.total.toLocaleString()} matching accounts` : 'Platform customer accounts'}</p></div>
         <span className="platform-data-tag">Account registry</span>
       </div>
       <form className="platform-search platform-directory-search" role="search" onSubmit={applySearch}>
@@ -178,9 +185,15 @@ export default function PlatformCustomers({ onViewBusiness }: { onViewBusiness: 
             placeholder="Search by customer email" maxLength={100} value={search}
             onChange={event => setSearch(event.target.value)} />
         </div>
+        <select className="form-select platform-directory-filter" aria-label="Filter by email verification"
+          value={verification} onChange={event => { setVerification(event.target.value); setPage(1) }}>
+          <option value="">All verification statuses</option>
+          <option value="true">Verified</option>
+          <option value="false">Not verified</option>
+        </select>
         <button className="btn btn-primary" type="submit">Search</button>
-        {(term || search) && <button className="btn btn-outline-secondary" type="button"
-          onClick={() => { setSearch(''); setTerm(''); setPage(1) }}>Clear</button>}
+        {(filtered || search) && <button className="btn btn-outline-secondary" type="button"
+          onClick={() => { setSearch(''); setTerm(''); setVerification(''); setPage(1) }}>Clear</button>}
       </form>
       {error && <div className="alert alert-danger" role="alert">{error}
         <button type="button" className="btn btn-outline-secondary btn-sm ms-2"
@@ -191,8 +204,8 @@ export default function PlatformCustomers({ onViewBusiness }: { onViewBusiness: 
         <span className="spinner-border spinner-border-sm" aria-hidden="true" /> Loading customer accounts…
       </div> : list?.total === 0 ? <div className="platform-directory-empty" role="status">
         <Users size={32} />
-        <h3>{term ? 'No matching accounts' : 'No registered customer accounts'}</h3>
-        <p>{term ? 'Try another email address or clear the search.' :
+        <h3>{filtered ? 'No matching accounts' : 'No registered customer accounts'}</h3>
+        <p>{filtered ? 'Try another email address or clear the filters.' :
           'New customer accounts will appear after secure registration and provisioning.'}</p>
       </div> : list && <>
         <div className="table-responsive">

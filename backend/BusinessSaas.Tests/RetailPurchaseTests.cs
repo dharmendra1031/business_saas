@@ -24,7 +24,6 @@ public sealed class RetailPurchaseTests
         using var factory = new WebApplicationFactory<Program>().WithWebHostBuilder(builder =>
         {
             builder.UseEnvironment("Development");
-            builder.UseSetting("Tests:AllowLegacyBusinessCreation", "true");
             builder.ConfigureServices(services =>
             {
                 services.RemoveAll<DbContextOptions<AppDbContext>>();
@@ -42,18 +41,10 @@ public sealed class RetailPurchaseTests
         await Register(manager, "purchase-manager@example.test");
         await Register(cashier, "purchase-cashier@example.test");
 
-        var businessId = await CreateId(owner, "/api/businesses", new
-        {
-            name = "Purchase Shop", businessTypeId = 1, countryCode = "IN",
-            currencyCode = "INR", timeZoneId = "Asia/Kolkata",
-            requestKey = "purchase-shop-20261113"
-        });
-        var otherBusinessId = await CreateId(other, "/api/businesses", new
-        {
-            name = "Another Purchase Shop", businessTypeId = 1, countryCode = "IN",
-            currencyCode = "INR", timeZoneId = "Asia/Kolkata",
-            requestKey = "purchase-other-20261113"
-        });
+        var businessId = await BusinessFixtures.SeedAsync(factory.Services, owner,
+            "Purchase Shop", "purchase-shop-20261113");
+        var otherBusinessId = await BusinessFixtures.SeedAsync(factory.Services, other,
+            "Another Purchase Shop", "purchase-other-20261113");
 
         long locationId;
         using (var scope = factory.Services.CreateScope())

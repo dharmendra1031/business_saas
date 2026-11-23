@@ -6,7 +6,7 @@
 
 ## Implemented global controls (23 November 2026)
 
-- **New-business eligibility:** existing `BusinessTypes` now stores `ReleaseState` and `ReleaseRevision`; only the installed `RETAIL` workflow can be Available. `GET /api/business-types` hides paused templates and `POST /api/platform/businesses` rechecks the state inside the provisioning transaction.
+- **New-business eligibility:** existing `BusinessTypes` stores `ReleaseState` and `ReleaseRevision`; only the installed `RETAIL` workflow can be Available. The MFA-protected wizard reads `GET /api/platform/provisioning-eligibility` for eligible types or a blocking reason. `POST /api/platform/businesses` applies the same type, required-module and blocking-maintenance rules inside the provisioning transaction.
 - **Modules:** the compiled registry contains Catalog, Purchase, Inventory and development-only POS. `PlatformModulePolicies` stores only overrides; the authorized write middleware blocks disabled modules without deleting historical records. Stock-changing receiving posts are also covered by Inventory release state. This does not replace subscription/RBAC checks.
 - **Maintenance:** `PlatformMaintenanceWindows` supports global NoticeOnly/ReadOnly/Unavailable UTC windows (maximum 24 hours, up to 30 days ahead), overlap rejection and audited cancellation. Auth, health, public status and platform recovery remain accessible; existing authorized tenants receive a 503 for affected operations.
 - **Announcements:** `PlatformAnnouncements` supports a global, plain-text severity message with UTC window and audited archival. `GET /api/public/platform-availability` returns only currently active public messages. The React public banner renders text safely on page load.
@@ -87,9 +87,9 @@ Use existing platform audit records for *previous/new state, actor, reason, targ
 | `PUT /api/platform/release-controls/{scope}/{code}` | Platform Super Admin + MFA | State transition with row-version/ETag, required reason, validation against installed registry and audited response |
 | `GET/POST/PATCH /api/platform/maintenance` | Platform Super Admin + MFA | List/schedule/update/cancel scoped maintenance; validate overlapping windows and impact |
 | `GET/POST/PATCH /api/platform/announcements` | Platform Super Admin + MFA | Draft, preview, publish, archive; sanitization, schedule and immutable audit |
-| `GET /api/platform/provisioning-eligibility?typeCode=&marketCode=` | Platform Super Admin + MFA | Authoritative reason codes and current ability to provision; excludes private internals from public route |
+| `GET /api/platform/provisioning-eligibility` | Platform Super Admin + MFA | Live global eligibility returns eligible types or a blocking reason. Querying policy for a specific market remains proposed. |
 
-These are **contract proposals**, not live APIs. Keep current `GET /api/business-types` for compatibility until the new backend is deployed. The existing `POST /api/platform/businesses` must check current policy **in the same transaction/consistent read path as provisioning**, regardless of what the frontend select shows.
+The implementation notes above identify the live endpoints and their current scope. `GET /api/business-types` remains available for existing callers. `POST /api/platform/businesses` checks the current global policy inside the provisioning transaction.
 
 ## 5. Enforcement and precedence
 
@@ -139,4 +139,4 @@ Show non-blocking notices as a dismissible accessible banner (persist dismissal 
 4. **Then:** scheduled maintenance/read-only and notices, review/confirm/audit/recovery, targeted messaging and operational runbook.
 5. **Finally:** real authenticated visual tests, E2E blocked/allowed scenarios, rollout/rollback and production release.
 
-The system has **no operational maintenance or create-eligibility control today** until its server-side integration is completed.
+The implemented global controls are listed at the top of this document. Scoped policies and release acceptance remain pending.

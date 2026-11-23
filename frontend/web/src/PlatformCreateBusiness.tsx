@@ -1,8 +1,14 @@
 import { useEffect, useState, type FormEvent } from 'react'
 import { ArrowLeft, ArrowRight, Building2, CheckCircle2, ShieldCheck, Store, UserRound } from 'lucide-react'
-import { api, operationKey, post, SessionExpiredError, type BusinessMarket, type BusinessType } from './api'
+import { api, ApiResponseError, operationKey, post, SessionExpiredError, type BusinessMarket, type BusinessType } from './api'
 
 type VerifiedOwner = { id: number; email: string; verified: boolean }
+type ProvisioningEligibility = {
+  types: BusinessType[]
+  block: { code: string; message: string } | null
+  trialDays: number | null
+}
+type ProvisioningResult = { id: number; alreadyExists: boolean; trialEndsAtUtc: string }
 const steps = ['Business Details', 'Owner & Access', 'Plan & Location', 'Review']
 
 export default function PlatformCreateBusiness({ onCancel, onCreated }: {
@@ -12,6 +18,7 @@ export default function PlatformCreateBusiness({ onCancel, onCreated }: {
   const [step, setStep] = useState(0)
   const [types, setTypes] = useState<BusinessType[]>([])
   const [markets, setMarkets] = useState<BusinessMarket[]>([])
+  const [trialDays, setTrialDays] = useState<number | null>(null)
   const [loading, setLoading] = useState(true)
   const [loadError, setLoadError] = useState('')
   const [refresh, setRefresh] = useState(0)
@@ -30,18 +37,20 @@ export default function PlatformCreateBusiness({ onCancel, onCreated }: {
   const [error, setError] = useState('')
   const [submissionUncertain, setSubmissionUncertain] = useState(false)
   const [confirmed, setConfirmed] = useState(false)
+  const [result, setResult] = useState<ProvisioningResult | null>(null)
 
   useEffect(() => {
     let active = true
     setLoading(true)
     Promise.all([
-      api<BusinessType[]>('/business-types'),
+      api<ProvisioningEligibility>('/platform/provisioning-eligibility'),
       api<BusinessMarket[]>('/business-markets')
-    ]).then(([availableTypes, availableMarkets]) => {
+    ]).then(([eligibility, availableMarkets]) => {
       if (!active) return
-      setTypes(availableTypes)
+      setTypes(eligibility.types)
       setMarkets(availableMarkets)
-      setLoadError('')
+      setTrialDays(eligibility.trialDays)
+      setLoadError(eligibility.block?.message ?? '')
     }).catch(cause => {
       if (!active || cause instanceof SessionExpiredError) return
       setLoadError('Unable to load available business setup options.')
@@ -68,21 +77,30 @@ export default function PlatformCreateBusiness({ onCancel, onCreated }: {
 
   async function create(event: FormEvent) {
     event.preventDefault()
-    if (!owner || !market || !confirmed || !canProceedDetails || !validLocation) return
+    if (busy || !owner || !market || !canSubmit) return
     setBusy(true)
     setError('')
-    setSubmissionUncertain(false)
     try {
-      const result = await post<{ id: number; alreadyExists: boolean }>('/platform/businesses', {
+      const created = await post<ProvisioningResult>('/platform/businesses', {
         name: name.trim(), businessTypeId: typeId, countryCode,
         currencyCode: currency, timeZoneId: timeZone,
         ownerEmail: owner.email, locationName: location.trim(),
-        planCode: 'STARTER', requestKey: key
+        planCode: 'STARTER', requestKey: key, expectedTrialDays: trialDays
       })
-      onCreated(result.id)
+      if (!created || !Number.isSafeInteger(created.id) || created.id <= 0 ||
+          typeof created.alreadyExists !== 'boolean' || !Number.isFinite(Date.parse(created.trialEndsAtUtc)))
+        throw new Error('The server returned an incomplete business creation result.')
+      setResult(created)
     } catch (cause) {
       if (!(cause instanceof SessionExpiredError)) {
-        const uncertain = cause instanceof Error && /connection lost|incomplete|timed out|network/i.test(cause.message)
+        if (cause instanceof ApiResponseError && cause.code === 'TRIAL_DURATION_CHANGED') {
+          setConfirmed(false)
+          setLoading(true)
+          setRefresh(value => value + 1)
+        }
+        const uncertain = cause instanceof ApiResponseError
+          ? cause.status >= 500 || cause.status === 408 || (submissionUncertain && cause.status === 429)
+          : true
         setSubmissionUncertain(uncertain)
         setError(cause instanceof Error ? cause.message : 'Unable to create business. Check status before retry.')
       }
@@ -94,6 +112,22 @@ export default function PlatformCreateBusiness({ onCancel, onCreated }: {
     types.some(x => x.id === typeId) && !!market && market.currencies.includes(currency) &&
     market.timeZones.includes(timeZone)
   const validLocation = location.trim().length >= 2 && location.trim().length <= 100
+  const canSubmit = confirmed && canProceedDetails && validLocation &&
+    trialDays !== null && !loading && !loadError
+
+  if (result) return <section className="content-section provision-form" aria-labelledby="provision-result">
+    <div role="status">
+      <h1 id="provision-result">{result.alreadyExists ? 'Business creation confirmed' : 'Business created'}</h1>
+      <p>{name.trim()} · Business ID {result.id}</p>
+      <p>{owner?.email} was assigned as Owner.</p>
+      <p>Trial ends <time dateTime={result.trialEndsAtUtc}>{new Date(result.trialEndsAtUtc).toLocaleString(undefined, {
+        timeZone, dateStyle: 'medium', timeStyle: 'short'
+      })}</time> ({timeZone}).</p>
+    </div>
+    <button type="button" className="btn btn-primary" autoFocus onClick={() => onCreated(result.id)}>
+      View Business <ArrowRight size={16} />
+    </button>
+  </section>
 
   return <div className="platform-provision">
     <div className="page-header provision-heading">
@@ -209,7 +243,7 @@ export default function PlatformCreateBusiness({ onCancel, onCreated }: {
               <p>Start with the available Starter trial. Paid plan activation requires separate verified billing.</p></div>
           </div>
           <div className="provision-plan-card" aria-label="Selected plan">
-            <div><strong>Starter · Trial</strong><small>Trial access only — no payment or paid subscription activated</small></div>
+            <div><strong>Starter · Trial</strong><small>{trialDays} days from business creation</small></div>
             <span className="provision-plan-selected"><CheckCircle2 size={16} /> Selected</span>
           </div>
           <form onSubmit={event => { event.preventDefault(); if (validLocation) { setError(''); setStep(3) } }}>
@@ -238,24 +272,25 @@ export default function PlatformCreateBusiness({ onCancel, onCreated }: {
             <div><dt>Owner</dt><dd>{owner?.email} <span className="provision-verified">Verified</span></dd></div>
             <div><dt>Market</dt><dd>{market?.name} · {currency}</dd></div>
             <div><dt>Timezone</dt><dd>{timeZone}</dd></div>
-            <div><dt>Plan</dt><dd>Starter · Trial</dd></div>
+            <div><dt>Plan</dt><dd>Starter · {trialDays}-day trial</dd></div>
             <div><dt>First Location</dt><dd>{location.trim()}</dd></div>
           </dl>
           <p className="provision-submit-note"><ShieldCheck size={17} /> Confirming will provision a real business and log the action in Platform Audit.</p>
           <form onSubmit={event => void create(event)}>
             <label className="provision-confirm-label">
-              <input type="checkbox" className="form-check-input" checked={confirmed} disabled={busy}
+              <input type="checkbox" className="form-check-input" checked={confirmed}
+                disabled={busy || submissionUncertain || loading || !!loadError}
                 onChange={event => setConfirmed(event.target.checked)} />
               <span>I have checked the business details and verified the Owner assignment.</span>
             </label>
             {submissionUncertain && <div className="alert alert-warning mt-3" role="alert">
-              The previous request may have completed. Check the Businesses directory before retrying. Retrying this form uses the same request key to prevent duplicate provisioning.
+              The previous request may have completed. Retry sends the same details and request key to recover the result safely.
             </div>}
             <div className="form-footer">
-              <button type="button" className="btn btn-outline-secondary" disabled={busy}
+              <button type="button" className="btn btn-outline-secondary" disabled={busy || submissionUncertain}
                 onClick={() => { setError(''); setStep(2) }}>Back</button>
-              <button type="submit" className="btn btn-primary" disabled={busy || !confirmed || !owner || !validLocation || !canProceedDetails}>
-                {busy ? 'Creating business…' : 'Confirm & Create Business'} <ArrowRight size={16} />
+              <button type="submit" className="btn btn-primary" disabled={busy || !owner || !canSubmit}>
+                {busy ? 'Creating business…' : submissionUncertain ? 'Retry Creation' : 'Confirm & Create Business'} <ArrowRight size={16} />
               </button>
             </div>
           </form>

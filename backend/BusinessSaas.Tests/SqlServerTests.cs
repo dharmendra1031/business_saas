@@ -28,7 +28,6 @@ public sealed class SqlServerTests
         using var factory = new WebApplicationFactory<Program>().WithWebHostBuilder(builder =>
         {
             builder.UseEnvironment("Development");
-            builder.UseSetting("Tests:AllowLegacyBusinessCreation", "true");
             builder.ConfigureServices(services =>
             {
                 services.RemoveAll<DbContextOptions<AppDbContext>>();
@@ -92,6 +91,10 @@ public sealed class SqlServerTests
         await RegisterAndLogin(owner, "sql-owner@example.test");
         await RegisterAndLogin(stranger, "sql-stranger@example.test");
 
+        using var admin = factory.CreateClient();
+        await BusinessFlowTests.SignInProvisioningAdmin(factory.Services, admin,
+            "sql-platform-admin@example.test", "sql-owner@example.test");
+
         var creation = new
         {
             name = "SQL Retail Shop",
@@ -99,12 +102,15 @@ public sealed class SqlServerTests
             countryCode = "IN",
             currencyCode = "INR",
             timeZoneId = "Asia/Kolkata",
+            ownerEmail = "sql-owner@example.test",
+            locationName = "Main Shop",
+            planCode = "STARTER",
             requestKey = "same-request-20261109"
         };
 
         var results = await Task.WhenAll(
-            Post(owner, "/api/businesses", creation),
-            Post(owner, "/api/businesses", creation));
+            Post(admin, "/api/platform/businesses", creation),
+            Post(admin, "/api/platform/businesses", creation));
 
         foreach (var result in results)
             Assert.True(result.StatusCode is HttpStatusCode.Created or HttpStatusCode.OK,
@@ -116,6 +122,10 @@ public sealed class SqlServerTests
 
         Assert.True(ids[0] > 0);
         Assert.Equal(ids[0], ids[1]);
+        var directory = await admin.GetFromJsonAsync<JsonElement>(
+            "/api/platform/businesses?search=SQL&ownerEmail=SQL-OWNER&businessTypeId=1&planCode=STARTER&status=Trial&pageSize=1");
+        Assert.Equal(1, directory.GetProperty("total").GetInt32());
+        Assert.Equal(ids[0], directory.GetProperty("items")[0].GetProperty("id").GetInt64());
 
         using (var scope = factory.Services.CreateScope())
         {
@@ -123,6 +133,9 @@ public sealed class SqlServerTests
             Assert.Equal(1, await db.Businesses.CountAsync(x => x.Id == ids[0]));
             Assert.Equal(1, await db.BusinessUsers.CountAsync(x => x.BusinessId == ids[0]));
             Assert.Equal(1, await db.BusinessLocations.CountAsync(x => x.BusinessId == ids[0]));
+            Assert.Equal(1, await db.BusinessSubscriptions.CountAsync(x => x.BusinessId == ids[0]));
+            Assert.Equal(1, await db.PlatformAuditEvents.CountAsync(x =>
+                x.TargetId == ids[0] && x.Action == "Business.Provisioned"));
         }
 
         Assert.Equal(HttpStatusCode.OK,
@@ -130,13 +143,16 @@ public sealed class SqlServerTests
         Assert.Equal(HttpStatusCode.NotFound,
             (await stranger.GetAsync($"/api/businesses/{ids[0]}/dashboard")).StatusCode);
 
-        var changedPayload = await Post(owner, "/api/businesses", new
+        var changedPayload = await Post(admin, "/api/platform/businesses", new
         {
             name = "Not The Same Business",
             businessTypeId = 1,
             countryCode = "IN",
             currencyCode = "INR",
             timeZoneId = "Asia/Kolkata",
+            ownerEmail = "sql-owner@example.test",
+            locationName = "Main Shop",
+            planCode = "STARTER",
             requestKey = "same-request-20261109"
         });
         Assert.Equal(HttpStatusCode.Conflict, changedPayload.StatusCode);

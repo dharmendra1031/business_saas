@@ -29,7 +29,6 @@ public sealed class BusinessFlowTests
         using var factory = new WebApplicationFactory<Program>().WithWebHostBuilder(builder =>
         {
             builder.UseEnvironment("Development");
-            builder.UseSetting("Tests:AllowLegacyBusinessCreation", "true");
             builder.ConfigureServices(services =>
             {
                 services.RemoveAll<DbContextOptions<AppDbContext>>();
@@ -55,6 +54,10 @@ public sealed class BusinessFlowTests
         Assert.True(authOptions.GetProperty("canRegister").GetBoolean());
         Assert.Equal(HttpStatusCode.OK, (await owner.GetAsync("/api/auth/me")).StatusCode);
         Assert.Equal(HttpStatusCode.OK, (await stranger.GetAsync("/api/auth/me")).StatusCode);
+        using var admin = factory.CreateClient();
+        await SignInProvisioningAdmin(factory.Services, admin, "provisioning-admin@example.test",
+            "owner@example.test", "stranger@example.test");
+
         // Unpublished templates must not appear in onboarding or be accepted by the API.
         long unsupportedTypeId;
         using (var scope = factory.Services.CreateScope())
@@ -75,16 +78,19 @@ public sealed class BusinessFlowTests
         Assert.Single(types.EnumerateArray());
         Assert.Equal("RETAIL", types[0].GetProperty("code").GetString());
 
-        var unsupported = await Post(owner, "/api/businesses", new
+        var unsupported = await Post(admin, "/api/platform/businesses", new
         {
             name = "Unreleased Salon",
             businessTypeId = unsupportedTypeId,
             countryCode = "IN",
             currencyCode = "INR",
             timeZoneId = "Asia/Kolkata",
+            ownerEmail = "owner@example.test",
+            locationName = "Main Shop",
+            planCode = "STARTER",
             requestKey = "unsupported-salon-20261111"
         });
-        Assert.Equal(HttpStatusCode.BadRequest, unsupported.StatusCode);
+        Assert.Equal(HttpStatusCode.Conflict, unsupported.StatusCode);
 
         var markets = await owner.GetFromJsonAsync<JsonElement>("/api/business-markets");
         Assert.Equal(249, markets.GetArrayLength());
@@ -92,35 +98,44 @@ public sealed class BusinessFlowTests
         Assert.Contains(markets.EnumerateArray(), item => item.GetProperty("code").GetString() == "US");
         Assert.Contains(markets.EnumerateArray(), item => item.GetProperty("code").GetString() == "KW");
 
-        var invalidMarket = await Post(owner, "/api/businesses", new
+        var invalidMarket = await Post(admin, "/api/platform/businesses", new
         {
             name = "Invalid Country Shop",
             businessTypeId = 1,
             countryCode = "XX",
             currencyCode = "USD",
             timeZoneId = "Unknown/Zone",
+            ownerEmail = "owner@example.test",
+            locationName = "Main Shop",
+            planCode = "STARTER",
             requestKey = "invalid-market-20261110"
         });
         Assert.Equal(HttpStatusCode.BadRequest, invalidMarket.StatusCode);
 
-        var invalidCurrency = await Post(owner, "/api/businesses", new
+        var invalidCurrency = await Post(admin, "/api/platform/businesses", new
         {
             name = "Wrong Currency Shop",
             businessTypeId = 1,
             countryCode = "IN",
             currencyCode = "USD",
             timeZoneId = "Asia/Kolkata",
+            ownerEmail = "owner@example.test",
+            locationName = "Main Shop",
+            planCode = "STARTER",
             requestKey = "invalid-currency-20261110"
         });
         Assert.Equal(HttpStatusCode.BadRequest, invalidCurrency.StatusCode);
 
-        var usaMarket = await Post(owner, "/api/businesses", new
+        var usaMarket = await Post(admin, "/api/platform/businesses", new
         {
             name = "West Coast Retail",
             businessTypeId = 1,
             countryCode = "US",
             currencyCode = "USD",
             timeZoneId = "America/Los_Angeles",
+            ownerEmail = "owner@example.test",
+            locationName = "Main Shop",
+            planCode = "STARTER",
             requestKey = "united-states-20261110"
         });
         Assert.Equal(HttpStatusCode.Created, usaMarket.StatusCode);
@@ -132,10 +147,13 @@ public sealed class BusinessFlowTests
             countryCode = "IN",
             currencyCode = "INR",
             timeZoneId = "Asia/Kolkata",
+            ownerEmail = "owner@example.test",
+            locationName = "Main Shop",
+            planCode = "STARTER",
             requestKey = "request-main-20261109"
         };
 
-        var first = await Post(owner, "/api/businesses", creation);
+        var first = await Post(admin, "/api/platform/businesses", creation);
         Assert.True(first.StatusCode == HttpStatusCode.Created, await first.Content.ReadAsStringAsync());
         var firstId = (await first.Content.ReadFromJsonAsync<JsonElement>()).GetProperty("id").GetInt64();
         Assert.True(firstId > 0);
@@ -148,7 +166,7 @@ public sealed class BusinessFlowTests
                 x.BusinessId == firstId && x.Code == "ITEM"));
         }
 
-        var retry = await Post(owner, "/api/businesses", creation);
+        var retry = await Post(admin, "/api/platform/businesses", creation);
         Assert.Equal(HttpStatusCode.OK, retry.StatusCode);
         var sameId = (await retry.Content.ReadFromJsonAsync<JsonElement>()).GetProperty("id").GetInt64();
         Assert.Equal(firstId, sameId);
@@ -156,13 +174,16 @@ public sealed class BusinessFlowTests
         var owned = await owner.GetFromJsonAsync<JsonElement>("/api/businesses");
         Assert.Equal(2, owned.GetArrayLength());
 
-        var anotherOwned = await Post(owner, "/api/businesses", new
+        var anotherOwned = await Post(admin, "/api/platform/businesses", new
         {
             name = "Owner's Second Shop",
             businessTypeId = 1,
             countryCode = "KW",
             currencyCode = "KWD",
             timeZoneId = "Asia/Kuwait",
+            ownerEmail = "owner@example.test",
+            locationName = "Main Shop",
+            planCode = "STARTER",
             requestKey = "request-second-owned-20261109"
         });
         Assert.Equal(HttpStatusCode.Created, anotherOwned.StatusCode);
@@ -218,13 +239,16 @@ public sealed class BusinessFlowTests
             Assert.Equal(canOperate, current.GetProperty("canOperate").GetBoolean());
         }
 
-        var second = await Post(stranger, "/api/businesses", new
+        var second = await Post(admin, "/api/platform/businesses", new
         {
             name = "Another Shop",
             businessTypeId = 1,
             countryCode = "IN",
             currencyCode = "INR",
             timeZoneId = "Asia/Kolkata",
+            ownerEmail = "stranger@example.test",
+            locationName = "Main Shop",
+            planCode = "STARTER",
             requestKey = "request-other-20261109"
         });
         Assert.True(second.StatusCode == HttpStatusCode.Created, await second.Content.ReadAsStringAsync());
@@ -269,7 +293,6 @@ public sealed class BusinessFlowTests
         using var factory = new WebApplicationFactory<Program>().WithWebHostBuilder(builder =>
         {
             builder.UseEnvironment("Development");
-            builder.UseSetting("Tests:AllowLegacyBusinessCreation", "true");
             builder.ConfigureServices(services =>
             {
                 services.RemoveAll<DbContextOptions<AppDbContext>>();
@@ -288,18 +311,8 @@ public sealed class BusinessFlowTests
         await RegisterAndLogin(cashier, "team-cashier@example.test");
         await RegisterAndLogin(outsider, "team-outsider@example.test");
 
-        var created = await Post(owner, "/api/businesses", new
-        {
-            name = "Team Retail",
-            businessTypeId = 1,
-            countryCode = "IN",
-            currencyCode = "INR",
-            timeZoneId = "Asia/Kolkata",
-            requestKey = "team-owner-request-20261111"
-        });
-        Assert.Equal(HttpStatusCode.Created, created.StatusCode);
-        var businessId = (await created.Content.ReadFromJsonAsync<JsonElement>())
-            .GetProperty("id").GetInt64();
+        var businessId = await BusinessFixtures.SeedAsync(factory.Services, owner,
+            "Team Retail", "team-owner-request-20261111");
         var staffPath = $"/api/businesses/{businessId}/staff";
 
         Assert.Equal(HttpStatusCode.NotFound, (await outsider.GetAsync(staffPath)).StatusCode);
@@ -385,7 +398,6 @@ public sealed class BusinessFlowTests
         using var factory = new WebApplicationFactory<Program>().WithWebHostBuilder(builder =>
         {
             builder.UseEnvironment("Development");
-            builder.UseSetting("Tests:AllowLegacyBusinessCreation", "true");
             builder.ConfigureServices(services =>
             {
                 services.RemoveAll<DbContextOptions<AppDbContext>>();
@@ -438,7 +450,6 @@ public sealed class BusinessFlowTests
         using var factory = new WebApplicationFactory<Program>().WithWebHostBuilder(builder =>
         {
             builder.UseEnvironment("Development");
-            builder.UseSetting("Tests:AllowLegacyBusinessCreation", "true");
             builder.ConfigureAppConfiguration((_, config) => config.AddInMemoryCollection(
                 new Dictionary<string, string?>
                 {
@@ -467,29 +478,10 @@ public sealed class BusinessFlowTests
         await RegisterAndLogin(admin, "directory-admin@example.test");
         await RegisterAndLogin(outsider, "directory-outsider@example.test");
 
-        var first = await Post(owner, "/api/businesses", new
-        {
-            name = "Alpha Retail",
-            businessTypeId = 1,
-            countryCode = "IN",
-            currencyCode = "INR",
-            timeZoneId = "Asia/Kolkata",
-            requestKey = "directory-alpha-20261112"
-        });
-        Assert.Equal(HttpStatusCode.Created, first.StatusCode);
-        var firstId = (await first.Content.ReadFromJsonAsync<JsonElement>())
-            .GetProperty("id").GetInt64();
-
-        var second = await Post(outsider, "/api/businesses", new
-        {
-            name = "Beta Retail",
-            businessTypeId = 1,
-            countryCode = "IN",
-            currencyCode = "INR",
-            timeZoneId = "Asia/Kolkata",
-            requestKey = "directory-beta-20261112"
-        });
-        Assert.Equal(HttpStatusCode.Created, second.StatusCode);
+        var firstId = await BusinessFixtures.SeedAsync(factory.Services, owner,
+            "Alpha Retail", "directory-alpha-20261112");
+        await BusinessFixtures.SeedAsync(factory.Services, outsider,
+            "Beta Retail", "directory-beta-20261112");
 
         Assert.Equal(HttpStatusCode.Unauthorized,
             (await anonymous.GetAsync("/api/platform/businesses")).StatusCode);
@@ -647,6 +639,19 @@ public sealed class BusinessFlowTests
             .GetProperty("actorUserId").GetInt64());
         Assert.Equal("PlatformOwner.SignIn", audit.GetProperty("items")[0]
             .GetProperty("action").GetString());
+        var eventId = audit.GetProperty("items")[1].GetProperty("id").GetInt64();
+        var exactEvent = await admin.GetFromJsonAsync<JsonElement>($"/api/platform/audit?eventId={eventId}");
+        Assert.Equal(1, exactEvent.GetProperty("total").GetInt32());
+        Assert.Equal(eventId, exactEvent.GetProperty("items")[0].GetProperty("id").GetInt64());
+        var actorEvents = await admin.GetFromJsonAsync<JsonElement>(
+            $"/api/platform/audit?actorUserId={platformOwnerId}&pageSize=1");
+        Assert.Equal(2, actorEvents.GetProperty("total").GetInt32());
+        Assert.Single(actorEvents.GetProperty("items").EnumerateArray());
+        var otherActorEvents = await admin.GetFromJsonAsync<JsonElement>(
+            "/api/platform/audit?actorUserId=999999");
+        Assert.Equal(0, otherActorEvents.GetProperty("total").GetInt32());
+        Assert.Equal(HttpStatusCode.Forbidden,
+            (await owner.GetAsync($"/api/platform/audit?eventId={eventId}")).StatusCode);
         Assert.Equal(HttpStatusCode.BadRequest,
             (await admin.GetAsync("/api/platform/audit?pageSize=100")).StatusCode);
 
@@ -705,6 +710,21 @@ public sealed class BusinessFlowTests
             filteredCustomers.GetProperty("items")[0].GetProperty("email").GetString());
         Assert.Equal(1, filteredCustomers.GetProperty("items")[0]
             .GetProperty("ownedBusinessCount").GetInt32());
+        using (var scope = factory.Services.CreateScope())
+        {
+            var db = scope.ServiceProvider.GetRequiredService<AppDbContext>();
+            var customer = await db.Users.SingleAsync(x => x.Id == customerId);
+            customer.EmailConfirmed = true;
+            await db.SaveChangesAsync();
+        }
+        var verifiedCustomers = await admin.GetFromJsonAsync<JsonElement>(
+            "/api/platform/customers?search=directory&emailConfirmed=true&pageSize=1");
+        Assert.Equal(1, verifiedCustomers.GetProperty("total").GetInt32());
+        Assert.Equal(customerId, verifiedCustomers.GetProperty("items")[0].GetProperty("id").GetInt64());
+        var unverifiedCustomers = await admin.GetFromJsonAsync<JsonElement>(
+            "/api/platform/customers?emailConfirmed=false");
+        Assert.Equal(1, unverifiedCustomers.GetProperty("total").GetInt32());
+        Assert.False(unverifiedCustomers.GetProperty("items")[0].GetProperty("emailConfirmed").GetBoolean());
 
         var customerDetail = await admin.GetFromJsonAsync<JsonElement>(
             $"/api/platform/customers/{customerId}");
@@ -733,10 +753,36 @@ public sealed class BusinessFlowTests
         Assert.Equal("directory-owner@example.test",
             filtered.GetProperty("items")[0].GetProperty("ownerEmail").GetString());
 
+        var starterTrials = await admin.GetFromJsonAsync<JsonElement>(
+            "/api/platform/businesses?planCode=starter&status=Trial&pageSize=1");
+        Assert.Equal(2, starterTrials.GetProperty("total").GetInt32());
+        Assert.Equal("Trial", starterTrials.GetProperty("items")[0].GetProperty("directoryStatus").GetString());
+        var ownerAndType = await admin.GetFromJsonAsync<JsonElement>(
+            "/api/platform/businesses?ownerEmail=DIRECTORY-OWNER&businessTypeId=1&planCode=STARTER&status=Trial");
+        Assert.Equal(1, ownerAndType.GetProperty("total").GetInt32());
+        Assert.Equal(firstId, ownerAndType.GetProperty("items")[0].GetProperty("id").GetInt64());
+        var mismatchedType = await admin.GetFromJsonAsync<JsonElement>(
+            "/api/platform/businesses?ownerEmail=directory-owner&businessTypeId=99999");
+        Assert.Equal(0, mismatchedType.GetProperty("total").GetInt32());
+        Assert.Equal(HttpStatusCode.BadRequest,
+            (await admin.GetAsync("/api/platform/businesses?businessTypeId=0")).StatusCode);
+        var otherPlan = await admin.GetFromJsonAsync<JsonElement>("/api/platform/businesses?planCode=GROWTH");
+        Assert.Equal(0, otherPlan.GetProperty("total").GetInt32());
+        var expired = await admin.GetFromJsonAsync<JsonElement>(
+            "/api/platform/businesses?search=Alpha&planCode=STARTER&status=TrialExpired");
+        Assert.Equal(0, expired.GetProperty("total").GetInt32());
+        Assert.Equal(HttpStatusCode.BadRequest,
+            (await admin.GetAsync("/api/platform/businesses?status=unknown")).StatusCode);
+
         var details = await admin.GetFromJsonAsync<JsonElement>(
             $"/api/platform/businesses/{firstId}");
         Assert.Equal("Alpha Retail", details.GetProperty("name").GetString());
+        Assert.Equal(1, details.GetProperty("locationCount").GetInt32());
+        Assert.Equal("Main Shop", details.GetProperty("primaryLocationName").GetString());
         Assert.Equal("Trial", details.GetProperty("subscriptionStatus").GetString());
+        var directoryCreatedAt = filtered.GetProperty("items")[0].GetProperty("createdAtUtc").GetDateTime();
+        Assert.Equal(DateTimeKind.Utc, directoryCreatedAt.Kind);
+        Assert.Equal(details.GetProperty("createdAtUtc").GetDateTime().Ticks, directoryCreatedAt.Ticks);
 
         Assert.Equal(HttpStatusCode.BadRequest,
             (await admin.GetAsync("/api/platform/businesses?pageSize=100")).StatusCode);
@@ -1389,6 +1435,15 @@ public sealed class BusinessFlowTests
         }
         var heldDashboard = await owner.GetFromJsonAsync<JsonElement>(
             $"/api/businesses/{firstId}/dashboard");
+        var heldDetails = await admin.GetFromJsonAsync<JsonElement>(
+            $"/api/platform/businesses/{firstId}");
+        Assert.Equal(planVersionId, heldDetails.GetProperty("paidPlanVersionId").GetInt64());
+        Assert.Equal(preview.GetProperty("version").GetInt32(), heldDetails.GetProperty("paidPlanVersion").GetInt32());
+        var paidStart = heldDetails.GetProperty("paidStartsAtUtc").GetDateTime();
+        var paidEnd = heldDetails.GetProperty("paidEndsAtUtc").GetDateTime();
+        Assert.Equal(DateTimeKind.Utc, paidStart.Kind);
+        Assert.Equal(DateTimeKind.Utc, paidEnd.Kind);
+        Assert.True(paidEnd > paidStart);
         Assert.Equal("Suspended", heldDashboard.GetProperty("accessStatus").GetString());
         Assert.False(heldDashboard.GetProperty("canOperate").GetBoolean());
         var resumePaid = await Post(admin,
@@ -1398,6 +1453,8 @@ public sealed class BusinessFlowTests
                 reason = "Confirmed payment and approved access restoration"
             });
         Assert.Equal(HttpStatusCode.OK, resumePaid.StatusCode);
+        var paidOverview = await admin.GetFromJsonAsync<JsonElement>("/api/platform/overview");
+        Assert.Equal(1, paidOverview.GetProperty("activeSubscriptions").GetInt32());
 
         var paidDashboard = await owner.GetFromJsonAsync<JsonElement>(
             $"/api/businesses/{firstId}/dashboard");
@@ -1581,6 +1638,21 @@ public sealed class BusinessFlowTests
         var expiredPaid = await owner.GetFromJsonAsync<JsonElement>(
             $"/api/businesses/{firstId}/dashboard");
         Assert.Equal("Inactive", expiredPaid.GetProperty("accessStatus").GetString());
+        var expiredPlatformDetails = await admin.GetFromJsonAsync<JsonElement>(
+            $"/api/platform/businesses/{firstId}");
+        Assert.Equal("Active", expiredPlatformDetails.GetProperty("subscriptionStatus").GetString());
+        Assert.Equal("Inactive", expiredPlatformDetails.GetProperty("accessStatus").GetString());
+        var expiredCustomer = await admin.GetFromJsonAsync<JsonElement>($"/api/platform/customers/{customerId}");
+        Assert.Equal("Inactive", expiredCustomer.GetProperty("businesses")[0].GetProperty("accessStatus").GetString());
+        var expiredOverview = await admin.GetFromJsonAsync<JsonElement>("/api/platform/overview");
+        Assert.Equal(0, expiredOverview.GetProperty("activeSubscriptions").GetInt32());
+        var activeDirectory = await admin.GetFromJsonAsync<JsonElement>(
+            "/api/platform/businesses?search=Alpha&status=Active");
+        Assert.Equal(0, activeDirectory.GetProperty("total").GetInt32());
+        var inactiveDirectory = await admin.GetFromJsonAsync<JsonElement>(
+            "/api/platform/businesses?search=Alpha&status=Inactive&pageSize=1");
+        Assert.Equal(1, inactiveDirectory.GetProperty("total").GetInt32());
+        Assert.Equal("Inactive", inactiveDirectory.GetProperty("items")[0].GetProperty("directoryStatus").GetString());
         Assert.False(expiredPaid.GetProperty("canOperate").GetBoolean());
         Assert.Equal(HttpStatusCode.Forbidden,
             (await Post(owner, $"/api/businesses/{firstId}/staff",
@@ -1673,7 +1745,6 @@ public sealed class BusinessFlowTests
         using var factory = new WebApplicationFactory<Program>().WithWebHostBuilder(builder =>
         {
             builder.UseEnvironment("Development");
-            builder.UseSetting("Tests:AllowLegacyBusinessCreation", "true");
             builder.ConfigureServices(services =>
             {
                 services.RemoveAll<DbContextOptions<AppDbContext>>();
@@ -1744,7 +1815,6 @@ public sealed class BusinessFlowTests
         using var factory = new WebApplicationFactory<Program>().WithWebHostBuilder(builder =>
         {
             builder.UseEnvironment("Development");
-            builder.UseSetting("Tests:AllowLegacyBusinessCreation", "true");
             builder.ConfigureServices(services =>
             {
                 services.RemoveAll<DbContextOptions<AppDbContext>>();
@@ -1800,7 +1870,6 @@ public sealed class BusinessFlowTests
         using var factory = new WebApplicationFactory<Program>().WithWebHostBuilder(builder =>
         {
             builder.UseEnvironment("Development");
-            builder.UseSetting("Tests:AllowLegacyBusinessCreation", "true");
             builder.ConfigureServices(services =>
             {
                 services.RemoveAll<DbContextOptions<AppDbContext>>();
@@ -1868,8 +1937,7 @@ public sealed class BusinessFlowTests
             requestKey = "platform-provision-verified-0001"
         };
 
-        // The historical owner-create endpoint is disabled, even in Development
-        // unless a legacy integration fixture explicitly opts in.
+        // The historical owner-create endpoint is disabled in Development too.
         Assert.Equal(HttpStatusCode.Forbidden,
             (await Post(owner, "/api/businesses", body)).StatusCode);
         Assert.Equal(HttpStatusCode.Forbidden,
@@ -1880,6 +1948,11 @@ public sealed class BusinessFlowTests
             (await Post(admin, "/api/platform/businesses", body)).StatusCode);
 
         await EnableOwnerMfaAndSignIn(admin, "platform-creation-admin@example.test");
+        const string eligibilityPath = "/api/platform/provisioning-eligibility";
+        Assert.Equal(HttpStatusCode.Forbidden, (await owner.GetAsync(eligibilityPath)).StatusCode);
+        var eligibility = await admin.GetFromJsonAsync<JsonElement>(eligibilityPath);
+        Assert.Single(eligibility.GetProperty("types").EnumerateArray());
+        Assert.Equal(14, eligibility.GetProperty("trialDays").GetInt32());
         var controlsPath = "/api/platform/business-type-controls";
         Assert.Equal(HttpStatusCode.Forbidden, (await outsider.GetAsync(controlsPath)).StatusCode);
         Assert.Equal(HttpStatusCode.Forbidden,
@@ -1896,8 +1969,12 @@ public sealed class BusinessFlowTests
             state = "Coming Soon", expectedRevision = 0, reason = "Stale update must be rejected"
         })).StatusCode);
         Assert.Empty((await admin.GetFromJsonAsync<JsonElement>("/api/business-types")).EnumerateArray());
-        Assert.Equal(HttpStatusCode.BadRequest,
-            (await Post(admin, "/api/platform/businesses", body)).StatusCode);
+        var blockedType = await admin.GetFromJsonAsync<JsonElement>(eligibilityPath);
+        Assert.Empty(blockedType.GetProperty("types").EnumerateArray());
+        var pausedCreate = await Post(admin, "/api/platform/businesses", body);
+        Assert.Equal(HttpStatusCode.Conflict, pausedCreate.StatusCode);
+        Assert.Equal(blockedType.GetProperty("block").GetProperty("code").GetString(),
+            (await pausedCreate.Content.ReadFromJsonAsync<JsonElement>()).GetProperty("code").GetString());
         var resumed = await Post(admin, controlsPath + "/RETAIL/release", new {
             state = "Available", expectedRevision = 1, reason = "Release testing completed successfully"
         });
@@ -1919,6 +1996,9 @@ public sealed class BusinessFlowTests
             reason = "Pause catalog during planned test maintenance"
         });
         Assert.Equal(HttpStatusCode.OK, pauseCatalog.StatusCode);
+        var blockedModule = await admin.GetFromJsonAsync<JsonElement>(eligibilityPath);
+        Assert.Empty(blockedModule.GetProperty("types").EnumerateArray());
+        Assert.Equal("MODULE_NOT_AVAILABLE", blockedModule.GetProperty("block").GetProperty("code").GetString());
         Assert.Equal(HttpStatusCode.Conflict, (await Post(admin, modulePath + "/CATALOG/release", new {
             state = "Available", expectedRevision = 0,
             reason = "Stale write should be rejected by revision"
@@ -1936,17 +2016,46 @@ public sealed class BusinessFlowTests
         Assert.Equal(ownerId, verified.GetProperty("id").GetInt64());
         Assert.True(verified.GetProperty("verified").GetBoolean());
 
+        var staleReview = await Post(admin, "/api/platform/businesses", new
+        {
+            body.name, body.businessTypeId, body.countryCode, body.currencyCode,
+            body.timeZoneId, body.ownerEmail, body.locationName, body.planCode,
+            body.requestKey, expectedTrialDays = 7
+        });
+        Assert.Equal(HttpStatusCode.Conflict, staleReview.StatusCode);
+        Assert.Equal("TRIAL_DURATION_CHANGED", (await staleReview.Content.ReadFromJsonAsync<JsonElement>())
+            .GetProperty("code").GetString());
+
         var first = await Post(admin, "/api/platform/businesses", body);
         Assert.Equal(HttpStatusCode.Created, first.StatusCode);
-        var businessId = (await first.Content.ReadFromJsonAsync<JsonElement>())
-            .GetProperty("id").GetInt64();
+        var created = await first.Content.ReadFromJsonAsync<JsonElement>();
+        var businessId = created.GetProperty("id").GetInt64();
+        var trialEnd = created.GetProperty("trialEndsAtUtc").GetDateTime();
+        Assert.InRange(trialEnd, DateTime.UtcNow.AddDays(14).AddMinutes(-1), DateTime.UtcNow.AddDays(14));
         Assert.True(businessId > 0);
 
         var retry = await Post(admin, "/api/platform/businesses", body);
         Assert.Equal(HttpStatusCode.OK, retry.StatusCode);
-        var repeatId = (await retry.Content.ReadFromJsonAsync<JsonElement>())
-            .GetProperty("id").GetInt64();
-        Assert.Equal(businessId, repeatId);
+        var replay = await retry.Content.ReadFromJsonAsync<JsonElement>();
+        Assert.Equal(businessId, replay.GetProperty("id").GetInt64());
+        Assert.Equal(trialEnd, replay.GetProperty("trialEndsAtUtc").GetDateTime());
+
+        var trialConfig = factory.Services.GetRequiredService<IConfiguration>();
+        var originalTrialDays = trialConfig["Saas:TrialDays"];
+        try
+        {
+            trialConfig["Saas:TrialDays"] = "invalid";
+            var unavailableTrial = await admin.GetFromJsonAsync<JsonElement>(eligibilityPath);
+            Assert.Equal(JsonValueKind.Null, unavailableTrial.GetProperty("trialDays").ValueKind);
+            Assert.Empty(unavailableTrial.GetProperty("types").EnumerateArray());
+            Assert.Equal("TRIAL_CONFIGURATION_UNAVAILABLE",
+                unavailableTrial.GetProperty("block").GetProperty("code").GetString());
+            Assert.Equal(HttpStatusCode.OK, (await Post(admin, "/api/platform/businesses", body)).StatusCode);
+        }
+        finally
+        {
+            trialConfig["Saas:TrialDays"] = originalTrialDays;
+        }
 
         var changed = await Post(admin, "/api/platform/businesses", new
         {
@@ -2003,6 +2112,21 @@ public sealed class BusinessFlowTests
             startUtc = start, endUtc = end
         });
         Assert.Equal(HttpStatusCode.Created, maintenance.StatusCode);
+        var blockedMaintenance = await admin.GetFromJsonAsync<JsonElement>(eligibilityPath);
+        Assert.Empty(blockedMaintenance.GetProperty("types").EnumerateArray());
+        Assert.Equal("PLATFORM_MAINTENANCE",
+            blockedMaintenance.GetProperty("block").GetProperty("code").GetString());
+        var newCreateDuringMaintenance = await Post(admin, "/api/platform/businesses", new
+        {
+            body.name, body.businessTypeId, body.countryCode, body.currencyCode,
+            body.timeZoneId, body.ownerEmail, body.locationName, body.planCode,
+            requestKey = "platform-provision-blocked-0002"
+        });
+        Assert.Equal(HttpStatusCode.Conflict, newCreateDuringMaintenance.StatusCode);
+        Assert.Equal("PLATFORM_MAINTENANCE",
+            (await newCreateDuringMaintenance.Content.ReadFromJsonAsync<JsonElement>())
+            .GetProperty("code").GetString());
+        Assert.Equal(HttpStatusCode.OK, (await Post(admin, "/api/platform/businesses", body)).StatusCode);
         var windowId = (await maintenance.Content.ReadFromJsonAsync<JsonElement>())
             .GetProperty("id").GetInt64();
         Assert.Equal(HttpStatusCode.Conflict,
@@ -2096,6 +2220,26 @@ public sealed class BusinessFlowTests
         public Task<GatewayRefund> FetchRefund(string id, CancellationToken cancellationToken) =>
             Task.FromResult(new GatewayRefund(id, "pay_test_capture_0123",
                 RefundAmountOverride ?? 50000, "INR", "processed"));
+    }
+
+    internal static async Task SignInProvisioningAdmin(IServiceProvider services, HttpClient admin,
+        string adminEmail, params string[] ownerEmails)
+    {
+        await RegisterAndLogin(admin, adminEmail);
+        using (var scope = services.CreateScope())
+        {
+            var db = scope.ServiceProvider.GetRequiredService<AppDbContext>();
+            var platform = await db.Users.SingleAsync(x => x.Email == adminEmail);
+            foreach (var email in ownerEmails)
+            {
+                var owner = await db.Users.SingleAsync(x => x.Email == email);
+                owner.EmailConfirmed = true;
+            }
+            await db.SaveChangesAsync();
+            scope.ServiceProvider.GetRequiredService<IConfiguration>()["Platform:OwnerUserId"] =
+                platform.Id.ToString();
+        }
+        await EnableOwnerMfaAndSignIn(admin, adminEmail);
     }
 
     private static async Task<(string secret, string[] recoveryCodes)> EnableOwnerMfaAndSignIn(

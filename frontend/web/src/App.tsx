@@ -29,10 +29,12 @@ export default function App() {
   const [businessesError, setBusinessesError] = useState('')
   const [openingBusinessId, setOpeningBusinessId] = useState<number | null>(null)
   const [platformSection, setPlatformSection] = useState<PlatformSection>('overview')
+  const [platformAuditEventId, setPlatformAuditEventId] = useState<number | null>(null)
   const [platformBusinessId, setPlatformBusinessId] = useState<number | null>(null)
   const [platformStartCreate, setPlatformStartCreate] = useState(false)
   const [platformSearchDraft, setPlatformSearchDraft] = useState('')
   const [platformBusinessSearch, setPlatformBusinessSearch] = useState('')
+  const [platformBusinessStatus, setPlatformBusinessStatus] = useState('')
   const [dashboard, setDashboard] = useState<RetailDashboard | null>(null)
   const [dashboardRefreshing, setDashboardRefreshing] = useState(false)
   const [approvalList, setApprovalList] = useState(false)
@@ -396,6 +398,8 @@ export default function App() {
                   setBillingBusiness(null)
                   setPlatformBusinessId(null)
                   setPlatformStartCreate(false)
+                  setPlatformBusinessStatus('')
+                  setPlatformAuditEventId(null)
                   setPlatformSection(section)
                   setPage('platform')
                 }}><Icon size={18} /> {label}</button>)}
@@ -445,6 +449,7 @@ export default function App() {
             setPlatformStartCreate(false)
             setPlatformBusinessId(null)
             setPlatformBusinessSearch(platformSearchDraft.trim())
+            setPlatformBusinessStatus('')
             setPlatformSection('businesses')
           }}>
             <Search size={17} aria-hidden="true" />
@@ -465,10 +470,21 @@ export default function App() {
 
           {page === 'platform' && canViewPlatform && <PlatformAdmin section={platformSection}
             selectedBusinessId={platformBusinessId} billingBusiness={billingBusiness}
-            startCreate={platformStartCreate} businessSearch={platformBusinessSearch}
-            onViewAudit={() => { setPlatformBusinessId(null); setPlatformSection('audit') }}
+            startCreate={platformStartCreate} businessSearch={platformBusinessSearch} businessStatus={platformBusinessStatus}
+            auditEventId={platformAuditEventId}
+            onViewAudit={id => {
+              setPlatformBusinessId(null)
+              setPlatformAuditEventId(id ?? null)
+              setPlatformSection('audit')
+            }}
             onCreateHandled={() => setPlatformStartCreate(false)}
-            onSeeBusinesses={() => { setPlatformStartCreate(false); setPlatformBusinessId(null); setPlatformSection('businesses') }}
+            onSeeBusinesses={status => {
+              setPlatformStartCreate(false)
+              setPlatformBusinessId(null)
+              setPlatformBusinessSearch('')
+              setPlatformBusinessStatus(status ?? '')
+              setPlatformSection('businesses')
+            }}
             onStartCreate={() => { setPlatformBusinessId(null); setPlatformStartCreate(true); setPlatformSection('businesses') }}
             onBilling={business => { setBillingBusiness(business); setPlatformSection('plans') }}
             onChooseBusiness={() => { setPlatformBusinessId(null); setPlatformStartCreate(false); setPlatformSection('businesses') }}

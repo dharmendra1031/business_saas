@@ -1,9 +1,12 @@
 import assert from 'node:assert/strict'
 import { mkdir } from 'node:fs/promises'
+import { resolve } from 'node:path'
+import { fileURLToPath } from 'node:url'
 import { chromium } from 'playwright'
 
-const base = 'http://127.0.0.1:5173'
-const output = new URL('../qa-artifacts/', import.meta.url)
+const base = process.env.BUSINESS_SAAS_QA_URL || 'http://127.0.0.1:5173'
+const output = process.env.BUSINESS_SAAS_QA_OUTPUT ||
+  fileURLToPath(new URL('../qa-artifacts/', import.meta.url))
 await mkdir(output, { recursive: true })
 
 const business = role => ({
@@ -203,7 +206,7 @@ async function scenario(name, {
   await page.goto(base, { waitUntil: 'domcontentloaded' })
 
   async function screenshot(file) {
-    await page.screenshot({ path: new URL(file + '.png', output).pathname, fullPage: true })
+    await page.screenshot({ path: resolve(output, file + '.png'), fullPage: true })
   }
   async function check() {
     assert.deepEqual(errors, [], name + ': uncaught browser errors')
@@ -1473,6 +1476,272 @@ try {
     await t.check()
     await t.context.close()
     console.log('PASS AUTH-02 recovery code, back and fresh MFA mode')
+  }
+
+  for (const width of [1366, 360]) {
+    const t = await scenario('provisioning-eligibility-' + width, { role: 'Platform', width })
+    const block = {
+      code: 'MODULE_NOT_AVAILABLE',
+      message: 'Required module CATALOG is not available for new businesses.'
+    }
+    let eligible = false
+    let trialDays = 14
+    await t.page.route('**/api/platform/provisioning-eligibility', route => response(route, 200, {
+      types: eligible ? [{ id: 1, code: 'RETAIL', name: 'Retail' }] : [],
+      block: eligible ? null : block,
+      trialDays
+    }))
+    await t.page.route('**/api/business-markets', route => response(route, 200, [
+      { code: 'IN', name: 'India', currencies: ['INR'], timeZones: ['Asia/Kolkata'] }
+    ]))
+    await t.login()
+    {
+      await t.page.route('**/api/platform/business-type-controls', route => response(route, 200, [
+        { id: 1, code: 'RETAIL', name: 'Retail' }
+      ]))
+      await t.page.route('**/api/platform/businesses?*', route => {
+        const query = new URL(route.request().url()).searchParams
+        const matches = query.get('ownerEmail') === 'owner@example.test' &&
+          query.get('businessTypeId') === '1' && query.get('page') === '1'
+        const items = matches ? [{
+          id: 42, name: 'Matching Retail', ownerEmail: 'owner@example.test',
+          typeName: 'Retail', countryCode: 'IN', planCode: 'STARTER', directoryStatus: 'Trial',
+          createdAtUtc: '2026-11-23T23:45:00Z'
+        }] : []
+        return response(route, 200, { items, total: items.length, page: 1, pageSize: 20 })
+      })
+      const statusFilter = width === 1366 ? 'Trial' : 'TrialExpired'
+      const trialDirectoryRequest = t.page.waitForRequest(request => {
+        const url = new URL(request.url())
+        return url.pathname === '/api/platform/businesses' && url.searchParams.get('status') === statusFilter
+      })
+      await t.page.getByRole('button', { name: width === 1366 ? 'View active trials' : 'View expired trials' }).click()
+      await trialDirectoryRequest
+      assert.equal(await t.page.getByLabel('Filter by subscription status').inputValue(), statusFilter)
+      await t.page.getByRole('button', { name: 'Clear', exact: true }).click()
+      await t.page.getByLabel('Filter by owner email').fill('owner@example.test')
+      await t.page.getByLabel('Filter by business type').selectOption('1')
+      await t.page.getByRole('button', { name: 'Search', exact: true }).click()
+      const row = t.page.getByRole('row').filter({ hasText: 'Matching Retail' })
+      await t.page.getByRole('columnheader', { name: 'Created (UTC)' }).waitFor()
+      const created = row.locator('time')
+      assert.equal(await created.getAttribute('datetime'), '2026-11-23T23:45:00Z')
+      assert.equal(await created.textContent(), await t.page.evaluate(() =>
+        new Intl.DateTimeFormat(undefined, { dateStyle: 'medium', timeZone: 'UTC' })
+          .format(new Date('2026-11-23T23:45:00Z'))))
+      await created.scrollIntoViewIfNeeded()
+      await t.screenshot('SA-03-directory-created-' + width)
+      await t.page.route('**/api/platform/businesses/42', route => response(route, 200, {
+        id: 42, name: 'Matching Retail', ownerEmail: 'owner@example.test', typeName: 'Retail',
+        countryCode: 'IN', currencyCode: 'INR', timeZoneId: 'Asia/Kolkata', locationCount: 2,
+        primaryLocationName: 'Main Shop', planCode: 'STARTER', subscriptionStatus: 'Active',
+        accessStatus: 'Inactive', paidPlanVersionId: 17, paidPlanVersion: 2,
+        paidStartsAtUtc: '2026-10-23T23:45:00Z', paidEndsAtUtc: '2026-11-23T23:45:00Z'
+      }))
+      await row.getByRole('button', { name: 'View details for Matching Retail' }).click()
+      const details = t.page.getByRole('region', { name: 'Business details' })
+      await details.getByText('Main Shop', { exact: true }).waitFor()
+      for (const [label, value] of [
+        ['Locations', '2'], ['Paid plan version', '2'], ['Subscription', 'Inactive']
+      ]) {
+        const field = details.locator('dl > div').filter({ has: t.page.getByText(label, { exact: true }) })
+        assert.equal(await field.locator('dd').textContent(), value)
+      }
+      const paidEnd = details.locator('dl > div').filter({ hasText: 'Paid period ends' }).locator('dd')
+      assert.equal(await paidEnd.textContent(), await t.page.evaluate(() =>
+        new Intl.DateTimeFormat(undefined, { dateStyle: 'medium', timeStyle: 'short', timeZone: 'Asia/Kolkata' })
+          .format(new Date('2026-11-23T23:45:00Z'))))
+      await t.screenshot('SA-09-business-details-' + width)
+      const reasonForStatusChange = 'Confirmed subscription status review'
+      const statusChanges = []
+      await t.page.route('**/api/platform/businesses/42/subscription-status', route => {
+        statusChanges.push(route.request().postDataJSON())
+        return statusChanges.length === 1
+          ? response(route, 200, { status: 'Suspended', accessStatus: 'Suspended', auditId: 71 })
+          : response(route, 200, { status: 'Active', accessStatus: 'Inactive', auditId: 72 })
+      })
+      for (const action of ['Suspend', 'Reactivate']) {
+        await t.page.getByRole('button', { name: action + ' Subscription', exact: true }).click()
+        const change = t.page.getByRole('region', { name: 'Confirm subscription status change' })
+        await change.getByLabel(/Reason for/).fill(reasonForStatusChange)
+        await change.getByRole('button', { name: 'Confirm ' + action }).click()
+        await t.page.getByRole('status').filter({ hasText: action === 'Suspend'
+          ? 'Subscription suspended. Audit event #71'
+          : 'Suspension lifted. Business access remains unavailable outside the valid subscription period. Audit event #72' }).waitFor()
+      }
+      assert.deepEqual(statusChanges, [
+        { action: 'Suspend', expectedStatus: 'Active', reason: reasonForStatusChange },
+        { action: 'Reactivate', expectedStatus: 'Suspended', reason: reasonForStatusChange }
+      ])
+      await t.page.getByRole('button', { name: 'All businesses' }).click()
+      const trialEnd = new Date(Date.now() + 86400000).toISOString()
+      await t.page.route('**/api/platform/businesses/42', route => response(route, 200, {
+        id: 42, name: 'Matching Retail', timeZoneId: 'Asia/Kolkata', locationCount: 2,
+        subscriptionStatus: 'Trial', accessStatus: 'Trial', trialEndsAtUtc: trialEnd
+      }))
+      await row.getByRole('button', { name: 'View details for Matching Retail' }).click()
+      await t.page.getByRole('button', { name: 'Extend Trial', exact: true }).click()
+      const extension = t.page.getByRole('region', { name: 'Extend trial' })
+      await extension.getByText(/Current expiry is .*Asia\/Kolkata/).waitFor()
+      await extension.getByText(/Estimated new expiry is .*Asia\/Kolkata/).waitFor()
+      await extension.getByLabel('Additional days').fill('31')
+      assert.equal(await extension.getByText(/Estimated new expiry is/).count(), 0)
+      const confirmExtension = extension.getByRole('button', { name: 'Confirm Trial Extension' })
+      const reason = 'Approved extension for store setup'
+      await extension.getByLabel('Reason for extension').fill(reason)
+      assert.equal(await confirmExtension.isDisabled(), true)
+      await extension.getByLabel('Additional days').fill('2.5')
+      assert.equal(await confirmExtension.isDisabled(), true)
+      await extension.getByLabel('Additional days').fill('2')
+      const confirmedExpiry = new Date(Date.parse(trialEnd) + 2 * 86400000).toISOString()
+      let extensionRequest
+      await t.page.route('**/api/platform/businesses/42/extend-trial', route => {
+        extensionRequest = route.request().postDataJSON()
+        return response(route, 200, { trialEndsAtUtc: confirmedExpiry, auditId: 73 })
+      })
+      await confirmExtension.click()
+      await t.page.getByRole('status').filter({ hasText: 'Audit event #73 recorded.' }).waitFor()
+      assert.deepEqual(extensionRequest, { additionalDays: 2, expectedTrialEndsAtUtc: trialEnd, reason })
+      const trialExpiry = details.locator('dl > div').filter({ hasText: 'Trial end' }).locator('dd')
+      assert.equal(await trialExpiry.textContent(), await t.page.evaluate(date =>
+        new Intl.DateTimeFormat(undefined, { dateStyle: 'medium', timeStyle: 'short', timeZone: 'Asia/Kolkata' })
+          .format(new Date(date)), confirmedExpiry))
+      await t.page.route('**/api/platform/audit?*', route => {
+        const params = new URL(route.request().url()).searchParams
+        const event = {
+          id: 73, actorUserId: 10, action: 'Subscription.TrialExtended', targetType: 'Business',
+          targetId: 42, reason, previousValue: trialEnd, newValue: confirmedExpiry,
+          createdAtUtc: '2026-11-23T12:00:00Z'
+        }
+        const items = [{ ...event, id: 74, actorUserId: 11, action: 'PlatformOwner.SignIn' }, event]
+          .filter(item => (!params.has('eventId') || params.get('eventId') === String(item.id)) &&
+            (!params.has('actorUserId') || params.get('actorUserId') === String(item.actorUserId)))
+        return response(route, 200, { items, total: items.length, page: 1, pageSize: 20 })
+      })
+      await t.page.getByRole('button', { name: 'View audit event' }).click()
+      await t.page.getByText('Showing audit event #73').waitFor()
+      const auditRow = t.page.getByRole('row').filter({ hasText: 'Event #73' })
+      await auditRow.getByText('View details', { exact: true }).click()
+      await auditRow.getByText(reason, { exact: true }).waitFor()
+      assert.equal(await t.page.getByText('Event #74', { exact: true }).count(), 0)
+      await t.page.getByRole('button', { name: 'Show all events' }).click()
+      await t.page.getByText('Event #74', { exact: true }).waitFor()
+      await t.page.getByRole('button', { name: 'Filter by actor #10', exact: true }).click()
+      await t.page.getByText('Event #74', { exact: true }).waitFor({ state: 'hidden' })
+      await t.page.getByText('Event #73', { exact: true }).waitFor()
+      await t.page.getByRole('button', { name: 'Clear actor #10', exact: true }).click()
+      await t.page.getByText('Event #74', { exact: true }).waitFor()
+      const lookup = t.page.getByLabel('Audit event ID')
+      await lookup.fill('7.3')
+      assert.equal(await t.page.getByRole('button', { name: 'Find event' }).isDisabled(), true)
+      await lookup.fill('73')
+      await lookup.press('Enter')
+      await t.page.getByText('Showing audit event #73').waitFor()
+      await t.page.getByText('Event #73', { exact: true }).waitFor()
+      assert.equal(await t.page.getByText('Event #74', { exact: true }).count(), 0)
+      console.log('PASS SA-41 exact audit event, actor filter and full history at ' + width + 'px')
+      if (width === 360) await t.page.getByRole('button', { name: 'Open navigation' }).click()
+      await t.page.locator('.platform-shell .app-sidebar').getByRole('button', { name: 'Businesses', exact: true }).click()
+      await t.page.getByRole('heading', { name: 'No businesses created yet' }).waitFor()
+      console.log('PASS SA-03 combined filters, UTC creation date and clear at ' + width + 'px')
+      await t.page.route('**/api/platform/customers?*', route => {
+        const params = new URL(route.request().url()).searchParams
+        const items = [
+          { id: 20, email: 'owner@example.test', emailConfirmed: true, ownedBusinessCount: 1 },
+          { id: 21, email: 'pending@example.test', emailConfirmed: false, ownedBusinessCount: 0 }
+        ].filter(item => !params.has('emailConfirmed') ||
+          params.get('emailConfirmed') === String(item.emailConfirmed))
+        return response(route, 200, { items, total: items.length, page: 1, pageSize: 20 })
+      })
+      await t.page.route('**/api/platform/customers/20', route => response(route, 200, {
+        id: 20, email: 'owner@example.test', emailConfirmed: true,
+        businesses: [{ id: 42, name: 'Matching Retail', typeName: 'Retail', planCode: 'STARTER',
+          subscriptionStatus: 'Active', accessStatus: 'Inactive' }]
+      }))
+      if (width === 360) await t.page.getByRole('button', { name: 'Open navigation' }).click()
+      await t.page.locator('.platform-shell .app-sidebar').getByRole('button', { name: 'Customers', exact: true }).click()
+      const verification = t.page.getByLabel('Filter by email verification')
+      await verification.selectOption('false')
+      await t.page.getByRole('button', { name: 'View customer pending@example.test' }).waitFor()
+      await t.page.getByRole('button', { name: 'View customer owner@example.test' }).waitFor({ state: 'hidden' })
+      await verification.selectOption('true')
+      await t.page.getByRole('button', { name: 'View customer owner@example.test' }).click()
+      await t.page.getByRole('heading', { name: 'Customer Details' }).waitFor()
+      const ownedBusiness = t.page.getByRole('row').filter({ hasText: 'Matching Retail' })
+      await ownedBusiness.getByRole('cell', { name: 'Inactive', exact: true }).waitFor()
+      assert.equal(await ownedBusiness.getByRole('cell', { name: 'Active', exact: true }).count(), 0)
+      await ownedBusiness.getByRole('button', { name: 'View Business' }).click()
+      await t.page.getByRole('heading', { name: 'Matching Retail', exact: true }).waitFor()
+      await t.page.getByRole('button', { name: 'All businesses' }).click()
+      console.log('PASS SA-14/SA-15 customer filter and owned business navigation at ' + width + 'px')
+    }
+    await t.page.getByRole('button', { name: 'Create Business', exact: true }).click()
+    await t.page.getByRole('alert').filter({ hasText: block.message }).waitFor()
+    assert.equal(await t.page.getByLabel('Business Type').count(), 0)
+    await t.screenshot('SA-07-eligibility-blocked-' + width)
+
+    eligible = true
+    await t.page.getByRole('button', { name: 'Retry', exact: true }).click()
+    await t.page.getByLabel('Business Name').fill('QA Retail Shop')
+    await t.page.getByLabel('Business Type').selectOption('1')
+    await t.page.getByLabel('Country').selectOption('IN')
+    assert.equal(await t.page.getByLabel('Currency').inputValue(), 'INR')
+    assert.equal(await t.page.getByLabel('Timezone').inputValue(), 'Asia/Kolkata')
+    await t.page.getByRole('button', { name: 'Next: Owner' }).click()
+    await t.page.getByRole('heading', { name: 'Owner & Access' }).waitFor()
+    if (width === 1366) {
+      const ownerEmail = 'owner@example.test'
+      const submissions = []
+      await t.page.route('**/api/platform/owner-lookup?*', route =>
+        response(route, 200, { id: 20, email: ownerEmail, verified: true }))
+      await t.page.route('**/api/platform/businesses', route => {
+        if (route.request().method() !== 'POST') return route.fallback()
+        submissions.push(route.request().postDataJSON())
+        if (submissions.length === 1) {
+          trialDays = 21
+          return response(route, 409, {
+            code: 'TRIAL_DURATION_CHANGED',
+            message: 'The trial duration changed. Review and confirm the updated duration.'
+          })
+        }
+        if (submissions.length === 2) return route.abort('connectionreset')
+        return response(route, 200, {
+          id: 42, alreadyExists: true, trialEndsAtUtc: '2026-12-07T15:00:00Z'
+        })
+      })
+      await t.page.getByLabel('Owner Email Address').fill(ownerEmail)
+      await t.page.getByRole('button', { name: 'Verify Owner' }).click()
+      await t.page.getByText('14 days from business creation').waitFor()
+      await t.page.getByRole('button', { name: 'Review Business' }).click()
+      await t.page.getByText('Starter · 14-day trial').waitFor()
+      await t.page.getByRole('checkbox', { name: /checked the business details/ }).check()
+      await t.page.getByRole('button', { name: 'Confirm & Create Business' }).click()
+      await t.page.getByRole('alert').filter({ hasText: 'The trial duration changed' }).waitFor()
+      await t.page.getByText('Starter · 21-day trial').waitFor()
+      const confirmation = t.page.getByRole('checkbox', { name: /checked the business details/ })
+      assert.equal(await confirmation.isChecked(), false)
+      assert.equal(await t.page.getByRole('button', { name: 'Confirm & Create Business' }).isDisabled(), true)
+      await confirmation.check()
+      await t.page.getByRole('button', { name: 'Confirm & Create Business' }).click()
+      await t.page.getByRole('alert').filter({ hasText: 'previous request may have completed' }).waitFor()
+      assert.equal(await t.page.getByRole('button', { name: 'Back', exact: true }).isDisabled(), true)
+      await t.page.getByRole('button', { name: 'Retry Creation' }).click()
+      await t.page.getByRole('heading', { name: 'Business creation confirmed' }).waitFor()
+      await t.page.getByText('QA Retail Shop · Business ID 42').waitFor()
+      await t.page.getByText(ownerEmail + ' was assigned as Owner.').waitFor()
+      await t.page.getByText(/Trial ends .*(8|20):30.*Asia\/Kolkata/).waitFor()
+      assert.equal(await t.page.locator('time').getAttribute('datetime'), '2026-12-07T15:00:00Z')
+      assert.equal(submissions.length, 3)
+      assert.equal(submissions[0].expectedTrialDays, 14)
+      assert.equal(submissions[1].expectedTrialDays, 21)
+      assert.ok(submissions[1].requestKey)
+      assert.deepEqual(submissions[2], submissions[1])
+      await t.screenshot('SA-08-provisioning-recovered')
+      console.log('PASS SA-08 lost creation response recovers with the same request key')
+    }
+    await t.check()
+    await t.context.close()
+    console.log('PASS SA-07 provisioning eligibility block and recovery at ' + width + 'px')
   }
 
   console.log('PASS all first-screen browser QA scenarios')

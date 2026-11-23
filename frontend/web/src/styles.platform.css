@@ -284,6 +284,7 @@
 .platform-directory-search-field input.form-control { width: 100%; min-height: 43px;
   padding-left: 42px; border-radius: 8px; border-color: #d9e1ef; }
 .platform-directory-search .btn { min-height: 42px; }
+.platform-directory-filter { flex: 1 1 150px; width: auto; min-height: 42px; }
 .platform-shell .platform-directory-table { margin: 0; border-color: #edf0f6; }
 .platform-shell .platform-directory-table th { background: #f6f7fc; color: #454e60;
   border-top: 1px solid #e7ecf5; padding: 12px 15px; font-weight: 700; font-size: .75rem; }

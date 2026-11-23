@@ -5,11 +5,16 @@ namespace BusinessSaas.Api.Features;
 public static class SubscriptionAccess
 {
     public static bool CanOperate(BusinessSubscription subscription, DateTime now) =>
-        subscription.Status switch
+        ResolveStatus(subscription.Status, subscription.TrialEndsAtUtc, subscription.PaidStartsAtUtc,
+            subscription.PaidEndsAtUtc, subscription.PaidPlanVersionId, now) is "Trial" or "Active";
+
+    internal static string ResolveStatus(string? status, DateTime? trialEndsAtUtc,
+        DateTime? paidStartsAtUtc, DateTime? paidEndsAtUtc, long? paidPlanVersionId, DateTime now) =>
+        status switch
         {
-            "Trial" => subscription.TrialEndsAtUtc > now,
-            "Active" => subscription.PaidStartsAtUtc <= now &&
-                subscription.PaidEndsAtUtc > now && subscription.PaidPlanVersionId.HasValue,
-            _ => false
+            "Trial" => trialEndsAtUtc > now ? "Trial" : "TrialExpired",
+            "Active" when paidStartsAtUtc <= now && paidEndsAtUtc > now && paidPlanVersionId.HasValue => "Active",
+            "Suspended" => "Suspended",
+            _ => "Inactive"
         };
 }

@@ -23,7 +23,6 @@ public sealed class OwnerStockAlertTests
         using var factory = new WebApplicationFactory<Program>().WithWebHostBuilder(builder =>
         {
             builder.UseEnvironment("Development");
-            builder.UseSetting("Tests:AllowLegacyBusinessCreation", "true");
             builder.ConfigureServices(services =>
             {
                 services.RemoveAll<DbContextOptions<AppDbContext>>();
@@ -39,8 +38,8 @@ public sealed class OwnerStockAlertTests
         await Login(other, "alerts-other@example.test");
         await Login(cashier, "alerts-cashier@example.test");
 
-        var id = await CreateBusiness(owner, "Alerts Store", "alerts-store-owner-20261123");
-        var foreignId = await CreateBusiness(other, "Foreign Store", "alerts-store-other-20261123");
+        var id = await BusinessFixtures.SeedAsync(factory.Services, owner, "Alerts Store", "alerts-store-owner-20261123");
+        var foreignId = await BusinessFixtures.SeedAsync(factory.Services, other, "Foreign Store", "alerts-store-other-20261123");
         long location;
         long secondLocation;
         using (var scope = factory.Services.CreateScope())
@@ -184,17 +183,6 @@ public sealed class OwnerStockAlertTests
             new { email, password = "TestPassword123!" })).StatusCode);
         Assert.Equal(HttpStatusCode.NoContent, (await Send(client, HttpMethod.Post, "/api/auth/login",
             new { email, password = "TestPassword123!" })).StatusCode);
-    }
-
-    private static async Task<long> CreateBusiness(HttpClient client, string name, string key)
-    {
-        var result = await Send(client, HttpMethod.Post, "/api/businesses", new
-        {
-            name, businessTypeId = 1, countryCode = "IN", currencyCode = "INR",
-            timeZoneId = "Asia/Kolkata", requestKey = key
-        });
-        Assert.Equal(HttpStatusCode.Created, result.StatusCode);
-        return (await result.Content.ReadFromJsonAsync<JsonElement>()).GetProperty("id").GetInt64();
     }
 
     private static async Task<long> CreateId(HttpClient client, string path, object data)

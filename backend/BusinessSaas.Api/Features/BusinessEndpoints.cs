@@ -2,7 +2,6 @@ using System.Security.Claims;
 using System.Text.Json;
 using BusinessSaas.Api.Data;
 using Microsoft.EntityFrameworkCore;
-using Microsoft.Data.SqlClient;
 
 namespace BusinessSaas.Api.Features;
 
@@ -23,13 +22,16 @@ public static class BusinessEndpoints
     internal static bool ValidMarket(string country, string currency, string timeZone) =>
         Markets.Any(x => x.Code == country && x.Currencies.Contains(currency) && x.TimeZones.Contains(timeZone));
 
+    internal static IQueryable<BusinessType> ProvisionableTypes(AppDbContext db) =>
+        db.BusinessTypes.AsNoTracking()
+            .Where(x => x.IsSupported && x.ReleaseState == "Available" && x.Code == "RETAIL");
+
     public static void MapBusinessEndpoints(this WebApplication app)
     {
         var group = app.MapGroup("/api").RequireAuthorization();
 
         group.MapGet("/business-types", async (AppDbContext db) =>
-            await db.BusinessTypes.AsNoTracking()
-                .Where(x => x.IsSupported && x.ReleaseState == "Available" && x.Code == "RETAIL")
+            await ProvisionableTypes(db)
                 .OrderBy(x => x.Name)
                 .Select(x => new { x.Id, x.Code, x.Name })
                 .ToListAsync());
@@ -60,109 +62,7 @@ public static class BusinessEndpoints
                           }).ToListAsync();
         });
 
-        // The former owner self-service endpoint is retired for all real deployments.
-        // Only legacy in-process integration fixtures may opt in while tests migrate
-        // to /api/platform/businesses. Never enable from appsettings or production.
-        group.MapPost("/businesses", async (CreateBusinessRequest request,
-            ClaimsPrincipal principal, AppDbContext db, IConfiguration configuration,
-            IWebHostEnvironment environment) =>
-        {
-            if (!environment.IsDevelopment() ||
-                !configuration.GetValue<bool>("Tests:AllowLegacyBusinessCreation"))
-                return Results.Forbid();
-
-            var userId = CurrentUserId(principal);
-            var name = request.Name?.Trim() ?? "";
-            var country = request.CountryCode?.Trim().ToUpperInvariant() ?? "";
-            var currency = request.CurrencyCode?.Trim().ToUpperInvariant() ?? "";
-            var timeZone = request.TimeZoneId?.Trim() ?? "";
-            var requestKey = request.RequestKey?.Trim() ?? "";
-
-            if (name.Length is < 2 or > 150 || requestKey.Length is < 12 or > 80)
-                return Results.BadRequest(new { message = "Enter a valid business name and request key." });
-
-            var market = Markets.FirstOrDefault(x => x.Code == country);
-            if (market is null || !market.Currencies.Contains(currency) || !market.TimeZones.Contains(timeZone))
-                return Results.BadRequest(new { message = "Choose a supported country, currency and timezone." });
-
-            var existing = await db.Businesses.AsNoTracking()
-                .FirstOrDefaultAsync(x => x.CreatedByUserId == userId && x.CreationKey == requestKey);
-            if (existing is not null)
-                return Matches(existing, request, name, country, currency, timeZone)
-                    ? Results.Ok(new { existing.Id })
-                    : Results.Conflict(new { message = "Request key was already used for another business." });
-
-            var trialDays = configuration.GetValue<int>("Saas:TrialDays");
-            if (trialDays is < 1 or > 90)
-                return Results.Problem("Trial duration must be between 1 and 90 days.", statusCode: 503);
-
-            var businessType = await db.BusinessTypes.AsNoTracking()
-                .Where(x => x.Id == request.BusinessTypeId && x.IsSupported &&
-                    x.ReleaseState == "Available")
-                .Select(x => x.Code).SingleOrDefaultAsync();
-            if (businessType is null)
-                return Results.BadRequest(new { message = "This business type is not available yet." });
-
-            await using var transaction = await db.Database.BeginTransactionAsync();
-
-            try
-            {
-                var business = new Business
-                {
-                    Name = name,
-                    BusinessTypeId = request.BusinessTypeId,
-                    CreatedByUserId = userId,
-                    CreationKey = requestKey,
-                    CountryCode = country,
-                    CurrencyCode = currency,
-                    TimeZoneId = timeZone
-                };
-
-                db.Businesses.Add(business);
-                await db.SaveChangesAsync();
-
-                db.BusinessUsers.Add(new BusinessUser
-                {
-                    BusinessId = business.Id,
-                    UserId = userId,
-                    RoleCode = "Owner"
-                });
-                db.BusinessLocations.Add(new BusinessLocation
-                {
-                    BusinessId = business.Id,
-                    Code = "MAIN",
-                    Name = "Main Shop"
-                });
-                db.BusinessSubscriptions.Add(new BusinessSubscription
-                {
-                    BusinessId = business.Id,
-                    TrialEndsAtUtc = DateTime.UtcNow.AddDays(trialDays)
-                });
-
-                if (businessType == "RETAIL")
-                    RetailModule.AddBusinessDefaults(db, business.Id);
-
-                await db.SaveChangesAsync();
-                await transaction.CommitAsync();
-
-                return Results.Created($"/api/businesses/{business.Id}/dashboard", new { business.Id });
-            }
-            catch (DbUpdateException exception) when (
-                exception.InnerException is SqlException { Number: 2601 or 2627 })
-            {
-                await transaction.RollbackAsync();
-                db.ChangeTracker.Clear();
-
-                var created = await db.Businesses.AsNoTracking().FirstOrDefaultAsync(
-                    x => x.CreatedByUserId == userId && x.CreationKey == requestKey);
-                if (created is null)
-                    throw;
-
-                return Matches(created, request, name, country, currency, timeZone)
-                    ? Results.Ok(new { created.Id })
-                    : Results.Conflict(new { message = "Request key was already used for another business." });
-            }
-        });
+        group.MapPost("/businesses", () => Results.Forbid());
 
         group.MapGet("/businesses/{businessId:long}/dashboard", async (
             long businessId, ClaimsPrincipal principal, AppDbContext db, IWebHostEnvironment environment) =>
@@ -201,17 +101,9 @@ public static class BusinessEndpoints
                 .Select(x => new { x.PlanCode, x.Status, x.TrialEndsAtUtc,
                     x.PaidStartsAtUtc, x.PaidEndsAtUtc, x.PaidPlanVersionId })
                 .SingleOrDefaultAsync();
-            var accessStatus = subscription?.Status switch
-            {
-                "Active" when subscription.PaidStartsAtUtc <= DateTime.UtcNow &&
-                    subscription.PaidEndsAtUtc > DateTime.UtcNow &&
-                    subscription.PaidPlanVersionId.HasValue => "Active",
-                "Active" => "Inactive",
-                "Trial" when subscription.TrialEndsAtUtc > DateTime.UtcNow => "Trial",
-                "Trial" => "TrialExpired",
-                "Suspended" => "Suspended",
-                _ => "Inactive"
-            };
+            var accessStatus = SubscriptionAccess.ResolveStatus(subscription?.Status,
+                subscription?.TrialEndsAtUtc, subscription?.PaidStartsAtUtc, subscription?.PaidEndsAtUtc,
+                subscription?.PaidPlanVersionId, DateTime.UtcNow);
             var canOperate = accessStatus is "Active" or "Trial";
 
             var hasProducts = roleCode != "Cashier" && await db.RetailProducts.AnyAsync(x => x.BusinessId == businessId);
@@ -300,18 +192,6 @@ public static class BusinessEndpoints
             ?? throw new InvalidOperationException("Country catalog is invalid.");
     }
 
-    private static bool Matches(Business business, CreateBusinessRequest request,
-        string name, string country, string currency, string timeZone) =>
-        business.BusinessTypeId == request.BusinessTypeId &&
-        business.Name == name &&
-        business.CountryCode == country &&
-        business.CurrencyCode == currency &&
-        business.TimeZoneId == timeZone;
-
     private static long CurrentUserId(ClaimsPrincipal principal) =>
         long.Parse(principal.FindFirstValue(ClaimTypes.NameIdentifier)!);
-
-    private sealed record CreateBusinessRequest(
-        string? Name, long BusinessTypeId, string? CountryCode,
-        string? CurrencyCode, string? TimeZoneId, string? RequestKey);
 }

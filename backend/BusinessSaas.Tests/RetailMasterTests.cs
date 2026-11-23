@@ -24,7 +24,6 @@ public sealed class RetailMasterTests
         using var factory = new WebApplicationFactory<Program>().WithWebHostBuilder(builder =>
         {
             builder.UseEnvironment("Development");
-            builder.UseSetting("Tests:AllowLegacyBusinessCreation", "true");
             builder.ConfigureServices(services =>
             {
                 services.RemoveAll<DbContextOptions<AppDbContext>>();
@@ -46,8 +45,8 @@ public sealed class RetailMasterTests
         await Register(manager, "retail-manager@example.test");
         await Register(cashier, "retail-cashier@example.test");
 
-        var firstId = await CreateBusiness(owner, "First Retail", "retail-first-20261112");
-        var secondId = await CreateBusiness(other, "Other Retail", "retail-other-20261112");
+        var firstId = await BusinessFixtures.SeedAsync(factory.Services, owner, "First Retail", "retail-first-20261112");
+        var secondId = await BusinessFixtures.SeedAsync(factory.Services, other, "Other Retail", "retail-other-20261112");
         var categories = $"/api/businesses/{firstId}/categories";
         var units = $"/api/businesses/{firstId}/units";
 
@@ -149,15 +148,8 @@ public sealed class RetailMasterTests
             salonTypeId = salon.Id;
         }
 
-        var salonResponse = await Post(owner, "/api/businesses", new
-        {
-            name = "Second Business Type", businessTypeId = salonTypeId,
-            countryCode = "IN", currencyCode = "INR",
-            timeZoneId = "Asia/Kolkata", requestKey = "retail-boundary-salon-001"
-        });
-        Assert.Equal(HttpStatusCode.Created, salonResponse.StatusCode);
-        var salonId = (await salonResponse.Content.ReadFromJsonAsync<JsonElement>())
-            .GetProperty("id").GetInt64();
+        var salonId = await BusinessFixtures.SeedAsync(factory.Services, owner,
+            "Second Business Type", "retail-boundary-salon-001", salonTypeId);
 
         Assert.Equal(HttpStatusCode.OK,
             (await owner.GetAsync($"/api/businesses/{salonId}/dashboard")).StatusCode);
@@ -197,18 +189,6 @@ public sealed class RetailMasterTests
         Assert.Equal(HttpStatusCode.NoContent,
             (await Post(client, "/api/auth/login",
                 new { email, password = "TestPassword123!" })).StatusCode);
-    }
-
-    private static async Task<long> CreateBusiness(HttpClient client, string name, string key)
-    {
-        var response = await Post(client, "/api/businesses", new
-        {
-            name, businessTypeId = 1, countryCode = "IN", currencyCode = "INR",
-            timeZoneId = "Asia/Kolkata", requestKey = key
-        });
-        Assert.Equal(HttpStatusCode.Created, response.StatusCode);
-        return (await response.Content.ReadFromJsonAsync<JsonElement>())
-            .GetProperty("id").GetInt64();
     }
 
     private static Task<HttpResponseMessage> Post(HttpClient client, string url, object body) =>

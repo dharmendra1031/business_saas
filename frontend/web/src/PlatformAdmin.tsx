@@ -1,6 +1,6 @@
 import { useEffect, useRef, useState, type FormEvent } from 'react'
-import { api, post, SessionExpiredError } from './api'
-import PlatformOverview from './PlatformOverview'
+import { api, post, SessionExpiredError, type BusinessType } from './api'
+import PlatformOverview, { type OverviewSubscriptionFilter } from './PlatformOverview'
 import PlatformCustomers from './PlatformCustomers'
 import PlatformAudit from './PlatformAudit'
 import PlatformPlans from './PlatformPlans'
@@ -19,6 +19,8 @@ interface BusinessRow {
   countryCode: string
   planCode: string | null
   subscriptionStatus: string | null
+  directoryStatus?: string
+  createdAtUtc?: string
   trialEndsAtUtc: string | null
 }
 
@@ -30,6 +32,13 @@ interface BusinessPage {
 }
 
 interface BusinessDetails extends BusinessRow {
+  accessStatus: string
+  paidStartsAtUtc: string | null
+  paidEndsAtUtc: string | null
+  paidPlanVersionId: number | null
+  paidPlanVersion: number | null
+  locationCount: number
+  primaryLocationName: string | null
   statusBeforeSuspension: string | null
   currencyCode: string
   timeZoneId: string
@@ -48,15 +57,26 @@ function statusStyle(status: string) {
   return 'is-muted'
 }
 
-function PlatformBusinesses({ selectedBusinessId, onBilling, startCreate, onCreateHandled, incomingSearch }: {
+const directoryDate = new Intl.DateTimeFormat(undefined, { dateStyle: 'medium', timeZone: 'UTC' })
+
+function PlatformBusinesses({ selectedBusinessId, onBilling, startCreate, onCreateHandled, incomingSearch, incomingStatus, onViewAudit }: {
   selectedBusinessId: number | null
   onBilling: (business: BusinessRow) => void
   startCreate: boolean
   onCreateHandled: () => void
   incomingSearch: string
+  incomingStatus: string
+  onViewAudit: (id: number) => void
 }) {
   const [search, setSearch] = useState(incomingSearch)
   const [term, setTerm] = useState(incomingSearch)
+  const [ownerEmail, setOwnerEmail] = useState('')
+  const [ownerTerm, setOwnerTerm] = useState('')
+  const [typeId, setTypeId] = useState('')
+  const [types, setTypes] = useState<BusinessType[]>([])
+  const [typeLoadError, setTypeLoadError] = useState(false)
+  const [plan, setPlan] = useState('')
+  const [statusFilter, setStatusFilter] = useState(incomingStatus)
   const [page, setPage] = useState(1)
   const [reload, setReload] = useState(0)
   const [list, setList] = useState<BusinessPage | null>(null)
@@ -71,7 +91,7 @@ function PlatformBusinesses({ selectedBusinessId, onBilling, startCreate, onCrea
   const [statusAction, setStatusAction] = useState<'Suspend' | 'Reactivate' | null>(null)
   const [statusReason, setStatusReason] = useState('')
   const [statusBusy, setStatusBusy] = useState(false)
-  const [notice, setNotice] = useState('')
+  const [notice, setNotice] = useState<{ message: string; auditId: number } | null>(null)
   const [creating, setCreating] = useState(startCreate)
   // Ignore responses from superseded detail requests (search, back, or another business).
   const detailRequestId = useRef(0)
@@ -88,16 +108,25 @@ function PlatformBusinesses({ selectedBusinessId, onBilling, startCreate, onCrea
     setDetailLoading(false)
     setSearch(incomingSearch)
     setTerm(incomingSearch)
+    setOwnerEmail('')
+    setOwnerTerm('')
+    setTypeId('')
+    setPlan('')
+    setStatusFilter(incomingStatus)
     setPage(1)
     setDetails(null)
-  }, [incomingSearch])
+  }, [incomingSearch, incomingStatus])
 
   useEffect(() => {
     let active = true
     setLoading(true)
     setError('')
 
-    api<BusinessPage>(`/platform/businesses?page=${page}&search=${encodeURIComponent(term)}`)
+    const params = new URLSearchParams({
+      page: String(page), search: term, ownerEmail: ownerTerm, planCode: plan, status: statusFilter
+    })
+    if (typeId) params.set('businessTypeId', typeId)
+    api<BusinessPage>(`/platform/businesses?${params}`)
       .then(result => { if (active) setList(result) })
       .catch(cause => {
         if (!active || cause instanceof SessionExpiredError) return
@@ -107,7 +136,18 @@ function PlatformBusinesses({ selectedBusinessId, onBilling, startCreate, onCrea
       .finally(() => { if (active) setLoading(false) })
 
     return () => { active = false }
-  }, [term, page, reload])
+  }, [term, ownerTerm, typeId, page, plan, statusFilter, reload])
+
+  useEffect(() => {
+    let active = true
+    setTypeLoadError(false)
+    api<BusinessType[]>('/platform/business-type-controls')
+      .then(result => { if (active) setTypes(result) })
+      .catch(cause => {
+        if (active && !(cause instanceof SessionExpiredError)) setTypeLoadError(true)
+      })
+    return () => { active = false }
+  }, [reload])
 
   function applySearch(event: FormEvent) {
     event.preventDefault()
@@ -115,13 +155,14 @@ function PlatformBusinesses({ selectedBusinessId, onBilling, startCreate, onCrea
     setDetailLoading(false)
     setPage(1)
     setTerm(search.trim())
+    setOwnerTerm(ownerEmail.trim())
     setDetails(null)
   }
 
   async function openBusiness(id: number) {
     const requestId = ++detailRequestId.current
     setError('')
-    setNotice('')
+    setNotice(null)
     setExtending(false)
     setStatusAction(null)
     setDetailLoading(true)
@@ -136,9 +177,16 @@ function PlatformBusinesses({ selectedBusinessId, onBilling, startCreate, onCrea
     }
   }
 
+  const validExtensionDays = Number.isInteger(extensionDays) && extensionDays >= 1 && extensionDays <= 30
+  const trimmedExtensionReason = extensionReason.trim()
+  const canExtendTrial = validExtensionDays && trimmedExtensionReason.length >= 10 &&
+    trimmedExtensionReason.length <= 200
+  const trimmedStatusReason = statusReason.trim()
+  const validStatusReason = trimmedStatusReason.length >= 10 && trimmedStatusReason.length <= 200
+
   async function extendTrial(event: FormEvent) {
     event.preventDefault()
-    if (!details?.trialEndsAtUtc || details.subscriptionStatus !== 'Trial') return
+    if (extensionBusy || !canExtendTrial || !details?.trialEndsAtUtc || details.subscriptionStatus !== 'Trial') return
     setError('')
     setExtensionBusy(true)
     try {
@@ -146,13 +194,13 @@ function PlatformBusinesses({ selectedBusinessId, onBilling, startCreate, onCrea
         `/platform/businesses/${details.id}/extend-trial`, {
           additionalDays: extensionDays,
           expectedTrialEndsAtUtc: details.trialEndsAtUtc,
-          reason: extensionReason.trim()
+          reason: trimmedExtensionReason
         })
       setDetails(current => current && current.id === details.id
-        ? { ...current, trialEndsAtUtc: result.trialEndsAtUtc } : current)
+        ? { ...current, trialEndsAtUtc: result.trialEndsAtUtc, accessStatus: 'Trial' } : current)
       setExtending(false)
       setExtensionReason('')
-      setNotice(`Trial extended successfully. Audit event #${result.auditId} recorded.`)
+      setNotice({ message: 'Trial extended successfully.', auditId: result.auditId })
     } catch (cause) {
       if (!(cause instanceof SessionExpiredError)) {
         setError(cause instanceof Error ? cause.message : 'Unable to extend trial.')
@@ -164,27 +212,32 @@ function PlatformBusinesses({ selectedBusinessId, onBilling, startCreate, onCrea
 
   async function changeSubscriptionStatus(event: FormEvent) {
     event.preventDefault()
-    if (!details || !statusAction || !details.subscriptionStatus) return
+    if (statusBusy || !validStatusReason || !details || !statusAction || !details.subscriptionStatus) return
     setStatusBusy(true)
     setError('')
     try {
-      const result = await post<{ status: string; auditId: number }>(
+      const result = await post<{ status: string; accessStatus: string; auditId: number }>(
         `/platform/businesses/${details.id}/subscription-status`, {
           action: statusAction,
           expectedStatus: details.subscriptionStatus,
-          reason: statusReason.trim()
+          reason: trimmedStatusReason
         })
       setDetails(current => current && current.id === details.id
         ? {
             ...current,
             subscriptionStatus: result.status,
+            accessStatus: result.accessStatus,
             statusBeforeSuspension: statusAction === 'Suspend'
               ? current.subscriptionStatus : null
           } : current)
       setStatusAction(null)
       setStatusReason('')
       setExtending(false)
-      setNotice(`Subscription ${result.status.toLowerCase()}. Audit event #${result.auditId} recorded.`)
+      const outcome = result.status === 'Suspended' ? 'Subscription suspended.' :
+        result.accessStatus === 'Active' || result.accessStatus === 'Trial'
+          ? 'Subscription reactivated. Business access is restored.'
+          : 'Suspension lifted. Business access remains unavailable outside the valid subscription period.'
+      setNotice({ message: outcome, auditId: result.auditId })
     } catch (cause) {
       if (!(cause instanceof SessionExpiredError))
         setError(cause instanceof Error ? cause.message :
@@ -207,6 +260,9 @@ function PlatformBusinesses({ selectedBusinessId, onBilling, startCreate, onCrea
     }} />
 
   if (details) {
+    const subscriptionDate = new Intl.DateTimeFormat(undefined, {
+      dateStyle: 'medium', timeStyle: 'short', timeZone: details.timeZoneId
+    })
     return (
       <>
         <div className="page-header">
@@ -232,15 +288,30 @@ function PlatformBusinesses({ selectedBusinessId, onBilling, startCreate, onCrea
             <div><dt>Country</dt><dd>{details.countryCode}</dd></div>
             <div><dt>Currency</dt><dd>{details.currencyCode}</dd></div>
             <div><dt>Timezone</dt><dd>{details.timeZoneId}</dd></div>
+            <div><dt>Locations</dt><dd>{details.locationCount.toLocaleString()}</dd></div>
+            <div><dt>Primary location</dt><dd>{details.primaryLocationName ?? 'Not assigned'}</dd></div>
             <div><dt>Plan</dt><dd>{details.planCode ?? 'Not assigned'}</dd></div>
-            <div><dt>Subscription</dt><dd>{statusLabel(details.subscriptionStatus, details.trialEndsAtUtc)}</dd></div>
+            {details.paidPlanVersionId != null && <div><dt>Paid plan version</dt>
+              <dd>{details.paidPlanVersion ?? `#${details.paidPlanVersionId}`}</dd></div>}
+            <div><dt>Subscription</dt><dd>{details.subscriptionStatus == null ? 'No subscription' :
+              details.accessStatus === 'TrialExpired' ? 'Trial expired' :
+              (details.accessStatus ?? statusLabel(details.subscriptionStatus, details.trialEndsAtUtc))}</dd></div>
             {details.subscriptionStatus === 'Suspended' && details.statusBeforeSuspension &&
               <div><dt>Previous status</dt><dd>{details.statusBeforeSuspension}</dd></div>}
             {details.trialEndsAtUtc && <div><dt>Trial end</dt>
-              <dd>{new Date(details.trialEndsAtUtc).toLocaleDateString()}</dd></div>}
+              <dd>{subscriptionDate.format(new Date(details.trialEndsAtUtc))}</dd></div>}
+            {details.paidStartsAtUtc && <div><dt>Paid period starts</dt>
+              <dd>{subscriptionDate.format(new Date(details.paidStartsAtUtc))}</dd></div>}
+            {details.paidEndsAtUtc && <div><dt>Paid period ends</dt>
+              <dd>{subscriptionDate.format(new Date(details.paidEndsAtUtc))}</dd></div>}
           </dl>
         </section>
-        {notice && <div className="alert alert-success mt-3" role="status">{notice}</div>}
+        {notice && <div className="alert alert-success mt-3">
+          <span role="status">{notice.message} Audit event #{notice.auditId} recorded.</span>{' '}
+          <button type="button" className="btn btn-link p-0" onClick={() => onViewAudit(notice.auditId)}>
+            View audit event
+          </button>
+        </div>}
         {details.subscriptionStatus === 'Trial' && details.trialEndsAtUtc && <>
           <div className="mt-3 mb-2">
             <button type="button" className="btn btn-primary btn-sm"
@@ -251,8 +322,8 @@ function PlatformBusinesses({ selectedBusinessId, onBilling, startCreate, onCrea
           {extending && <section className="content-section mt-3" aria-label="Extend trial">
             <h2>Extend Trial — {details.name}</h2>
             <p className="text-secondary small">
-              Current expiry: {new Date(details.trialEndsAtUtc).toLocaleString()}.
-              This change affects only this business and is recorded in the platform audit log.
+              Current expiry is {subscriptionDate.format(new Date(details.trialEndsAtUtc))} ({details.timeZoneId}).
+              The extension is recorded in the platform audit log.
             </p>
             <form onSubmit={event => void extendTrial(event)}>
               <div className="row g-3">
@@ -274,9 +345,10 @@ function PlatformBusinesses({ selectedBusinessId, onBilling, startCreate, onCrea
                 </div>
               </div>
               <p className="small text-secondary mt-3">
-                Estimated new expiry: {new Date(
+                {validExtensionDays &&
+                  <>Estimated new expiry is {subscriptionDate.format(new Date(
                   Math.max(Date.now(), new Date(details.trialEndsAtUtc).getTime()) +
-                  extensionDays * 86400000).toLocaleString()}.
+                  extensionDays * 86400000))} ({details.timeZoneId}).{' '}</>}
                 Maximum permitted expiry is 90 days from now.
               </p>
               {error && <div className="alert alert-danger" role="alert">{error}</div>}
@@ -286,8 +358,7 @@ function PlatformBusinesses({ selectedBusinessId, onBilling, startCreate, onCrea
                   Cancel
                 </button>
                 <button type="submit" className="btn btn-primary"
-                  disabled={extensionBusy || extensionDays < 1 || extensionDays > 30 ||
-                    extensionReason.trim().length < 10}>
+                  disabled={extensionBusy || !canExtendTrial}>
                   {extensionBusy ? 'Saving…' : 'Confirm Trial Extension'}
                 </button>
               </div>
@@ -319,7 +390,7 @@ function PlatformBusinesses({ selectedBusinessId, onBilling, startCreate, onCrea
             <p className="small text-secondary">
               {statusAction === 'Suspend'
                 ? 'Suspension blocks business operations without deleting any business data.'
-                : `Reactivation restores the previous ${details.statusBeforeSuspension ?? 'subscription'} status. Expired trials remain expired.`}
+                : 'Reactivation lifts the suspension. Business access requires a current trial or paid subscription period.'}
               {' '}Current status: {details.subscriptionStatus}. The action is audited and cannot be undone without a separate confirmed action.
             </p>
             <form onSubmit={event => void changeSubscriptionStatus(event)}>
@@ -337,7 +408,7 @@ function PlatformBusinesses({ selectedBusinessId, onBilling, startCreate, onCrea
                   disabled={statusBusy} onClick={() => { setStatusAction(null); setError('') }}>Cancel</button>
                 <button type="submit" className={statusAction === 'Suspend'
                   ? 'btn btn-danger' : 'btn btn-primary'}
-                  disabled={statusBusy || statusReason.trim().length < 10}>
+                  disabled={statusBusy || !validStatusReason}>
                   {statusBusy ? 'Saving…' : `Confirm ${statusAction}`}
                 </button>
               </div>
@@ -351,6 +422,7 @@ function PlatformBusinesses({ selectedBusinessId, onBilling, startCreate, onCrea
     )
   }
 
+  const filtered = !!(term || ownerTerm || typeId || plan || statusFilter)
   return (
     <div className="platform-business-directory">
       <div className="page-header">
@@ -384,11 +456,46 @@ function PlatformBusinesses({ selectedBusinessId, onBilling, startCreate, onCrea
               placeholder="Search business by name" value={search}
               onChange={event => setSearch(event.target.value)} />
           </div>
+          <input className="form-control platform-directory-filter" type="search" aria-label="Filter by owner email"
+            placeholder="Owner email" maxLength={254} value={ownerEmail}
+            onChange={event => setOwnerEmail(event.target.value)} />
+          <select className="form-select platform-directory-filter" aria-label="Filter by business type" value={typeId}
+            disabled={types.length === 0}
+            onChange={event => { setTypeId(event.target.value); setPage(1) }}>
+            <option value="">All business types</option>
+            {types.map(type => <option key={type.id} value={type.id}>{type.name}</option>)}
+          </select>
+          <select className="form-select platform-directory-filter" aria-label="Filter by plan" value={plan}
+            onChange={event => { setPlan(event.target.value); setPage(1) }}>
+            <option value="">All plans</option>
+            <option value="STARTER">Starter</option>
+            <option value="GROWTH">Growth</option>
+            <option value="PROFESSIONAL">Professional</option>
+            <option value="BUSINESS">Business</option>
+            <option value="ENTERPRISE">Enterprise</option>
+          </select>
+          <select className="form-select platform-directory-filter" aria-label="Filter by subscription status" value={statusFilter}
+            onChange={event => { setStatusFilter(event.target.value); setPage(1) }}>
+            <option value="">All statuses</option>
+            <option value="Trial">Trial</option>
+            <option value="TrialExpired">Trial expired</option>
+            <option value="Active">Active</option>
+            <option value="Inactive">Inactive</option>
+            <option value="Suspended">Suspended</option>
+            <option value="None">No subscription</option>
+          </select>
           <button type="submit" className="btn btn-primary">Search</button>
-          {(term || search) && <button type="button" className="btn btn-outline-secondary"
-            onClick={() => { setSearch(''); setTerm(''); setPage(1) }}>Clear</button>}
+          {(filtered || search || ownerEmail) && <button type="button" className="btn btn-outline-secondary"
+            onClick={() => {
+              setSearch(''); setTerm(''); setOwnerEmail(''); setOwnerTerm(''); setTypeId('')
+              setPlan(''); setStatusFilter(''); setPage(1)
+            }}>Clear</button>}
         </form>
 
+        {typeLoadError && <div className="alert alert-warning" role="alert">Unable to load business types.
+          <button type="button" className="btn btn-outline-secondary btn-sm ms-2"
+            onClick={() => setReload(value => value + 1)}>Retry business types</button>
+        </div>}
         {error && <div className="alert alert-danger" role="alert">{error}
           <button type="button" className="btn btn-outline-secondary btn-sm ms-2"
             onClick={() => setReload(value => value + 1)}>Retry</button>
@@ -398,8 +505,8 @@ function PlatformBusinesses({ selectedBusinessId, onBilling, startCreate, onCrea
           <span className="spinner-border spinner-border-sm" aria-hidden="true" /> Loading businesses…
         </div> : list?.total === 0 ? <div className="platform-directory-empty" role="status">
           <Building2 size={32} />
-          <h3>{term ? 'No matching businesses' : 'No businesses created yet'}</h3>
-          <p>{term ? 'Try a different business name or clear the search.' :
+          <h3>{filtered ? 'No matching businesses' : 'No businesses created yet'}</h3>
+          <p>{filtered ? 'Try a different search or clear the filters.' :
             'Create your first business using the Platform Owner workflow.'}</p>
         </div> : list && <>
           <div className="table-responsive">
@@ -407,10 +514,11 @@ function PlatformBusinesses({ selectedBusinessId, onBilling, startCreate, onCrea
               <thead>
                 <tr><th scope="col">Business</th><th scope="col">Owner</th>
                   <th scope="col">Type / Country</th><th scope="col">Plan</th>
-                  <th scope="col">Status</th><th scope="col" className="text-end">Action</th></tr>
+                  <th scope="col">Status</th><th scope="col">Created (UTC)</th>
+                  <th scope="col" className="text-end">Action</th></tr>
               </thead>
               <tbody>{list.items.map(item => {
-                const status = statusLabel(item.subscriptionStatus, item.trialEndsAtUtc)
+                const status = item.directoryStatus ?? statusLabel(item.subscriptionStatus, item.trialEndsAtUtc)
                 return <tr key={item.id}>
                   <td><span className="platform-business-cell">
                     <span className="platform-business-symbol" aria-hidden="true"><Building2 size={19} /></span>
@@ -420,6 +528,9 @@ function PlatformBusinesses({ selectedBusinessId, onBilling, startCreate, onCrea
                   <td>{item.typeName}<small className="d-block text-secondary">{item.countryCode}</small></td>
                   <td><span className="platform-plan-pill">{item.planCode ?? 'Not assigned'}</span></td>
                   <td><span className={`platform-state-pill ${statusStyle(status)}`}>{status}</span></td>
+                  <td>{item.createdAtUtc && Number.isFinite(Date.parse(item.createdAtUtc))
+                    ? <time dateTime={item.createdAtUtc}>{directoryDate.format(new Date(item.createdAtUtc))}</time>
+                    : '—'}</td>
                   <td className="text-end"><button type="button"
                     className="btn btn-outline-secondary btn-sm" disabled={detailLoading}
                     aria-label={`View details for ${item.name}`}
@@ -442,35 +553,37 @@ function PlatformBusinesses({ selectedBusinessId, onBilling, startCreate, onCrea
           </div>
         </>}
       </section>
-      <p className="platform-directory-note">Directory search currently uses the verified business-name API.
-        Plan/status filters and creation dates will appear only when backed by accurate platform data.</p>
     </div>
   )
 }
 
 export default function PlatformAdmin({ section, selectedBusinessId, onViewBusiness, onBilling,
   billingBusiness, onChooseBusiness, onSeeBusinesses, onStartCreate, startCreate, onCreateHandled,
-  businessSearch, onViewAudit }: {
+  businessSearch, businessStatus, auditEventId, onViewAudit }: {
   billingBusiness: { id: number; name: string } | null
   onBilling: (business: BusinessRow) => void
   onChooseBusiness: () => void
   section: PlatformSection
   selectedBusinessId: number | null
   onViewBusiness: (id: number) => void
-  onSeeBusinesses: () => void
+  onSeeBusinesses: (status?: OverviewSubscriptionFilter) => void
   onStartCreate: () => void
   startCreate: boolean
   onCreateHandled: () => void
   businessSearch: string
-  onViewAudit: () => void
+  businessStatus: string
+  auditEventId: number | null
+  onViewAudit: (id?: number) => void
 }) {
   if (section === 'overview') return <PlatformOverview onViewBusiness={onViewBusiness}
     onSeeBusinesses={onSeeBusinesses} onCreateBusiness={onStartCreate} />
   if (section === 'customers') return <PlatformCustomers onViewBusiness={onViewBusiness} />
   if (section === 'plans') return <PlatformPlans business={billingBusiness} onChooseBusiness={onChooseBusiness} />
-  if (section === 'audit') return <PlatformAudit />
+  if (section === 'audit') return <PlatformAudit key={auditEventId ?? 'all'}
+    eventId={auditEventId} onFindEvent={onViewAudit} onClearEvent={() => onViewAudit()} />
   if (section === 'operations') return <PlatformOperations onViewAudit={onViewAudit} />
   if (section === 'licenses' || section === 'settings') return <PlatformModulePreview module={section} />
   return <PlatformBusinesses onBilling={onBilling} selectedBusinessId={selectedBusinessId}
-    startCreate={startCreate} onCreateHandled={onCreateHandled} incomingSearch={businessSearch} />
+    startCreate={startCreate} onCreateHandled={onCreateHandled}
+    incomingSearch={businessSearch} incomingStatus={businessStatus} onViewAudit={onViewAudit} />
 }

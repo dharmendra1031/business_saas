@@ -21,8 +21,16 @@ interface AuditPage {
   pageSize: number
 }
 
-export default function PlatformAudit() {
+export default function PlatformAudit({ eventId, onFindEvent, onClearEvent }: {
+  eventId: number | null
+  onFindEvent: (id: number) => void
+  onClearEvent: () => void
+}) {
   const [page, setPage] = useState(1)
+  const [actorId, setActorId] = useState<number | null>(null)
+  const [eventInput, setEventInput] = useState(eventId?.toString() ?? '')
+  const searchId = Number(eventInput.trim())
+  const validEventId = /^\d+$/.test(eventInput.trim()) && Number.isSafeInteger(searchId) && searchId > 0
   const [reload, setReload] = useState(0)
   const [list, setList] = useState<AuditPage | null>(null)
   const [loading, setLoading] = useState(true)
@@ -33,7 +41,10 @@ export default function PlatformAudit() {
     let active = true
     setLoading(true)
     setError('')
-    api<AuditPage>(`/platform/audit?page=${page}`)
+    const params = new URLSearchParams({ page: String(page) })
+    if (eventId !== null) params.set('eventId', String(eventId))
+    if (actorId !== null) params.set('actorUserId', String(actorId))
+    api<AuditPage>(`/platform/audit?${params}`)
       .then(result => { if (active) setList(result) })
       .catch(cause => {
         if (!active || cause instanceof SessionExpiredError) return
@@ -42,7 +53,7 @@ export default function PlatformAudit() {
       })
       .finally(() => { if (active) setLoading(false) })
     return () => { active = false }
-  }, [page, reload])
+  }, [page, reload, eventId, actorId])
 
   useEffect(() => {
     let active = true
@@ -79,17 +90,31 @@ export default function PlatformAudit() {
     <section className="content-section platform-directory-card" aria-label="Platform audit log">
       <div className="platform-directory-heading"><div>
         <h2>Platform Activity Log</h2>
-        <p>Recorded actor, entity, action, reason and timestamp</p></div>
-        <span className="platform-data-tag">Audit records</span>
+        <p>{eventId === null ? 'Recorded actor, entity, action, reason and timestamp' :
+          `Showing audit event #${eventId}`}</p></div>
+        {eventId !== null && <button className="btn btn-outline-secondary btn-sm" type="button"
+          onClick={onClearEvent}>Show all events</button>}
+        {actorId !== null && <button className="btn btn-outline-secondary btn-sm" type="button"
+          onClick={() => { setActorId(null); setPage(1) }}>Clear actor #{actorId}</button>}
       </div>
-      <p className="platform-audit-note">Search and date filters require server-side audit queries;
-        this view shows actual paginated records ordered by newest audit ID.</p>
+      <form className="platform-search platform-directory-search" role="search" aria-label="Audit event lookup"
+        onSubmit={event => {
+          event.preventDefault()
+          if (validEventId) onFindEvent(searchId)
+        }}>
+        <input className="form-control platform-directory-filter" type="text" inputMode="numeric"
+          aria-label="Audit event ID" placeholder="Audit event ID" value={eventInput}
+          onChange={event => setEventInput(event.target.value)} />
+        <button className="btn btn-primary btn-sm" type="submit" disabled={!validEventId}>Find event</button>
+      </form>
       {error && <div className="alert alert-danger" role="alert">{error}
         <button className="btn btn-outline-secondary btn-sm ms-2" type="button"
           onClick={() => setReload(value => value + 1)}>Retry</button>
       </div>}
       {loading ? <div className="platform-directory-loading" role="status">Loading audit history…</div>
-        : list?.total === 0 ? <p className="platform-audit-note">No platform events have been recorded yet.</p>
+        : list?.total === 0 ? <p className="platform-audit-note">{eventId !== null
+          ? 'Audit event not found.' : actorId !== null ? 'No events for this actor.' :
+            'No platform events have been recorded yet.'}</p>
         : list && <>
           <div className="table-responsive">
             <table className="table table-sm platform-table platform-directory-table">
@@ -98,7 +123,11 @@ export default function PlatformAudit() {
               <tbody>{list.items.map(event => <tr key={event.id}>
                 <td>{new Date(event.createdAtUtc).toLocaleString()}</td>
                 <td><strong>{event.action}</strong><small className="d-block text-secondary">Event #{event.id}</small></td>
-                <td>#{event.actorUserId}</td>
+                <td>{eventId === null && actorId === null && event.actorUserId > 0
+                  ? <button className="btn btn-link p-0" type="button"
+                    aria-label={`Filter by actor #${event.actorUserId}`}
+                    onClick={() => { setActorId(event.actorUserId); setPage(1) }}>#{event.actorUserId}</button>
+                  : `#${event.actorUserId}`}</td>
                 <td>{event.targetType}{event.targetId === null ? '' : ` #${event.targetId}`}</td>
                 <td><details className="platform-audit-detail"><summary><ChevronDown size={14} /> View details</summary>
                   <dl><div><dt>Reason</dt><dd>{event.reason ?? 'Not recorded'}</dd></div>
