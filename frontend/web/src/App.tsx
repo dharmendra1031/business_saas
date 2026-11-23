@@ -34,6 +34,7 @@ export default function App() {
   const [platformSearchDraft, setPlatformSearchDraft] = useState('')
   const [platformBusinessSearch, setPlatformBusinessSearch] = useState('')
   const [dashboard, setDashboard] = useState<RetailDashboard | null>(null)
+  const [dashboardRefreshing, setDashboardRefreshing] = useState(false)
   const [approvalList, setApprovalList] = useState(false)
   const [stockAlertLocationId, setStockAlertLocationId] = useState<number | null>(null)
   const [billingOpen, setBillingOpen] = useState(false)
@@ -48,6 +49,7 @@ export default function App() {
   const sessionVersion = useRef(0)
   const businessesVersion = useRef(0)
   const openVersion = useRef(0)
+  const dashboardRefreshVersion = useRef(0)
   const openingBusiness = useRef(false)
 
   // Invalidate requests synchronously before any old response can update the workspace.
@@ -55,6 +57,7 @@ export default function App() {
     sessionVersion.current++
     businessesVersion.current++
     openVersion.current++
+    dashboardRefreshVersion.current++
     openingBusiness.current = false
   }
 
@@ -126,6 +129,8 @@ export default function App() {
     if (session !== sessionVersion.current) return
     const request = ++businessesVersion.current
     openVersion.current++
+    dashboardRefreshVersion.current++
+    setDashboardRefreshing(false)
     openingBusiness.current = false
     setError('')
     setBusinessesError('')
@@ -153,6 +158,8 @@ export default function App() {
     if (openingBusiness.current || session !== sessionVersion.current ||
         listRequest !== businessesVersion.current) return
     const request = ++openVersion.current
+    dashboardRefreshVersion.current++
+    setDashboardRefreshing(false)
     openingBusiness.current = true
     setError('')
     setOpeningBusinessId(id)
@@ -183,6 +190,40 @@ export default function App() {
         openingBusiness.current = false
         setOpeningBusinessId(null)
       }
+    }
+  }
+
+  // Keep the current dashboard visible while refreshing live figures.
+  // Failed reads must not send an authorized owner out of their workspace.
+  async function refreshDashboard() {
+    if (!dashboard) return
+    const businessId = dashboard.business.id
+    const session = sessionVersion.current
+    const listRequest = businessesVersion.current
+    const request = ++dashboardRefreshVersion.current
+    setRetailPage('overview')
+    setError('')
+    setDashboardRefreshing(true)
+    try {
+      const details = await api<RetailDashboard>(`/businesses/${businessId}/dashboard`)
+      if (session !== sessionVersion.current || listRequest !== businessesVersion.current ||
+          request !== dashboardRefreshVersion.current) return
+      if (details.business.id !== businessId || details.business.typeCode !== 'RETAIL') {
+        void loadBusinesses()
+        return
+      }
+      setDashboard(details)
+      setRetailPage(details.roleCode === 'Cashier' && details.cashSaleEnabled ? 'cash' : 'overview')
+    } catch (cause) {
+      if (session !== sessionVersion.current || listRequest !== businessesVersion.current ||
+          request !== dashboardRefreshVersion.current || cause instanceof SessionExpiredError) return
+      if (cause instanceof ApiResponseError && (cause.status === 403 || cause.status === 404)) {
+        void loadBusinesses()
+        return
+      }
+      setError(`Dashboard refresh failed. Showing previously loaded figures. ${message(cause)}`)
+    } finally {
+      if (request === dashboardRefreshVersion.current) setDashboardRefreshing(false)
     }
   }
 
@@ -217,8 +258,12 @@ export default function App() {
     setMenuOpen(false)
     setApprovalList(false)
     if (section === 'stock') setStockAlertLocationId(null)
-    if (section === 'overview' && dashboard) void openBusiness(dashboard.business.id, true)
-    else setRetailPage(section)
+    if (section === 'overview' && dashboard) void refreshDashboard()
+    else {
+      dashboardRefreshVersion.current++
+      setDashboardRefreshing(false)
+      setRetailPage(section)
+    }
   }
 
   if (page === 'loading')
@@ -413,7 +458,8 @@ export default function App() {
           </>}
         </header>
 
-        <main className={`page-content${isBusinessOverview ? ' business-dashboard-page' : ''}`}>
+        <main className={`page-content${isBusinessOverview ? ' business-dashboard-page' : ''}`}
+          aria-busy={isBusinessOverview && dashboardRefreshing}>
           {error && <div className="alert alert-danger" role="alert">{error}</div>}
 
           {page === 'platform' && canViewPlatform && <PlatformAdmin section={platformSection}
@@ -503,7 +549,7 @@ export default function App() {
                 </section>}
               {retailPage === 'cash' && dashboard.cashSaleEnabled && user && <CashCheckout
                 key={user.id + '-' + dashboard.business.id} userId={user.id} dashboard={dashboard}
-                onExit={() => dashboard.roleCode === 'Cashier' ? void loadBusinesses() : setRetailPage('overview')} />}
+                onExit={() => dashboard.roleCode === 'Cashier' ? void loadBusinesses() : navigateRetail('overview')} />}
               {isRetailSection(retailPage) && dashboard.roleCode !== 'Cashier' &&
                 <RetailCatalog key={dashboard.business.id + '-' + retailPage} section={retailPage} approvalsOnly={approvalList}
                   businessId={dashboard.business.id} canOperate={dashboard.canOperate}
