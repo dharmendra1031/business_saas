@@ -771,11 +771,14 @@ try {
     })
     let posted = null
     let posts = 0
-    await t.page.route('**/api/businesses/1/cash-sales/products*', route =>
-      response(route, 200, [{
-        id: 91, name: 'Loose Rice', sku: 'RICE-KG', barcode: null,
-        salePrice: 80, available: 0.625, unitCode: 'KG'
-      }]))
+    await t.page.route('**/api/businesses/1/cash-sales/products*', route => {
+      const term = new URL(route.request().url()).searchParams.get('search') ?? ''
+      return response(route, 200, term && !'Loose Rice'.toLowerCase().includes(term.toLowerCase())
+        ? [] : [{
+          id: 91, name: 'Loose Rice', sku: 'RICE-KG', barcode: null,
+          salePrice: 80, available: 0.625, unitCode: 'KG'
+        }])
+    })
     await t.page.route('**/api/businesses/1/cash-sales', route => {
       if (route.request().method() !== 'POST')
         return response(route, 404, { message: 'Unexpected cash sale route' })
@@ -791,9 +794,26 @@ try {
     await t.page.locator('.pos-checkout').waitFor()
     await t.page.getByRole('button', { name: /Add Loose Rice/ }).waitFor()
     await t.page.getByRole('button', { name: /Add Loose Rice/ }).click()
-    await t.page.getByRole('spinbutton', { name: 'Quantity of Loose Rice' }).fill('0.125')
-    assert.equal(await t.page.getByRole('spinbutton', { name: 'Quantity of Loose Rice' }).inputValue(),
-      '0.125')
+    const kgQuantity = t.page.getByRole('spinbutton', { name: 'Quantity of Loose Rice' })
+    assert.equal(await kgQuantity.inputValue(), '0.625',
+      'Adding limited-stock KG uses the exact available fractional quantity')
+    await t.page.getByRole('button', { name: 'Decrease quantity of Loose Rice' }).click()
+    assert.equal(await kgQuantity.inputValue(), '0.525',
+      'Minus on a fractional unit must reduce quantity, not be disabled')
+    await t.page.getByRole('button', { name: 'Increase quantity of Loose Rice' }).click()
+    assert.equal(await kgQuantity.inputValue(), '0.625',
+      'Plus can restore a fractional amount without exceeding available stock')
+    assert.equal(await t.page.getByRole('button', { name: 'Increase quantity of Loose Rice' })
+      .isDisabled(), true, 'Plus must not exceed stock')
+
+    await t.page.locator('#pos-product-search').fill('not-in-catalog')
+    await t.page.getByText('No products to display').waitFor()
+    await kgQuantity.fill('0.900')
+    await t.page.getByRole('alert').getByText('Only 0.625 KG available at this location.').waitFor()
+    assert.equal(await kgQuantity.inputValue(), '0.625',
+      'Filtered searches must not bypass the basket stock limit')
+    await kgQuantity.fill('0.125')
+    assert.equal(await kgQuantity.inputValue(), '0.125')
     await t.page.getByRole('button', { name: /Pay \/ Checkout/ }).click()
     await t.page.getByRole('dialog', { name: 'Complete Payment' }).waitFor()
     await t.page.getByLabel('Cash received').fill('10')

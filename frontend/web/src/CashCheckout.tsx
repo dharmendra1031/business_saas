@@ -8,7 +8,7 @@ interface Product {
   unitCode?: string | null
 }
 interface Line { productId: number; name: string; quantity: number; expectedUnitPrice: number;
-  unitCode?: string | null }
+  unitCode?: string | null; available?: number }
 interface SaleRequest { locationId: number; requestKey: string; tendered: number; lines: Line[] }
 interface Receipt {
   id: number; total: number; tendered: number; currencyCode: string; postedAtUtc: string
@@ -124,7 +124,7 @@ export default function CashCheckout({ userId, dashboard, onExit }: {
       return
     }
     const line = { productId: item.id, name: item.name, quantity: nextQty,
-      expectedUnitPrice: item.salePrice, unitCode: item.unitCode }
+      expectedUnitPrice: item.salePrice, unitCode: item.unitCode, available: item.available }
     setBasket(existing ? basket.map(previous => previous.productId === item.id ? line : previous) : [...basket, line])
     setCash('')
     setError('')
@@ -150,16 +150,32 @@ export default function CashCheckout({ userId, dashboard, onExit }: {
     } finally { setScanBusy(false) }
   }
 
+  // A filtered product search must not erase the stock limit for items in the basket.
+  // The server still rechecks the real balance atomically when posting a sale.
+  function availableStock(line: Line): number | undefined {
+    return products.find(x => x.id === line.productId)?.available ?? line.available
+  }
+
   function updateQuantity(line: Line, quantity: number) {
     if (!validQuantity(quantity)) return
-    const knownStock = products.find(x => x.id === line.productId)?.available
+    const knownStock = availableStock(line)
     if (knownStock !== undefined && quantity > knownStock) {
-      setError('Quantity is greater than available stock.')
+      setError(`Only ${knownStock} ${line.unitCode ?? 'units'} available at this location.`)
       return
     }
     setBasket(previous => previous.map(x => x.productId === line.productId ? { ...x, quantity } : x))
     setCash('')
     setError('')
+  }
+
+  function stepQuantity(line: Line, direction: -1 | 1) {
+    const step = line.quantity >= 1 ? 1 : line.quantity >= 0.1 ? 0.1 :
+      line.quantity >= 0.01 ? 0.01 : 0.001
+    const maximum = Math.min(1000000, availableStock(line) ?? 1000000)
+    const next = Number((direction > 0 ?
+      Math.min(maximum, line.quantity + step) :
+      Math.max(0.001, line.quantity - step)).toFixed(3))
+    if (next !== line.quantity) updateQuantity(line, next)
   }
 
   const itemCount = Number(basket.reduce((sum, line) => sum + line.quantity, 0).toFixed(3))
@@ -345,14 +361,15 @@ export default function CashCheckout({ userId, dashboard, onExit }: {
             </div>
             <div className="pos-quantity-control" aria-label={`Quantity of ${line.name}`}>
               <button type="button" aria-label={`Decrease quantity of ${line.name}`}
-                disabled={busy || line.quantity <= 1}
-                onClick={() => updateQuantity(line, line.quantity - 1)}><Minus size={15} /></button>
+                disabled={busy || line.quantity === 1 || line.quantity <= 0.001}
+                onClick={() => stepQuantity(line, -1)}><Minus size={15} /></button>
               <input className="form-control form-control-sm" aria-label={`Quantity of ${line.name}`}
                 type="number" min="0.001" max="1000000" step="0.001" disabled={busy} value={line.quantity}
                 onChange={event => updateQuantity(line, Number(event.target.value))} />
               <button type="button" aria-label={`Increase quantity of ${line.name}`}
-                disabled={busy || line.quantity >= 1000000}
-                onClick={() => updateQuantity(line, line.quantity + 1)}><Plus size={15} /></button>
+                disabled={busy || line.quantity + 0.001 >
+                  Math.min(1000000, availableStock(line) ?? 1000000)}
+                onClick={() => stepQuantity(line, 1)}><Plus size={15} /></button>
             </div>
             <button type="button" className="pos-remove-item" disabled={busy}
               aria-label={`Remove ${line.name}`} onClick={() => {

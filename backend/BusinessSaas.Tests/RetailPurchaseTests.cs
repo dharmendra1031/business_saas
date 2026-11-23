@@ -371,6 +371,65 @@ public sealed class RetailPurchaseTests
                 .Select(x => x.Quantity).SingleAsync());
         }
 
+        // Verify exact base-unit flow for weighted goods: PO -> receiving -> ledger ->
+        // fractional POS -> receipt -> stock, with no implicit BOX/PCS conversion.
+        var kgUnitId = await CreateId(owner, $"/api/businesses/{businessId}/units",
+            new { code = "KG", name = "Kilogram" });
+        var kgProductId = await CreateId(owner, $"/api/businesses/{businessId}/products", new {
+            name = "Loose grain", sku = "GRAIN-KG-01", categoryId, unitId = kgUnitId,
+            salePrice = 89.99m, taxClassification = ""
+        });
+        var kgOrderId = await CreateId(manager, orders, new {
+            locationId, supplierId, requestKey = "kg-base-unit-purchase-20261123",
+            lines = new[] { new { productId = kgProductId, quantity = 0.625m, unitCost = 42m } }
+        });
+        var kgOrderPath = orders + "/" + kgOrderId;
+        var kgDraft = await owner.GetFromJsonAsync<JsonElement>(kgOrderPath);
+        Assert.Equal("KG", kgDraft.GetProperty("lines")[0].GetProperty("unitCode").GetString());
+        var kgOrderLineId = kgDraft.GetProperty("lines")[0].GetProperty("id").GetInt64();
+        Assert.Equal(HttpStatusCode.OK, (await Send(owner, kgOrderPath + "/approve", new { })).StatusCode);
+        var kgReceivingId = await CreateId(manager, kgOrderPath + "/receivings", new {
+            requestKey = "kg-base-unit-receiving-20261123",
+            lines = new[] { new { purchaseOrderLineId = kgOrderLineId, quantity = 0.625m } }
+        });
+        Assert.Equal(HttpStatusCode.OK, (await Send(manager,
+            kgOrderPath + "/receivings/" + kgReceivingId + "/post", new { })).StatusCode);
+        var kgStockPath = $"/api/businesses/{businessId}/stock/locations/{locationId}";
+        var kgStock = await owner.GetFromJsonAsync<JsonElement>(kgStockPath + "?search=GRAIN-KG-01");
+        Assert.Equal(0.625m, kgStock.GetProperty("items")[0].GetProperty("quantity").GetDecimal());
+        Assert.Equal("KG", kgStock.GetProperty("items")[0].GetProperty("unitCode").GetString());
+
+        var kgSale = new {
+            locationId, requestKey = "kg-base-unit-cash-sale-20261123",
+            lines = new[] { new { productId = kgProductId, quantity = 0.125m,
+                expectedUnitPrice = 89.99m } },
+            tendered = 12m
+        };
+        var kgCheckout = await Send(cashier, sales, kgSale);
+        Assert.Equal(HttpStatusCode.OK, kgCheckout.StatusCode);
+        var kgReceipt = await kgCheckout.Content.ReadFromJsonAsync<JsonElement>();
+        Assert.Equal(11.25m, kgReceipt.GetProperty("total").GetDecimal());
+        Assert.Equal(0.125m, kgReceipt.GetProperty("lines")[0].GetProperty("quantity").GetDecimal());
+        Assert.Equal(HttpStatusCode.OK, (await Send(cashier, sales, kgSale)).StatusCode);
+        Assert.Equal(HttpStatusCode.BadRequest, (await Send(cashier, sales, new {
+            locationId, requestKey = "kg-base-unit-oversell-20261123",
+            lines = new[] { new { productId = kgProductId, quantity = 0.501m,
+                expectedUnitPrice = 89.99m } },
+            tendered = 100m
+        })).StatusCode);
+        using (var scope = factory.Services.CreateScope())
+        {
+            var db = scope.ServiceProvider.GetRequiredService<AppDbContext>();
+            Assert.Equal(0.500m, await db.RetailStockBalances.AsNoTracking()
+                .Where(x => x.BusinessId == businessId && x.LocationId == locationId &&
+                    x.ProductId == kgProductId)
+                .Select(x => x.Quantity).SingleAsync());
+            var kgMovements = await db.RetailStockMovements.AsNoTracking()
+                .Where(x => x.BusinessId == businessId && x.ProductId == kgProductId)
+                .OrderBy(x => x.Id).Select(x => x.QuantityChange).ToListAsync();
+            Assert.Equal(new[] { 0.625m, -0.125m }, kgMovements);
+        }
+
         using (var scope = factory.Services.CreateScope())
         {
             var db = scope.ServiceProvider.GetRequiredService<AppDbContext>();

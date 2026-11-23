@@ -53,7 +53,6 @@ export default function BusinessOverview({ dashboard, onNavigate, onReviewApprov
             Record opening stock <ArrowRight size={15} /></button>
           : <span>Record opening stock <small>{!hasProducts ? 'After adding products' :
             locations.length === 0 ? 'Requires a location' : 'Requires an active subscription'}</small></span>}</li>
-        <li><span>4</span><span>Receipt settings <small>Not available yet</small></span></li>
       </ol>
     </section>}
     {hasProducts && <>
