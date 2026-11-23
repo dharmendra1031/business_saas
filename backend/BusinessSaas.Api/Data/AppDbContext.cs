@@ -20,6 +20,16 @@ public sealed class PlatformAuditEvent
 }
 
 
+public sealed class PlatformModulePolicy
+{
+    public long Id { get; set; }
+    public string Code { get; set; } = "";
+    public string ReleaseState { get; set; } = "Available";
+    public int Revision { get; set; }
+    public long UpdatedByUserId { get; set; }
+    public DateTime UpdatedAtUtc { get; set; } = DateTime.UtcNow;
+}
+
 public sealed class PlatformMaintenanceWindow
 {
     public long Id { get; set; }
@@ -356,6 +366,7 @@ public sealed class AppDbContext(DbContextOptions<AppDbContext> options)
     : IdentityUserContext<AppUser, long>(options)
 {
     public DbSet<PlatformAuditEvent> PlatformAuditEvents => Set<PlatformAuditEvent>();
+    public DbSet<PlatformModulePolicy> PlatformModulePolicies => Set<PlatformModulePolicy>();
     public DbSet<PlatformMaintenanceWindow> PlatformMaintenanceWindows => Set<PlatformMaintenanceWindow>();
     public DbSet<PlatformAnnouncement> PlatformAnnouncements => Set<PlatformAnnouncement>();
     public DbSet<BusinessType> BusinessTypes => Set<BusinessType>();
@@ -402,6 +413,13 @@ public sealed class AppDbContext(DbContextOptions<AppDbContext> options)
             entity.HasIndex(x => new { x.CreatedAtUtc, x.Id });
             entity.HasOne<AppUser>().WithMany()
                 .HasForeignKey(x => x.ActorUserId).OnDelete(DeleteBehavior.Restrict);
+        });
+
+        builder.Entity<PlatformModulePolicy>(entity =>
+        {
+            entity.Property(x => x.Code).HasMaxLength(40).IsRequired();
+            entity.Property(x => x.ReleaseState).HasMaxLength(24).IsRequired();
+            entity.HasIndex(x => x.Code).IsUnique();
         });
 
         builder.Entity<PlatformMaintenanceWindow>(entity =>

@@ -90,6 +90,20 @@ namespace BusinessSaas.Api.Data.Migrations
                     b.ToTable("AspNetUsers", (string)null);
                 });
 
+            modelBuilder.Entity("BusinessSaas.Api.Data.PlatformModulePolicy", b =>
+                {
+                    b.Property<long>("Id").ValueGeneratedOnAdd().HasColumnType("bigint");
+                    SqlServerPropertyBuilderExtensions.UseIdentityColumn(b.Property<long>("Id"));
+                    b.Property<string>("Code").IsRequired().HasMaxLength(40).HasColumnType("nvarchar(40)");
+                    b.Property<string>("ReleaseState").IsRequired().HasMaxLength(24).HasColumnType("nvarchar(24)");
+                    b.Property<int>("Revision").HasColumnType("int");
+                    b.Property<long>("UpdatedByUserId").HasColumnType("bigint");
+                    b.Property<DateTime>("UpdatedAtUtc").HasColumnType("datetime2");
+                    b.HasKey("Id");
+                    b.HasIndex("Code").IsUnique();
+                    b.ToTable("PlatformModulePolicies");
+                });
+
             modelBuilder.Entity("BusinessSaas.Api.Data.PlatformMaintenanceWindow", b =>
                 {
                     b.Property<long>("Id").ValueGeneratedOnAdd().HasColumnType("bigint");
