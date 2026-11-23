@@ -1,6 +1,7 @@
 import { useEffect, useRef, useState, type FormEvent } from 'react'
 import { api, post, SessionExpiredError } from './api'
 import { Package, Plus, Search } from 'lucide-react'
+import { classificationPath, classificationTrail } from './retailClassification'
 
 interface Product {
   id: number
@@ -31,6 +32,7 @@ interface CatalogOption {
   name: string
   code?: string
   parentId?: number | null
+  isActive?: boolean
 }
 
 interface CatalogOptions {
@@ -101,7 +103,7 @@ export default function RetailProducts({ businessId, canOperate, currencyCode }:
     setOptionsLoading(true)
     setOptions({ categories: [], units: [], brands: [] })
     setOptionsError('')
-    api<CatalogOptions>(basePath + '/options')
+    api<CatalogOptions>(basePath + '/options?includeInactiveCategories=true')
       .then(value => { if (active) setOptions({ ...value, brands: value.brands ?? [] }) })
       .catch(cause => { if (active && !(cause instanceof SessionExpiredError)) setOptionsError(errorMessage(cause)) })
       .finally(() => { if (active) setOptionsLoading(false) })
@@ -146,8 +148,8 @@ export default function RetailProducts({ businessId, canOperate, currencyCode }:
     setInlineType(null)
     setForm({
       ...initialForm,
-      categoryId: options.categories.find(item => item.name === 'General')?.id
-        ?? options.categories[0]?.id ?? 0,
+      categoryId: options.categories.find(item => item.parentId == null && item.isActive && item.name === 'General')?.id
+        ?? options.categories.find(item => item.parentId == null && item.isActive)?.id ?? 0,
       unitId: options.units.find(item => item.code === 'ITEM')?.id
         ?? options.units[0]?.id ?? 0
     })
@@ -229,25 +231,11 @@ export default function RetailProducts({ businessId, canOperate, currencyCode }:
   }
 
 
-  function categoryPath(id: number): string {
-    const names: string[] = []
-    const seen = new Set<number>()
-    let current: number | null = id
-    while (current && !seen.has(current) && names.length < 3) {
-      seen.add(current)
-      const category = options.categories.find(x => x.id === current)
-      if (!category) break
-      names.unshift(category.name)
-      current = category.parentId ?? null
-    }
-    return names.join(' / ')
-  }
-
   function beginInline(type: 'categories' | 'units' | 'brands') {
     setInlineType(type === inlineType ? null : type)
     setInlineName('')
     setInlineCode('')
-    setInlineParent(0)
+    setInlineParent(type === 'categories' ? selectedSubgroup : 0)
     setError('')
   }
 
@@ -279,9 +267,19 @@ export default function RetailProducts({ businessId, canOperate, currencyCode }:
     }
   }
 
-  const categorySelected = options.categories.some(item => item.id === form.categoryId)
-  const unitSelected = options.units.some(item => item.id === form.unitId)
-  const canCreate = options.categories.length > 0 && options.units.length > 0
+  const activeNodes = options.categories.filter(item => item.isActive)
+  const groups = activeNodes.filter(item => item.parentId == null)
+  const selectedTrail = classificationTrail(options.categories, form.categoryId)
+  const selectedGroup = selectedTrail[0]?.id ?? 0
+  const selectedSubgroup = selectedTrail[1]?.id ?? 0
+  const selectedCategory = selectedTrail[2]?.id ?? 0
+  const subgroups = activeNodes.filter(item => item.parentId === selectedGroup)
+  const categories = activeNodes.filter(item => item.parentId === selectedSubgroup && selectedSubgroup > 0)
+  const filterTrail = classificationTrail(options.categories, categoryFilter)
+  const filterGroup = filterTrail[0]?.id ?? 0
+  const filterSubgroup = filterTrail[1]?.id ?? 0
+  const filterCategory = filterTrail[2]?.id ?? 0
+  const canCreate = groups.length > 0 && options.units.length > 0
 
   return (
     <section className="content-section retail-products business-module-card" aria-label="Product master">
@@ -308,7 +306,7 @@ export default function RetailProducts({ businessId, canOperate, currencyCode }:
       </div>}
       {notice && <div className="alert alert-success" role="status">{notice}</div>}
       {!optionsLoading && !optionsError && !canCreate && <p className="alert alert-info" role="status">
-        A category and unit are required. Add them from Product Masters first.
+        A group and unit are required. Add them from Product Masters first.
       </p>}
 
       {formOpen && canOperate && <form className="product-form" onSubmit={event => void save(event)}>
@@ -327,7 +325,7 @@ export default function RetailProducts({ businessId, canOperate, currencyCode }:
               value={form.salePrice} onChange={event => changeForm('salePrice', event.target.value)} />
           </div>
           <details className="form-wide" key={editingId ?? 'new'} open={editingId !== null || !canCreate}>
-            <summary>More details (category, unit, brand, SKU, barcode, stock alerts, tax)</summary>
+            <summary>More details (classification, brand, unit, SKU, barcode, stock alerts, tax)</summary>
             <div className="form-grid mt-3">
           <div>
             <label className="form-label" htmlFor="product-sku">SKU {editingId === null ? '(auto if blank)' : '*'}</label>
@@ -346,15 +344,38 @@ export default function RetailProducts({ businessId, canOperate, currencyCode }:
             <div id="barcode-help" className="field-help">Scan a barcode or enter an existing code. No barcode is generated.</div>
           </div>
           <div>
-            <label className="form-label" htmlFor="product-category">Category *</label>
-            <select id="product-category" className="form-select" required value={form.categoryId}
+            <label className="form-label" htmlFor="product-group">Group *</label>
+            <select id="product-group" className="form-select" required value={selectedGroup}
               onChange={event => changeForm('categoryId', Number(event.target.value))}>
-              <option value={0}>Select category</option>
-              {!categorySelected && form.categoryId > 0 &&
-                <option value={form.categoryId}>Previous category (inactive)</option>}
-              {options.categories.map(item => <option key={item.id} value={item.id}>{categoryPath(item.id)}</option>)}
+              <option value={0}>Select group</option>
+              {selectedGroup > 0 && !groups.some(item => item.id === selectedGroup) &&
+                <option value={selectedGroup}>Previous group (inactive)</option>}
+              {groups.map(item => <option key={item.id} value={item.id}>{item.name}</option>)}
             </select>
-            <button type="button" className="btn btn-sm btn-link" onClick={() => beginInline('categories')}>+ Add category</button>
+          </div>
+          <div>
+            <label className="form-label" htmlFor="product-subgroup">Subgroup (optional)</label>
+            <select id="product-subgroup" className="form-select" value={selectedSubgroup}
+              disabled={!selectedGroup}
+              onChange={event => changeForm('categoryId', Number(event.target.value) || selectedGroup)}>
+              <option value={0}>No subgroup</option>
+              {selectedSubgroup > 0 && !subgroups.some(item => item.id === selectedSubgroup) &&
+                <option value={selectedSubgroup}>Previous subgroup (inactive)</option>}
+              {subgroups.map(item => <option key={item.id} value={item.id}>{item.name}</option>)}
+            </select>
+          </div>
+          <div>
+            <label className="form-label" htmlFor="product-category">Category (optional)</label>
+            <select id="product-category" className="form-select" value={selectedCategory}
+              disabled={!selectedSubgroup}
+              onChange={event => changeForm('categoryId', Number(event.target.value) || selectedSubgroup)}>
+              <option value={0}>No category</option>
+              {selectedCategory > 0 && !categories.some(item => item.id === selectedCategory) &&
+                <option value={selectedCategory}>Previous category (inactive)</option>}
+              {categories.map(item => <option key={item.id} value={item.id}>{item.name}</option>)}
+            </select>
+            {selectedSubgroup > 0 && <button type="button" className="btn btn-sm btn-link"
+              onClick={() => beginInline('categories')}>+ Add category</button>}
           </div>
           <div>
             <label className="form-label" htmlFor="product-unit">Stock / sales unit *</label>
@@ -391,15 +412,9 @@ export default function RetailProducts({ businessId, canOperate, currencyCode }:
               <input id="inline-master-code" className="form-control" maxLength={12}
                 value={inlineCode} onChange={event => setInlineCode(event.target.value.toUpperCase())} />
             </>}
-            {inlineType === 'categories' && <>
-              <label className="form-label mt-2" htmlFor="inline-master-parent">Parent (optional)</label>
-              <select id="inline-master-parent" className="form-select" value={inlineParent}
-                onChange={event => setInlineParent(Number(event.target.value))}>
-                <option value={0}>No parent</option>
-                {options.categories.filter(x => categoryPath(x.id).split(' / ').length < 3)
-                  .map(item => <option key={item.id} value={item.id}>{categoryPath(item.id)}</option>)}
-              </select>
-            </>}
+            {inlineType === 'categories' && <p className="field-help mt-2">
+              Subgroup: {classificationPath(options.categories, inlineParent)}
+            </p>}
             <div className="d-flex gap-2 mt-2">
               <button type="button" className="btn btn-sm btn-primary"
                 disabled={inlineSaving || inlineName.trim().length < 2 ||
@@ -467,11 +482,32 @@ export default function RetailProducts({ businessId, canOperate, currencyCode }:
             </select>
           </div>
           <div>
-            <label className="visually-hidden" htmlFor="product-filter-category">Category</label>
-            <select id="product-filter-category" className="form-select" value={categoryFilter}
+            <label className="visually-hidden" htmlFor="product-filter-group">Group</label>
+            <select id="product-filter-group" className="form-select" value={filterGroup}
               onChange={event => { setPage(1); setCategoryFilter(Number(event.target.value)) }}>
+              <option value={0}>All groups</option>
+              {options.categories.filter(item => item.parentId == null).map(item =>
+                <option key={item.id} value={item.id}>{item.name}{item.isActive ? '' : ' (inactive)'}</option>)}
+            </select>
+          </div>
+          <div>
+            <label className="visually-hidden" htmlFor="product-filter-subgroup">Subgroup</label>
+            <select id="product-filter-subgroup" className="form-select" value={filterSubgroup}
+              disabled={!filterGroup}
+              onChange={event => { setPage(1); setCategoryFilter(Number(event.target.value) || filterGroup) }}>
+              <option value={0}>All subgroups</option>
+              {options.categories.filter(item => item.parentId === filterGroup && filterGroup > 0).map(item =>
+                <option key={item.id} value={item.id}>{item.name}{item.isActive ? '' : ' (inactive)'}</option>)}
+            </select>
+          </div>
+          <div>
+            <label className="visually-hidden" htmlFor="product-filter-category">Category</label>
+            <select id="product-filter-category" className="form-select" value={filterCategory}
+              disabled={!filterSubgroup}
+              onChange={event => { setPage(1); setCategoryFilter(Number(event.target.value) || filterSubgroup) }}>
               <option value={0}>All categories</option>
-              {options.categories.map(item => <option key={item.id} value={item.id}>{categoryPath(item.id)}</option>)}
+              {options.categories.filter(item => item.parentId === filterSubgroup && filterSubgroup > 0)
+                .map(item => <option key={item.id} value={item.id}>{item.name}{item.isActive ? '' : ' (inactive)'}</option>)}
             </select>
           </div>
           <button type="submit" className="btn btn-outline-secondary">Search</button>
