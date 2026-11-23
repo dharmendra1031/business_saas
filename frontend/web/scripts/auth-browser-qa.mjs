@@ -10,7 +10,7 @@ const business = role => ({
   id: 1, name: 'Sample Retail', typeCode: 'RETAIL', typeName: 'Retail',
   countryCode: 'IN', currencyCode: 'INR', timeZoneId: 'Asia/Kolkata', roleCode: role
 })
-const dashboard = (role, hasProducts = false, pendingApprovals = 0, selectedBusinessId = 1, locationCount = 1, cashSalesFixture = false) => ({
+const dashboard = (role, hasProducts = false, pendingApprovals = 0, selectedBusinessId = 1, locationCount = 1, cashSalesFixture = false, stockAlertsFixture = false) => ({
   business: {
     id: selectedBusinessId, name: selectedBusinessId === 2 ? 'Second Retail' : 'Sample Retail', typeCode: 'RETAIL', typeName: 'Retail',
     countryCode: 'IN', currencyCode: 'INR', timeZoneId: 'Asia/Kolkata'
@@ -24,6 +24,15 @@ const dashboard = (role, hasProducts = false, pendingApprovals = 0, selectedBusi
     paidStartsAtUtc: null, paidEndsAtUtc: null, paidPlanVersionId: null },
   accessStatus: 'Trial', canOperate: true,
   hasProducts, pendingApprovals, cashSaleEnabled: role === 'Cashier',
+  stockAlerts: stockAlertsFixture && role === 'Owner' ? {
+    count: 2, outOfStockCount: 1,
+    items: [
+      { productId: 11, productName: 'Blue Shirt', sku: 'BLUE-11',
+        locationId: 1, locationName: 'Main Shop', quantity: 0, reorderLevel: 4 },
+      { productId: 12, productName: 'Red Bag', sku: 'BAG-12',
+        locationId: 2, locationName: 'Second Location', quantity: 2, reorderLevel: 3 }
+    ]
+  } : null,
   cashSalesToday: cashSalesFixture && role === 'Owner' ? {
     total: 150.25, billCount: 2, businessDate: '2026-11-22',
     recentReceipts: [
@@ -50,7 +59,7 @@ async function scenario(name, {
   width = 1366, height = 768, role = 'Owner', initialFailure = false,
   businessFailure = false, multiple = false, challenge = false, verified = true,
   badPassword = false, lockedPassword = false, badMfa = false, hasProducts = false, pendingApprovals = 0,
-  locationCount = 1, productsFixture = false, cashSalesFixture = false
+  locationCount = 1, productsFixture = false, cashSalesFixture = false, stockAlertsFixture = false
 } = {}) {
   const context = await browser.newContext({ viewport: { width, height }, deviceScaleFactor: 1 })
   const page = await context.newPage()
@@ -110,7 +119,7 @@ async function scenario(name, {
       const first = business(role)
       return response(route, 200, multiple ? [first, { ...first, id: 2, name: 'Second Retail' }] : [first])
     }
-    if (/^\/businesses\/\d+\/dashboard$/.test(path)) return response(route, 200, dashboard(role, hasProducts, pendingApprovals, Number(path.split('/')[2]), locationCount, cashSalesFixture))
+    if (/^\/businesses\/\d+\/dashboard$/.test(path)) return response(route, 200, dashboard(role, hasProducts, pendingApprovals, Number(path.split('/')[2]), locationCount, cashSalesFixture, stockAlertsFixture))
     if (/^\/businesses\/\d+\/stock\/locations\/\d+$/.test(path)) {
       stockPaths.push(path)
       return response(route, 200, { items: [], total: 0, page: 1, pageSize: 20 })
@@ -125,10 +134,10 @@ async function scenario(name, {
       let items = [
         { id: 11, name: 'Blue Shirt', sku: 'BLUE-11', barcode: '100001', categoryId: 2,
           categoryName: 'Clothing', unitId: 1, unitCode: 'ITEM', salePrice: 450,
-          taxClassification: '', isActive: true },
+          taxClassification: '', reorderLevel: 4, isActive: true },
         { id: 12, name: 'Red Bag', sku: 'BAG-12', barcode: null, categoryId: 1,
           categoryName: 'General', unitId: 1, unitCode: 'ITEM', salePrice: 220,
-          taxClassification: '', isActive: false }
+          taxClassification: '', reorderLevel: null, isActive: false }
       ]
       const term = (params.get('search') ?? '').toLowerCase()
       if (term) items = items.filter(item =>
@@ -294,6 +303,45 @@ try {
     await t.check()
     await t.context.close()
     console.log('PASS BUS-01 owner summary consumes the cash API contract')
+  }
+
+  {
+    const t = await scenario('owner-verified-stock-alerts', {
+      role: 'Owner', hasProducts: true, stockAlertsFixture: true, locationCount: 2,
+      width: 360, height: 780
+    })
+    await t.login()
+    await t.page.getByRole('heading', { name: 'Business Overview' }).waitFor()
+    const alertCard = t.page.locator('.business-kpi-card').filter({ hasText: 'Stock Alerts' })
+    assert.equal(await alertCard.locator('strong').innerText(), '2')
+    assert.equal(await t.page.locator('.business-stock-alerts li').count(), 2)
+    await t.page.getByText('Out of stock', { exact: true }).waitFor()
+    assert.ok(await t.page.evaluate(() => document.documentElement.scrollWidth) <= 361,
+      'Configured stock alerts must not cause horizontal overflow')
+    await t.screenshot('BUS-01-verified-stock-alerts-mobile-360')
+    await t.page.getByRole('button', { name: 'Review 2 stock alerts in Inventory' }).click()
+    await t.page.getByRole('heading', { name: 'Inventory', exact: true, level: 2 }).waitFor()
+    await t.check()
+    await t.context.close()
+    console.log('PASS owner configured stock alerts / navigation / mobile')
+  }
+
+  {
+    const t = await scenario('owner-product-reorder-control', {
+      role: 'Owner', hasProducts: true, productsFixture: true
+    })
+    await t.login()
+    await t.page.getByRole('heading', { name: 'Business Overview' }).waitFor()
+    await t.page.locator('.app-sidebar .nav-entry').filter({ hasText: 'Products' }).first().click()
+    await t.page.getByRole('heading', { name: 'Products', exact: true, level: 2 }).waitFor()
+    await t.page.getByRole('button', { name: 'Edit' }).first().click()
+    assert.equal(await t.page.locator('#product-reorder').inputValue(), '4')
+    await t.page.locator('#product-reorder').fill('3.5')
+    assert.equal(await t.page.locator('#product-reorder').inputValue(), '3.5')
+    await t.screenshot('BUS-06-reorder-level-edit-desktop')
+    await t.check()
+    await t.context.close()
+    console.log('PASS product reorder threshold edit UI')
   }
 
   {
