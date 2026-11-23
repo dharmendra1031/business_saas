@@ -564,12 +564,40 @@ namespace BusinessSaas.Api.Data.Migrations
                         .HasMaxLength(80)
                         .HasColumnType("nvarchar(80)");
 
+                    b.Property<long?>("ParentId")
+                        .HasColumnType("bigint");
+
                     b.HasKey("Id");
 
                     b.HasIndex("BusinessId", "NameKey")
                         .IsUnique();
 
+                    b.HasIndex("ParentId");
+
                     b.ToTable("RetailCategories");
+                });
+
+            modelBuilder.Entity("BusinessSaas.Api.Data.RetailBrand", b =>
+                {
+                    b.Property<long>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("bigint");
+
+                    SqlServerPropertyBuilderExtensions.UseIdentityColumn(b.Property<long>("Id"));
+
+                    b.Property<long>("BusinessId").HasColumnType("bigint");
+
+                    b.Property<bool>("IsActive").HasColumnType("bit");
+
+                    b.Property<string>("Name")
+                        .IsRequired().HasMaxLength(80).HasColumnType("nvarchar(80)");
+
+                    b.Property<string>("NameKey")
+                        .IsRequired().HasMaxLength(80).HasColumnType("nvarchar(80)");
+
+                    b.HasKey("Id");
+                    b.HasIndex("BusinessId", "NameKey").IsUnique();
+                    b.ToTable("RetailBrands");
                 });
 
             modelBuilder.Entity("BusinessSaas.Api.Data.RetailUnit", b =>
@@ -624,6 +652,8 @@ namespace BusinessSaas.Api.Data.Migrations
                         .HasMaxLength(64)
                         .HasColumnType("nvarchar(64)");
 
+                    b.Property<long?>("BrandId").HasColumnType("bigint");
+
                     b.Property<long>("BusinessId")
                         .HasColumnType("bigint");
 
@@ -667,6 +697,8 @@ namespace BusinessSaas.Api.Data.Migrations
 
                     b.HasIndex("BusinessId", "Sku")
                         .IsUnique();
+
+                    b.HasIndex("BrandId");
 
                     b.HasIndex("CategoryId");
 
@@ -1323,6 +1355,20 @@ namespace BusinessSaas.Api.Data.Migrations
                         .HasForeignKey("BusinessId")
                         .OnDelete(DeleteBehavior.Cascade)
                         .IsRequired();
+
+                    b.HasOne("BusinessSaas.Api.Data.RetailCategory", null)
+                        .WithMany()
+                        .HasForeignKey("ParentId")
+                        .OnDelete(DeleteBehavior.Restrict);
+                });
+
+            modelBuilder.Entity("BusinessSaas.Api.Data.RetailBrand", b =>
+                {
+                    b.HasOne("BusinessSaas.Api.Data.Business", null)
+                        .WithMany()
+                        .HasForeignKey("BusinessId")
+                        .OnDelete(DeleteBehavior.Cascade)
+                        .IsRequired();
                 });
 
             modelBuilder.Entity("BusinessSaas.Api.Data.RetailUnit", b =>
@@ -1347,6 +1393,11 @@ namespace BusinessSaas.Api.Data.Migrations
                         .HasForeignKey("CategoryId")
                         .OnDelete(DeleteBehavior.Restrict)
                         .IsRequired();
+
+                    b.HasOne("BusinessSaas.Api.Data.RetailBrand", null)
+                        .WithMany()
+                        .HasForeignKey("BrandId")
+                        .OnDelete(DeleteBehavior.Restrict);
 
                     b.HasOne("BusinessSaas.Api.Data.RetailUnit", null)
                         .WithMany()
