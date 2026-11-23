@@ -89,6 +89,26 @@ public sealed class RetailProductTests
         var foreignParent = await CreateId(other,
             $"/api/businesses/{otherBusinessId}/categories", new { name = "Foreign Group" });
 
+        // One tenant-scoped category tree is presented as three separate master tabs.
+        var groupPage = await owner.GetFromJsonAsync<JsonElement>(categoriesPath + "?level=1");
+        Assert.Contains(groupPage.GetProperty("items").EnumerateArray(),
+            item => item.GetProperty("id").GetInt64() == groupId);
+        Assert.DoesNotContain(groupPage.GetProperty("items").EnumerateArray(),
+            item => item.GetProperty("id").GetInt64() == subgroupId);
+        var subgroupPage = await manager.GetFromJsonAsync<JsonElement>(
+            categoriesPath + "?level=2&parentId=" + groupId);
+        Assert.Single(subgroupPage.GetProperty("items").EnumerateArray());
+        Assert.Equal(subgroupId, subgroupPage.GetProperty("items")[0].GetProperty("id").GetInt64());
+        var categoryPage = await owner.GetFromJsonAsync<JsonElement>(
+            categoriesPath + "?level=3&parentId=" + subgroupId);
+        Assert.Single(categoryPage.GetProperty("items").EnumerateArray());
+        Assert.Equal(leafId, categoryPage.GetProperty("items")[0].GetProperty("id").GetInt64());
+        Assert.Equal(HttpStatusCode.BadRequest,
+            (await owner.GetAsync(categoriesPath + "?level=4")).StatusCode);
+        Assert.Equal(HttpStatusCode.NotFound,
+            (await other.GetAsync(categoriesPath + "?level=2&parentId=" + groupId)).StatusCode);
+
+
         Assert.Equal(HttpStatusCode.BadRequest,
             (await Post(owner, categoriesPath, new { name = "Too Deep", parentId = leafId })).StatusCode);
         Assert.Equal(HttpStatusCode.BadRequest,
