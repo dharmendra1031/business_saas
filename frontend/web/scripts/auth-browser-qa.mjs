@@ -236,6 +236,9 @@ try {
       viewport.name + ': Tab should focus Sign in')
     const width = await t.page.evaluate(() => document.documentElement.scrollWidth)
     assert.ok(width <= viewport.width + 1, viewport.name + ': horizontal overflow ' + width)
+    assert.equal(await t.page.evaluate(() =>
+      getComputedStyle(document.documentElement).getPropertyValue('--ink').trim()),
+      '#080808', 'Light-screen text uses near-black instead of pale blue')
     await t.screenshot('login-' + viewport.name)
     await t.check()
     await t.context.close()
@@ -341,6 +344,12 @@ try {
     const t = await scenario('business-owner', { role: 'Owner' })
     await t.login(true)
     await t.page.getByRole('heading', { name: 'Business Dashboard', exact: true }).waitFor()
+    const ownerText = await t.page.evaluate(() => ({
+      heading: getComputedStyle(document.querySelector('.business-shell .page-header h1')).color,
+      nav: getComputedStyle(document.querySelector('.business-shell .app-sidebar .nav-entry')).color
+    }))
+    assert.equal(ownerText.heading, 'rgb(8, 8, 8)', 'Light workspace headings are near-black')
+    assert.equal(ownerText.nav, 'rgb(255, 255, 255)', 'Dark navigation text is pure white')
     const dashboardTop = await t.page.locator('.business-dashboard-summary').boundingBox()
     assert.ok(dashboardTop && dashboardTop.y < 200, 'Dashboard summary must begin near the top')
     assert.equal(await t.page.locator('.business-action-card').count(), 0, 'No duplicated navigation cards')
@@ -1237,6 +1246,9 @@ try {
     const t = await scenario('cashier', { role: 'Cashier' })
     await t.login()
     await t.page.locator('.pos-shell').waitFor()
+    assert.equal(await t.page.locator('.pos-topbar-brand small').evaluate(el =>
+      getComputedStyle(el).color), 'rgb(255, 255, 255)',
+      'POS dark header labels remain pure white')
     await t.page.getByText('Loading products…').waitFor({ state: 'hidden' })
     await t.screenshot('cashier-pos-workspace')
     assert.equal(await t.page.locator('.app-sidebar').count(), 0,
@@ -1251,6 +1263,9 @@ try {
     await t.login()
     await t.page.locator('.platform-shell').waitFor()
     await t.page.getByText('SUPER ADMIN MODULES').waitFor()
+    assert.equal(await t.page.locator('.platform-shell .app-sidebar .nav-entry').first()
+      .evaluate(el => getComputedStyle(el).color), 'rgb(255, 255, 255)',
+      'Super Admin dark sidebar labels remain pure white')
     const platformCardHeights = await t.page.locator('.platform-metric-grid > .platform-metric')
       .evaluateAll(cards => cards.map(card => card.getBoundingClientRect().height))
     if (platformCardHeights.length > 1)

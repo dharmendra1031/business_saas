@@ -68,7 +68,7 @@
 .pos-product-card:hover:not(:disabled) { transform: translateY(-2px); border-color: #a6a0ee;
   box-shadow: 0 7px 20px #1e30691b; }
 .pos-product-card:focus-visible { outline: 3px solid #7766df; outline-offset: 2px; }
-.pos-product-card:disabled { opacity: .62; cursor: not-allowed; }
+.pos-product-card:disabled { opacity: 1; background: #f0f1f3; border-color: #aeb3bd; cursor: not-allowed; }
 .pos-product-visual { display: grid; place-items: center; position: relative; flex: 0 0 112px;
   background: linear-gradient(160deg, #f3f3fb, #e9edfa); color: #4a5165; }
 .pos-product-visual > svg { stroke-width: 1.5; }
