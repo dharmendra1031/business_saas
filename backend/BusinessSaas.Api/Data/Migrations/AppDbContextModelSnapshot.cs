@@ -90,6 +90,42 @@ namespace BusinessSaas.Api.Data.Migrations
                     b.ToTable("AspNetUsers", (string)null);
                 });
 
+            modelBuilder.Entity("BusinessSaas.Api.Data.PlatformMaintenanceWindow", b =>
+                {
+                    b.Property<long>("Id").ValueGeneratedOnAdd().HasColumnType("bigint");
+                    SqlServerPropertyBuilderExtensions.UseIdentityColumn(b.Property<long>("Id"));
+                    b.Property<long>("CreatedByUserId").HasColumnType("bigint");
+                    b.Property<DateTime>("CreatedAtUtc").HasColumnType("datetime2");
+                    b.Property<DateTime>("StartUtc").HasColumnType("datetime2");
+                    b.Property<DateTime>("EndUtc").HasColumnType("datetime2");
+                    b.Property<string>("Title").IsRequired().HasMaxLength(100).HasColumnType("nvarchar(100)");
+                    b.Property<string>("Message").IsRequired().HasMaxLength(300).HasColumnType("nvarchar(300)");
+                    b.Property<string>("Reason").IsRequired().HasMaxLength(200).HasColumnType("nvarchar(200)");
+                    b.Property<string>("Mode").IsRequired().HasMaxLength(20).HasColumnType("nvarchar(20)");
+                    b.Property<bool>("IsCancelled").HasColumnType("bit");
+                    b.HasKey("Id");
+                    b.HasIndex("StartUtc", "EndUtc");
+                    b.ToTable("PlatformMaintenanceWindows");
+                });
+
+            modelBuilder.Entity("BusinessSaas.Api.Data.PlatformAnnouncement", b =>
+                {
+                    b.Property<long>("Id").ValueGeneratedOnAdd().HasColumnType("bigint");
+                    SqlServerPropertyBuilderExtensions.UseIdentityColumn(b.Property<long>("Id"));
+                    b.Property<long>("CreatedByUserId").HasColumnType("bigint");
+                    b.Property<DateTime>("CreatedAtUtc").HasColumnType("datetime2");
+                    b.Property<DateTime>("StartUtc").HasColumnType("datetime2");
+                    b.Property<DateTime>("EndUtc").HasColumnType("datetime2");
+                    b.Property<string>("Title").IsRequired().HasMaxLength(100).HasColumnType("nvarchar(100)");
+                    b.Property<string>("Message").IsRequired().HasMaxLength(300).HasColumnType("nvarchar(300)");
+                    b.Property<string>("Reason").IsRequired().HasMaxLength(200).HasColumnType("nvarchar(200)");
+                    b.Property<string>("Level").IsRequired().HasMaxLength(20).HasColumnType("nvarchar(20)");
+                    b.Property<bool>("IsArchived").HasColumnType("bit");
+                    b.HasKey("Id");
+                    b.HasIndex("StartUtc", "EndUtc");
+                    b.ToTable("PlatformAnnouncements");
+                });
+
             modelBuilder.Entity("BusinessSaas.Api.Data.PlatformAuditEvent", b =>
                 {
                     b.Property<long>("Id")

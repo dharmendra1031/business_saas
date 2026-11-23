@@ -19,6 +19,35 @@ public sealed class PlatformAuditEvent
     public DateTime CreatedAtUtc { get; set; } = DateTime.UtcNow;
 }
 
+
+public sealed class PlatformMaintenanceWindow
+{
+    public long Id { get; set; }
+    public string Mode { get; set; } = "NoticeOnly";
+    public string Title { get; set; } = "";
+    public string Message { get; set; } = "";
+    public DateTime StartUtc { get; set; }
+    public DateTime EndUtc { get; set; }
+    public bool IsCancelled { get; set; }
+    public string Reason { get; set; } = "";
+    public long CreatedByUserId { get; set; }
+    public DateTime CreatedAtUtc { get; set; } = DateTime.UtcNow;
+}
+
+public sealed class PlatformAnnouncement
+{
+    public long Id { get; set; }
+    public string Level { get; set; } = "Information";
+    public string Title { get; set; } = "";
+    public string Message { get; set; } = "";
+    public DateTime StartUtc { get; set; }
+    public DateTime EndUtc { get; set; }
+    public bool IsArchived { get; set; }
+    public string Reason { get; set; } = "";
+    public long CreatedByUserId { get; set; }
+    public DateTime CreatedAtUtc { get; set; } = DateTime.UtcNow;
+}
+
 public sealed class BusinessType
 {
     public long Id { get; set; }
@@ -327,6 +356,8 @@ public sealed class AppDbContext(DbContextOptions<AppDbContext> options)
     : IdentityUserContext<AppUser, long>(options)
 {
     public DbSet<PlatformAuditEvent> PlatformAuditEvents => Set<PlatformAuditEvent>();
+    public DbSet<PlatformMaintenanceWindow> PlatformMaintenanceWindows => Set<PlatformMaintenanceWindow>();
+    public DbSet<PlatformAnnouncement> PlatformAnnouncements => Set<PlatformAnnouncement>();
     public DbSet<BusinessType> BusinessTypes => Set<BusinessType>();
     public DbSet<Business> Businesses => Set<Business>();
     public DbSet<BusinessUser> BusinessUsers => Set<BusinessUser>();
@@ -371,6 +402,24 @@ public sealed class AppDbContext(DbContextOptions<AppDbContext> options)
             entity.HasIndex(x => new { x.CreatedAtUtc, x.Id });
             entity.HasOne<AppUser>().WithMany()
                 .HasForeignKey(x => x.ActorUserId).OnDelete(DeleteBehavior.Restrict);
+        });
+
+        builder.Entity<PlatformMaintenanceWindow>(entity =>
+        {
+            entity.Property(x => x.Mode).HasMaxLength(20).IsRequired();
+            entity.Property(x => x.Title).HasMaxLength(100).IsRequired();
+            entity.Property(x => x.Message).HasMaxLength(300).IsRequired();
+            entity.Property(x => x.Reason).HasMaxLength(200).IsRequired();
+            entity.HasIndex(x => new { x.StartUtc, x.EndUtc });
+        });
+
+        builder.Entity<PlatformAnnouncement>(entity =>
+        {
+            entity.Property(x => x.Level).HasMaxLength(20).IsRequired();
+            entity.Property(x => x.Title).HasMaxLength(100).IsRequired();
+            entity.Property(x => x.Message).HasMaxLength(300).IsRequired();
+            entity.Property(x => x.Reason).HasMaxLength(200).IsRequired();
+            entity.HasIndex(x => new { x.StartUtc, x.EndUtc });
         });
 
         builder.Entity<BusinessType>(entity =>
