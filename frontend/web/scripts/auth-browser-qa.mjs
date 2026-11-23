@@ -172,7 +172,8 @@ async function scenario(name, {
     }
     if (productsFixture && /^\/businesses\/\d+\/products\/options$/.test(path))
       return response(route, 200, {
-        categories: [{ id: 1, name: 'General' }, { id: 2, name: 'Clothing' }],
+        categories: [{ id: 1, name: 'General', parentId: null, isActive: true },
+          { id: 2, name: 'Clothing', parentId: null, isActive: true }],
         units: [{ id: 1, name: 'Item', code: 'ITEM' }]
       })
     if (productsFixture && /^\/businesses\/\d+\/products$/.test(path)) {
@@ -1078,20 +1079,21 @@ try {
       role: 'Owner', hasProducts: true, productsFixture: true
     })
     const categories = [
-      { id: 1, name: 'General', parentId: null },
-      { id: 2, name: 'Clothing', parentId: null }
+      { id: 1, name: 'General', parentId: null, isActive: true },
+      { id: 2, name: 'Clothing', parentId: null, isActive: true },
+      { id: 21, name: 'Menswear', parentId: 2, isActive: true }
     ]
     const units = [{ id: 1, name: 'Item', code: 'ITEM' }]
     const brands = []
     let savedProduct = null
-    await t.page.route('**/api/businesses/1/products/options', route =>
+    await t.page.route('**/api/businesses/1/products/options*', route =>
       response(route, 200, { categories, units, brands }))
     await t.page.route('**/api/businesses/1/categories', route => {
       if (route.request().method() !== 'POST') return route.fallback()
       const body = route.request().postDataJSON()
       assert.equal(body.name, 'Shirts')
-      assert.equal(body.parentId, 2)
-      categories.push({ id: 31, name: body.name, parentId: body.parentId })
+      assert.equal(body.parentId, 21)
+      categories.push({ id: 31, name: body.name, parentId: body.parentId, isActive: true })
       return response(route, 201, { id: 31, name: body.name, parentId: 2, isActive: true })
     })
     await t.page.route('**/api/businesses/1/units', route => {
@@ -1123,13 +1125,15 @@ try {
     await t.page.locator('#product-price').fill('1299')
     await t.page.locator('details summary').filter({ hasText: 'More details' }).click()
 
+    await t.page.locator('#product-group').selectOption('2')
+    await t.page.locator('#product-subgroup').selectOption('21')
     await t.page.getByRole('button', { name: '+ Add category' }).click()
     await t.page.locator('#inline-master-name').fill('Shirts')
-    await t.page.locator('#inline-master-parent').selectOption('2')
     await t.page.getByRole('button', { name: 'Add & select' }).click()
     await t.page.waitForFunction(() =>
       document.querySelector('#product-category')?.value === '31')
-    assert.equal(await t.page.locator('#product-category option:checked').innerText(), 'Clothing / Shirts')
+    assert.equal(await t.page.locator('#product-category option:checked').innerText(), 'Shirts')
+    assert.equal(await t.page.locator('#product-brand').inputValue(), '0')
 
     await t.page.getByRole('button', { name: '+ Add unit' }).click()
     await t.page.locator('#inline-master-name').fill('Box')
@@ -1426,14 +1430,14 @@ try {
     assert.equal(await t.page.locator('.business-record-table tbody tr').count(), 1,
       'Inactive status must filter actual records')
     await t.page.locator('#product-filter-status').selectOption('all')
-    await t.page.locator('#product-filter-category').selectOption('2')
+    await t.page.locator('#product-filter-group').selectOption('2')
     await t.page.waitForFunction(() => {
       const rows = document.querySelectorAll('.business-record-table tbody tr')
       return rows.length === 1 && rows[0].textContent.includes('Blue Shirt')
     })
     assert.equal(await t.page.locator('.business-record-table tbody tr').count(), 1,
       'Category selection must filter records')
-    await t.page.locator('#product-filter-category').selectOption('0')
+    await t.page.locator('#product-filter-group').selectOption('0')
     await t.page.locator('#product-search').fill('BLUE-11')
     await t.page.getByRole('button', { name: 'Search', exact: true }).click()
     await t.page.waitForFunction(() => {
