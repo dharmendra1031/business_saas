@@ -27,6 +27,8 @@ interface BillingDraft {
   amount: number
   createdAtUtc: string
   status: string
+  paymentRequestId: number | null
+  paymentStatus: string | null
 }
 
 interface PaymentRequest {
@@ -71,6 +73,8 @@ interface PendingGatewayOrder {
 interface ReconciliationPage {
   items: ReconciliationRow[]
   total: number
+  page: number
+  pageSize: number
   unresolvedOrders: PendingGatewayOrder[]
 }
 
@@ -79,6 +83,18 @@ interface BillingPage {
   total: number
   page: number
   pageSize: number
+}
+
+function paymentStatusLabel(status: string | null): string {
+  switch (status) {
+    case 'AwaitingGateway': return 'Awaiting checkout'
+    case 'CreatingOrder': return 'Creating gateway order'
+    case 'OrderCreated': return 'Awaiting customer payment'
+    case 'OrderUncertain': return 'Gateway reconciliation required'
+    case 'Captured': return 'Captured — verified'
+    case 'CapturedReview': return 'Captured — needs review'
+    default: return status ? `Status: ${status}` : 'Payment not requested'
+  }
 }
 
 function money(amount: number, currency: string) {
@@ -100,6 +116,8 @@ export default function PlatformBilling({ business, onChooseBusiness }: { busine
   const [preview, setPreview] = useState<BillingPreview | null>(null)
   const [requestKey, setRequestKey] = useState('')
   const [page, setPage] = useState(1)
+  const [paymentPage, setPaymentPage] = useState(1)
+  const [reconciliationPage, setReconciliationPage] = useState(1)
   const [reload, setReload] = useState(0)
   const [records, setRecords] = useState<BillingPage | null>(null)
   const [payments, setPayments] = useState<PaymentPage | null>(null)
@@ -120,8 +138,8 @@ export default function PlatformBilling({ business, onChooseBusiness }: { busine
     setLoading(true)
     Promise.all([
       api<BillingPage>(`/platform/billing/drafts?page=${page}`),
-      api<PaymentPage>('/platform/billing/payment-requests'),
-      api<ReconciliationPage>('/platform/billing/reconciliation')
+      api<PaymentPage>(`/platform/billing/payment-requests?page=${paymentPage}`),
+      api<ReconciliationPage>(`/platform/billing/reconciliation?page=${reconciliationPage}`)
     ])
       .then(([drafts, requests, summary]) => {
         if (active) {
@@ -139,7 +157,7 @@ export default function PlatformBilling({ business, onChooseBusiness }: { busine
       })
       .finally(() => { if (active) setLoading(false) })
     return () => { active = false }
-  }, [page, reload])
+  }, [page, paymentPage, reconciliationPage, reload])
 
   function clearPreview() {
     setPreview(null)
@@ -337,7 +355,7 @@ export default function PlatformBilling({ business, onChooseBusiness }: { busine
             <div className="table-responsive">
               <table className="table platform-table align-middle">
                 <thead><tr><th>Draft ID</th><th>Business</th><th>Plan / Cycle</th>
-                  <th>Period</th><th>Amount</th><th>Created</th><th>Status</th><th>Action</th></tr></thead>
+                  <th>Period</th><th>Amount</th><th>Created</th><th>Payment status</th><th>Action</th></tr></thead>
                 <tbody>{records.items.map(item => <tr key={item.id}>
                   <td>#{item.id}</td>
                   <td><strong>{item.businessName}</strong>
@@ -348,10 +366,13 @@ export default function PlatformBilling({ business, onChooseBusiness }: { busine
                     : 'Not recorded (older draft)'}</td>
                   <td>{money(item.amount, item.currencyCode)}</td>
                   <td>{new Date(item.createdAtUtc).toLocaleString()}</td>
-                  <td><span className="text-secondary">{item.status} (unpaid)</span></td>
+                  <td><span className="text-secondary">{paymentStatusLabel(item.paymentStatus)}</span>
+                    {item.paymentRequestId !== null &&
+                      <small className="d-block text-secondary">Request #{item.paymentRequestId}</small>}
+                  </td>
                   <td>
-                    {payments?.items.some(request => request.billingDraftId === item.id)
-                      ? <span className="text-secondary small">Prepared</span>
+                    {item.paymentRequestId !== null
+                      ? <span className="text-secondary small">Already prepared</span>
                       : <button className="btn btn-outline-primary btn-sm" type="button"
                           disabled={busy || !item.periodStartDate || !item.periodEndDate}
                           onClick={() => selectDraft(item.id)}>Prepare Payment</button>}
@@ -391,7 +412,7 @@ export default function PlatformBilling({ business, onChooseBusiness }: { busine
       </form>
     </section>}
     <section className="content-section mt-3">
-      <h2>Payment Preparation History</h2>
+      <h2>Payment Requests</h2>
       {payments?.total === 0 ? <p className="text-secondary">No payment requests prepared.</p>
         : payments && <div className="table-responsive">
           <table className="table platform-table align-middle">
@@ -406,6 +427,17 @@ export default function PlatformBilling({ business, onChooseBusiness }: { busine
             </tr>)}</tbody>
           </table>
         </div>}
+      {payments && payments.total > 0 && <div className="d-flex justify-content-between align-items-center gap-2 mt-3">
+        <span className="small text-secondary">{payments.total} payment requests · Page {paymentPage}</span>
+        <div className="d-flex gap-2">
+          <button className="btn btn-outline-secondary btn-sm" type="button"
+            disabled={busy || paymentPage === 1}
+            onClick={() => setPaymentPage(n => n - 1)}>Previous requests</button>
+          <button className="btn btn-outline-secondary btn-sm" type="button"
+            disabled={busy || paymentPage * payments.pageSize >= payments.total}
+            onClick={() => setPaymentPage(n => n + 1)}>Next requests</button>
+        </div>
+      </div>}
     </section>
     <section className="content-section mt-3">
       <div className="d-flex justify-content-between align-items-center gap-2 mb-3">
@@ -434,8 +466,16 @@ export default function PlatformBilling({ business, onChooseBusiness }: { busine
             </table>
           </div>}
       {reconciliation && <p className="small text-secondary">
-        Showing {reconciliation.items.length} of {reconciliation.total} captured payments.
+        Showing {reconciliation.items.length} of {reconciliation.total} captured payments · Page {reconciliationPage}.
       </p>}
+      {reconciliation && reconciliation.total > 0 && <div className="d-flex gap-2 mt-2">
+        <button className="btn btn-outline-secondary btn-sm" type="button"
+          disabled={busy || reconciliationPage === 1}
+          onClick={() => setReconciliationPage(n => n - 1)}>Previous captures</button>
+        <button className="btn btn-outline-secondary btn-sm" type="button"
+          disabled={busy || reconciliationPage * reconciliation.pageSize >= reconciliation.total}
+          onClick={() => setReconciliationPage(n => n + 1)}>Next captures</button>
+      </div>}
       <h3 className="h6 mt-4">Orders requiring reconciliation</h3>
       {reconciliation?.unresolvedOrders.length === 0
         ? <p className="small text-secondary">No uncertain gateway orders.</p>

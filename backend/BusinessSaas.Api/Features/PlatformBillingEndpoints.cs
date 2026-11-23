@@ -25,10 +25,15 @@ public static class PlatformBillingEndpoints
             var items = await (from draft in db.SubscriptionBillingDrafts.AsNoTracking()
                                join business in db.Businesses.AsNoTracking()
                                    on draft.BusinessId equals business.Id
+                               join payment in db.SubscriptionPaymentRequests.AsNoTracking()
+                                   on draft.Id equals payment.BillingDraftId into requests
+                               from payment in requests.DefaultIfEmpty()
                                orderby draft.Id descending
                                select new
                                {
                                    draft.Id, draft.BusinessId,
+                                   paymentRequestId = payment == null ? (long?)null : payment.Id,
+                                   paymentStatus = payment == null ? null : payment.Status,
                                    businessName = business.Name,
                                    draft.PublishedPlanVersionId,
                                    draft.PlanCode, draft.BillingCycle,
@@ -183,10 +188,15 @@ public static class PlatformBillingEndpoints
             var item = await (from draft in db.SubscriptionBillingDrafts.AsNoTracking()
                               join business in db.Businesses.AsNoTracking()
                                   on draft.BusinessId equals business.Id
+                              join payment in db.SubscriptionPaymentRequests.AsNoTracking()
+                                  on draft.Id equals payment.BillingDraftId into requests
+                              from payment in requests.DefaultIfEmpty()
                               where draft.Id == id
                               select new
                               {
                                   draft.Id, draft.BusinessId, businessName = business.Name,
+                                  paymentRequestId = payment == null ? (long?)null : payment.Id,
+                                  paymentStatus = payment == null ? null : payment.Status,
                                   draft.PublishedPlanVersionId, draft.PlanCode,
                                   draft.BillingCycle, draft.CurrencyCode, draft.Amount,
                                   draft.PeriodStartDate, draft.PeriodEndDate,

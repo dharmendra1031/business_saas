@@ -332,8 +332,10 @@ export default function PlatformPlans({ business, onChooseBusiness }: { business
     <section className="content-section mt-3" aria-label="Subscription billing">
       <h2>Subscription Billing</h2>
       <p className="text-secondary mb-0">
-        Payment ledger, invoices, refunds and verified paid activation are not implemented.
-        Publishing a plan does not charge a customer or activate a subscription.
+        Captured gateway payments, processed refunds and subscription access changes are tracked
+        in the billing reconciliation workflow. Invoice and credit-note drafts are internal
+        documents only; statutory invoice issuance is not enabled. Publishing a plan
+        alone does not charge a customer or activate access.
       </p>
     </section>
 

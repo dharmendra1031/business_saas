@@ -1119,6 +1119,10 @@ public sealed class BusinessFlowTests
             .GetProperty("periodStartDate").GetString()!));
         Assert.Equal("Draft", billingHistory.GetProperty("items")[0]
             .GetProperty("status").GetString());
+        Assert.Equal(JsonValueKind.Null, billingHistory.GetProperty("items")[0]
+            .GetProperty("paymentRequestId").ValueKind);
+        Assert.Equal(JsonValueKind.Null, billingHistory.GetProperty("items")[0]
+            .GetProperty("paymentStatus").ValueKind);
         Assert.Equal(HttpStatusCode.BadRequest,
             (await admin.GetAsync("/api/platform/billing/drafts?page=0")).StatusCode);
         Assert.Equal(HttpStatusCode.NotFound,
@@ -1250,6 +1254,16 @@ public sealed class BusinessFlowTests
         Assert.Equal("AwaitingGateway", paymentJson.GetProperty("status").GetString());
         Assert.Equal(1099m, paymentJson.GetProperty("amount").GetDecimal());
         Assert.Equal("INR", paymentJson.GetProperty("currencyCode").GetString());
+        var preparedHistory = await admin.GetFromJsonAsync<JsonElement>(
+            "/api/platform/billing/drafts?page=1&pageSize=1");
+        Assert.Equal(paymentRequestId, preparedHistory.GetProperty("items")[0]
+            .GetProperty("paymentRequestId").GetInt64());
+        Assert.Equal("AwaitingGateway", preparedHistory.GetProperty("items")[0]
+            .GetProperty("paymentStatus").GetString());
+        var preparedDetail = await admin.GetFromJsonAsync<JsonElement>(
+            $"/api/platform/billing/drafts/{billingId}");
+        Assert.Equal(paymentRequestId, preparedDetail.GetProperty("paymentRequestId").GetInt64());
+        Assert.Equal("AwaitingGateway", preparedDetail.GetProperty("paymentStatus").GetString());
 
         var replay = await Post(admin,
             $"/api/platform/billing/drafts/{billingId}/payment-requests", preparePayment);
@@ -1433,6 +1447,12 @@ public sealed class BusinessFlowTests
             Assert.True(sub.PaidStartsAtUtc < DateTime.UtcNow);
             Assert.True(sub.PaidEndsAtUtc > DateTime.UtcNow);
         }
+        var paidHistory = await admin.GetFromJsonAsync<JsonElement>(
+            "/api/platform/billing/drafts");
+        Assert.Equal("Captured", paidHistory.GetProperty("items")[0]
+            .GetProperty("paymentStatus").GetString());
+        Assert.Equal(paymentRequestId, paidHistory.GetProperty("items")[0]
+            .GetProperty("paymentRequestId").GetInt64());
         var heldDashboard = await owner.GetFromJsonAsync<JsonElement>(
             $"/api/businesses/{firstId}/dashboard");
         var heldDetails = await admin.GetFromJsonAsync<JsonElement>(
