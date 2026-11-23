@@ -115,6 +115,10 @@ public static class PlatformBusinessProvisioning
                     return Results.Conflict(new { code = "BUSINESS_TYPE_NOT_AVAILABLE",
                         message = "New business provisioning is paused for this type." });
 
+                if (await PlatformStatusEndpoints.ActiveMaintenance(db) is not null)
+                    return Results.Conflict(new { code = "PLATFORM_MAINTENANCE",
+                        message = "New business creation is temporarily paused for maintenance." });
+
                 var business = new Business
                 {
                     Name = name,

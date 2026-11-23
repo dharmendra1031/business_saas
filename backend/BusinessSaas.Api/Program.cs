@@ -208,6 +208,39 @@ app.Use(async (context, next) =>
 
 app.UseAuthorization();
 
+// Maintenance affects authorized tenant operations, not login, health, public status or recovery.
+app.Use(async (context, next) =>
+{
+    if (context.Request.Path.StartsWithSegments("/api/businesses", out var rest))
+    {
+        var parts = rest.Value?.TrimStart('/').Split('/') ?? [];
+        if (parts.Length >= 2 && long.TryParse(parts[0], out var businessId) &&
+            long.TryParse(context.User.FindFirst(System.Security.Claims.ClaimTypes.NameIdentifier)?.Value,
+                out var actorId))
+        {
+            var db = context.RequestServices.GetRequiredService<AppDbContext>();
+            if (await db.BusinessUsers.AsNoTracking().AnyAsync(x =>
+                x.BusinessId == businessId && x.UserId == actorId))
+            {
+                var window = await PlatformStatusEndpoints.ActiveMaintenance(db);
+                var isWrite = context.Request.Method is "POST" or "PUT" or "PATCH" or "DELETE";
+                if (window is not null && (window.Mode == "Unavailable" || isWrite))
+                {
+                    context.Response.StatusCode = StatusCodes.Status503ServiceUnavailable;
+                    context.Response.Headers.RetryAfter = Math.Max(1, (int)
+                        Math.Ceiling((window.EndUtc - DateTime.UtcNow).TotalSeconds)).ToString();
+                    await context.Response.WriteAsJsonAsync(new {
+                        code = "PLATFORM_MAINTENANCE", window.Mode, window.Title,
+                        message = window.Message, window.EndUtc
+                    });
+                    return;
+                }
+            }
+        }
+    }
+    await next();
+});
+
 // All tenant write endpoints respect the paid expiry, including older retail routes.
 // Payment checkout is still available after a trial or paid period has expired.
 app.Use(async (context, next) =>
@@ -267,6 +300,7 @@ app.MapRetailModule();
 app.MapPlatformEndpoints();
 app.MapPlatformBusinessProvisioning();
 app.MapPlatformTypeAvailability();
+app.MapPlatformStatus();
 app.MapPlatformBillingEndpoints();
 app.MapRazorpayPaymentEndpoints();
 app.MapPlatformPaymentReviewEndpoints();
