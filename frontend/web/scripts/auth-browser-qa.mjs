@@ -401,8 +401,12 @@ try {
 
     await t.page.getByRole('button', { name: /New Purchase Order/ }).click()
     await t.page.getByRole('heading', { name: 'New purchase order', level: 3 }).waitFor()
-    await t.page.locator('#purchase-supplier option').filter({ hasText: 'Wholesaler' }).waitFor()
-    await t.page.locator('#purchase-product option').filter({ hasText: 'Blue Shirt' }).waitFor()
+    await t.page.waitForFunction(() =>
+      [...document.querySelectorAll('#purchase-supplier option')].some(option =>
+        option.textContent?.includes('Wholesaler')))
+    await t.page.waitForFunction(() =>
+      [...document.querySelectorAll('#purchase-product option')].some(option =>
+        option.textContent?.includes('Blue Shirt')))
     assert.ok(catalogReads.some(path => path.endsWith('/suppliers')),
       'Supplier lookup should load when the draft form opens')
     assert.ok(catalogReads.some(path => path.endsWith('/products')),
