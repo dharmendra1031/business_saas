@@ -87,7 +87,7 @@ export default function BusinessOverview({ dashboard, onNavigate, onReviewApprov
         {isOwner && stockAlerts && stockAlerts.count > 0 && <div className="business-stock-alerts">
           <button type="button" className="business-setup-alert-link"
             onClick={() => onNavigate('stock', stockAlerts.items[0]?.locationId)}>
-            Review {stockAlerts.count} stock {stockAlerts.count === 1 ? 'alert' : 'alerts'} in Inventory
+            View stock alerts in Inventory
             <ArrowRight size={15} aria-hidden="true" />
           </button>
           <ul aria-label="Products needing stock attention">

@@ -57,6 +57,14 @@
 - The preview-only Sales/Returns, Cash Register, Reports and Business Settings tabs retain working tab selection and genuine read-only business identity when available. Decorative preview welcome cards, empty chart-like panels, and developer-facing implementation guardrails were removed. Missing features remain visibly **Under construction**, with no fake numbers or saves.
 - No backend, SQL, permissions, new UI library or routing framework added. Real browser testing at 1366px/360px and user acceptance are separate; **not DONE** based on source changes alone.
 
+## BUS-27 — location-scoped Alerts Only navigation (23 November 2026)
+
+- Existing GET /api/businesses/{businessId}/stock/locations/{locationId} accepts an optional alertsOnly boolean; authenticated business/location access checks are unchanged. The query applies the same active-product, configured-threshold, existing-balance and quantity rules as BUS-01 before server pagination and total count.
+- Inventory retains its single location selector, search and paging. One small Alerts only checkbox filters this location. Dashboard Stock Alerts links to the first affected location and enables the checkbox; switching locations preserves the filter; removing it restores the full stock list.
+- Dashboard's alert total covers all locations, while Inventory labels its filtered total as alerts at this location. The link deliberately avoids implying the all-location total appears on a single-location screen.
+- Browser and backend test scenarios cover deep-link state, changing location at 360px, clear filter, tenant/Cashier denial, inactive/uninitialized balances and server pagination. UI acceptance and real deployed E2E are separate.
+- No new screen, route, migration, stock ledger or reusable abstraction introduced. Current screen status: Partial until visual user approval and deployed E2E.
+
 ## Frontend + backend integration — stock alert slice (23 November 2026)
 
 - Added nullable per-product ReorderLevel (precision 18,3) with a single SQL Server migration and matching EF model/snapshot. Existing products remain unconfigured by default; no arbitrary threshold or fake quantity is introduced.

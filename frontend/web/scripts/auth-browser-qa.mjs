@@ -338,7 +338,7 @@ try {
     assert.ok(await t.page.evaluate(() => document.documentElement.scrollWidth) <= 361,
       'Configured stock alerts must not cause horizontal overflow')
     await t.screenshot('BUS-01-verified-stock-alerts-mobile-360')
-    await t.page.getByRole('button', { name: 'Review 2 stock alerts in Inventory' }).click()
+    await t.page.getByRole('button', { name: 'View stock alerts in Inventory' }).click()
     await t.page.getByRole('heading', { name: 'Inventory', exact: true, level: 2 }).waitFor()
     assert.equal(await t.page.locator('#stock-location').inputValue(), '1',
       'Dashboard must select the location of the first real alert')
