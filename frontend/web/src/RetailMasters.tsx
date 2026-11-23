@@ -36,6 +36,7 @@ export default function RetailMasters({ businessId, canOperate }: {
   const [name, setName] = useState('')
   const [code, setCode] = useState('')
   const [parentId, setParentId] = useState(0)
+  const [filterParent, setFilterParent] = useState(0)
   const [parentOptions, setParentOptions] = useState<MasterItem[]>([])
   const [active, setActive] = useState(true)
   const [editingId, setEditingId] = useState<number | null>(null)
@@ -53,7 +54,7 @@ export default function RetailMasters({ businessId, canOperate }: {
     setTotal(0)
     setLoadError('')
 
-    api<MasterPage>(`/businesses/${businessId}/${endpoint}?page=${page}&search=${encodeURIComponent(query)}${classification ? `&level=${level}` : ''}`)
+    api<MasterPage>(`/businesses/${businessId}/${endpoint}?page=${page}&search=${encodeURIComponent(query)}${classification ? `&level=${level}${filterParent ? `&parentId=${filterParent}` : ''}` : ''}`)
       .then(result => {
         if (!mounted) return
         setItems(result.items)
@@ -66,7 +67,7 @@ export default function RetailMasters({ businessId, canOperate }: {
       .finally(() => { if (mounted) setLoading(false) })
 
     return () => { mounted = false }
-  }, [businessId, endpoint, classification, level, page, query, reload])
+  }, [businessId, endpoint, classification, level, page, query, filterParent, reload])
 
   useEffect(() => {
     if (!classification) return
@@ -88,6 +89,7 @@ export default function RetailMasters({ businessId, canOperate }: {
   function changeType(next: MasterType) {
     if (next === type) return
     setType(next)
+    setFilterParent(0)
     setPage(1)
     setQuery('')
     setSearch('')
@@ -146,6 +148,8 @@ export default function RetailMasters({ businessId, canOperate }: {
   const label = isUnit ? 'Unit' : type === 'brands' ? 'Brand' : type === 'groups' ? 'Group' : type === 'subgroups' ? 'Subgroup' : 'Category'
   const parentLabel = type === 'subgroups' ? 'Group' : 'Subgroup'
   const candidateParents = parentOptions.filter(item => item.isActive &&
+    classificationTrail(parentOptions, item.id).length === (type === 'subgroups' ? 1 : 2))
+  const filterParents = parentOptions.filter(item =>
     classificationTrail(parentOptions, item.id).length === (type === 'subgroups' ? 1 : 2))
 
   return (
@@ -222,6 +226,16 @@ export default function RetailMasters({ businessId, canOperate }: {
         <input id="master-search" className="form-control" type="search"
           placeholder={`Search ${type}`} value={search}
           onChange={event => setSearch(event.target.value)} />
+        {(type === 'subgroups' || type === 'categories') && <div>
+          <label className="visually-hidden" htmlFor="master-filter-parent">Filter by {parentLabel.toLowerCase()}</label>
+          <select id="master-filter-parent" className="form-select" value={filterParent}
+            onChange={event => { setPage(1); setFilterParent(Number(event.target.value)) }}>
+            <option value={0}>All {type}</option>
+            {filterParents.map(item => <option key={item.id} value={item.id}>
+              {classificationPath(parentOptions, item.id)}{item.isActive ? '' : ' (inactive)'}
+            </option>)}
+          </select>
+        </div>}
         <button className="btn btn-outline-secondary" type="submit">Search</button>
       </form>
 
