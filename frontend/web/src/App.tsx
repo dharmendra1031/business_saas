@@ -251,7 +251,7 @@ export default function App() {
               ref={section === 'overview' && businesses.length <= 1 ? businessNav : undefined}
               className={`nav-entry${section === 'cash' ? ' pos-nav-entry' : ''}${retailPage === section ? ' active' : ''}`}
               aria-current={retailPage === section ? 'page' : undefined}
-              onClick={() => navigateRetail(section)}><Icon size={18} /> {label}</button>)
+              onClick={() => navigateRetail(section)}><Icon size={18} /> {label}</button>)}
           {dashboard.roleCode !== 'Cashier' && <>
             <div className="sidebar-heading">SHOP SETUP</div>
             {([
@@ -261,7 +261,7 @@ export default function App() {
             ] as const).map(([section, label, Icon]) => <button key={section} type="button"
               className={`nav-entry${retailPage === section ? ' active' : ''}`}
               aria-current={retailPage === section ? 'page' : undefined}
-              onClick={() => navigateRetail(section)}><Icon size={18} /> {label}</button>)
+              onClick={() => navigateRetail(section)}><Icon size={18} /> {label}</button>)}
           </>}
           {dashboard.roleCode !== 'Cashier' && <>
             <div className="sidebar-heading">SALES & REPORTING</div>
@@ -272,7 +272,7 @@ export default function App() {
             ] as const).map(([section, label, Icon]) => <button key={section} type="button"
               className={`nav-entry business-preview-nav${retailPage === section ? ' active' : ''}`}
               aria-current={retailPage === section ? 'page' : undefined}
-              onClick={() => navigateRetail(section)}><Icon size={18} /> <span>{label}</span><small>Preview</small></button>)
+              onClick={() => navigateRetail(section)}><Icon size={18} /> <span>{label}</span><small>Preview</small></button>)}
           </>}
           {dashboard.roleCode === 'Owner' && <button type="button"
             className={`nav-entry${retailPage === 'team' ? ' active' : ''}`}
