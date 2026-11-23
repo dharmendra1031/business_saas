@@ -5,17 +5,17 @@
 .auth-brand { display: flex; align-items: center; justify-content: center; gap: 12px;
   margin-bottom: 28px; color: #172a4a; line-height: 1.2; }
 .auth-brand strong { display: block; font-weight: 750; font-size: 1.22rem; }
-.auth-brand small { display: block; color: #62758d; font-size: .78rem; margin-top: 3px; }
+.auth-brand small { display: block; color: #435162; font-size: .78rem; margin-top: 3px; }
 .auth-brand-mark { display: grid; place-items: center; width: 44px; height: 44px;
   border-radius: 10px; background: #172a50; color: #fff; font-size: 1.35rem; font-weight: 800; }
 .auth-form-container .auth-card { width: 100%; background: #fff; border: 1px solid #e0e7f0;
   border-radius: 12px; box-shadow: 0 10px 30px rgb(23 48 91 / 5%); padding: 32px; }
 .auth-form-container .auth-card h1 { font-size: 1.65rem; font-weight: 750; margin: 0 0 10px; }
-.auth-form-container .form-hint { color: #62758d; font-size: .9rem; line-height: 1.55; margin-bottom: 24px; }
+.auth-form-container .form-hint { color: #435162; font-size: .9rem; line-height: 1.55; margin-bottom: 24px; }
 .auth-form-container .form-control { min-height: 46px; border-radius: 8px; }
 .auth-form-container .auth-card > .btn-primary { min-height: 48px; border-radius: 8px; }
-.auth-switch { margin: 22px 0 0; text-align: center; color: #62758d; font-size: .89rem; }
-.auth-switch button { background: none; border: 0; color: #165ed4; font-weight: 650; padding: 0; }
+.auth-switch { margin: 22px 0 0; text-align: center; color: #435162; font-size: .89rem; }
+.auth-switch button { background: none; border: 0; color: #1249a5; font-weight: 650; padding: 0; }
 @media (max-width: 480px) {
   .auth-layout { padding: 18px; }
   .auth-form-container .auth-card { padding: 24px 20px; }
