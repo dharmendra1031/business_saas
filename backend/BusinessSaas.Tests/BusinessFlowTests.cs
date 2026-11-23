@@ -1903,6 +1903,34 @@ public sealed class BusinessFlowTests
         });
         Assert.Equal(HttpStatusCode.OK, resumed.StatusCode);
         Assert.Single((await admin.GetFromJsonAsync<JsonElement>("/api/business-types")).EnumerateArray());
+        var modulePath = "/api/platform/module-controls";
+        Assert.Equal(HttpStatusCode.Forbidden, (await owner.GetAsync(modulePath)).StatusCode);
+        var modulePolicies = await admin.GetFromJsonAsync<JsonElement>(modulePath);
+        Assert.Contains(modulePolicies.EnumerateArray(), item =>
+            item.GetProperty("code").GetString() == "CATALOG" &&
+            item.GetProperty("canOperate").GetBoolean());
+
+        Assert.Equal(HttpStatusCode.NotFound,
+            (await Post(admin, modulePath + "/UNKNOWN/release",
+                new { state = "Paused", expectedRevision = 0,
+                    reason = "Unknown modules must not be released" })).StatusCode);
+        var pauseCatalog = await Post(admin, modulePath + "/CATALOG/release", new {
+            state = "Paused", expectedRevision = 0,
+            reason = "Pause catalog during planned test maintenance"
+        });
+        Assert.Equal(HttpStatusCode.OK, pauseCatalog.StatusCode);
+        Assert.Equal(HttpStatusCode.Conflict, (await Post(admin, modulePath + "/CATALOG/release", new {
+            state = "Available", expectedRevision = 0,
+            reason = "Stale write should be rejected by revision"
+        })).StatusCode);
+        Assert.Equal(HttpStatusCode.Conflict,
+            (await Post(admin, "/api/platform/businesses", body)).StatusCode);
+        Assert.Equal(HttpStatusCode.OK,
+            (await Post(admin, modulePath + "/CATALOG/release", new {
+                state = "Available", expectedRevision = 1,
+                reason = "Restore installed catalog after test pause"
+            })).StatusCode);
+
         var verified = await admin.GetFromJsonAsync<JsonElement>(
             "/api/platform/owner-lookup?email=platform-creation-owner%40example.test");
         Assert.Equal(ownerId, verified.GetProperty("id").GetInt64());
@@ -2014,6 +2042,21 @@ public sealed class BusinessFlowTests
             new { reason = "Emergency recovery route stays operational" })).StatusCode);
         Assert.Equal(HttpStatusCode.OK,
             (await owner.GetAsync($"/api/businesses/{businessId}/dashboard")).StatusCode);
+
+        var pauseInventory = await Post(admin, modulePath + "/INVENTORY/release", new {
+            state = "Paused", expectedRevision = 0,
+            reason = "Verify inventory operational write gate"
+        });
+        Assert.Equal(HttpStatusCode.OK, pauseInventory.StatusCode);
+        Assert.Equal(HttpStatusCode.Conflict,
+            (await Post(owner, $"/api/businesses/{businessId}/stock/locations/1/opening",
+                new { productId = 1, quantity = 1m })).StatusCode);
+        Assert.Equal(HttpStatusCode.OK, (await owner.GetAsync(
+            $"/api/businesses/{businessId}/dashboard")).StatusCode);
+        Assert.Equal(HttpStatusCode.OK, (await Post(admin, modulePath + "/INVENTORY/release", new {
+            state = "Available", expectedRevision = 1,
+            reason = "Inventory release restored after gate verification"
+        })).StatusCode);
 
         Assert.Equal(HttpStatusCode.OK,
             (await owner.GetAsync($"/api/businesses/{businessId}/dashboard")).StatusCode);
