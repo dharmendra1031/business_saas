@@ -1,7 +1,8 @@
 import { useEffect, useRef, useState, type FormEvent } from 'react'
 import { api, post, SessionExpiredError } from './api'
+import { classificationPath, classificationTrail } from './retailClassification'
 
-type MasterType = 'categories' | 'units' | 'brands'
+type MasterType = 'groups' | 'subgroups' | 'categories' | 'brands' | 'units'
 
 interface MasterItem {
   id: number
@@ -22,7 +23,10 @@ export default function RetailMasters({ businessId, canOperate }: {
   businessId: number
   canOperate: boolean
 }) {
-  const [type, setType] = useState<MasterType>('categories')
+  const [type, setType] = useState<MasterType>('groups')
+  const classification = type === 'groups' || type === 'subgroups' || type === 'categories'
+  const level = type === 'groups' ? 1 : type === 'subgroups' ? 2 : type === 'categories' ? 3 : 0
+  const endpoint = classification ? 'categories' : type
   const [items, setItems] = useState<MasterItem[]>([])
   const [total, setTotal] = useState(0)
   const [page, setPage] = useState(1)
@@ -49,7 +53,7 @@ export default function RetailMasters({ businessId, canOperate }: {
     setTotal(0)
     setLoadError('')
 
-    api<MasterPage>(`/businesses/${businessId}/${type}?page=${page}&search=${encodeURIComponent(query)}`)
+    api<MasterPage>(`/businesses/${businessId}/${endpoint}?page=${page}&search=${encodeURIComponent(query)}${classification ? `&level=${level}` : ''}`)
       .then(result => {
         if (!mounted) return
         setItems(result.items)
@@ -62,30 +66,16 @@ export default function RetailMasters({ businessId, canOperate }: {
       .finally(() => { if (mounted) setLoading(false) })
 
     return () => { mounted = false }
-  }, [businessId, type, page, query, reload])
+  }, [businessId, endpoint, classification, level, page, query, reload])
 
   useEffect(() => {
-    if (type !== 'categories') return
+    if (!classification) return
     let active = true
-    api<{ categories: MasterItem[] }>(`/businesses/${businessId}/products/options`)
+    api<{ categories: MasterItem[] }>(`/businesses/${businessId}/products/options?includeInactiveCategories=true`)
       .then(data => { if (active) setParentOptions(data.categories) })
       .catch(() => { if (active) setParentOptions([]) })
     return () => { active = false }
-  }, [businessId, type, reload])
-
-  function categoryPath(categoryId: number): string {
-    const names: string[] = []
-    const visited = new Set<number>()
-    let current: number | null = categoryId
-    while (current && !visited.has(current) && names.length < 3) {
-      visited.add(current)
-      const item = parentOptions.find(x => x.id === current)
-      if (!item) break
-      names.unshift(item.name)
-      current = item.parentId ?? null
-    }
-    return names.join(' / ')
-  }
+  }, [businessId, classification, reload])
 
   function clearForm() {
     setEditingId(null)
@@ -124,9 +114,14 @@ export default function RetailMasters({ businessId, canOperate }: {
     setSaving(true)
     setError('')
     setNotice('')
-    const basePath = `/businesses/${businessId}/${type}`
+    const basePath = `/businesses/${businessId}/${endpoint}`
+    if ((type === 'subgroups' || type === 'categories') && !parentId) {
+      setError(`Choose a ${type === 'subgroups' ? 'group' : 'subgroup'} first.`)
+      setSaving(false)
+      return
+    }
     const body = { name: name.trim(), ...(type === 'units' ? { code: code.trim().toUpperCase() } : {}),
-      ...(type === 'categories' ? { parentId: parentId || null } : {}),
+      ...(classification ? { parentId: type === 'groups' ? null : parentId } : {}),
       ...(editingId !== null ? { isActive: active } : {}) }
 
     try {
@@ -135,7 +130,7 @@ export default function RetailMasters({ businessId, canOperate }: {
       else
         await api(`${basePath}/${editingId}`, { method: 'PUT', body: JSON.stringify(body) })
 
-      setNotice(`${type === 'units' ? 'Unit' : type === 'brands' ? 'Brand' : 'Category'} ${editingId === null ? 'created' : 'updated'}.`)
+      setNotice(`${label} ${editingId === null ? 'created' : 'updated'}.`)
       clearForm()
       setReload(value => value + 1)
       firstInput.current?.focus()
@@ -148,19 +143,22 @@ export default function RetailMasters({ businessId, canOperate }: {
   }
 
   const isUnit = type === 'units'
-  const label = isUnit ? 'Unit' : type === 'brands' ? 'Brand' : 'Category'
+  const label = isUnit ? 'Unit' : type === 'brands' ? 'Brand' : type === 'groups' ? 'Group' : type === 'subgroups' ? 'Subgroup' : 'Category'
+  const parentLabel = type === 'subgroups' ? 'Group' : 'Subgroup'
+  const candidateParents = parentOptions.filter(item => item.isActive &&
+    classificationTrail(parentOptions, item.id).length === (type === 'subgroups' ? 1 : 2))
 
   return (
     <section className="content-section retail-masters business-module-card" aria-label="Retail master data">
       <div className="masters-heading business-module-heading">
         <h2>Product Masters</h2>
-        <div className="btn-group business-master-tabs" role="group" aria-label="Catalog master type">
-          <button type="button" className={`btn btn-sm ${type === 'categories' ? 'btn-primary' : 'btn-outline-secondary'}`}
-            aria-pressed={type === 'categories'} onClick={() => changeType('categories')}>Categories</button>
-          <button type="button" className={`btn btn-sm ${isUnit ? 'btn-primary' : 'btn-outline-secondary'}`}
-            aria-pressed={isUnit} onClick={() => changeType('units')}>Units</button>
-          <button type="button" className={`btn btn-sm ${type === 'brands' ? 'btn-primary' : 'btn-outline-secondary'}`}
-            aria-pressed={type === 'brands'} onClick={() => changeType('brands')}>Brands</button>
+        <div className="btn-group business-master-tabs" role="group" aria-label="Product master type">
+          {(['groups', 'subgroups', 'categories', 'brands', 'units'] as MasterType[]).map(tab =>
+            <button key={tab} type="button" className={`btn btn-sm ${type === tab ? 'btn-primary' : 'btn-outline-secondary'}`}
+              aria-pressed={type === tab} onClick={() => changeType(tab)}>
+              {tab === 'groups' ? 'Groups' : tab === 'subgroups' ? 'Subgroups' :
+                tab === 'categories' ? 'Categories' : tab === 'brands' ? 'Brands' : 'Units'}
+            </button>)}
         </div>
       </div>
 
@@ -179,7 +177,7 @@ export default function RetailMasters({ businessId, canOperate }: {
             <input ref={firstInput} id="master-name" className="form-control" autoComplete="off"
               value={name} maxLength={isUnit ? 60 : 80} minLength={2} required
               onChange={event => setName(event.target.value)}
-              placeholder={isUnit ? 'e.g. Pieces' : 'Category name'} />
+              placeholder={isUnit ? 'e.g. Pieces' : `Enter ${label.toLowerCase()} name`} />
           </div>
           {isUnit && <div>
             <label className="form-label" htmlFor="master-code">Unit code *</label>
@@ -188,18 +186,17 @@ export default function RetailMasters({ businessId, canOperate }: {
               onChange={event => setCode(event.target.value.toUpperCase())}
               placeholder="e.g. PCS" />
           </div>}
-          {type === 'categories' && <div>
-            <label className="form-label" htmlFor="master-parent">Parent (optional)</label>
-            <select id="master-parent" className="form-select" value={parentId}
+          {(type === 'subgroups' || type === 'categories') && <div>
+            <label className="form-label" htmlFor="master-parent">{parentLabel} *</label>
+            <select id="master-parent" className="form-select" value={parentId} required
               onChange={event => setParentId(Number(event.target.value))}>
-              <option value={0}>No parent (group / standalone)</option>
-              {parentOptions.filter(item => item.id !== editingId &&
-                categoryPath(item.id).split(' / ').length <= 2)
-                .map(item => <option key={item.id} value={item.id}>
-                  {categoryPath(item.id)}
-                </option>)}
+              <option value={0}>Select {parentLabel.toLowerCase()}</option>
+              {parentId > 0 && !candidateParents.some(item => item.id === parentId) &&
+                <option value={parentId}>Previous parent (inactive or moved)</option>}
+              {candidateParents.filter(item => item.id !== editingId).map(item =>
+                <option key={item.id} value={item.id}>{classificationPath(parentOptions, item.id)}</option>)}
             </select>
-          </div>}
+          </div>
           {editingId !== null && <div>
             <label className="form-label" htmlFor="master-status">Status</label>
             <select id="master-status" className="form-select" value={active ? 'active' : 'inactive'}
@@ -233,12 +230,12 @@ export default function RetailMasters({ businessId, canOperate }: {
           : <div className="table-responsive">
             <table className="table table-sm align-middle business-record-table">
               <thead><tr><th scope="col">Name</th>{isUnit && <th scope="col">Code</th>}
-                {type === 'categories' && <th scope="col">Parent</th>}
+                {(type === 'subgroups' || type === 'categories') && <th scope="col">{parentLabel}</th>}
                 <th scope="col">Status</th>{canOperate && <th scope="col" className="text-end">Action</th>}</tr></thead>
               <tbody>{items.map(item => <tr key={item.id}>
                 <td>{item.name}</td>{isUnit && <td>{item.code}</td>}
-                {type === 'categories' && <td>{item.parentId
-                  ? categoryPath(item.parentId) || `#${item.parentId}` : '—'}</td>}
+                {(type === 'subgroups' || type === 'categories') && <td>{item.parentId
+                  ? classificationPath(parentOptions, item.parentId) || `#${item.parentId}` : '—'}</td>}
                 <td>{item.isActive ? 'Active' : 'Inactive'}</td>
                 {canOperate && <td className="text-end"><button type="button"
                   className="btn btn-outline-secondary btn-sm" onClick={() => edit(item)}>Edit</button></td>}
@@ -246,7 +243,7 @@ export default function RetailMasters({ businessId, canOperate }: {
             </table>
           </div>}
       {!loading && !loadError && total > 0 && <div className="masters-pages">
-        <span className="small text-secondary">Page {page} · {total} records</span>
+        <span className="small text-secondary">Page {page} · {total} {type}</span>
         <div className="btn-group">
           <button className="btn btn-sm btn-outline-secondary" disabled={page === 1}
             onClick={() => setPage(value => value - 1)}>Previous</button>
