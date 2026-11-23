@@ -122,6 +122,17 @@ public sealed class OwnerDashboardIntegrationTests
         Assert.Equal(777m, otherData.GetProperty("cashSalesToday").GetProperty("total").GetDecimal());
         Assert.Equal(1, otherData.GetProperty("cashSalesToday").GetProperty("billCount").GetInt32());
 
+        Assert.Equal(HttpStatusCode.OK,
+            (await owner.GetAsync($"/api/businesses/{businessId}/staff")).StatusCode);
+        Assert.Equal(HttpStatusCode.NotFound,
+            (await manager.GetAsync($"/api/businesses/{businessId}/staff")).StatusCode);
+        Assert.Equal(HttpStatusCode.NotFound,
+            (await cashier.GetAsync($"/api/businesses/{businessId}/staff")).StatusCode);
+        Assert.Equal(HttpStatusCode.NotFound,
+            (await outsider.GetAsync($"/api/businesses/{businessId}/staff")).StatusCode);
+        Assert.Equal(HttpStatusCode.Unauthorized,
+            (await guest.GetAsync($"/api/businesses/{businessId}/staff")).StatusCode);
+
         Assert.Equal(HttpStatusCode.NotFound,
             (await outsider.GetAsync($"/api/businesses/{businessId}/dashboard")).StatusCode);
         Assert.Equal(HttpStatusCode.Unauthorized,
