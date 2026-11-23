@@ -1942,6 +1942,79 @@ public sealed class BusinessFlowTests
                 x.TargetId == businessId && x.Action == "Business.Provisioned"));
         }
 
+        Assert.Equal(HttpStatusCode.Forbidden,
+            (await Post(owner, "/api/platform/announcements", new {
+                level = "Information", title = "Unauthorized notice", message = "Cannot publish this notice",
+                reason = "Must be Super Admin", startUtc = DateTime.UtcNow, endUtc = DateTime.UtcNow.AddMinutes(15)
+            })).StatusCode);
+
+        var announcement = await Post(admin, "/api/platform/announcements", new {
+            level = "Warning", title = "Scheduled update", message = "A verified platform update will be applied.",
+            reason = "Approved status banner integration test",
+            startUtc = DateTime.UtcNow.AddSeconds(-25), endUtc = DateTime.UtcNow.AddMinutes(20)
+        });
+        Assert.Equal(HttpStatusCode.Created, announcement.StatusCode);
+        var noticeId = (await announcement.Content.ReadFromJsonAsync<JsonElement>())
+            .GetProperty("id").GetInt64();
+        var publicStatus = await outsider.GetFromJsonAsync<JsonElement>("/api/public/platform-availability");
+        Assert.Single(publicStatus.GetProperty("announcements").EnumerateArray());
+        Assert.Equal("Scheduled update", publicStatus.GetProperty("announcements")[0]
+            .GetProperty("title").GetString());
+        Assert.Equal(HttpStatusCode.OK, (await Post(admin,
+            $"/api/platform/announcements/{noticeId}/archive",
+            new { reason = "Confirmed public notice lifecycle works" })).StatusCode);
+        Assert.Empty((await outsider.GetFromJsonAsync<JsonElement>("/api/public/platform-availability"))
+            .GetProperty("announcements").EnumerateArray());
+
+        var start = DateTime.UtcNow.AddSeconds(-25);
+        var end = DateTime.UtcNow.AddMinutes(20);
+        var maintenance = await Post(admin, "/api/platform/maintenance", new {
+            mode = "ReadOnly", title = "Read-only update",
+            message = "Store changes are temporarily unavailable during maintenance.",
+            reason = "Verified platform read-only integration test",
+            startUtc = start, endUtc = end
+        });
+        Assert.Equal(HttpStatusCode.Created, maintenance.StatusCode);
+        var windowId = (await maintenance.Content.ReadFromJsonAsync<JsonElement>())
+            .GetProperty("id").GetInt64();
+        Assert.Equal(HttpStatusCode.Conflict,
+            (await Post(admin, "/api/platform/maintenance", new {
+                mode = "Unavailable", title = "Overlap", message = "This window overlaps.",
+                reason = "Overlapping window must be rejected",
+                startUtc = start.AddMinutes(1), endUtc = end.AddMinutes(1)
+            })).StatusCode);
+        Assert.Equal(HttpStatusCode.OK,
+            (await owner.GetAsync($"/api/businesses/{businessId}/dashboard")).StatusCode);
+        Assert.Equal(HttpStatusCode.ServiceUnavailable,
+            (await Post(owner, $"/api/businesses/{businessId}/categories",
+                new { name = "Maintenance blocked" })).StatusCode);
+        Assert.Equal(HttpStatusCode.NotFound,
+            (await outsider.GetAsync($"/api/businesses/{businessId}/dashboard")).StatusCode);
+        Assert.Equal(HttpStatusCode.OK,
+            (await Post(admin, $"/api/platform/maintenance/{windowId}/cancel",
+                new { reason = "Read-only enforcement verified" })).StatusCode);
+        Assert.Equal(HttpStatusCode.Created,
+            (await Post(owner, $"/api/businesses/{businessId}/categories",
+                new { name = "Maintenance ended" })).StatusCode);
+
+        var unavailable = await Post(admin, "/api/platform/maintenance", new {
+            mode = "Unavailable", title = "Temporary outage",
+            message = "Store operations will return after maintenance.",
+            reason = "Verified unavailable maintenance access",
+            startUtc = DateTime.UtcNow.AddSeconds(-20), endUtc = DateTime.UtcNow.AddMinutes(20)
+        });
+        Assert.Equal(HttpStatusCode.Created, unavailable.StatusCode);
+        var outageId = (await unavailable.Content.ReadFromJsonAsync<JsonElement>())
+            .GetProperty("id").GetInt64();
+        Assert.Equal(HttpStatusCode.ServiceUnavailable,
+            (await owner.GetAsync($"/api/businesses/{businessId}/dashboard")).StatusCode);
+        Assert.Equal(HttpStatusCode.OK, (await outsider.GetAsync("/api/public/platform-availability")).StatusCode);
+        Assert.Equal(HttpStatusCode.OK, (await outsider.GetAsync("/api/ready")).StatusCode);
+        Assert.Equal(HttpStatusCode.OK, (await Post(admin, $"/api/platform/maintenance/{outageId}/cancel",
+            new { reason = "Emergency recovery route stays operational" })).StatusCode);
+        Assert.Equal(HttpStatusCode.OK,
+            (await owner.GetAsync($"/api/businesses/{businessId}/dashboard")).StatusCode);
+
         Assert.Equal(HttpStatusCode.OK,
             (await owner.GetAsync($"/api/businesses/{businessId}/dashboard")).StatusCode);
         Assert.Equal(HttpStatusCode.NotFound,
