@@ -13,10 +13,16 @@ public static class RetailCashSales
         group.MapGet("/products", Search);
         group.MapGet("/receipt", FindReceipt);
         group.MapGet("/latest", Latest);
+        group.MapGet("/receipts/{receiptId:long}", ReceiptById);
+        group.MapGet("/receipts", ReceiptHistory);
+        group.MapGet("/business-receipts", BusinessReceiptHistory);
+        group.MapGet("/business-receipts/{receiptId:long}", BusinessReceiptById);
+        group.MapGet("/daily-report", DailyReport);
         group.MapPost("", Post);
     }
 
-    private static async Task<Business?> Shop(AppDbContext db, long businessId, long actor, long locationId)
+    private static async Task<Business?> Shop(AppDbContext db, long businessId, long actor, long locationId,
+        bool ownerOnly = false)
     {
         return await (from b in db.Businesses.AsNoTracking()
                       join t in db.BusinessTypes on b.BusinessTypeId equals t.Id
@@ -24,7 +30,7 @@ public static class RetailCashSales
                       join loc in db.BusinessLocations on b.Id equals loc.BusinessId
                       where b.Id == businessId && t.Code == "RETAIL" && m.UserId == actor &&
                           loc.Id == locationId && (m.RoleCode == "Owner" ||
-                          (loc.IsPrimary && (m.RoleCode == "Cashier" || m.RoleCode == "Manager")))
+                          (!ownerOnly && loc.IsPrimary && (m.RoleCode == "Cashier" || m.RoleCode == "Manager")))
                       select b).SingleOrDefaultAsync();
     }
 
@@ -49,14 +55,108 @@ public static class RetailCashSales
         return sale is null ? Results.NotFound() : Results.Ok(Receipt(sale));
     }
 
+    private static async Task<IResult> ReceiptById(long businessId, long locationId, long receiptId,
+        ClaimsPrincipal user, AppDbContext db)
+    {
+        if (!long.TryParse(user.FindFirstValue(ClaimTypes.NameIdentifier), out var actor) ||
+            await Shop(db, businessId, actor, locationId) is null) return Results.NotFound();
+        var sale = await db.RetailCashSales.AsNoTracking().Include(x => x.Lines)
+            .SingleOrDefaultAsync(x => x.Id == receiptId && x.BusinessId == businessId &&
+                x.CashierId == actor && x.LocationId == locationId);
+        return sale is null ? Results.NotFound() : Results.Ok(Receipt(sale));
+    }
+
     private static object Receipt(RetailCashSale sale)
     {
         var lines = sale.Lines.OrderBy(x => x.Id).ToArray();
         // Older single-item checkout clients read these four fields from the receipt header.
         var first = lines.First();
         return new { sale.Id, sale.BusinessId, sale.LocationId, sale.CashierId, sale.RequestKey,
-            sale.Tendered, sale.Total, sale.CurrencyCode, sale.PostedAtUtc,
+            sale.Tendered, sale.Total, sale.CurrencyCode,
+            PostedAtUtc = DateTime.SpecifyKind(sale.PostedAtUtc, DateTimeKind.Utc),
             first.ProductId, first.ProductName, first.UnitPrice, first.Quantity, Lines = lines };
+    }
+
+    private static async Task<IResult> BusinessReceiptById(long businessId, long locationId, long receiptId,
+        ClaimsPrincipal user, AppDbContext db)
+    {
+        if (!long.TryParse(user.FindFirstValue(ClaimTypes.NameIdentifier), out var actor) ||
+            await Shop(db, businessId, actor, locationId, ownerOnly: true) is null) return Results.NotFound();
+        var sale = await db.RetailCashSales.AsNoTracking().Include(x => x.Lines)
+            .SingleOrDefaultAsync(x => x.Id == receiptId && x.BusinessId == businessId && x.LocationId == locationId);
+        return sale is null ? Results.NotFound() : Results.Ok(Receipt(sale));
+    }
+
+    private static async Task<IResult> ReceiptHistory(long businessId, long locationId, ClaimsPrincipal user,
+        AppDbContext db, int page = 1)
+    {
+        if (!long.TryParse(user.FindFirstValue(ClaimTypes.NameIdentifier), out var actor) ||
+            await Shop(db, businessId, actor, locationId) is null) return Results.NotFound();
+        return await ReadHistory(db, businessId, locationId, page, actor, null);
+    }
+
+    private static async Task<IResult> BusinessReceiptHistory(long businessId, long locationId,
+        ClaimsPrincipal user, AppDbContext db, int page = 1, long? receiptId = null, DateOnly? postedDate = null)
+    {
+        if (!long.TryParse(user.FindFirstValue(ClaimTypes.NameIdentifier), out var actor) ||
+            await Shop(db, businessId, actor, locationId, ownerOnly: true) is not { } business) return Results.NotFound();
+        if (postedDate is null) return await ReadHistory(db, businessId, locationId, page, null, receiptId);
+        if (postedDate.Value.Year is < 1900 or > 9998)
+            return Results.BadRequest(new { message = "Choose a valid receipt date." });
+        var zone = TimeZoneInfo.FindSystemTimeZoneById(business.TimeZoneId);
+        return await ReadHistory(db, businessId, locationId, page, null, receiptId,
+            LocalDateStart(postedDate.Value, zone), LocalDateStart(postedDate.Value.AddDays(1), zone));
+    }
+
+    private static DateTime LocalDateStart(DateOnly date, TimeZoneInfo zone)
+    {
+        var local = date.ToDateTime(TimeOnly.MinValue);
+        while (zone.IsInvalidTime(local)) local = local.AddMinutes(1);
+        return zone.IsAmbiguousTime(local)
+            ? new DateTimeOffset(local, zone.GetAmbiguousTimeOffsets(local).Max()).UtcDateTime
+            : TimeZoneInfo.ConvertTimeToUtc(local, zone);
+    }
+
+    private static async Task<IResult> DailyReport(long businessId, long locationId, DateOnly date,
+        ClaimsPrincipal user, AppDbContext db)
+    {
+        if (!long.TryParse(user.FindFirstValue(ClaimTypes.NameIdentifier), out var actor) ||
+            await Shop(db, businessId, actor, locationId, ownerOnly: true) is not { } business)
+            return Results.NotFound();
+        if (date.Year is < 1900 or > 9998)
+            return Results.BadRequest(new { message = "Choose a valid report date." });
+
+        var zone = TimeZoneInfo.FindSystemTimeZoneById(business.TimeZoneId);
+        var start = LocalDateStart(date, zone);
+        var end = LocalDateStart(date.AddDays(1), zone);
+        var totals = await db.RetailCashSales.AsNoTracking()
+            .Where(x => x.BusinessId == businessId && x.LocationId == locationId &&
+                x.PostedAtUtc >= start && x.PostedAtUtc < end)
+            .GroupBy(x => x.CurrencyCode)
+            .OrderBy(x => x.Key)
+            .Select(x => new { CurrencyCode = x.Key, ReceiptCount = x.Count(), SalesTotal = x.Sum(s => s.Total) })
+            .ToListAsync();
+        return Results.Ok(new { date, business.TimeZoneId, totals });
+    }
+
+    private static async Task<IResult> ReadHistory(AppDbContext db, long businessId, long locationId,
+        int page, long? cashierId, long? receiptId, DateTime? start = null, DateTime? end = null)
+    {
+        if (page is < 1 or > 100000) return Results.BadRequest(new { message = "Choose a valid receipt page." });
+        if (receiptId is <= 0) return Results.BadRequest(new { message = "Choose a valid receipt number." });
+
+        const int pageSize = 10;
+        var query = db.RetailCashSales.AsNoTracking()
+            .Where(x => x.BusinessId == businessId && x.LocationId == locationId);
+        if (cashierId.HasValue) query = query.Where(x => x.CashierId == cashierId.Value);
+        if (receiptId.HasValue) query = query.Where(x => x.Id == receiptId.Value);
+        if (start.HasValue && end.HasValue)
+            query = query.Where(x => x.PostedAtUtc >= start.Value && x.PostedAtUtc < end.Value);
+        var items = await query
+            .OrderByDescending(x => x.Id).Skip((page - 1) * pageSize).Take(pageSize + 1)
+            .Select(x => new { x.Id, x.Total, x.CurrencyCode,
+                PostedAtUtc = DateTime.SpecifyKind(x.PostedAtUtc, DateTimeKind.Utc) }).ToListAsync();
+        return Results.Ok(new { items = items.Take(pageSize), hasMore = items.Count > pageSize });
     }
 
     private static async Task<IResult> Search(long businessId, long locationId, string? search,
@@ -133,7 +233,8 @@ public static class RetailCashSales
             {
                 if (!products.TryGetValue(item.ProductId, out var product) || product.TaxClassification != "" ||
                     product.SalePrice <= 0 || product.SalePrice != item.ExpectedUnitPrice)
-                    return Results.BadRequest(new { message = "Product or price changed. Remove and select the affected item again." });
+                    return Results.BadRequest(new { code = "CASH_SALE_BASKET_CHANGED", item.ProductId,
+                        message = "Product or price changed. Remove and select the affected item again." });
                 sale.Lines.Add(new RetailCashSaleLine { ProductId = product.Id, ProductName = product.Name,
                     Quantity = item.Quantity, UnitPrice = product.SalePrice });
                 sale.Total += decimal.Round(product.SalePrice * item.Quantity, 2,
@@ -147,7 +248,8 @@ public static class RetailCashSales
             {
                 if (await StockPosting.ApplyAsync(db, businessId, sale.LocationId, line.ProductId,
                         -line.Quantity, "CashSaleLine", line.Id, actor) is null)
-                    return Results.BadRequest(new { message = $"Insufficient stock for {line.ProductName} at this location." });
+                    return Results.BadRequest(new { code = "CASH_SALE_BASKET_CHANGED", line.ProductId,
+                        message = $"Insufficient stock for {line.ProductName} at this location. Remove it and select it again if stock is available." });
             }
             await tx.CommitAsync();
             return Results.Ok(Receipt(sale));

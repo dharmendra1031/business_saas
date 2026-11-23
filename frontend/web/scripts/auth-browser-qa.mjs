@@ -811,18 +811,31 @@ try {
     console.log('PASS BUS-01 fresh API totals, POS return, outage fallback and access loss')
   }
 
-  {
-    const t = await scenario('pos-fractional-base-unit-checkout', {
+  for (const mode of ['checkout', 'recover', 'review', 'out-of-stock']) {
+    const recover = mode === 'recover'
+    const t = await scenario('pos-fractional-' + mode, {
       role: 'Cashier', hasProducts: true
     })
     let posted = null
     let posts = 0
+    let originalRequest
+    const receipt = {
+      id: 501, total: 10, tendered: 10, currencyCode: 'INR',
+      postedAtUtc: '2026-11-23T06:00:00Z',
+      lines: [{ id: 502, productName: 'Loose Rice', unitPrice: 80, quantity: 0.125 }]
+    }
+    await t.page.route('**/api/businesses/1/cash-sales/receipt?*', route => {
+      assert.equal(new URL(route.request().url()).searchParams.get('requestKey'), originalRequest.requestKey)
+      return posts === 1 ? response(route, 404, {}) : response(route, 200, receipt)
+    })
     await t.page.route('**/api/businesses/1/cash-sales/products*', route => {
       const term = new URL(route.request().url()).searchParams.get('search') ?? ''
+      if (mode === 'out-of-stock' && posts > 0) return response(route, 200, [])
       return response(route, 200, term && !'Loose Rice'.toLowerCase().includes(term.toLowerCase())
         ? [] : [{
           id: 91, name: 'Loose Rice', sku: 'RICE-KG', barcode: null,
-          salePrice: 80, available: 0.625, unitCode: 'KG'
+          salePrice: mode === 'review' && posts > 0 ? 96 : 80,
+          available: mode === 'review' && posts > 0 ? 0.25 : 0.625, unitCode: 'KG'
         }])
     })
     await t.page.route('**/api/businesses/1/cash-sales', route => {
@@ -830,17 +843,40 @@ try {
         return response(route, 404, { message: 'Unexpected cash sale route' })
       posted = route.request().postDataJSON()
       posts++
-      return response(route, 200, {
-        id: 501, total: 10, tendered: 10, currencyCode: 'INR',
-        postedAtUtc: '2026-11-23T06:00:00Z',
-        lines: [{ id: 502, productName: 'Loose Rice', unitPrice: 80, quantity: 0.125 }]
+      if (mode === 'out-of-stock') return response(route, 400, {
+        code: 'CASH_SALE_BASKET_CHANGED', productId: 91,
+        message: 'Insufficient stock for Loose Rice at this location.'
       })
+      if (mode === 'review') {
+        if (posts === 1) {
+          originalRequest = posted
+          return response(route, 400, {
+            code: 'CASH_SALE_BASKET_CHANGED',
+            productId: 91,
+            message: 'Product or price changed. Remove and select the affected item again.'
+          })
+        }
+        return response(route, 200, {
+          ...receipt, total: 24, tendered: 30,
+          lines: [{ id: 502, productName: 'Loose Rice', unitPrice: 96, quantity: 0.25 }]
+        })
+      }
+      if (recover) {
+        if (posts === 1) {
+          originalRequest = posted
+          return route.abort('connectionreset')
+        }
+        assert.deepEqual(posted, originalRequest)
+        return response(route, 403, { message: 'Retry could not be authorized.' })
+      }
+      return response(route, 200, receipt)
     })
     await t.login()
     await t.page.locator('.pos-checkout').waitFor()
     await t.page.getByRole('button', { name: /Add Loose Rice/ }).waitFor()
     await t.page.getByRole('button', { name: /Add Loose Rice/ }).click()
     const kgQuantity = t.page.getByRole('spinbutton', { name: 'Quantity of Loose Rice' })
+    assert.equal(await t.page.getByRole('button', { name: 'Print receipt' }).count(), 0)
     assert.equal(await kgQuantity.inputValue(), '0.625',
       'Adding limited-stock KG uses the exact available fractional quantity')
     await t.page.getByRole('button', { name: 'Decrease quantity of Loose Rice' }).click()
@@ -864,15 +900,100 @@ try {
     await t.page.getByRole('dialog', { name: 'Complete Payment' }).waitFor()
     await t.page.getByLabel('Cash received').fill('10')
     await t.page.getByRole('button', { name: 'Confirm Cash Payment' }).click()
+    if (mode === 'out-of-stock') {
+      await t.page.getByRole('alert').getByText(/Insufficient stock for Loose Rice/).waitFor()
+      await t.page.getByText('Review required. Remove this item and select it again.').waitFor()
+      assert.equal(await kgQuantity.inputValue(), '0.125')
+      assert.equal(await t.page.getByRole('button', { name: /Pay \/ Checkout/ }).isDisabled(), true)
+      await t.page.getByRole('button', { name: 'Remove Loose Rice' }).click()
+      await t.page.getByText('No products to display').waitFor()
+      assert.equal(await t.page.getByRole('button', { name: /Add Loose Rice/ }).count(), 0)
+      assert.equal(posts, 1)
+      await t.check()
+      await t.context.close()
+      console.log('PASS POS-17 out-of-stock line cannot be repurchased from the refreshed catalog')
+      continue
+    }
+    if (mode === 'review') {
+      await t.page.getByRole('alert').getByText(/Product or price changed/).waitFor()
+      await t.page.getByRole('dialog').waitFor({ state: 'hidden' })
+      assert.equal(await kgQuantity.inputValue(), '0.125')
+      assert.equal(posts, 1)
+      await t.page.getByText('Review required. Remove this item and select it again.').waitFor()
+      assert.equal(await t.page.getByRole('button', { name: /Pay \/ Checkout/ }).isDisabled(), true)
+      await t.page.getByRole('button', { name: 'Remove Loose Rice' }).click()
+      await t.page.getByRole('button', { name: /Add Loose Rice/ }).click()
+      assert.equal(await kgQuantity.inputValue(), '0.25')
+      await t.page.getByText('INR 96.00 / KG', { exact: true }).waitFor()
+      await t.page.getByText('INR 24.00', { exact: true }).first().waitFor()
+      await t.page.getByRole('button', { name: /Pay \/ Checkout/ }).click()
+      assert.equal(await t.page.getByLabel('Cash received').inputValue(), '')
+      await t.page.getByLabel('Cash received').fill('30')
+      await t.page.getByRole('button', { name: 'Confirm Cash Payment' }).click()
+      await t.page.getByRole('heading', { name: 'Cash receipt #501' }).waitFor()
+      const receiptView = t.page.getByRole('region', { name: 'Cash receipt' })
+      await receiptView.getByText(/Total INR 24\.00/).waitFor()
+      assert.equal(posts, 2)
+      assert.notEqual(posted.requestKey, originalRequest.requestKey)
+      assert.equal(posted.lines[0].quantity, 0.25)
+      assert.equal(posted.lines[0].expectedUnitPrice, 96)
+      assert.equal(posted.tendered, 30)
+      await t.check()
+      await t.context.close()
+      console.log('PASS POS-17 changed price returns to the preserved basket for review')
+      continue
+    }
+    if (recover) await t.page.getByRole('button', { name: 'Record original request' }).click()
     await t.page.getByRole('heading', { name: 'Cash receipt #501' }).waitFor()
-    assert.equal(posts, 1, 'Fractional POS must post once')
+    assert.equal(posts, recover ? 2 : 1)
     assert.equal(posted.lines.length, 1)
     assert.equal(posted.lines[0].productId, 91)
     assert.equal(posted.lines[0].quantity, 0.125)
     assert.equal(posted.tendered, 10)
+    await t.page.evaluate(() => {
+      window.receiptPrintCalls = 0
+      window.print = () => { window.receiptPrintCalls++ }
+    })
+    const printReceipt = t.page.getByRole('button', { name: 'Print receipt' })
+    await printReceipt.click()
+    await printReceipt.click()
+    assert.equal(await t.page.evaluate(() => window.receiptPrintCalls), 2)
+    assert.equal(posts, recover ? 2 : 1)
+    await t.page.getByRole('button', { name: 'New sale', exact: true }).click()
+    await t.page.getByText('Your basket is empty', { exact: true }).waitFor()
+    assert.equal(await printReceipt.count(), 0)
+    if (mode === 'checkout') {
+      await t.page.route('**/api/businesses/1/cash-sales/receipts/501?*', route => {
+        assert.equal(new URL(route.request().url()).searchParams.get('locationId'), '1')
+        return response(route, 200, receipt)
+      })
+      await t.page.getByRole('button', { name: /Add Loose Rice/ }).click()
+      await t.page.getByLabel('Receipt number').fill('501')
+      await t.page.getByRole('button', { name: 'Find receipt' }).click()
+      await t.page.getByRole('heading', { name: 'Cash receipt #501' }).waitFor()
+      await printReceipt.click()
+      await t.page.getByRole('button', { name: 'Back to checkout' }).click()
+      assert.equal(await kgQuantity.inputValue(), '0.625')
+      await t.page.route('**/api/businesses/1/cash-sales/receipts?*', route => {
+        const params = new URL(route.request().url()).searchParams
+        assert.equal(params.get('locationId'), '1')
+        const newest = params.get('page') === '1'
+        return response(route, 200, { items: [newest ? { ...receipt, id: 503 } : receipt], hasMore: newest })
+      })
+      await t.page.getByRole('button', { name: 'Receipt history' }).click()
+      const history = t.page.getByRole('region', { name: 'Cash receipt history' })
+      await history.getByRole('button', { name: 'Receipt #503' }).waitFor()
+      await history.getByRole('button', { name: 'Next' }).click()
+      await history.getByRole('button', { name: 'Receipt #501' }).click()
+      await t.page.getByRole('heading', { name: 'Cash receipt #501' }).waitFor()
+      await t.page.getByRole('button', { name: 'Back to checkout' }).click()
+      assert.equal(await kgQuantity.inputValue(), '0.625')
+      assert.equal(posts, 1)
+    }
     await t.check()
     await t.context.close()
-    console.log('PASS POS sells fractional KG in base units with currency rounding')
+    console.log(recover ? 'PASS POS-07 preserves the original pending request after a denied retry' :
+      'PASS POS sells fractional KG in base units with currency rounding')
   }
 
   {
@@ -1090,7 +1211,7 @@ try {
       ['Product Masters', 'Product Masters', null],
       ['Suppliers', 'Suppliers', null],
       ['Customers', 'Customers', null],
-      ['Sales & Returns', 'Sales & Returns', 'BUS-35-sales-preview-compact'],
+      ['Sales & Returns', 'Sales & Returns', 'BUS-35-posted-sales-compact'],
       ['Cash Register', 'Cash Register', null],
       ['Reports', 'Reports', null],
       ['Staff & Access', 'Team Access', null],
@@ -1107,6 +1228,49 @@ try {
         const headerHeight = await t.page.locator('.business-module-heading').first()
           .evaluate(header => header.getBoundingClientRect().height)
         assert.ok(headerHeight >= 63, label + ': common module header should be 64px minimum')
+      }
+      if (label === 'Sales & Returns') {
+        await t.page.route('**/api/businesses/1/cash-sales/business-receipts?*', route => {
+          const params = new URL(route.request().url()).searchParams
+          assert.equal(params.get('locationId'), '1')
+          return response(route, 200, { items: params.get('receiptId') === '42' && params.get('postedDate') === '2026-11-23'
+            ? [{ id: 42, total: 24, currencyCode: 'INR', postedAtUtc: '2026-11-23T06:00:00Z' }]
+            : [], hasMore: false })
+        })
+        await t.page.getByLabel('Receipt number').fill('42')
+        await t.page.getByLabel('Posted date').fill('2026-11-23')
+        await t.page.getByRole('button', { name: 'Search', exact: true }).click()
+        await t.page.getByRole('row').filter({ hasText: '#42' }).getByText('INR 24.00').waitFor()
+        await t.page.route('**/api/businesses/1/cash-sales/business-receipts/42?*', route => {
+          assert.equal(route.request().method(), 'GET')
+          assert.equal(new URL(route.request().url()).searchParams.get('locationId'), '1')
+          return response(route, 200, { id: 42, total: 24, tendered: 30, currencyCode: 'INR',
+            postedAtUtc: '2026-11-23T06:00:00Z',
+            lines: [{ id: 1, productName: 'Loose Rice', unitPrice: 96, quantity: 0.25 }] })
+        })
+        await t.page.getByRole('button', { name: 'Receipt #42' }).click()
+        const receipt = t.page.getByRole('region', { name: 'Cash receipt' })
+        await receipt.getByText(/Loose Rice/).waitFor()
+        await receipt.getByText(/Change INR 6\.00/).waitFor()
+        await t.page.evaluate(() => { window.print = () => { document.body.dataset.receiptPrinted = 'yes' } })
+        await receipt.getByRole('button', { name: 'Print receipt' }).click()
+        assert.equal(await t.page.locator('body').getAttribute('data-receipt-printed'), 'yes')
+        await receipt.getByRole('button', { name: 'Back to receipts' }).click()
+        assert.equal(await t.page.getByLabel('Receipt number').inputValue(), '42')
+        assert.equal(await t.page.getByLabel('Posted date').inputValue(), '2026-11-23')
+      }
+      if (label === 'Reports') {
+        await t.page.route('**/api/businesses/1/cash-sales/daily-report?*', route => {
+          const params = new URL(route.request().url()).searchParams
+          assert.equal(params.get('locationId'), '1')
+          return response(route, 200, { date: params.get('date'), timeZoneId: 'Asia/Kolkata',
+            totals: params.get('date') === '2026-11-23'
+              ? [{ currencyCode: 'INR', receiptCount: 1, salesTotal: 24 }] : [] })
+        })
+        await t.page.getByLabel('Business date').fill('2026-11-22')
+        await t.page.getByText('No posted cash receipts for this date and location.').waitFor()
+        await t.page.getByLabel('Business date').fill('2026-11-23')
+        await t.page.getByRole('row').filter({ hasText: 'INR' }).getByText('24.00').waitFor()
       }
       if (shot) await t.screenshot(shot)
     }

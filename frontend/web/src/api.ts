@@ -94,7 +94,7 @@ let sessionExpiredHandler: (() => void) | null = null
 
 export class ApiResponseError extends Error {
   readonly status: number
-  constructor(status: number, message: string, readonly code?: string) {
+  constructor(status: number, message: string, readonly code?: string, readonly productId?: number) {
     super(message)
     this.status = status
   }
@@ -189,10 +189,12 @@ export async function api<T>(path: string, options: RequestInit = {}): Promise<T
     if (response.status === 401 && path === '/auth/mfa/verify')
       throw new Error('Invalid code or expired verification session. Please sign in again if needed.')
 
-    const body = await response.json().catch(() => ({})) as { message?: string; detail?: string; code?: string }
+    const body = await response.json().catch(() => ({})) as {
+      message?: string; detail?: string; code?: string; productId?: number
+    }
     throw new ApiResponseError(response.status, body.message ?? body.detail ??
       (response.status === 429 ? 'Too many requests. Wait a minute and try again.'
-        : response.status === 401 ? 'Please sign in to continue.' : 'Request failed.'), body.code)
+        : response.status === 401 ? 'Please sign in to continue.' : 'Request failed.'), body.code, body.productId)
   }
 
   if (response.status === 204) return undefined as T

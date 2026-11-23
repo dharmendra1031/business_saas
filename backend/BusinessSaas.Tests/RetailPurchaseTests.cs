@@ -281,14 +281,57 @@ public sealed class RetailPurchaseTests
         Assert.Equal(HttpStatusCode.OK, postedSale.StatusCode);
         var receipt = await postedSale.Content.ReadFromJsonAsync<JsonElement>();
         Assert.Equal(450m, receipt.GetProperty("total").GetDecimal());
+        var receiptByIdPath = $"{sales}/receipts/{receipt.GetProperty("id").GetInt64()}?locationId={locationId}";
+        var savedReceipt = await cashier.GetFromJsonAsync<JsonElement>(receiptByIdPath);
+        Assert.Equal(receipt.GetProperty("id").GetInt64(), savedReceipt.GetProperty("id").GetInt64());
+        Assert.Equal(HttpStatusCode.NotFound, (await owner.GetAsync(receiptByIdPath)).StatusCode);
+        Assert.Equal(HttpStatusCode.NotFound, (await other.GetAsync(receiptByIdPath)).StatusCode);
+        var historyPath = $"{sales}/receipts?locationId={locationId}";
+        var cashierHistory = await cashier.GetFromJsonAsync<JsonElement>(historyPath);
+        Assert.Equal(receipt.GetProperty("id").GetInt64(),
+            cashierHistory.GetProperty("items")[0].GetProperty("id").GetInt64());
+        Assert.False(cashierHistory.GetProperty("hasMore").GetBoolean());
+        var ownerHistory = await owner.GetFromJsonAsync<JsonElement>(historyPath);
+        Assert.Empty(ownerHistory.GetProperty("items").EnumerateArray());
+        Assert.Equal(HttpStatusCode.NotFound, (await other.GetAsync(historyPath)).StatusCode);
+        var businessHistoryPath = $"{sales}/business-receipts?locationId={locationId}";
+        var businessHistory = await owner.GetFromJsonAsync<JsonElement>(
+            $"{businessHistoryPath}&receiptId={receipt.GetProperty("id").GetInt64()}");
+        Assert.Equal(receipt.GetProperty("id").GetInt64(),
+            businessHistory.GetProperty("items")[0].GetProperty("id").GetInt64());
+        Assert.Equal(HttpStatusCode.NotFound, (await cashier.GetAsync(businessHistoryPath)).StatusCode);
+        Assert.Equal(HttpStatusCode.NotFound, (await other.GetAsync(businessHistoryPath)).StatusCode);
+        var businessReceiptPath = $"{sales}/business-receipts/{receipt.GetProperty("id").GetInt64()}?locationId={locationId}";
+        var businessReceipt = await owner.GetFromJsonAsync<JsonElement>(businessReceiptPath);
+        Assert.Equal(450m, businessReceipt.GetProperty("total").GetDecimal());
+        Assert.Equal(DateTimeKind.Utc, businessReceipt.GetProperty("postedAtUtc").GetDateTime().Kind);
+        var localSaleDate = businessReceipt.GetProperty("postedAtUtc").GetDateTime().AddMinutes(330).Date;
+        var datedHistory = await owner.GetFromJsonAsync<JsonElement>(
+            $"{businessHistoryPath}&postedDate={localSaleDate:yyyy-MM-dd}");
+        Assert.Single(datedHistory.GetProperty("items").EnumerateArray());
+        var previousDate = await owner.GetFromJsonAsync<JsonElement>(
+            $"{businessHistoryPath}&postedDate={localSaleDate.AddDays(-1):yyyy-MM-dd}");
+        Assert.Empty(previousDate.GetProperty("items").EnumerateArray());
+        var reportPath = $"{sales}/daily-report?locationId={locationId}&date={localSaleDate:yyyy-MM-dd}";
+        var report = await owner.GetFromJsonAsync<JsonElement>(reportPath);
+        Assert.Equal(1, report.GetProperty("totals")[0].GetProperty("receiptCount").GetInt32());
+        Assert.Equal(450m, report.GetProperty("totals")[0].GetProperty("salesTotal").GetDecimal());
+        Assert.Equal(HttpStatusCode.NotFound, (await cashier.GetAsync(reportPath)).StatusCode);
+        Assert.Equal(HttpStatusCode.NotFound, (await other.GetAsync(reportPath)).StatusCode);
+        Assert.Equal(HttpStatusCode.NotFound, (await cashier.GetAsync(businessReceiptPath)).StatusCode);
+        Assert.Equal(HttpStatusCode.NotFound, (await other.GetAsync(businessReceiptPath)).StatusCode);
         var replay = await Send(cashier, sales, cashSale);
         Assert.Equal(HttpStatusCode.OK, replay.StatusCode);
         Assert.Equal(receipt.GetProperty("id").GetInt64(),
             (await replay.Content.ReadFromJsonAsync<JsonElement>()).GetProperty("id").GetInt64());
         Assert.Equal(HttpStatusCode.Conflict, (await Send(cashier, sales,
             cashSale with { quantity = 2 })).StatusCode);
-        Assert.Equal(HttpStatusCode.BadRequest, (await Send(cashier, sales,
-            cashSale with { requestKey = "cash-out-of-stock-001", quantity = 98, tendered = 15000m })).StatusCode);
+        var insufficientStock = await Send(cashier, sales,
+            cashSale with { requestKey = "cash-out-of-stock-001", quantity = 98, tendered = 15000m });
+        Assert.Equal(HttpStatusCode.BadRequest, insufficientStock.StatusCode);
+        var stockReview = await insufficientStock.Content.ReadFromJsonAsync<JsonElement>();
+        Assert.Equal("CASH_SALE_BASKET_CHANGED", stockReview.GetProperty("code").GetString());
+        Assert.Equal(productId, stockReview.GetProperty("productId").GetInt64());
         // A replayed receipt does not create a second cash movement.
         var afterSaleMovements = await owner.GetFromJsonAsync<JsonElement>(movementsUrl);
         Assert.Equal(3, afterSaleMovements.GetProperty("total").GetInt32());

@@ -93,8 +93,8 @@ The mockup pictures display illustrative controls (Card, UPI, Split, Services, d
 
 | Current evidence status | Count |
 | --- | ---: |
-| Missing | 57 |
-| Partial | 74 |
+| Missing | 50 |
+| Partial | 81 |
 | Deferred | 14 |
 
 ### A. Entry, authentication and cross-workspace navigation
@@ -178,7 +178,7 @@ The mockup pictures display illustrative controls (Card, UPI, Split, Services, d
 | ID | Screen / interaction | Type | Current | Priority | Required outcome / guardrail |
 | --- | --- | --- | --- | --- | --- |
 | BUS-01 | Business Dashboard | Page | Partial | P0 | Real cash totals, Draft POs and configured stock alerts; Stock Alerts action now opens Inventory at the first affected location with server-filtered Alerts Only. Total counts remain business-wide; Inventory is explicitly location-scoped. Release acceptance pending. |
-| BUS-02 | First-run business setup checklist | Page | Partial | P0 | Dashboard shows location and catalog readiness. Owners can resume setup in Inventory until the first stock balance exists. Receipt settings and hosted acceptance remain pending. |
+| BUS-02 | First-run business setup checklist | Page | Partial | P0 | Dashboard shows location and catalog readiness. Chromium fixtures at 1366px and 360px verified that Owners can open Inventory from the checklist and that it clears after the dashboard sees the first stock balance. Receipt settings and hosted acceptance remain pending. |
 | BUS-03 | Business selector / context switch | Page | Partial | P0 | Compact membership-only rows with business name/type/role; no owner tenant creation. Repeated clicks guarded and prior context cleared; Chromium fixture QA passed. Real tenant-revocation/authorization E2E and visual owner sign-off pending. |
 | BUS-04 | Locations — list and active location | Page | Partial | P1 | Authorized stock location selection and one-location label verified in Chromium; sidebar uses count for multi-branch rather than assuming first is active. Separate location management/list and authoritative primary/active scope still missing. |
 | BUS-05 | Locations — add / edit | Form | Missing | P1 | Permission and entitlement limits; no unauthorized branch access. |
@@ -211,16 +211,16 @@ The mockup pictures display illustrative controls (Card, UPI, Split, Services, d
 | BUS-32 | Inventory — adjustment detail/history | Panel | Partial | P1 | Full before/after and posting outcome with audit. |
 | BUS-33 | Inventory — low stock / reorder | Page | Missing | P2 | Configured reorder points and real counts, no invented thresholds. |
 | BUS-34 | Inventory — branch transfer | Flow | Deferred | P3 | Optional V1: source issue, in-transit, destination receive and audit. |
-| BUS-35 | Sales — posted invoice list | Page | Missing | P1 | Business and location access, search and genuine posted receipts. |
-| BUS-36 | Sales — invoice detail / reprint | Page | Partial | P1 | Receipt from persisted immutable sale; reprint never reposts. |
+| BUS-35 | Sales — posted invoice list | Page | Partial | P1 | Owners can browse posted cash receipts by location and filter by receipt number and date in the business timezone. Backend and Chromium fixtures verified access and filtering. Hosted acceptance remains pending. |
+| BUS-36 | Sales — invoice detail / reprint | Page | Partial | P1 | Owner can open and print a committed receipt from the location-scoped sales list. Integration tests verified access boundaries, and Chromium verified receipt details, print and returning to the same filter. Hosted and printer acceptance remain pending. |
 | BUS-37 | Sales — return / refund list | Page | Missing | P1 | Search original sale and return status without over-refund. |
 | BUS-38 | Sales — return eligibility and lines | Form | Missing | P1 | Original quantities, already returned, reason and allowed amount; immutable history. |
 | BUS-39 | Sales — return/refund confirmation | Modal | Missing | P1 | Role, stock reversal and settlement verification, idempotency. |
 | BUS-40 | Sales — exchange | Flow | Missing | P2 | Linked return + new sale; difference explicit, no editing posted invoice. |
 | BUS-41 | Cash Register — sessions and drawer summary | Page | Missing | P1 | Cashier/location sessions, posted movements and opening float. |
 | BUS-42 | Cash Register — variance approval | Modal | Missing | P1 | Counted vs expected, approval threshold, reason and immutable close. |
-| BUS-43 | Reports — reports hub | Page | Missing | P1 | Choose sales, stock, purchasing or cash report; business date/branch control. |
-| BUS-44 | Reports — daily sales | Page | Missing | P1 | Gross, discounts, tax, refunds, net and payments reconciled to ledger. |
+| BUS-43 | Reports — reports hub | Page | Partial | P1 | Owner can open a daily cash sales report by business date and location. Inventory, purchasing and register reports remain pending. |
+| BUS-44 | Reports — daily sales | Page | Partial | P1 | Posted cash receipt count and total by currency. Backend and Chromium fixtures verified the cash report. Discounts, tax, refunds, other tenders and hosted acceptance remain pending. |
 | BUS-45 | Reports — stock balances/movements | Page | Missing | P1 | Current balances from movement ledger, valuation only when approved. |
 | BUS-46 | Reports — purchase/receiving | Page | Missing | P2 | Ordered vs actually received and outstanding. |
 | BUS-47 | Reports — cash and register | Page | Missing | P2 | Tender, refunds and variance by authorized shift, no SaaS revenue leakage. |
@@ -245,17 +245,17 @@ The mockup pictures display illustrative controls (Card, UPI, Split, Services, d
 | POS-04 | Quick add customer | Modal | Missing | P2 | Create customer without losing current cart, with duplicate checks. |
 | POS-05 | Cart quantity / remove / clear | State | Partial | P0 | Inline fast edit, exact money and stock checks; no extra page. |
 | POS-06 | Payment Popup — Cash first | Modal | Partial | P0 | Cash-only frontend modal implemented with total, tender, change, focus containment and Cancel/Confirm. Browser visual QA and full cash posting/retry tests still pending. |
-| POS-07 | Payment Popup — processing / unknown outcome | State | Missing | P0 | Disable double submit; reconcile original request before retry, never fake failure/success. |
+| POS-07 | Payment Popup — processing / unknown outcome | State | Partial | P0 | Original request is held for receipt lookup and retry. Chromium fixture verified recovery after a lost response and denied retry using the same request key. Hosted acceptance remains pending. |
 | POS-08 | Payment Popup — Card/UPI/Split | Tab | Deferred | P2 | Only show/enabled after verified backend and configured payment capability. |
-| POS-09 | Sale complete / committed receipt | State | Partial | P0 | Persisted sale ID, exact totals, Print / New Sale, original basket safely cleared. |
-| POS-10 | Receipt print / reprint | Page | Partial | P1 | Print ONLY a committed receipt; printer failure does not repost stock/money. |
-| POS-11 | Find invoice / sale history | Page | Partial | P1 | Existing latest receipt only; searchable invoice list still missing. |
+| POS-09 | Sale complete / committed receipt | State | Partial | P0 | Chromium fixtures verified the receipt ID and that New Sale clears the original basket after normal posting and recovery. Hosted acceptance remains pending. |
+| POS-10 | Receipt print / reprint | Page | Partial | P1 | Chromium fixtures verified Print is only offered after a receipt is returned and repeated print invocations do not submit another sale. Physical printer and hosted acceptance remain pending. |
+| POS-11 | Find invoice / sale history | Page | Partial | P1 | POS supports receipt number lookup and paginated cash receipt history for the signed-in account and selected location. Chromium verified paging, opening a receipt and returning to the unchanged basket. Hosted acceptance remains pending. |
 | POS-12 | Held bills — list / resume / cancel | Page | Missing | P2 | Draft only; no stock posting/payment until later real completed sale. |
 | POS-13 | Return/refund lookup | Flow | Missing | P1 | Read eligibility against posted invoice; show actions only to permitted role. |
 | POS-14 | Cash Register — open shift | Modal | Missing | P1 | Authorized location, opening float and drawer rules; audit. |
 | POS-15 | Cash Register — shift summary | Page | Missing | P1 | Posted cash movements, expected vs counted, business date. |
 | POS-16 | Cash Register — close shift | Modal | Missing | P1 | Count, variance and approval, no silent cash mutation. |
-| POS-17 | Insufficient stock / changed price review | Modal | Missing | P0 | Server reprice/revalidate; explain change before charging, preserve basket. |
+| POS-17 | Insufficient stock / changed price review | Modal | Partial | P0 | Server identifies the affected item for stale prices or insufficient stock. Checkout preserves the basket, clears cash entry, refreshes the catalog and blocks checkout until the flagged line is removed. Chromium fixtures verified checkout at the corrected price with a new request key and that an out-of-stock item cannot be re-added. Hosted acceptance remains pending. |
 | POS-18 | Outage / pending-sale recovery | State | Partial | P0 | Existing pending/replay path; make status understandable and block duplicate posting. |
 
 ### E. Deferred product families — SCREEN IDs reserved, NOT Retail V1 commitments

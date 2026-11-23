@@ -1,6 +1,7 @@
 import { useEffect, useRef, useState, type FormEvent } from 'react'
 import { ArrowLeft, ArrowRight, Banknote, Check, Minus, Package, Plus, ReceiptText, Search, ShoppingBag, Trash2 } from 'lucide-react'
 import PosCashPaymentDialog from './PosCashPaymentDialog'
+import CashReceipt, { type Receipt } from './CashReceipt'
 import { api, ApiResponseError, operationKey, post, type RetailDashboard } from './api'
 
 interface Product {
@@ -10,9 +11,9 @@ interface Product {
 interface Line { productId: number; name: string; quantity: number; expectedUnitPrice: number;
   unitCode?: string | null; available?: number }
 interface SaleRequest { locationId: number; requestKey: string; tendered: number; lines: Line[] }
-interface Receipt {
-  id: number; total: number; tendered: number; currencyCode: string; postedAtUtc: string
-  lines: { id: number; productName: string; unitPrice: number; quantity: number }[]
+interface ReceiptHistory {
+  items: Pick<Receipt, 'id' | 'total' | 'currencyCode' | 'postedAtUtc'>[]
+  hasMore: boolean
 }
 
 function validQuantity(value: number): boolean {
@@ -60,6 +61,14 @@ export default function CashCheckout({ userId, dashboard, onExit }: {
   const [receipt, setReceipt] = useState<Receipt | null>(null)
   const [locationId, setLocation] = useState(pending?.locationId ?? locations[0]?.id ?? 0)
   const [basket, setBasket] = useState<Line[]>(pending?.lines ?? [])
+  const [reviewProductId, setReviewProductId] = useState<number | null>(null)
+  const [receiptNumber, setReceiptNumber] = useState('')
+  const [historyPage, setHistoryPage] = useState(0)
+  const [history, setHistory] = useState<ReceiptHistory | null>(null)
+  const [historyError, setHistoryError] = useState(false)
+  const [historyRetry, setHistoryRetry] = useState(0)
+  const validReceiptNumber = /^\d{1,19}$/.test(receiptNumber.trim()) && /[1-9]/.test(receiptNumber)
+  const needsReview = basket.some(line => line.productId === reviewProductId)
   const [search, setSearch] = useState('')
   const [products, setProducts] = useState<Product[]>([])
   const [productsLoading, setProductsLoading] = useState(false)
@@ -76,6 +85,17 @@ export default function CashCheckout({ userId, dashboard, onExit }: {
   const total = basket.reduce((sum, line) =>
     sum + Math.round(Math.round(line.expectedUnitPrice * 100) * line.quantity), 0) / 100
   const money = (amount: number) => business.currencyCode + ' ' + amount.toFixed(2)
+
+  useEffect(() => {
+    if (!historyPage || !locationId || pending || receipt) return
+    let active = true
+    setHistory(null)
+    setHistoryError(false)
+    api<ReceiptHistory>(`${base}/receipts?locationId=${locationId}&page=${historyPage}`)
+      .then(result => { if (active) setHistory(result) })
+      .catch(() => { if (active) setHistoryError(true) })
+    return () => { active = false }
+  }, [base, historyPage, historyRetry, locationId, pending, receipt])
 
   useEffect(() => {
     if (!pending || receipt || busy) return
@@ -182,7 +202,7 @@ export default function CashCheckout({ userId, dashboard, onExit }: {
 
   async function recordSale() {
     const received = Number(cash)
-    if (lock.current || !dashboard.canOperate || (pending && lookupState !== 'missing')) return
+    if (lock.current || !dashboard.canOperate || needsReview || (pending && lookupState !== 'missing')) return
     if (!pending && (!locationId || !basket.length || basket.some(line =>
       !validQuantity(line.quantity) ||
       !Number.isFinite(line.expectedUnitPrice) || line.expectedUnitPrice < 0) ||
@@ -194,6 +214,7 @@ export default function CashCheckout({ userId, dashboard, onExit }: {
     const request = pending ?? { locationId, lines: basket, tendered: received, requestKey: operationKey() }
     lock.current = true
     setBusy(true)
+    setLookupState('checking')
     setError('')
     try {
       try { sessionStorage.setItem(key, JSON.stringify(request)) } catch { /* Keep the request key in memory. */ }
@@ -201,31 +222,35 @@ export default function CashCheckout({ userId, dashboard, onExit }: {
       setReceipt(await post<Receipt>(base, request))
     } catch (cause) {
       setError(cause instanceof Error ? cause.message : 'Unable to confirm sale.')
-      if (cause instanceof ApiResponseError && [400, 403].includes(cause.status)) {
+      if (!pending && cause instanceof ApiResponseError && [400, 403].includes(cause.status)) {
         try { sessionStorage.removeItem(key) } catch { /* Storage may be unavailable. */ }
         setPending(null)
+        if (cause.code === 'CASH_SALE_BASKET_CHANGED') {
+          setReviewProductId(cause.productId ?? null)
+          setProducts([])
+          setSearch('')
+          setShowPayment(false)
+          setCash('')
+        }
       }
     } finally { lock.current = false; setBusy(false) }
   }
 
-  async function lastReceipt() {
+  async function lookupReceipt(receiptId?: string) {
+    if (lock.current || !locationId || pending) return
+    lock.current = true
     setBusy(true)
     setError('')
-    try { setReceipt(await api<Receipt>(base + '/latest?locationId=' + locationId)) }
+    const path = receiptId ? '/receipts/' + receiptId : '/latest'
+    try { setReceipt(await api<Receipt>(base + path + '?locationId=' + locationId)) }
     catch (cause) {
       setError(cause instanceof ApiResponseError && cause.status === 404
-        ? 'No previous receipt at this location for your account.' : 'Unable to load the last receipt.')
-    } finally { setBusy(false) }
+        ? 'No matching receipt at this location for your account.' : 'Unable to load the receipt.')
+    } finally { lock.current = false; setBusy(false) }
   }
 
-  if (receipt) return <section className="content-section cash-receipt" aria-label="Cash receipt">
-    <h2>Cash receipt #{receipt.id}</h2>
-    <p>{business.name} · {new Date(receipt.postedAtUtc).toLocaleString(undefined, { timeZone: business.timeZoneId })}</p>
-    <ul>{receipt.lines.map(line => <li key={line.id}>{line.productName} · {line.quantity} × {money(line.unitPrice)}</li>)}</ul>
-    <p><strong>Total {money(receipt.total)}</strong><br />Cash received {money(receipt.tendered)}<br />
-      Change {money(receipt.tendered - receipt.total)}</p>
-    <button className="btn btn-outline-secondary me-2" onClick={() => window.print()}>Print receipt</button>
-    <button className="btn btn-primary" onClick={() => {
+  if (receipt) return <CashReceipt receipt={receipt} businessName={business.name} timeZone={business.timeZoneId}
+    backLabel={pending ? 'New sale' : 'Back to checkout'} onBack={() => {
       if (pending) {
         try { sessionStorage.removeItem(key) } catch { /* Storage may be unavailable. */ }
         setPending(null)
@@ -235,8 +260,7 @@ export default function CashCheckout({ userId, dashboard, onExit }: {
       setReceipt(null)
       setSearch('')
       setShowPayment(false)
-    }}>{pending ? 'New sale' : 'Back to checkout'}</button>
-  </section>
+    }} />
 
   return <section className="pos-checkout" aria-label="Point of Sale checkout">
     <header className="pos-header">
@@ -279,13 +303,50 @@ export default function CashCheckout({ userId, dashboard, onExit }: {
         <div className="pos-location-row">
           <label className="form-label" htmlFor="pos-location">Store location
             <select id="pos-location" className="form-select" value={locationId}
-              disabled={busy || basket.length > 0} onChange={event => setLocation(Number(event.target.value))}>
+              disabled={busy || basket.length > 0} onChange={event => {
+                setHistoryPage(0)
+                setLocation(Number(event.target.value))
+              }}>
               {locations.map(location => <option key={location.id} value={location.id}>{location.name}</option>)}
             </select>
           </label>
           <button type="button" className="btn btn-outline-secondary btn-sm" disabled={busy || !locationId}
-            onClick={() => void lastReceipt()}><ReceiptText size={16} /> Last Receipt</button>
+            onClick={() => void lookupReceipt()}><ReceiptText size={16} /> Last Receipt</button>
         </div>
+        <form className="pos-search" role="search" aria-label="Receipt lookup" onSubmit={event => {
+          event.preventDefault()
+          if (validReceiptNumber) void lookupReceipt(receiptNumber.trim())
+        }}>
+          <input className="form-control" aria-label="Receipt number" placeholder="Receipt number"
+            inputMode="numeric" maxLength={19} value={receiptNumber} disabled={busy || !locationId}
+            onChange={event => setReceiptNumber(event.target.value)} />
+          <button type="submit" className="btn btn-outline-secondary btn-sm"
+            disabled={busy || !locationId || !validReceiptNumber}>Find receipt</button>
+        </form>
+        <button type="button" className="btn btn-outline-secondary btn-sm" disabled={busy || !locationId}
+          aria-expanded={historyPage > 0} onClick={() => setHistoryPage(page => page ? 0 : 1)}>
+          Receipt history
+        </button>
+        {historyPage > 0 && <section aria-label="Cash receipt history" className="mt-2">
+          {historyError ? <div role="alert">Unable to load receipt history.{' '}
+            <button type="button" onClick={() => setHistoryRetry(value => value + 1)}>Retry history</button>
+          </div> : !history ? <p role="status">Loading receipt history…</p> : <>
+            {history.items.length === 0 ? <p>No receipts on this page.</p> :
+              <ul className="list-group mb-2">{history.items.map(item => <li key={item.id} className="list-group-item">
+                <button type="button" className="btn btn-link p-0" disabled={busy}
+                  onClick={() => void lookupReceipt(String(item.id))}>Receipt #{item.id}</button>
+                {' · '}{item.currencyCode} {item.total.toFixed(2)}{' · '}
+                {new Date(item.postedAtUtc).toLocaleString(undefined, { timeZone: business.timeZoneId })}
+              </li>)}</ul>}
+            <div className="d-flex gap-2 align-items-center">
+              <button type="button" className="btn btn-outline-secondary btn-sm" disabled={busy || historyPage === 1}
+                onClick={() => setHistoryPage(page => page - 1)}>Previous</button>
+              <span>Page {historyPage}</span>
+              <button type="button" className="btn btn-outline-secondary btn-sm" disabled={busy || !history.hasMore}
+                onClick={() => setHistoryPage(page => page + 1)}>Next</button>
+            </div>
+          </>}
+        </section>}
         <form className="pos-search" role="search" onSubmit={event => void submitBarcode(event)}>
           <label className="visually-hidden" htmlFor="pos-product-search">Search product or scan barcode</label>
           <Search size={19} aria-hidden="true" />
@@ -344,7 +405,9 @@ export default function CashCheckout({ userId, dashboard, onExit }: {
             disabled={busy} onClick={() => setClearArmed(true)}><Trash2 size={15} /> Clear</button>}
           {clearArmed && <div className="pos-clear-confirm">
             <span>Clear this basket?</span>
-            <button type="button" disabled={busy} onClick={() => { setBasket([]); setClearArmed(false); setCash('') }}>Yes, clear</button>
+            <button type="button" disabled={busy} onClick={() => {
+              setBasket([]); setReviewProductId(null); setClearArmed(false); setCash('')
+            }}>Yes, clear</button>
             <button type="button" onClick={() => setClearArmed(false)}>Cancel</button>
           </div>}
         </div>
@@ -356,6 +419,9 @@ export default function CashCheckout({ userId, dashboard, onExit }: {
           <li key={line.productId} className="pos-basket-line">
             <div className="pos-line-description">
               <strong>{line.name}</strong>
+              {line.productId === reviewProductId && <span className="text-danger">
+                Review required. Remove this item and select it again.
+              </span>}
               <small>{money(line.expectedUnitPrice)} / {line.unitCode ?? 'unit'}</small>
               <b>{money(Math.round(Math.round(line.expectedUnitPrice * 100) * line.quantity) / 100)}</b>
             </div>
@@ -374,6 +440,7 @@ export default function CashCheckout({ userId, dashboard, onExit }: {
             <button type="button" className="pos-remove-item" disabled={busy}
               aria-label={`Remove ${line.name}`} onClick={() => {
                 setBasket(previous => previous.filter(x => x.productId !== line.productId))
+                if (line.productId === reviewProductId) setReviewProductId(null)
                 setCash('')
                 setClearArmed(false)
               }}><Trash2 size={16} /></button>
@@ -383,7 +450,7 @@ export default function CashCheckout({ userId, dashboard, onExit }: {
           <div className="pos-total-row"><span>Total Payable</span><strong>{money(total)}</strong></div>
           <p className="pos-no-discount-note">Additional discounts and payment methods are not enabled for this checkout.</p>
           <button type="button" className="btn btn-primary pos-record-button"
-            disabled={!dashboard.canOperate || busy || !basket.length || !Number.isFinite(total) || total <= 0 ||
+            disabled={!dashboard.canOperate || busy || needsReview || !basket.length || !Number.isFinite(total) || total <= 0 ||
               basket.some(line => !validQuantity(line.quantity))}
             onClick={() => { setError(''); setShowPayment(true) }}>
             <Banknote size={19} /> Pay / Checkout <ArrowRight size={18} />

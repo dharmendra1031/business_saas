@@ -4,6 +4,8 @@ import {
   ReceiptText, RotateCcw, Store, Wallet
 } from 'lucide-react'
 import type { RetailDashboard } from './api'
+import BusinessPostedSales from './BusinessPostedSales'
+import BusinessDailySales from './BusinessDailySales'
 
 export type BusinessPreviewModule = 'sales' | 'register' | 'reports' | 'settings'
 
@@ -52,11 +54,13 @@ export default function BusinessPreview({ module, dashboard }: {
   const [tab, setTab] = useState(0)
   const selected = item.tabs[tab]
   const generalSettings = module === 'settings' && tab === 0
+  const postedSales = module === 'sales' && tab === 0 && dashboard.roleCode === 'Owner'
+  const dailySales = module === 'reports' && tab === 0 && dashboard.roleCode === 'Owner'
 
   return <div className="business-preview">
     <div className="business-preview-heading">
       <h2>{item.title}</h2>
-      <span>Under construction</span>
+      {!postedSales && !dailySales && <span>Under construction</span>}
     </div>
 
     <div className="business-preview-tabs" role="tablist" aria-label={`${item.title} sections`}>
@@ -72,8 +76,9 @@ export default function BusinessPreview({ module, dashboard }: {
 
     <section className="content-section business-preview-content" role="tabpanel">
       <h3>{selected.title}</h3>
-      <p className="business-preview-description">{selected.description}</p>
-      {generalSettings ? <dl className="business-preview-identity">
+      <p className="business-preview-description">{dailySales ? 'Totals from posted cash receipts.' : selected.description}</p>
+      {postedSales ? <BusinessPostedSales dashboard={dashboard} /> :
+        dailySales ? <BusinessDailySales dashboard={dashboard} /> : generalSettings ? <dl className="business-preview-identity">
         <div><dt>Business name</dt><dd>{dashboard.business.name}</dd></div>
         <div><dt>Business type</dt><dd>{dashboard.business.typeName}</dd></div>
         <div><dt>Country</dt><dd>{dashboard.business.countryCode}</dd></div>
