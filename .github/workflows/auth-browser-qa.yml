@@ -5,14 +5,7 @@ on:
   push:
     branches: [development]
     paths:
-      - 'frontend/web/src/App.tsx'
-      - 'frontend/web/src/AuthPage.tsx'
-      - 'frontend/web/src/api.ts'
-      - 'frontend/web/src/styles.auth.css'
-      - 'frontend/web/src/styles.business.css'
-      - 'frontend/web/src/styles.platform.css'
-      - 'frontend/web/src/styles.pos.css'
-      - 'frontend/web/src/styles.css'
+      - 'frontend/web/src/**'
       - 'frontend/web/scripts/auth-browser-qa.mjs'
       - '.github/workflows/auth-browser-qa.yml'
 
