@@ -257,6 +257,7 @@ export default function App() {
     if (menuOpen) menuToggle.current?.focus()
     setMenuOpen(false)
     setApprovalList(false)
+    setError('')
     if (section === 'stock') setStockAlertLocationId(null)
     if (section === 'overview' && dashboard) void refreshDashboard()
     else {
