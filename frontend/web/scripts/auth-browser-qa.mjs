@@ -753,6 +753,50 @@ try {
   }
 
   {
+    const t = await scenario('pos-fractional-base-unit-checkout', {
+      role: 'Cashier', hasProducts: true
+    })
+    let posted = null
+    let posts = 0
+    await t.page.route('**/api/businesses/1/cash-sales/products*', route =>
+      response(route, 200, [{
+        id: 91, name: 'Loose Rice', sku: 'RICE-KG', barcode: null,
+        salePrice: 80, available: 0.625, unitCode: 'KG'
+      }]))
+    await t.page.route('**/api/businesses/1/cash-sales', route => {
+      if (route.request().method() !== 'POST')
+        return response(route, 404, { message: 'Unexpected cash sale route' })
+      posted = route.request().postDataJSON()
+      posts++
+      return response(route, 200, {
+        id: 501, total: 10, tendered: 10, currencyCode: 'INR',
+        postedAtUtc: '2026-11-23T06:00:00Z',
+        lines: [{ id: 502, productName: 'Loose Rice', unitPrice: 80, quantity: 0.125 }]
+      })
+    })
+    await t.login()
+    await t.page.locator('.pos-checkout').waitFor()
+    await t.page.getByRole('button', { name: /Add Loose Rice/ }).waitFor()
+    await t.page.getByRole('button', { name: /Add Loose Rice/ }).click()
+    await t.page.getByRole('spinbutton', { name: 'Quantity of Loose Rice' }).fill('0.125')
+    assert.equal(await t.page.getByRole('spinbutton', { name: 'Quantity of Loose Rice' }).inputValue(),
+      '0.125')
+    await t.page.getByRole('button', { name: /Pay \/ Checkout/ }).click()
+    await t.page.getByRole('dialog', { name: 'Complete Payment' }).waitFor()
+    await t.page.getByLabel('Cash received').fill('10')
+    await t.page.getByRole('button', { name: 'Confirm Cash Payment' }).click()
+    await t.page.getByRole('heading', { name: 'Cash receipt #501' }).waitFor()
+    assert.equal(posts, 1, 'Fractional POS must post once')
+    assert.equal(posted.lines.length, 1)
+    assert.equal(posted.lines[0].productId, 91)
+    assert.equal(posted.lines[0].quantity, 0.125)
+    assert.equal(posted.tendered, 10)
+    await t.check()
+    await t.context.close()
+    console.log('PASS POS sells fractional KG in base units with currency rounding')
+  }
+
+  {
     const t = await scenario('stock-history-source-references', {
       role: 'Owner', hasProducts: true, stockAlertsFixture: true
     })
