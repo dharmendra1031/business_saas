@@ -325,25 +325,6 @@ export default function RetailProducts({ businessId, canOperate, currencyCode }:
               max={9999999999.99} step="0.01" inputMode="decimal" required
               value={form.salePrice} onChange={event => changeForm('salePrice', event.target.value)} />
           </div>
-          <details className="form-wide" key={editingId ?? 'new'} open={editingId !== null || !canCreate}>
-            <summary>More details (classification, brand, unit, SKU, barcode, stock alerts, tax)</summary>
-            <div className="form-grid mt-3">
-          <div>
-            <label className="form-label" htmlFor="product-sku">SKU {editingId === null ? '(auto if blank)' : '*'}</label>
-            <input id="product-sku" className="form-control" required={editingId !== null} maxLength={50}
-              minLength={2} pattern="[a-zA-Z0-9._/-]{2,50}" autoComplete="off"
-              aria-invalid={Boolean(skuError)} aria-describedby={skuError ? 'product-code-error' : undefined}
-              value={form.sku} onChange={event => changeForm('sku', event.target.value.toUpperCase())} />
-            {skuError && <div id="product-code-error" className="field-help text-danger">{skuError}</div>}
-          </div>
-          <div>
-            <label className="form-label" htmlFor="product-barcode">Barcode (optional)</label>
-            <input id="product-barcode" className="form-control" maxLength={64}
-              autoComplete="off" value={form.barcode}
-              aria-describedby="barcode-help"
-              onChange={event => changeForm('barcode', event.target.value)} />
-            <div id="barcode-help" className="field-help">Scan a barcode or enter an existing code. No barcode is generated.</div>
-          </div>
           <div>
             <label className="form-label" htmlFor="product-group">Group *</label>
             <select id="product-group" className="form-select" required value={selectedGroup}
@@ -425,6 +406,25 @@ export default function RetailProducts({ businessId, canOperate, currencyCode }:
                 onClick={() => setInlineType(null)}>Cancel</button>
             </div>
           </div>}
+          <details className="form-wide" key={editingId ?? 'new'} open={editingId !== null}>
+            <summary>More details (SKU, barcode, stock alerts, tax, status)</summary>
+            <div className="form-grid mt-3">
+          <div>
+            <label className="form-label" htmlFor="product-sku">SKU {editingId === null ? '(auto if blank)' : '*'}</label>
+            <input id="product-sku" className="form-control" required={editingId !== null} maxLength={50}
+              minLength={2} pattern="[a-zA-Z0-9._/-]{2,50}" autoComplete="off"
+              aria-invalid={Boolean(skuError)} aria-describedby={skuError ? 'product-code-error' : undefined}
+              value={form.sku} onChange={event => changeForm('sku', event.target.value.toUpperCase())} />
+            {skuError && <div id="product-code-error" className="field-help text-danger">{skuError}</div>}
+          </div>
+          <div>
+            <label className="form-label" htmlFor="product-barcode">Barcode (optional)</label>
+            <input id="product-barcode" className="form-control" maxLength={64}
+              autoComplete="off" value={form.barcode}
+              aria-describedby="barcode-help"
+              onChange={event => changeForm('barcode', event.target.value)} />
+            <div id="barcode-help" className="field-help">Scan a barcode or enter an existing code. No barcode is generated.</div>
+          </div>
           <div>
             <label className="form-label" htmlFor="product-reorder">Reorder level (optional)</label>
             <input id="product-reorder" className="form-control" type="number" min="0"
