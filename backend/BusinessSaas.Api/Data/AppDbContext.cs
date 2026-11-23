@@ -25,6 +25,9 @@ public sealed class BusinessType
     public string Code { get; set; } = "";
     public string Name { get; set; } = "";
     public bool IsSupported { get; set; }
+    // Installed capability remains IsSupported; policy only controls new provisioning.
+    public string ReleaseState { get; set; } = "Available";
+    public int ReleaseRevision { get; set; }
 }
 
 public sealed class Business
@@ -375,6 +378,7 @@ public sealed class AppDbContext(DbContextOptions<AppDbContext> options)
             entity.HasIndex(x => x.Code).IsUnique();
             entity.Property(x => x.Code).HasMaxLength(40).IsRequired();
             entity.Property(x => x.Name).HasMaxLength(100).IsRequired();
+            entity.Property(x => x.ReleaseState).HasMaxLength(24).IsRequired();
             entity.HasData(new BusinessType
             {
                 Id = 1,

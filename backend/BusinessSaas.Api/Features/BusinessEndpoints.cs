@@ -29,7 +29,7 @@ public static class BusinessEndpoints
 
         group.MapGet("/business-types", async (AppDbContext db) =>
             await db.BusinessTypes.AsNoTracking()
-                .Where(x => x.IsSupported)
+                .Where(x => x.IsSupported && x.ReleaseState == "Available" && x.Code == "RETAIL")
                 .OrderBy(x => x.Name)
                 .Select(x => new { x.Id, x.Code, x.Name })
                 .ToListAsync());
@@ -97,7 +97,8 @@ public static class BusinessEndpoints
                 return Results.Problem("Trial duration must be between 1 and 90 days.", statusCode: 503);
 
             var businessType = await db.BusinessTypes.AsNoTracking()
-                .Where(x => x.Id == request.BusinessTypeId && x.IsSupported)
+                .Where(x => x.Id == request.BusinessTypeId && x.IsSupported &&
+                    x.ReleaseState == "Available" && x.Code == "RETAIL")
                 .Select(x => x.Code).SingleOrDefaultAsync();
             if (businessType is null)
                 return Results.BadRequest(new { message = "This business type is not available yet." });

@@ -4,7 +4,7 @@ import {
   CirclePause, Construction, Eye, LockKeyhole, Megaphone, Package,
   RefreshCw, ShieldCheck, Wrench
 } from 'lucide-react'
-import { api, SessionExpiredError, type BusinessType } from './api'
+import { api, post, SessionExpiredError } from './api'
 
 export type AvailabilityView = 'types' | 'modules' | 'maintenance' | 'announcements'
 type ReleaseState = 'Available' | 'Coming Soon' | 'Under Construction' | 'Paused' | 'Retired'
@@ -43,13 +43,19 @@ function DesignCaution({ message }: { message?: string }) {
   </div>
 }
 
+type TypeControl = { id: number; code: string; name: string; isSupported: boolean;
+  releaseState: ReleaseState; releaseRevision: number; canProvision: boolean }
+
 function BusinessTypePreview() {
-  const [types, setTypes] = useState<BusinessType[]>([])
+  const [types, setTypes] = useState<TypeControl[]>([])
   const [selected, setSelected] = useState<number | null>(null)
-  const [desiredStatus, setDesiredStatus] = useState<ReleaseState>('Coming Soon')
+  const [desiredStatus, setDesiredStatus] = useState<ReleaseState>('Available')
+  const [reason, setReason] = useState('')
   const [search, setSearch] = useState('')
   const [loading, setLoading] = useState(true)
+  const [saving, setSaving] = useState(false)
   const [error, setError] = useState('')
+  const [notice, setNotice] = useState('')
   const [reload, setReload] = useState(0)
   const current = types.find(x => x.id === selected)
   const visible = types.filter(x => x.name.toLowerCase().includes(search.toLowerCase()) ||
@@ -59,7 +65,7 @@ function BusinessTypePreview() {
     let active = true
     setLoading(true)
     setError('')
-    api<BusinessType[]>('/business-types')
+    api<TypeControl[]>('/platform/business-type-controls')
       .then(rows => {
         if (!active) return
         setTypes(rows)
@@ -68,17 +74,44 @@ function BusinessTypePreview() {
       .catch(cause => {
         if (!active || cause instanceof SessionExpiredError) return
         setTypes([])
-        setError('Unable to read the current business-type catalogue. Retry after checking connectivity.')
+        setError(cause instanceof Error ? cause.message : 'Unable to load business type policies.')
       })
       .finally(() => { if (active) setLoading(false) })
     return () => { active = false }
   }, [reload])
 
+  useEffect(() => {
+    if (current) setDesiredStatus(current.releaseState)
+  }, [selected, current?.releaseRevision])
+
+  async function save() {
+    if (!current || saving || desiredStatus === current.releaseState || reason.trim().length < 10) return
+    setSaving(true)
+    setError('')
+    setNotice('')
+    try {
+      await post(`/platform/business-type-controls/${current.code}/release`, {
+        state: desiredStatus, expectedRevision: current.releaseRevision, reason: reason.trim()
+      })
+      setReason('')
+      setNotice(`${current.name} release policy saved and audited.`)
+      setReload(x => x + 1)
+    } catch (cause) {
+      if (!(cause instanceof SessionExpiredError))
+        setError(cause instanceof Error ? cause.message : 'Unable to save release policy.')
+    } finally { setSaving(false) }
+  }
+
   return <>
-    <DesignCaution message="Business types below come from the current catalogue API. Their release/visibility status is not exposed by the API. Selecting a draft status has NO effect on business creation." />
+    <div className="alert alert-info" role="status">
+      Live policy for <strong>new business creation only.</strong> Existing businesses remain accessible.
+      Only installed, verified types can be Available; a policy cannot install a new business module.
+    </div>
+    {error && <div className="alert alert-danger" role="alert">{error}</div>}
+    {notice && <div className="alert alert-success" role="status">{notice}</div>}
     <div className="release-layout">
-      <section className="release-list" aria-label="Current business type catalogue">
-        <div className="release-panel-heading"><h3>Business Types</h3><span>Server catalogue</span></div>
+      <section className="release-list" aria-label="Business type catalogue">
+        <div className="release-panel-heading"><h3>Business Types</h3><span>Live policy</span></div>
         <div className="release-list-toolbar">
           <label className="visually-hidden" htmlFor="release-business-search">Filter business types</label>
           <input className="form-control" id="release-business-search" type="search"
@@ -88,35 +121,44 @@ function BusinessTypePreview() {
             disabled={loading} onClick={() => setReload(n => n + 1)} aria-label="Refresh business types">
             <RefreshCw size={16} /></button>
         </div>
-        {error && <div className="alert alert-danger m-3" role="alert">{error}</div>}
-        {loading ? <p className="release-empty" role="status">Loading catalogue…</p> :
-          visible.length === 0 ? <p className="release-empty">No matching business types in the live catalogue.</p> :
-          <div className="release-type-list">{visible.map(type => <button
-            key={type.id} type="button" onClick={() => { setSelected(type.id); setDesiredStatus('Coming Soon') }}
+        {loading ? <p className="release-empty" role="status">Loading policies…</p> :
+          visible.length === 0 ? <p className="release-empty">No matching business types.</p> :
+          <div className="release-type-list">{visible.map(type => <button key={type.id}
+            type="button" onClick={() => { setSelected(type.id); setNotice(''); setReason('') }}
             className={`release-type-item${type.id === selected ? ' is-selected' : ''}`}
             aria-pressed={type.id === selected}>
             <span className="release-type-symbol"><Building2 size={19} /></span>
-            <span><strong>{type.name}</strong><small>Code: {type.code} · Current policy: not connected</small></span>
+            <span><strong>{type.name}</strong><small>{type.code} · {type.releaseState}
+              {type.canProvision ? ' · Accepting new businesses' : ' · Provisioning blocked'}</small></span>
             <ChevronRight size={17} aria-hidden="true" />
           </button>)}</div>}
       </section>
-      <section className="release-editor" aria-label="Business type policy design">
-        <div className="release-panel-heading"><h3>Release Policy</h3><span>Unsaved prototype</span></div>
+      <section className="release-editor" aria-label="Business type release policy">
+        <div className="release-panel-heading"><h3>Release Policy</h3><span>Server enforced</span></div>
         {current ? <>
           <div className="release-selected"><strong>{current.name}</strong>
-            <small>{current.code} · New-business provisioning policy</small></div>
-          <label className="form-label" htmlFor="release-type-status">Choose a sample lifecycle state</label>
+            <small>{current.code} · v{current.releaseRevision}</small></div>
+          <label className="form-label" htmlFor="release-type-status">New business availability</label>
           <select id="release-type-status" className="form-select" value={desiredStatus}
-            onChange={event => setDesiredStatus(event.target.value as ReleaseState)}>
-            {releaseStates.map(entry => <option key={entry.state} value={entry.state}>{entry.state}</option>)}
+            disabled={saving} onChange={event => setDesiredStatus(event.target.value as ReleaseState)}>
+            {releaseStates.map(entry => <option key={entry.state} value={entry.state}
+              disabled={entry.state === 'Available' && (!current.isSupported || current.code !== 'RETAIL')}>
+              {entry.state}</option>)}
           </select>
           <div className="release-preview-card">
-            <span className="release-preview-label"><Eye size={14} /> Operator preview · not applied</span>
+            <span className="release-preview-label"><Eye size={14} /> Current: {current.releaseState}</span>
             <StateBadge state={desiredStatus} />
             <p>{releaseStates.find(x => x.state === desiredStatus)?.summary}</p>
-            <small>Server-side create-business eligibility, market scope, audit and existing tenant behavior remain to be implemented.</small>
+            <small>This only affects future provisioning, not existing tenant access.</small>
           </div>
-        </> : <p className="release-empty">Select a type from the catalogue to inspect the proposed release controls.</p>}
+          <label className="form-label mt-3" htmlFor="release-type-reason">Reason for change</label>
+          <textarea id="release-type-reason" className="form-control" rows={2}
+            maxLength={200} value={reason} onChange={event => setReason(event.target.value)}
+            placeholder="Explain the release change for the audit log" />
+          <button type="button" className="btn btn-primary mt-2"
+            disabled={saving || desiredStatus === current.releaseState || reason.trim().length < 10}
+            onClick={() => void save()}>{saving ? 'Saving…' : 'Apply release policy'}</button>
+        </> : <p className="release-empty">Choose a business type to manage its availability.</p>}
       </section>
     </div>
   </>

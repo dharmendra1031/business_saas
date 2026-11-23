@@ -266,6 +266,7 @@ app.MapBusinessStaffEndpoints();
 app.MapRetailModule();
 app.MapPlatformEndpoints();
 app.MapPlatformBusinessProvisioning();
+app.MapPlatformTypeAvailability();
 app.MapPlatformBillingEndpoints();
 app.MapRazorpayPaymentEndpoints();
 app.MapPlatformPaymentReviewEndpoints();

@@ -1880,6 +1880,29 @@ public sealed class BusinessFlowTests
             (await Post(admin, "/api/platform/businesses", body)).StatusCode);
 
         await EnableOwnerMfaAndSignIn(admin, "platform-creation-admin@example.test");
+        var controlsPath = "/api/platform/business-type-controls";
+        Assert.Equal(HttpStatusCode.Forbidden, (await outsider.GetAsync(controlsPath)).StatusCode);
+        Assert.Equal(HttpStatusCode.Forbidden,
+            (await Post(owner, controlsPath + "/RETAIL/release", new {
+                state = "Paused", expectedRevision = 0, reason = "Unauthorized test"
+            })).StatusCode);
+        var controls = await admin.GetFromJsonAsync<JsonElement>(controlsPath);
+        Assert.True(controls[0].GetProperty("canProvision").GetBoolean());
+        var pause = await Post(admin, controlsPath + "/RETAIL/release", new {
+            state = "Paused", expectedRevision = 0, reason = "Scheduled pause for setup tests"
+        });
+        Assert.Equal(HttpStatusCode.OK, pause.StatusCode);
+        Assert.Equal(HttpStatusCode.Conflict, (await Post(admin, controlsPath + "/RETAIL/release", new {
+            state = "Coming Soon", expectedRevision = 0, reason = "Stale update must be rejected"
+        })).StatusCode);
+        Assert.Empty((await admin.GetFromJsonAsync<JsonElement>("/api/business-types")).EnumerateArray());
+        Assert.Equal(HttpStatusCode.BadRequest,
+            (await Post(admin, "/api/platform/businesses", body)).StatusCode);
+        var resumed = await Post(admin, controlsPath + "/RETAIL/release", new {
+            state = "Available", expectedRevision = 1, reason = "Release testing completed successfully"
+        });
+        Assert.Equal(HttpStatusCode.OK, resumed.StatusCode);
+        Assert.Single((await admin.GetFromJsonAsync<JsonElement>("/api/business-types")).EnumerateArray());
         var verified = await admin.GetFromJsonAsync<JsonElement>(
             "/api/platform/owner-lookup?email=platform-creation-owner%40example.test");
         Assert.Equal(ownerId, verified.GetProperty("id").GetInt64());

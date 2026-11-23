@@ -48,7 +48,8 @@ function PlatformSettingsPreview() {
         <h1>Platform Settings</h1>
         <p>Global settings and module policies are separate from every business's operational settings.</p></div>
     </div>
-    <PreviewNotice area="Platform configuration" />
+    {(tab === 'general' || tab === 'localization' || tab === 'notifications') &&
+      <PreviewNotice area="Selected platform settings" />}
     <div className="platform-preview-tabs" role="tablist" aria-label="Platform settings sections">
       {settingTabs.map(item => <button key={item.id} type="button" role="tab"
         aria-selected={tab === item.id} className={tab === item.id ? 'is-active' : ''}
@@ -101,8 +102,8 @@ function PlatformSettingsPreview() {
               <span className="platform-preview-small-tag">Pending</span></div>
           </div>
         </>}
-        <p className="platform-preview-footnote">No changes can be saved here until the
-          corresponding authenticated backend, permissions and audit are delivered.</p>
+        {(tab === 'general' || tab === 'localization' || tab === 'notifications') &&
+          <p className="platform-preview-footnote">This section remains a design preview; no live write API is connected.</p>}
       </section>
       <aside className="content-section platform-preview-side">
         <span className="platform-kicker">PLATFORM SCOPE</span>

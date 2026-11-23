@@ -494,6 +494,14 @@ namespace BusinessSaas.Api.Data.Migrations
                         .HasMaxLength(100)
                         .HasColumnType("nvarchar(100)");
 
+                    b.Property<string>("ReleaseState")
+                        .IsRequired()
+                        .HasMaxLength(24)
+                        .HasColumnType("nvarchar(24)");
+
+                    b.Property<int>("ReleaseRevision")
+                        .HasColumnType("int");
+
                     b.HasKey("Id");
 
                     b.HasIndex("Code")
@@ -507,7 +515,9 @@ namespace BusinessSaas.Api.Data.Migrations
                             Id = 1L,
                             Code = "RETAIL",
                             IsSupported = true,
-                            Name = "General Retail Shop"
+                            Name = "General Retail Shop",
+                            ReleaseState = "Available",
+                            ReleaseRevision = 0
                         });
                 });
 

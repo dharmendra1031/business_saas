@@ -62,7 +62,8 @@ public static class PlatformBusinessProvisioning
                 return Results.BadRequest(new { message = "Choose a supported country, currency and timezone." });
 
             var typeCode = await db.BusinessTypes.AsNoTracking()
-                .Where(x => x.Id == request.BusinessTypeId && x.IsSupported)
+                .Where(x => x.Id == request.BusinessTypeId && x.IsSupported &&
+                    x.ReleaseState == "Available" && x.Code == "RETAIL")
                 .Select(x => x.Code).SingleOrDefaultAsync();
             if (typeCode is null)
                 return Results.BadRequest(new { message = "This business template is not available." });
@@ -102,9 +103,18 @@ public static class PlatformBusinessProvisioning
             if (before is not Microsoft.AspNetCore.Http.HttpResults.NotFound) return before;
 
             var actorId = long.Parse(actor.FindFirstValue(ClaimTypes.NameIdentifier)!);
-            await using var transaction = await db.Database.BeginTransactionAsync();
+            await using var transaction = await db.Database.BeginTransactionAsync(
+                System.Data.IsolationLevel.Serializable);
             try
             {
+                // Recheck eligibility after entering the provisioning transaction:
+                // a stale wizard selection cannot bypass a freshly paused business type.
+                if (!await db.BusinessTypes.AsNoTracking().AnyAsync(x =>
+                    x.Id == request.BusinessTypeId && x.Code == "RETAIL" &&
+                    x.IsSupported && x.ReleaseState == "Available"))
+                    return Results.Conflict(new { code = "BUSINESS_TYPE_NOT_AVAILABLE",
+                        message = "New business provisioning is paused for this type." });
+
                 var business = new Business
                 {
                     Name = name,
