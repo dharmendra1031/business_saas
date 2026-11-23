@@ -382,6 +382,39 @@ try {
   }
 
   {
+    const t = await scenario('purchase-catalog-on-demand', {
+      role: 'Owner', hasProducts: true, pendingApprovals: 2, productsFixture: true
+    })
+    const catalogReads = []
+    t.page.on('request', request => {
+      const url = new URL(request.url())
+      if (/^\/api\/businesses\/1\/(suppliers|products)$/.test(url.pathname)) {
+        catalogReads.push(url.pathname)
+      }
+    })
+    await t.login()
+    await t.page.getByRole('button', { name: /Review 2 draft purchase orders/ }).click()
+    await t.page.getByRole('heading', { name: 'Purchase Orders', level: 2 }).waitFor()
+    await t.page.getByText('No purchase orders yet.').waitFor()
+    assert.equal(catalogReads.length, 0,
+      'Reviewing purchase orders should not fetch supplier or product creation catalogs')
+
+    await t.page.getByRole('button', { name: /New Purchase Order/ }).click()
+    await t.page.getByRole('heading', { name: 'New purchase order', level: 3 }).waitFor()
+    await t.page.locator('#purchase-supplier option').filter({ hasText: 'Wholesaler' }).waitFor()
+    await t.page.locator('#purchase-product option').filter({ hasText: 'Blue Shirt' }).waitFor()
+    assert.ok(catalogReads.some(path => path.endsWith('/suppliers')),
+      'Supplier lookup should load when the draft form opens')
+    assert.ok(catalogReads.some(path => path.endsWith('/products')),
+      'Product lookup should load when the draft form opens')
+    await t.page.getByRole('button', { name: 'Cancel', exact: true }).click()
+    await t.page.getByRole('heading', { name: 'New purchase order', level: 3 }).waitFor({ state: 'hidden' })
+    await t.check()
+    await t.context.close()
+    console.log('PASS Purchase review skips creation catalogs; opening draft loads both')
+  }
+
+  {
     const t = await scenario('owner-cash-summary-integrated', {
       role: 'Owner', hasProducts: true, cashSalesFixture: true
     })
