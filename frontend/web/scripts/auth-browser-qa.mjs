@@ -1279,6 +1279,109 @@ try {
   }
 
   {
+    const t = await scenario('platform-live-release-maintenance-and-notices', { role: 'Platform' })
+    let typeState = 'Available', typeRevision = 0
+    let moduleState = 'Available', moduleRevision = 0
+    const maintenance = [], announcements = []
+    let policyWrites = 0
+    await t.page.route('**/api/platform/business-type-controls', route =>
+      response(route, 200, [{
+        id: 1, code: 'RETAIL', name: 'General Retail Shop', isSupported: true,
+        releaseState: typeState, releaseRevision: typeRevision,
+        canProvision: typeState === 'Available'
+      }]))
+    await t.page.route('**/api/platform/business-type-controls/RETAIL/release', route => {
+      const input = route.request().postDataJSON()
+      assert.equal(input.expectedRevision, typeRevision)
+      assert.equal(input.reason, 'Pause new retail signups during upgrade')
+      typeState = input.state
+      typeRevision++
+      policyWrites++
+      return response(route, 200, { releaseState: typeState, releaseRevision: typeRevision })
+    })
+    await t.page.route('**/api/platform/module-controls', route =>
+      response(route, 200, [{
+        code: 'CATALOG', name: 'Catalog & Products', installed: true,
+        releaseState: moduleState, revision: moduleRevision, canOperate: moduleState === 'Available'
+      }, {
+        code: 'POS', name: 'POS Cash Sales', installed: false,
+        releaseState: 'Under Construction', revision: 0, canOperate: false
+      }]))
+    await t.page.route('**/api/platform/module-controls/CATALOG/release', route => {
+      const input = route.request().postDataJSON()
+      assert.equal(input.expectedRevision, moduleRevision)
+      assert.equal(input.reason, 'Pause catalog writes for coordinated release')
+      moduleState = input.state
+      moduleRevision++
+      policyWrites++
+      return response(route, 200, { releaseState: moduleState, revision: moduleRevision })
+    })
+    await t.page.route('**/api/platform/maintenance', route => {
+      if (route.request().method() === 'GET') return response(route, 200, maintenance)
+      const input = route.request().postDataJSON()
+      assert.equal(input.mode, 'ReadOnly')
+      assert.ok(input.startUtc.endsWith('Z'), 'Maintenance schedule must use UTC')
+      assert.ok(Date.parse(input.endUtc) > Date.parse(input.startUtc))
+      maintenance.push({
+        id: 91, ...input, isCancelled: false, createdAtUtc: new Date().toISOString()
+      })
+      return response(route, 201, maintenance.at(-1))
+    })
+    await t.page.route('**/api/platform/announcements', route => {
+      if (route.request().method() === 'GET') return response(route, 200, announcements)
+      const input = route.request().postDataJSON()
+      assert.equal(input.level, 'Warning')
+      announcements.push({
+        id: 92, ...input, isArchived: false, createdAtUtc: new Date().toISOString()
+      })
+      return response(route, 201, announcements.at(-1))
+    })
+    await t.page.route('**/api/public/platform-availability', route =>
+      response(route, 200, {
+        serverTimeUtc: new Date().toISOString(),
+        maintenance: maintenance[0] ?? null,
+        announcements
+      }))
+    await t.login()
+    await t.page.locator('.platform-shell .app-sidebar .nav-entry')
+      .filter({ hasText: 'Platform Settings' }).click()
+    await t.page.getByRole('tab', { name: 'Business Types' }).click()
+    await t.page.locator('#release-type-status').selectOption('Paused')
+    await t.page.locator('#release-type-reason').fill('Pause new retail signups during upgrade')
+    await t.page.getByRole('button', { name: 'Apply release policy' }).click()
+    await t.page.getByText('release policy saved and audited.', { exact: false }).waitFor()
+    assert.equal(typeState, 'Paused')
+    await t.page.getByRole('tab', { name: 'Modules & Access' }).click()
+    await t.page.locator('#release-module-status').selectOption('Paused')
+    await t.page.locator('#release-module-reason').fill('Pause catalog writes for coordinated release')
+    await t.page.getByRole('button', { name: 'Apply module policy' }).click()
+    await t.page.getByText('New writes now follow the published state.', { exact: false }).waitFor()
+    assert.equal(policyWrites, 2)
+    await t.page.getByRole('tab', { name: 'Maintenance' }).click()
+    await t.page.locator('#maintenance-mode').selectOption('ReadOnly')
+    const local = date => new Date(date.getTime() - date.getTimezoneOffset() * 60000)
+      .toISOString().slice(0, 16)
+    await t.page.locator('#maintenance-start').fill(local(new Date(Date.now() + 5 * 60000)))
+    await t.page.locator('#maintenance-end').fill(local(new Date(Date.now() + 35 * 60000)))
+    await t.page.locator('#maintenance-reason').fill('Scheduled read-only update approved by operator')
+    await t.page.getByRole('button', { name: 'Schedule maintenance' }).click()
+    await t.page.getByText('Maintenance window scheduled and audited.', { exact: false }).waitFor()
+    assert.equal(maintenance.length, 1)
+    await t.page.getByRole('tab', { name: 'Announcements' }).click()
+    await t.page.locator('#notice-severity').selectOption('Warning')
+    await t.page.locator('#notice-start').fill(local(new Date(Date.now() + 5 * 60000)))
+    await t.page.locator('#notice-end').fill(local(new Date(Date.now() + 35 * 60000)))
+    await t.page.locator('#notice-reason').fill('Publish visitor update after operator review')
+    await t.page.getByRole('button', { name: 'Publish announcement' }).click()
+    await t.page.getByText('Announcement published with its scheduled window.', { exact: false }).waitFor()
+    assert.equal(announcements.length, 1)
+    await t.screenshot('SA-33-platform-controls')
+    await t.check()
+    await t.context.close()
+    console.log('PASS Super Admin live type, module, maintenance and notice controls')
+  }
+
+  {
     const t = await scenario('platform-mfa-setup', { role: 'Platform', verified: false })
     await t.login()
     await t.page.getByRole('heading', { name: 'Secure your Super Admin account' }).waitFor()
