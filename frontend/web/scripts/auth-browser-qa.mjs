@@ -1108,6 +1108,7 @@ try {
         total: 1, page: 1, pageSize: 20
       }))
     await t.login()
+    if (width === 360) await t.page.getByRole('button', { name: 'Open navigation' }).click()
     await t.page.locator('.app-sidebar .nav-entry').filter({ hasText: 'Product Masters' }).click()
     await t.page.getByRole('heading', { name: 'Product Masters' }).waitFor()
     assert.equal(await t.page.locator('.business-master-tabs button').count(), 5)
