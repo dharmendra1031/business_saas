@@ -132,6 +132,19 @@ async function scenario(name, {
         items: [{ id: 21, name: 'Wholesaler', phone: '1234567890', email: '', isActive: true }],
         total: 1, page: 1, pageSize: 20
       })
+    if (/^\/businesses\/\d+\/stock\/locations\/\d+\/movements$/.test(path)) {
+      if (!stockAlertsFixture) return response(route, 200, { items: [], total: 0, page: 1, pageSize: 20 })
+      const now = '2026-11-23T02:00:00Z'
+      const items = [
+        { id: 5, productId: 11, name: 'Blue Shirt', sku: 'BLUE-11',
+          quantityChange: -4, balanceAfter: 0, sourceType: 'CashSaleLine',
+          sourceId: 89, reason: null, postedAtUtc: now, actor: 'cashier@example.test' },
+        { id: 4, productId: 11, name: 'Blue Shirt', sku: 'BLUE-11',
+          quantityChange: 4, balanceAfter: 4, sourceType: 'Receiving',
+          sourceId: 77, reason: null, postedAtUtc: now, actor: 'owner@example.test' }
+      ]
+      return response(route, 200, { items, total: items.length, page: 1, pageSize: 20 })
+    }
     if (/^\/businesses\/\d+\/stock\/locations\/\d+$/.test(path)) {
       stockPaths.push(path)
       const url = new URL(route.request().url())
