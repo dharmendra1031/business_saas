@@ -424,11 +424,21 @@ try {
       'Supplier lookup should load when the draft form opens')
     assert.ok(catalogReads.some(path => path.endsWith('/products')),
       'Product lookup should load when the draft form opens')
+    await t.page.locator('#purchase-supplier').selectOption('21')
+    await t.page.locator('#purchase-product').selectOption('11')
+    await t.page.getByRole('spinbutton', { name: 'Blue Shirt quantity' }).fill('4')
     await t.page.getByRole('button', { name: 'Cancel', exact: true }).click()
     await t.page.getByRole('heading', { name: 'New purchase order', level: 3 }).waitFor({ state: 'hidden' })
+    await t.page.getByRole('button', { name: 'New Purchase Order' }).click()
+    await t.page.getByRole('heading', { name: 'New purchase order', level: 3 }).waitFor()
+    assert.equal(await t.page.locator('#purchase-supplier').inputValue(), '0',
+      'Canceled order must not keep the previous supplier')
+    assert.equal(await t.page.getByRole('spinbutton', { name: 'Blue Shirt quantity' }).count(), 0,
+      'Canceled order must not keep previously selected product lines')
+    await t.page.getByRole('button', { name: 'Cancel', exact: true }).click()
     await t.check()
     await t.context.close()
-    console.log('PASS Purchase review skips creation catalogs; opening draft loads both')
+    console.log('PASS Purchase catalogs load on demand; canceled drafts reopen empty')
   }
 
   {
