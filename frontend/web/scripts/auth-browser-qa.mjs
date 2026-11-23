@@ -424,6 +424,15 @@ try {
       'Supplier lookup should load when the draft form opens')
     assert.ok(catalogReads.some(path => path.endsWith('/products')),
       'Product lookup should load when the draft form opens')
+    await t.page.getByRole('button', { name: '+ New supplier' }).click()
+    await t.page.locator('#new-supplier-name').fill('Not Saved')
+    await t.page.locator('#new-supplier-phone').fill('1234567890')
+    await t.page.getByRole('button', { name: 'Cancel adding supplier' }).click()
+    await t.page.getByRole('button', { name: '+ New supplier' }).click()
+    assert.equal(await t.page.locator('#new-supplier-name').inputValue(), '',
+      'Cancel adding supplier must discard the inline supplier draft')
+    assert.equal(await t.page.locator('#new-supplier-phone').inputValue(), '')
+    await t.page.getByRole('button', { name: 'Cancel adding supplier' }).click()
     await t.page.locator('#purchase-supplier').selectOption('21')
     await t.page.locator('#purchase-product').selectOption('11')
     await t.page.getByRole('spinbutton', { name: 'Blue Shirt quantity' }).fill('4')
