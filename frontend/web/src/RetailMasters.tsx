@@ -196,7 +196,7 @@ export default function RetailMasters({ businessId, canOperate }: {
               {candidateParents.filter(item => item.id !== editingId).map(item =>
                 <option key={item.id} value={item.id}>{classificationPath(parentOptions, item.id)}</option>)}
             </select>
-          </div>
+          </div>}
           {editingId !== null && <div>
             <label className="form-label" htmlFor="master-status">Status</label>
             <select id="master-status" className="form-select" value={active ? 'active' : 'inactive'}
