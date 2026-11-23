@@ -99,6 +99,10 @@ async function scenario(name, {
       state.authenticated = true
       return response(route, 204)
     }
+    if (path === '/auth/logout') {
+      state.authenticated = false
+      return response(route, 204)
+    }
     if (path === '/auth/mfa/verify') {
       assert.ok(state.challengePending, 'MFA must follow the password challenge')
       state.lastMfaRequest = route.request().postDataJSON()
@@ -241,6 +245,76 @@ try {
     await t.check()
     await t.context.close()
     console.log('PASS authenticated business outage / retry / direct workspace')
+  }
+
+
+  {
+    // A delayed business list must not restore the picker after explicit sign-out.
+    const t = await scenario('stale-businesses-after-logout', { multiple: true })
+    let unblock
+    const blocked = new Promise(resolve => { unblock = resolve })
+    let received
+    const requestReceived = new Promise(resolve => { received = resolve })
+    let delivered
+    const responseDelivered = new Promise(resolve => { delivered = resolve })
+    await t.page.route('**/api/businesses', async route => {
+      received()
+      await blocked
+      await response(route, 200, [business('Owner')])
+      delivered()
+    })
+    await t.login()
+    await requestReceived
+    await t.page.getByRole('button', { name: 'Sign out' }).click()
+    await t.page.getByRole('heading', { name: 'Sign in' }).waitFor()
+    unblock()
+    await responseDelivered
+    await t.page.waitForTimeout(100)
+    assert.equal(await t.page.getByRole('heading', { name: 'Sign in' }).count(), 1,
+      'An old business-list response cannot replace the sign-in page')
+    await t.check()
+    await t.context.close()
+    console.log('PASS AUTH stale business list ignored after sign-out')
+  }
+
+  for (const staleStatus of [200, 401]) {
+    const t = await scenario('stale-dashboard-' + staleStatus, { multiple: true })
+    await t.login()
+    await t.page.getByRole('heading', { name: 'Choose a business' }).waitFor()
+    let unblock
+    const blocked = new Promise(resolve => { unblock = resolve })
+    let received
+    const requestReceived = new Promise(resolve => { received = resolve })
+    let delivered
+    const responseDelivered = new Promise(resolve => { delivered = resolve })
+    await t.page.route('**/api/businesses/1/dashboard', async route => {
+      received()
+      await blocked
+      await response(route, staleStatus,
+        staleStatus === 200 ? dashboard('Owner') : { message: 'Old session expired' })
+      delivered()
+    })
+    await t.page.getByRole('button', { name: 'Open Sample Retail as Owner' }).click()
+    await requestReceived
+    await t.page.getByRole('button', { name: 'Sign out' }).click()
+    await t.page.getByRole('heading', { name: 'Sign in' }).waitFor()
+    if (staleStatus === 401) {
+      await t.login()
+      await t.page.getByRole('heading', { name: 'Choose a business' }).waitFor()
+    }
+    unblock()
+    await responseDelivered
+    await t.page.waitForTimeout(100)
+    if (staleStatus === 200) {
+      assert.equal(await t.page.getByRole('heading', { name: 'Sign in' }).count(), 1,
+        'An old dashboard response cannot restore the logged-out workspace')
+    } else {
+      assert.equal(await t.page.getByRole('heading', { name: 'Choose a business' }).count(), 1,
+        'An old 401 must not log out the newly authenticated session')
+    }
+    await t.check()
+    await t.context.close()
+    console.log('PASS AUTH stale dashboard ' + staleStatus + ' ignored after auth transition')
   }
 
   {
