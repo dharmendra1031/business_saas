@@ -1,14 +1,14 @@
 /* BUS-01–05: Business Owner/Manager enterprise workspace.
    Scoped independently: Platform Super Admin and POS keep their approved styles. */
-.business-shell { --brand: #245bb7; --brand-hover: #194b9b; background: #f4f7fc; }
+.business-shell { --brand: #19488f; --brand-hover: #133b7e; background: #f4f7fc; }
 .business-shell .app-sidebar { background: #132744; padding: 22px 11px 17px; width: 248px; flex-basis: 248px; }
 .business-shell .app-sidebar .brand { padding: 1px 12px 22px; }
-.business-shell .app-sidebar .brand-mark { background: #2e6bd0; border-radius: 10px; }
+.business-shell .app-sidebar .brand-mark { background: #20519a; border-radius: 10px; }
 .business-shell .sidebar-heading { padding: 18px 14px 7px; color: #ffffff; font-size: .74rem; letter-spacing: .08em; font-weight: 750; }
 .business-shell .app-sidebar .nav-entry { padding: 11px 13px; min-height: 44px; border-radius: 8px; font-size: .9rem; color: #ffffff; }
-.business-shell .app-sidebar .nav-entry.active { background: #2e67c9; color: #fff; font-weight: 750; }
+.business-shell .app-sidebar .nav-entry.active { background: #20519a; color: #fff; font-weight: 750; }
 .business-shell .app-sidebar .nav-entry:hover { background: #294b78; }
-.business-shell .app-sidebar .nav-entry.active:hover { background: #2e67c9; }
+.business-shell .app-sidebar .nav-entry.active:hover { background: #20519a; }
 .business-shell .workspace-identity { margin: 15px 4px 0; padding: 16px 13px; border-radius: 11px; background: #1c3455; }
 .business-shell .workspace-identity > span { color: #ffffff; }
 .business-shell .workspace-identity > strong { font-size: 1.03rem; }

@@ -7,7 +7,7 @@
 .pos-topbar-brand, .pos-topbar-store, .pos-topbar-account { display: flex; align-items: center; gap: 11px; min-width: 0; }
 .pos-topbar-brand { flex: 0 0 auto; }
 .pos-brand-mark { display: grid; place-items: center; width: 38px; height: 38px; border-radius: 9px;
-  background: #6250df; color: #fff; font-size: 1.29rem; font-weight: 830; }
+  background: #4934b5; color: #fff; font-size: 1.29rem; font-weight: 830; }
 .pos-topbar-brand > span:last-child, .pos-topbar-store > span { display: grid; gap: 2px; min-width: 0; }
 .pos-topbar-brand strong { font-size: 1rem; font-weight: 800; line-height: 1.2; letter-spacing: -.02em; }
 .pos-topbar-brand small { color: #ffffff; font-size: .61rem; letter-spacing: .11em; font-weight: 730; }

@@ -68,21 +68,21 @@
 /* Platform visual approval: 21 Nov 2026 final Super Admin montage.
    Navy shell, violet-blue active navigation and primary actions, white canvas.
    Scoped to Platform only: Business Admin and approved POS remain independent. */
-.platform-shell { --brand: #5b42de; --brand-hover: #4a33c6; }
+.platform-shell { --brand: #4932b0; --brand-hover: #4a33c6; }
 .platform-shell .app-sidebar { background: #101939; }
 .platform-shell .app-topbar { background: #101939; border-color: #202b54; }
-.platform-shell .brand-mark { background: #5b42de; }
+.platform-shell .brand-mark { background: #4932b0; }
 .platform-shell .nav-entry.active,
-.platform-shell .nav-entry:not(:disabled):hover { background: #5b42de; color: #fff; }
+.platform-shell .nav-entry:not(:disabled):hover { background: #4932b0; color: #fff; }
 .platform-shell .topbar-workspace small { color: #ffffff; }
 .platform-shell .platform-metric-top svg,
 .platform-shell .platform-panel-heading h2 svg { color: #000000; }
 .platform-shell .platform-activity-dot { background: #6044d8; }
-.platform-shell .provision-step.is-current .provision-step-number { background: #5b42de; border-color: #5b42de; }
+.platform-shell .provision-step.is-current .provision-step-number { background: #4932b0; border-color: #4932b0; }
 .platform-shell .provision-intro-icon { color: #4d38b1; background: #efedff; }
 .platform-shell .provision-security { color: #5040ad; border-color: #ddd6fd; background: #f4f1ff; }
 .platform-shell .provision-plan-card { border-color: #c6bafa; background: #f9f7ff; }
-.platform-shell .btn-primary { --bs-btn-bg: #5b42de; --bs-btn-border-color: #5b42de;
+.platform-shell .btn-primary { --bs-btn-bg: #4932b0; --bs-btn-border-color: #4932b0;
   --bs-btn-hover-bg: #4a33c6; --bs-btn-hover-border-color: #4a33c6;
   --bs-btn-active-bg: #452fb9; --bs-btn-active-border-color: #452fb9; }
 
@@ -118,9 +118,9 @@
 .platform-shell .platform-topbar-brand { display: flex; align-items: center; gap: 12px; white-space: nowrap;
   min-width: 0; color: #fff; }
 .platform-topbar-logo { width: 37px; height: 37px; display: grid; place-items: center; flex-shrink: 0;
-  background: #5b42de; border-radius: 9px; font-size: 1.26rem; font-weight: 850; color: #fff; }
+  background: #4932b0; border-radius: 9px; font-size: 1.26rem; font-weight: 850; color: #fff; }
 .platform-shell .platform-topbar-brand > strong { font-size: 1.13rem; font-weight: 770; letter-spacing: -.025em; }
-.platform-topbar-badge { background: #5b42de; padding: 5px 10px; border-radius: 999px;
+.platform-topbar-badge { background: #4932b0; padding: 5px 10px; border-radius: 999px;
   font-size: .68rem; font-weight: 700; color: #fff; }
 .platform-topbar-divider { display: block; width: 1px; height: 24px; background: #4d5c84; margin: 0 5px; }
 .platform-topbar-caption { font-size: .8rem; color: #d3dbef; }
@@ -134,9 +134,9 @@
 .platform-global-search:focus-within { outline: 2px solid #8e82ff; outline-offset: 2px; }
 .platform-global-search button { background: #3a4972; border: 0; border-radius: 6px; color: #e4eafb;
   font-size: .69rem; font-weight: 650; padding: 5px 9px; }
-.platform-global-search button:hover { background: #5b42de; }
+.platform-global-search button:hover { background: #4932b0; }
 .platform-shell .topbar-account { gap: 11px; color: #ffffff; font-size: .8rem; white-space: nowrap; }
-.platform-shell .topbar-account > svg { background: #5b42de; color: #fff; width: 31px; height: 31px;
+.platform-shell .topbar-account > svg { background: #4932b0; color: #fff; width: 31px; height: 31px;
   padding: 7px; border-radius: 50%; }
 .platform-shell .topbar-account .account-email { max-width: 160px; overflow: hidden; text-overflow: ellipsis; }
 .platform-shell .app-topbar .btn-outline-secondary { border-color: #50618a; color: #fff; background: transparent; }

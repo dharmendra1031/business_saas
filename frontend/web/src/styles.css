@@ -36,13 +36,13 @@ button:focus-visible, a:focus-visible, input:focus-visible, select:focus-visible
 .center-screen { min-height: 100vh; display: grid; place-items: center; color: var(--muted); }
 .brand { display: flex; gap: 12px; align-items: center; font-size: 1.1rem; font-weight: 750; line-height: 1.15; color: white; }
 .brand small { display: block; color: #ffffff; font-size: .72rem; font-weight: 400; margin-top: 4px; }
-.brand-mark { display: grid; place-items: center; width: 39px; height: 39px; border-radius: 7px; background: #2b6e9c; color: white; font-size: 1.3rem; }
+.brand-mark { display: grid; place-items: center; width: 39px; height: 39px; border-radius: 7px; background: #16496c; color: white; font-size: 1.3rem; }
 .app-shell { display: flex; min-height: 100vh; }
 .app-sidebar { position: sticky; top: 0; height: 100vh; overflow-y: auto; width: 245px; flex: 0 0 245px; background: var(--sidebar); padding: 22px 15px; color: #ffffff; display: flex; flex-direction: column; }
 .app-sidebar .brand { padding: 0 12px 28px; border-bottom: 1px solid #ffffff1e; }
 .sidebar-heading { font-size: .72rem; letter-spacing: .1em; color: #ffffff; padding: 27px 12px 8px; }
 .nav-entry { width: 100%; display: flex; align-items: center; gap: 12px; padding: 12px 14px; border-radius: 6px; border: 0; color: #e3f0fa; background: none; text-align: left; font-size: .93rem; }
-.nav-entry.active, .nav-entry:hover { background: #165ed4; color: white; }
+.nav-entry.active, .nav-entry:hover { background: #134c9d; color: white; }
 .sidebar-footer { margin-top: auto; font-size: .74rem; color: #ffffff; padding: 15px 12px 0; }
 .sidebar-scrim, .mobile-menu-toggle { display: none; }
 .app-main { min-width: 0; flex: 1; }
@@ -230,7 +230,7 @@ button:focus-visible, a:focus-visible, input:focus-visible, select:focus-visible
 .topbar-workspace strong { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font-size: .96rem; }
 .platform-shell .topbar-workspace small { color: #ffffff; }
 .pos-nav-entry { background: #173b64; color: #fff; font-weight: 700; margin-bottom: 4px; }
-.pos-nav-entry:hover, .pos-nav-entry.active { background: #165ed4; }
+.pos-nav-entry:hover, .pos-nav-entry.active { background: #134c9d; }
 .pos-shell .app-sidebar { background: #0d2342; }
 .pos-shell .page-content { max-width: 1480px; padding-top: 26px; }
 .business-home-actions { border-left: 3px solid var(--brand); }
