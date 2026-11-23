@@ -1,5 +1,5 @@
 /* Platform Settings: business availability, module release, scoped maintenance & notices.
-   Frontend-only design previews: never imply these choices are persisted/enforced. */
+   Live Type, Maintenance and Announcement controls; Module is still design-only. */
 .platform-preview-columns.is-release-management { grid-template-columns: minmax(0, 1fr); }
 .platform-preview-columns.is-release-management > .platform-preview-side { display: none; }
 .platform-shell .platform-preview-columns.is-release-management .platform-preview-main { padding: 24px; }
@@ -85,3 +85,13 @@
   .release-list-toolbar { padding-left: 14px; padding-right: 14px; }
   .release-type-item { padding: 12px 13px; gap: 9px; }
 }
+
+/* Live visitor banner: readable monochrome text and restrained severity cues. */
+.platform-public-notices:empty { display: none; }
+.platform-public-notice { display: flex; align-items: center; justify-content: space-between;
+  gap: 12px; color: #000; background: #fff; border-bottom: 2px solid #233b69;
+  padding: 9px 16px; font-size: .84rem; }
+.platform-public-notice.level-warning { background: #fff1d6; border-color: #6a4400; }
+.platform-public-notice.level-critical { background: #ffe2e2; border-color: #8e1818; }
+.platform-public-notice button { background: #fff; color: #000; border: 1px solid #333;
+  border-radius: 5px; padding: 3px 10px; }

@@ -48,7 +48,7 @@ function PlatformSettingsPreview() {
         <h1>Platform Settings</h1>
         <p>Global settings and module policies are separate from every business's operational settings.</p></div>
     </div>
-    {(tab === 'general' || tab === 'localization' || tab === 'notifications') &&
+    {(tab === 'general' || tab === 'localization' || tab === 'notifications' || tab === 'modules') &&
       <PreviewNotice area="Selected platform settings" />}
     <div className="platform-preview-tabs" role="tablist" aria-label="Platform settings sections">
       {settingTabs.map(item => <button key={item.id} type="button" role="tab"

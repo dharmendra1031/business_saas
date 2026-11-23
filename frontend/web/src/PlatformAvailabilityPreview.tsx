@@ -1,7 +1,6 @@
 import { useEffect, useState } from 'react'
 import {
-  AlertTriangle, BellRing, Building2, CalendarClock, ChevronRight,
-  CirclePause, Construction, Eye, LockKeyhole, Megaphone, Package,
+  Building2, ChevronRight, Eye, LockKeyhole, Megaphone, Package,
   RefreshCw, ShieldCheck, Wrench
 } from 'lucide-react'
 import { api, post, SessionExpiredError } from './api'
@@ -197,106 +196,223 @@ function ModuleReleasePreview() {
   </>
 }
 
+type MaintenanceRow = { id: number; mode: string; title: string; message: string;
+  startUtc: string; endUtc: string; isCancelled: boolean }
+type AnnouncementRow = { id: number; level: string; title: string; message: string;
+  startUtc: string; endUtc: string; isArchived: boolean }
+
+function utc(value: string): string { return new Date(value).toISOString() }
+
 function MaintenancePreview() {
-  const [scope, setScope] = useState('Entire Platform')
-  const [mode, setMode] = useState<MaintenanceMode>('Notice Only')
+  const [rows, setRows] = useState<MaintenanceRow[]>([])
+  const [mode, setMode] = useState<'NoticeOnly' | 'ReadOnly' | 'Unavailable'>('NoticeOnly')
   const [title, setTitle] = useState('Scheduled platform update')
-  const [message, setMessage] = useState('We are improving this service. Please check back shortly.')
+  const [message, setMessage] = useState('We are updating this service. Please check back shortly.')
+  const [reason, setReason] = useState('')
   const [starts, setStarts] = useState('')
   const [ends, setEnds] = useState('')
-  const invalidRange = starts !== '' && ends !== '' && new Date(ends).getTime() <= new Date(starts).getTime()
+  const [error, setError] = useState('')
+  const [notice, setNotice] = useState('')
+  const [busy, setBusy] = useState(false)
+  const [reload, setReload] = useState(0)
+  useEffect(() => {
+    let active = true
+    api<MaintenanceRow[]>('/platform/maintenance').then(data => {
+      if (active) setRows(data)
+    }).catch(cause => {
+      if (active && !(cause instanceof SessionExpiredError))
+        setError(cause instanceof Error ? cause.message : 'Unable to read maintenance history.')
+    })
+    return () => { active = false }
+  }, [reload])
+
+  const validRange = starts !== '' && ends !== '' && Date.parse(starts) < Date.parse(ends) &&
+    Date.parse(ends) - Date.parse(starts) <= 24 * 60 * 60 * 1000
+  async function save() {
+    if (busy || !validRange) return
+    setBusy(true); setError(''); setNotice('')
+    try {
+      await post('/platform/maintenance', {
+        mode, title: title.trim(), message: message.trim(), reason: reason.trim(),
+        startUtc: utc(starts), endUtc: utc(ends)
+      })
+      setNotice('Maintenance window scheduled and audited. The server will enforce it at the selected time.')
+      setReason(''); setReload(x => x + 1)
+    } catch (cause) {
+      if (!(cause instanceof SessionExpiredError))
+        setError(cause instanceof Error ? cause.message : 'Unable to schedule maintenance.')
+    } finally { setBusy(false) }
+  }
+  async function cancel(id: number) {
+    if (busy || reason.trim().length < 10) return
+    setBusy(true); setError(''); setNotice('')
+    try {
+      await post(`/platform/maintenance/${id}/cancel`, { reason: reason.trim() })
+      setNotice('Maintenance cancelled. The policy no longer blocks tenant operations.')
+      setReason(''); setReload(x => x + 1)
+    } catch (cause) {
+      if (!(cause instanceof SessionExpiredError))
+        setError(cause instanceof Error ? cause.message : 'Unable to cancel maintenance.')
+    } finally { setBusy(false) }
+  }
+
   return <>
-    <DesignCaution message="This is a schedule and banner composition preview only. No maintenance window is scheduled, no writes are restricted and no site notice is published." />
+    <div className="alert alert-info" role="status">
+      Live global maintenance. <strong>Notice Only</strong> displays a banner;
+      <strong> Read Only</strong> blocks tenant writes; <strong>Unavailable</strong> blocks
+      tenant operations. Platform recovery, sign-in and health endpoints stay accessible.
+      Scope-specific maintenance is not enabled yet.
+    </div>
+    {error && <div role="alert" className="alert alert-danger">{error}</div>}
+    {notice && <div role="status" className="alert alert-success">{notice}</div>}
     <div className="release-layout">
       <section className="release-editor release-editor-wide">
-        <div className="release-panel-heading"><h3>Maintenance Window</h3><span>Unsaved prototype</span></div>
+        <div className="release-panel-heading"><h3>Schedule Global Maintenance</h3><span>Audited</span></div>
         <div className="release-form-grid">
-          <div><label className="form-label" htmlFor="maintenance-scope">Target scope</label>
-            <select id="maintenance-scope" className="form-select" value={scope}
-              onChange={event => setScope(event.target.value)}>
-              <option>Entire Platform</option><option>Business Type</option><option>Specific Module</option>
-            </select></div>
-          <div><label className="form-label" htmlFor="maintenance-mode">Operating mode</label>
+          <div><label className="form-label" htmlFor="maintenance-mode">Mode</label>
             <select id="maintenance-mode" className="form-select" value={mode}
-              onChange={event => setMode(event.target.value as MaintenanceMode)}>
-              <option>Notice Only</option><option>Read Only</option><option>Unavailable</option>
+              onChange={event => setMode(event.target.value as typeof mode)}>
+              <option value="NoticeOnly">Notice Only</option>
+              <option value="ReadOnly">Read Only</option>
+              <option value="Unavailable">Unavailable</option>
             </select></div>
-          <div><label className="form-label" htmlFor="maintenance-start">Start time (local preview)</label>
-            <input id="maintenance-start" className="form-control" type="datetime-local" value={starts}
-              onChange={event => setStarts(event.target.value)} /></div>
-          <div><label className="form-label" htmlFor="maintenance-end">End time (local preview)</label>
-            <input id="maintenance-end" className="form-control" type="datetime-local" value={ends}
-              onChange={event => setEnds(event.target.value)} /></div>
-          <div className="release-field-wide"><label className="form-label" htmlFor="maintenance-title">Visitor heading</label>
-            <input id="maintenance-title" className="form-control" type="text" maxLength={100}
+          <div><label className="form-label" htmlFor="maintenance-start">Start (local time)</label>
+            <input type="datetime-local" id="maintenance-start" className="form-control"
+              value={starts} onChange={event => setStarts(event.target.value)} /></div>
+          <div><label className="form-label" htmlFor="maintenance-end">End (local time)</label>
+            <input type="datetime-local" id="maintenance-end" className="form-control"
+              value={ends} onChange={event => setEnds(event.target.value)} /></div>
+          <div className="release-field-wide"><label className="form-label" htmlFor="maintenance-title">Public heading</label>
+            <input id="maintenance-title" className="form-control" maxLength={100}
               value={title} onChange={event => setTitle(event.target.value)} /></div>
-          <div className="release-field-wide"><label className="form-label" htmlFor="maintenance-message">Visitor message</label>
-            <textarea id="maintenance-message" className="form-control" maxLength={300} rows={3}
-              value={message} onChange={event => setMessage(event.target.value)} />
-            <small className="release-input-hint">{message.length}/300 characters. Public text only; no HTML or secrets.</small></div>
+          <div className="release-field-wide"><label className="form-label" htmlFor="maintenance-message">Public message</label>
+            <textarea id="maintenance-message" rows={3} className="form-control" maxLength={300}
+              value={message} onChange={event => setMessage(event.target.value)} /></div>
+          <div className="release-field-wide"><label className="form-label" htmlFor="maintenance-reason">Operator reason (required for schedule and cancellation)</label>
+            <textarea id="maintenance-reason" rows={2} className="form-control" maxLength={200}
+              value={reason} onChange={event => setReason(event.target.value)} /></div>
         </div>
-        {invalidRange && <p className="release-validation" role="alert">End time must be later than start time.</p>}
-        {scope !== 'Entire Platform' && <p className="release-input-hint">Target selection by business-type/module code is deliberately not enabled until the verified registry exists.</p>}
+        <p className="release-input-hint">Windows must begin within 30 days and last no longer than 24 hours. UTC is calculated from the browser's local time.</p>
+        <button type="button" className="btn btn-primary"
+          disabled={busy || !validRange || title.trim().length < 3 ||
+            message.trim().length < 10 || reason.trim().length < 10}
+          onClick={() => void save()}>{busy ? 'Saving…' : 'Schedule maintenance'}</button>
       </section>
-      <aside className="release-editor" aria-label="Maintenance visitor message preview">
-        <div className="release-panel-heading"><h3>Visitor Preview</h3><span>Not published</span></div>
-        <div className="release-preview-card">
-          <span className="release-preview-label"><CalendarClock size={15} /> {scope}</span>
-          <div className="release-maintenance-sign"><Wrench size={19} />
-            <strong>{title.trim() || 'Maintenance notice'}</strong></div>
-          <p>{message.trim() || 'Maintenance information will appear here.'}</p>
-          <small>Requested mode: {mode}. Real activation requires owner confirmation, a reason, precise UTC scheduling, exceptions and rollback.</small>
-        </div>
-        <div className="release-policy-info">
-          <span><BellRing size={15} /> Notice Only — show a banner, no API blocking</span>
-          <span><CirclePause size={15} /> Read Only — block applicable writes on the server</span>
-          <span><AlertTriangle size={15} /> Unavailable — return a correct maintenance response</span>
-        </div>
+      <aside className="release-editor" aria-label="Maintenance window history">
+        <div className="release-panel-heading"><h3>Maintenance History</h3><span>Latest 30</span></div>
+        {rows.length === 0 ? <p>No maintenance windows scheduled.</p> : rows.map(row =>
+          <div className="release-preview-card" key={row.id}>
+            <strong>{row.title}</strong>
+            <p>{row.mode} · {row.isCancelled ? 'Cancelled' : 'Scheduled / time-limited'}</p>
+            <small>{new Date(row.startUtc).toLocaleString()} — {new Date(row.endUtc).toLocaleString()}</small>
+            {!row.isCancelled && <button type="button" className="btn btn-outline-danger btn-sm mt-2"
+              disabled={busy || reason.trim().length < 10}
+              onClick={() => void cancel(row.id)}>Cancel window</button>}
+          </div>)}
       </aside>
     </div>
   </>
 }
 
 function AnnouncementsPreview() {
+  const [rows, setRows] = useState<AnnouncementRow[]>([])
   const [level, setLevel] = useState<NoticeLevel>('Information')
-  const [audience, setAudience] = useState('All visitors')
-  const [title, setTitle] = useState('A new update is on the way')
-  const [message, setMessage] = useState('We are preparing an improved experience. Some features may appear as coming soon.')
+  const [title, setTitle] = useState('Platform update')
+  const [message, setMessage] = useState('We have an update to share.')
+  const [reason, setReason] = useState('')
+  const [starts, setStarts] = useState('')
+  const [ends, setEnds] = useState('')
+  const [error, setError] = useState('')
+  const [notice, setNotice] = useState('')
+  const [busy, setBusy] = useState(false)
+  const [reload, setReload] = useState(0)
+  useEffect(() => {
+    let active = true
+    api<AnnouncementRow[]>('/platform/announcements').then(data => {
+      if (active) setRows(data)
+    }).catch(cause => {
+      if (active && !(cause instanceof SessionExpiredError))
+        setError(cause instanceof Error ? cause.message : 'Unable to load announcements.')
+    })
+    return () => { active = false }
+  }, [reload])
+  const validRange = starts !== '' && ends !== '' && Date.parse(starts) < Date.parse(ends) &&
+    Date.parse(ends) - Date.parse(starts) <= 24 * 60 * 60 * 1000
+  async function publish() {
+    if (!validRange || busy) return
+    setBusy(true); setError(''); setNotice('')
+    try {
+      await post('/platform/announcements', {
+        level, title: title.trim(), message: message.trim(), reason: reason.trim(),
+        startUtc: utc(starts), endUtc: utc(ends)
+      })
+      setNotice('Announcement published with its scheduled window. Visitor banners show only while active.')
+      setReason(''); setReload(x => x + 1)
+    } catch (cause) {
+      if (!(cause instanceof SessionExpiredError))
+        setError(cause instanceof Error ? cause.message : 'Unable to publish the announcement.')
+    } finally { setBusy(false) }
+  }
+  async function archive(id: number) {
+    if (busy || reason.trim().length < 10) return
+    setBusy(true); setError(''); setNotice('')
+    try {
+      await post(`/platform/announcements/${id}/archive`, { reason: reason.trim() })
+      setNotice('Announcement archived and removed from the live status feed.')
+      setReason(''); setReload(x => x + 1)
+    } catch (cause) {
+      if (!(cause instanceof SessionExpiredError))
+        setError(cause instanceof Error ? cause.message : 'Unable to archive announcement.')
+    } finally { setBusy(false) }
+  }
+
   return <>
-    <DesignCaution message="This is a local message-composition preview. It does not send email, display a live banner or publish any public information." />
+    <div className="alert alert-info" role="status">
+      Real public in-app announcements, scheduled using UTC. This version is for
+      <strong> all visitors</strong>; targeted audiences and email delivery are not yet enabled.
+    </div>
+    {error && <div role="alert" className="alert alert-danger">{error}</div>}
+    {notice && <div role="status" className="alert alert-success">{notice}</div>}
     <div className="release-layout">
       <section className="release-editor release-editor-wide">
-        <div className="release-panel-heading"><h3>Notice Composer</h3><span>Unsaved prototype</span></div>
+        <div className="release-panel-heading"><h3>Publish Public Notice</h3><span>Audited</span></div>
         <div className="release-form-grid">
-          <div><label className="form-label" htmlFor="notice-severity">Message level</label>
-            <select className="form-select" id="notice-severity" value={level}
+          <div><label className="form-label" htmlFor="notice-severity">Severity</label>
+            <select id="notice-severity" className="form-select" value={level}
               onChange={event => setLevel(event.target.value as NoticeLevel)}>
               <option>Information</option><option>Warning</option><option>Critical</option>
             </select></div>
-          <div><label className="form-label" htmlFor="notice-audience">Audience</label>
-            <select className="form-select" id="notice-audience" value={audience}
-              onChange={event => setAudience(event.target.value)}>
-              <option>All visitors</option><option>Business Owner / Manager</option>
-              <option>Cashier / POS</option><option>Selected business type</option>
-            </select></div>
-          <div className="release-field-wide"><label className="form-label" htmlFor="notice-title">Message title</label>
-            <input className="form-control" id="notice-title" maxLength={100} value={title}
-              onChange={event => setTitle(event.target.value)} /></div>
-          <div className="release-field-wide"><label className="form-label" htmlFor="notice-text">Message content</label>
-            <textarea className="form-control" id="notice-text" maxLength={300} rows={4}
-              value={message} onChange={event => setMessage(event.target.value)} />
-            <small className="release-input-hint">{message.length}/300 characters; approved language variants will be required for production.</small></div>
+          <div><label className="form-label" htmlFor="notice-start">Start (local time)</label>
+            <input type="datetime-local" id="notice-start" className="form-control"
+              value={starts} onChange={event => setStarts(event.target.value)} /></div>
+          <div><label className="form-label" htmlFor="notice-end">End (local time)</label>
+            <input type="datetime-local" id="notice-end" className="form-control"
+              value={ends} onChange={event => setEnds(event.target.value)} /></div>
+          <div className="release-field-wide"><label className="form-label" htmlFor="notice-title">Title</label>
+            <input id="notice-title" className="form-control" maxLength={100}
+              value={title} onChange={event => setTitle(event.target.value)} /></div>
+          <div className="release-field-wide"><label className="form-label" htmlFor="notice-text">Message</label>
+            <textarea id="notice-text" className="form-control" rows={3} maxLength={300}
+              value={message} onChange={event => setMessage(event.target.value)} /></div>
+          <div className="release-field-wide"><label className="form-label" htmlFor="notice-reason">Operator reason (required)</label>
+            <textarea id="notice-reason" className="form-control" rows={2} maxLength={200}
+              value={reason} onChange={event => setReason(event.target.value)} /></div>
         </div>
+        <button type="button" className="btn btn-primary mt-2"
+          disabled={busy || !validRange || title.trim().length < 3 ||
+            message.trim().length < 10 || reason.trim().length < 10}
+          onClick={() => void publish()}>{busy ? 'Publishing…' : 'Publish announcement'}</button>
       </section>
-      <aside className="release-editor">
-        <div className="release-panel-heading"><h3>Banner Preview</h3><span>Not published</span></div>
-        <div className={`release-public-banner release-level-${level.toLowerCase()}`}>
-          {level === 'Critical' ? <AlertTriangle size={21} /> :
-            level === 'Warning' ? <Construction size={21} /> : <BellRing size={21} />}
-          <div><strong>{title.trim() || 'Announcement'}</strong>
-            <p>{message.trim() || 'Enter a message to preview a visitor notice.'}</p></div>
-        </div>
-        <p className="release-input-hint mt-3">Audience preview: {audience}. Scheduling, acknowledgement, expiry and visibility need the public status API before deployment.</p>
+      <aside className="release-editor" aria-label="Announcement history">
+        <div className="release-panel-heading"><h3>Announcements</h3><span>Latest 30</span></div>
+        {rows.length === 0 ? <p>No published notices.</p> : rows.map(row =>
+          <div className="release-preview-card" key={row.id}>
+            <strong>{row.title}</strong><p>{row.message}</p>
+            <small>{row.level} · {row.isArchived ? 'Archived' : 'Scheduled / published'} · {new Date(row.startUtc).toLocaleString()}</small>
+            {!row.isArchived && <button type="button" className="btn btn-outline-secondary btn-sm mt-2"
+              disabled={busy || reason.trim().length < 10}
+              onClick={() => void archive(row.id)}>Archive</button>}
+          </div>)}
       </aside>
     </div>
   </>
