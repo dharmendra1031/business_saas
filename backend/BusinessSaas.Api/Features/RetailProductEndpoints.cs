@@ -54,16 +54,18 @@ public static class RetailProductEndpoints
             return Results.Ok(new { items, total, page = currentPage, pageSize = PageSize });
         });
 
-        group.MapGet("/options", async (long businessId,
+        group.MapGet("/options", async (long businessId, bool? includeInactiveCategories,
             ClaimsPrincipal user, AppDbContext db) =>
         {
             var denied = await RetailMasterEndpoints.CheckAccess(db, user, businessId, false);
             if (denied is not null) return denied;
 
-            var categories = await db.RetailCategories.AsNoTracking()
-                .Where(x => x.BusinessId == businessId && x.IsActive)
-                .OrderBy(x => x.Name)
-                .Select(x => new { x.Id, x.Name, x.ParentId }).ToListAsync();
+            var categoryQuery = db.RetailCategories.AsNoTracking()
+                .Where(x => x.BusinessId == businessId);
+            if (includeInactiveCategories != true)
+                categoryQuery = categoryQuery.Where(x => x.IsActive);
+            var categories = await categoryQuery.OrderBy(x => x.Name)
+                .Select(x => new { x.Id, x.Name, x.ParentId, x.IsActive }).ToListAsync();
             var units = await db.RetailUnits.AsNoTracking()
                 .Where(x => x.BusinessId == businessId && x.IsActive)
                 .OrderBy(x => x.Name)
