@@ -7,7 +7,6 @@ import { api, post, SessionExpiredError } from './api'
 
 export type AvailabilityView = 'types' | 'modules' | 'maintenance' | 'announcements'
 type ReleaseState = 'Available' | 'Coming Soon' | 'Under Construction' | 'Paused' | 'Retired'
-type MaintenanceMode = 'Notice Only' | 'Read Only' | 'Unavailable'
 type NoticeLevel = 'Information' | 'Warning' | 'Critical'
 
 const releaseStates: { state: ReleaseState; summary: string }[] = [
