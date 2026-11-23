@@ -34,6 +34,7 @@ interface StockMovement {
   quantityChange: number
   balanceAfter: number
   sourceType: string
+  sourceId: number
   reason: string | null
   postedAtUtc: string
   actor: string | null
@@ -338,8 +339,16 @@ export default function RetailStock({ businessId, locations, canOperate, isOwner
                     <th scope="col">Posted by</th></tr></thead>
                   <tbody>{history.map(entry => <tr key={entry.id}>
                     <td>{new Date(entry.postedAtUtc + (entry.postedAtUtc.endsWith('Z') ? '' : 'Z')).toLocaleString()}</td>
-                    <td>{entry.sourceType === 'CashSaleLine' || entry.sourceType === 'CashSale' ? 'Cash sale' : entry.sourceType}{entry.reason &&
-                      <small className="product-secondary">{entry.reason}</small>}</td>
+                    <td>
+                      {entry.sourceType === 'Receiving' ? 'Goods received' :
+                        entry.sourceType === 'CashSaleLine' || entry.sourceType === 'CashSale' ? 'Cash sale' :
+                          entry.sourceType === 'Opening' ? 'Opening stock' : entry.sourceType}
+                      {entry.sourceId > 0 && <small className="product-secondary">
+                        {entry.sourceType === 'Receiving' || entry.sourceType === 'CashSaleLine'
+                          ? `Source line #${entry.sourceId}` : `Source #${entry.sourceId}`}
+                      </small>}
+                      {entry.reason && <small className="product-secondary">{entry.reason}</small>}
+                    </td>
                     <td className="text-end">{entry.quantityChange.toFixed(3)}</td>
                     <td className="text-end">{entry.balanceAfter.toFixed(3)}</td>
                     <td>{entry.actor ?? '—'}</td>
