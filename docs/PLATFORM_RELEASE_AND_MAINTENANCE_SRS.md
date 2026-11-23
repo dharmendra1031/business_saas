@@ -1,8 +1,17 @@
 # Business SaaS — Platform Release, Business Type & Maintenance Control
 
-**Decision:** DR-002, 22 Nov 2026. **Implementation stage:** Frontend-first design + backend contract **ONLY**; no runtime release policies, database migrations or published site banners yet.
+**Decision:** DR-002, 22 Nov 2026. **Implementation stage (23 Nov 2026):** Functional global Business Type/Module release controls, maintenance scheduling and public notices on `development`. Scoped market/tenant maintenance, localization, support and production rollout acceptance remain pending.
 **Owner:** Platform Super Admin; **location:** existing **Platform Settings** sidebar module. Keep exactly eight platform top-level modules.
 **Related:** [Master Screen Register](./MASTER_SCREEN_REGISTER.md), [Approved UI/UX](./APPROVED_UI_UX.md), [Frontend-First Tracker](./FRONTEND_FIRST_DESIGN_TRACKER.md).
+
+## Implemented global controls (23 November 2026)
+
+- **New-business eligibility:** existing `BusinessTypes` now stores `ReleaseState` and `ReleaseRevision`; only the installed `RETAIL` workflow can be Available. `GET /api/business-types` hides paused templates and `POST /api/platform/businesses` rechecks the state inside the provisioning transaction.
+- **Modules:** the compiled registry contains Catalog, Purchase, Inventory and development-only POS. `PlatformModulePolicies` stores only overrides; the authorized write middleware blocks disabled modules without deleting historical records. Stock-changing receiving posts are also covered by Inventory release state. This does not replace subscription/RBAC checks.
+- **Maintenance:** `PlatformMaintenanceWindows` supports global NoticeOnly/ReadOnly/Unavailable UTC windows (maximum 24 hours, up to 30 days ahead), overlap rejection and audited cancellation. Auth, health, public status and platform recovery remain accessible; existing authorized tenants receive a 503 for affected operations.
+- **Announcements:** `PlatformAnnouncements` supports a global, plain-text severity message with UTC window and audited archival. `GET /api/public/platform-availability` returns only currently active public messages. The React public banner renders text safely on page load.
+- **Role boundaries:** Super Admin with completed MFA is required for changes. Changes require reasons; Type/Module state updates use revision checks. Existing store data and tenant subscriptions are unchanged by release availability.
+- **Deferred:** market-specific type policies, scoped module/tenant maintenance, targeted announcements, push delivery, approvals beyond the MFA operator, production restoration exercises and manual UX sign-off. Platform Settings Languages and Notifications remain previews. These new screens are **Partial**, not DONE, until acceptance gates pass.
 
 ## 1. Intent and strict conceptual separation
 
