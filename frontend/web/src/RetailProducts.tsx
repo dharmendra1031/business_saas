@@ -12,6 +12,7 @@ interface Product {
   unitId: number
   unitCode: string
   salePrice: number
+  reorderLevel: number | null
   taxClassification: string
   isActive: boolean
 }
@@ -41,13 +42,14 @@ interface ProductForm {
   categoryId: number
   unitId: number
   salePrice: string
+  reorderLevel: string
   taxClassification: string
   isActive: boolean
 }
 
 const initialForm: ProductForm = {
   name: '', sku: '', barcode: '', categoryId: 0, unitId: 0,
-  salePrice: '', taxClassification: '', isActive: true
+  salePrice: '', reorderLevel: '', taxClassification: '', isActive: true
 }
 
 function errorMessage(error: unknown): string {
@@ -153,6 +155,7 @@ export default function RetailProducts({ businessId, canOperate, currencyCode }:
       categoryId: item.categoryId,
       unitId: item.unitId,
       salePrice: item.salePrice.toFixed(2),
+      reorderLevel: item.reorderLevel == null ? '' : String(item.reorderLevel),
       taxClassification: item.taxClassification,
       isActive: item.isActive
     })
@@ -183,6 +186,7 @@ export default function RetailProducts({ businessId, canOperate, currencyCode }:
       barcode: form.barcode.trim() || null,
       taxClassification: form.taxClassification.trim().toUpperCase(),
       salePrice: Number(form.salePrice),
+      reorderLevel: form.reorderLevel.trim() === '' ? null : Number(form.reorderLevel),
       ...(editingId === null ? { isActive: true } : {})
     }
 
@@ -258,7 +262,7 @@ export default function RetailProducts({ businessId, canOperate, currencyCode }:
               value={form.salePrice} onChange={event => changeForm('salePrice', event.target.value)} />
           </div>
           <details className="form-wide" key={editingId ?? 'new'} open={editingId !== null || !canCreate}>
-            <summary>More details (SKU, barcode, category, unit, tax)</summary>
+            <summary>More details (SKU, barcode, category, unit, stock alerts, tax)</summary>
             <div className="form-grid mt-3">
           <div>
             <label className="form-label" htmlFor="product-sku">SKU {editingId === null ? '(auto if blank)' : '*'}</label>
@@ -297,6 +301,14 @@ export default function RetailProducts({ businessId, canOperate, currencyCode }:
                 {item.name} ({item.code})
               </option>)}
             </select>
+          </div>
+          <div>
+            <label className="form-label" htmlFor="product-reorder">Reorder level (optional)</label>
+            <input id="product-reorder" className="form-control" type="number" min="0"
+              max="9999999999.999" step="0.001" inputMode="decimal"
+              value={form.reorderLevel} onChange={event => changeForm('reorderLevel', event.target.value)} />
+            <div className="field-help">Alert when location stock reaches this quantity.
+              Leave blank to disable; stock must be initialized first.</div>
           </div>
           <div>
             <label className="form-label" htmlFor="product-tax">Tax classification (optional)</label>
