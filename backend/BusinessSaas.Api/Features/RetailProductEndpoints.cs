@@ -31,7 +31,18 @@ public static class RetailProductEndpoints
             if (term.Length > 0)
                 query = query.Where(x => x.Name.ToUpper().Contains(term) ||
                     x.Sku.Contains(term) || x.Barcode != null && x.Barcode.Contains(term));
-            if (categoryId is > 0) query = query.Where(x => x.CategoryId == categoryId);
+            if (categoryId is > 0)
+            {
+                var categories = await db.RetailCategories.AsNoTracking()
+                    .Where(x => x.BusinessId == businessId)
+                    .Select(x => new { x.Id, x.ParentId }).ToListAsync();
+                var allowed = new HashSet<long> { categoryId.Value };
+                for (var i = 0; i < 2; i++)
+                    foreach (var child in categories.Where(x => x.ParentId is not null &&
+                                 allowed.Contains(x.ParentId.Value)))
+                        allowed.Add(child.Id);
+                query = query.Where(x => allowed.Contains(x.CategoryId));
+            }
             if (status == "active") query = query.Where(x => x.IsActive);
             if (status == "inactive") query = query.Where(x => !x.IsActive);
 
@@ -52,13 +63,18 @@ public static class RetailProductEndpoints
             var categories = await db.RetailCategories.AsNoTracking()
                 .Where(x => x.BusinessId == businessId && x.IsActive)
                 .OrderBy(x => x.Name)
-                .Select(x => new { x.Id, x.Name }).ToListAsync();
+                .Select(x => new { x.Id, x.Name, x.ParentId }).ToListAsync();
             var units = await db.RetailUnits.AsNoTracking()
                 .Where(x => x.BusinessId == businessId && x.IsActive)
                 .OrderBy(x => x.Name)
                 .Select(x => new { x.Id, x.Name, x.Code }).ToListAsync();
 
-            return Results.Ok(new { categories, units });
+            var brands = await db.RetailBrands.AsNoTracking()
+                .Where(x => x.BusinessId == businessId && x.IsActive)
+                .OrderBy(x => x.Name)
+                .Select(x => new { x.Id, x.Name }).ToListAsync();
+
+            return Results.Ok(new { categories, units, brands });
         });
 
         group.MapGet("/lookup", async (long businessId, string? barcode,
@@ -105,7 +121,7 @@ public static class RetailProductEndpoints
                 (x.Sku == sku || barcode != null && x.Barcode == barcode)))
                 return Results.Conflict(new { message = "SKU or barcode is already used in this business." });
 
-            if (!await ValidReferences(db, businessId, request.CategoryId, request.UnitId, true))
+            if (!await ValidReferences(db, businessId, request.CategoryId, request.UnitId, request.BrandId, true))
                 return Results.BadRequest(new { message = "Select an active category and unit from this business." });
 
             var product = new RetailProduct
@@ -116,6 +132,7 @@ public static class RetailProductEndpoints
                 Barcode = barcode,
                 CategoryId = request.CategoryId,
                 UnitId = request.UnitId,
+                BrandId = request.BrandId,
                 SalePrice = request.SalePrice,
                 ReorderLevel = request.ReorderLevel,
                 TaxClassification = NormalizeCode(request.TaxClassification),
@@ -164,7 +181,7 @@ public static class RetailProductEndpoints
                 return Results.Conflict(new { message = "SKU or barcode is already used in this business." });
 
             if (!await ValidReferences(db, businessId, request.CategoryId, request.UnitId,
-                request.IsActive.Value))
+                request.BrandId, request.IsActive.Value))
                 return Results.BadRequest(new { message = "Select a valid category and unit from this business. Active products need active masters." });
 
             product.Name = request.Name!.Trim();
@@ -172,6 +189,7 @@ public static class RetailProductEndpoints
             product.Barcode = barcode;
             product.CategoryId = request.CategoryId;
             product.UnitId = request.UnitId;
+            product.BrandId = request.BrandId;
             product.SalePrice = request.SalePrice;
             product.ReorderLevel = request.ReorderLevel;
             product.TaxClassification = NormalizeCode(request.TaxClassification);
@@ -198,10 +216,13 @@ public static class RetailProductEndpoints
               category.BusinessId == businessId && unit.BusinessId == businessId
         select new ProductItem(product.Id, product.Name, product.Sku, product.Barcode,
             product.CategoryId, category.Name, product.UnitId, unit.Code,
-            product.SalePrice, product.TaxClassification, product.IsActive, product.ReorderLevel);
+            product.SalePrice, product.TaxClassification, product.IsActive, product.ReorderLevel,
+            product.BrandId,
+            db.RetailBrands.Where(brand => brand.Id == product.BrandId &&
+                brand.BusinessId == businessId).Select(brand => brand.Name).FirstOrDefault());
 
     private static async Task<bool> ValidReferences(AppDbContext db, long businessId,
-        long categoryId, long unitId, bool requireActive)
+        long categoryId, long unitId, long? brandId, bool requireActive)
     {
         if (categoryId <= 0 || unitId <= 0) return false;
 
@@ -209,8 +230,11 @@ public static class RetailProductEndpoints
             x.Id == categoryId && x.BusinessId == businessId && (!requireActive || x.IsActive));
         if (!category) return false;
 
-        return await db.RetailUnits.AnyAsync(x =>
-            x.Id == unitId && x.BusinessId == businessId && (!requireActive || x.IsActive));
+        if (!await db.RetailUnits.AnyAsync(x =>
+            x.Id == unitId && x.BusinessId == businessId && (!requireActive || x.IsActive)))
+            return false;
+        return brandId is null || brandId > 0 && await db.RetailBrands.AnyAsync(x =>
+            x.Id == brandId.Value && x.BusinessId == businessId && (!requireActive || x.IsActive));
     }
 
     private static string? Validate(ProductRequest request, bool allowAutoSku = false)
@@ -255,9 +279,10 @@ public static class RetailProductEndpoints
 
     private sealed record ProductRequest(string? Name, string? Sku, string? Barcode,
         long CategoryId, long UnitId, decimal SalePrice, string? TaxClassification, bool? IsActive,
-        decimal? ReorderLevel = null);
+        decimal? ReorderLevel = null, long? BrandId = null);
 
     private sealed record ProductItem(long Id, string Name, string Sku, string? Barcode,
         long CategoryId, string CategoryName, long UnitId, string UnitCode,
-        decimal SalePrice, string TaxClassification, bool IsActive, decimal? ReorderLevel);
+        decimal SalePrice, string TaxClassification, bool IsActive, decimal? ReorderLevel,
+        long? BrandId, string? BrandName);
 }

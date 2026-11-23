@@ -30,7 +30,7 @@ public static class RetailMasterEndpoints
             var total = await query.CountAsync();
             var items = await query.OrderBy(x => x.NameKey).ThenBy(x => x.Id)
                 .Skip((currentPage - 1) * PageSize).Take(PageSize)
-                .Select(x => new { x.Id, x.Name, x.IsActive }).ToListAsync();
+                .Select(x => new { x.Id, x.Name, x.ParentId, x.IsActive }).ToListAsync();
 
             return Results.Ok(new { items, total, page = currentPage, pageSize = PageSize });
         });
@@ -49,7 +49,12 @@ public static class RetailMasterEndpoints
             if (await db.RetailCategories.AnyAsync(x => x.BusinessId == businessId && x.NameKey == key))
                 return Results.Conflict(new { message = "Category already exists." });
 
-            var category = new RetailCategory { BusinessId = businessId, Name = name, NameKey = key };
+            var parentError = await ValidateParent(db, businessId, request.ParentId, null);
+            if (parentError is not null) return Results.BadRequest(new { message = parentError });
+            var category = new RetailCategory
+            {
+                BusinessId = businessId, Name = name, NameKey = key, ParentId = request.ParentId
+            };
             db.RetailCategories.Add(category);
             try { await db.SaveChangesAsync(); }
             catch (DbUpdateException error) when (RetailModule.IsDuplicateKey(error))
@@ -58,7 +63,7 @@ public static class RetailMasterEndpoints
             }
 
             return Results.Created($"/api/businesses/{businessId}/categories/{category.Id}",
-                new { category.Id, category.Name, category.IsActive });
+                new { category.Id, category.Name, category.ParentId, category.IsActive });
         });
 
         categories.MapPut("/{categoryId:long}", async (long businessId, long categoryId,
@@ -80,15 +85,18 @@ public static class RetailMasterEndpoints
                 x.BusinessId == businessId && x.Id != categoryId && x.NameKey == key))
                 return Results.Conflict(new { message = "Category already exists." });
 
+            var parentError = await ValidateParent(db, businessId, request.ParentId, categoryId);
+            if (parentError is not null) return Results.BadRequest(new { message = parentError });
             category.Name = name;
             category.NameKey = key;
+            category.ParentId = request.ParentId;
             category.IsActive = request.IsActive.Value;
             try { await db.SaveChangesAsync(); }
             catch (DbUpdateException error) when (RetailModule.IsDuplicateKey(error))
             {
                 return Results.Conflict(new { message = "Category already exists." });
             }
-            return Results.Ok(new { category.Id, category.Name, category.IsActive });
+            return Results.Ok(new { category.Id, category.Name, category.ParentId, category.IsActive });
         });
 
         var units = app.MapGroup("/api/businesses/{businessId:long}/units")
@@ -178,12 +186,126 @@ public static class RetailMasterEndpoints
             }
             return Results.Ok(new { unit.Id, unit.Code, unit.Name, unit.IsActive });
         });
+
+        var brands = app.MapGroup("/api/businesses/{businessId:long}/brands")
+            .RequireAuthorization();
+
+        brands.MapGet("", async (long businessId, string? search, int? page,
+            ClaimsPrincipal user, AppDbContext db) =>
+        {
+            var denied = await CheckAccess(db, user, businessId, false);
+            if (denied is not null) return denied;
+            var currentPage = page ?? 1;
+            if (currentPage is < 1 or > 100000)
+                return Results.BadRequest(new { message = "Invalid page." });
+            var term = search?.Trim().ToUpperInvariant() ?? "";
+            if (term.Length > 80) return Results.BadRequest(new { message = "Search is too long." });
+            var query = db.RetailBrands.AsNoTracking().Where(x => x.BusinessId == businessId);
+            if (term.Length > 0) query = query.Where(x => x.NameKey.Contains(term));
+            var total = await query.CountAsync();
+            var items = await query.OrderBy(x => x.NameKey).ThenBy(x => x.Id)
+                .Skip((currentPage - 1) * PageSize).Take(PageSize)
+                .Select(x => new { x.Id, x.Name, x.IsActive }).ToListAsync();
+            return Results.Ok(new { items, total, page = currentPage, pageSize = PageSize });
+        });
+
+        brands.MapPost("", async (long businessId, BrandRequest request,
+            ClaimsPrincipal user, AppDbContext db) =>
+        {
+            var denied = await CheckAccess(db, user, businessId, true);
+            if (denied is not null) return denied;
+            var name = request.Name?.Trim() ?? "";
+            if (name.Length is < 2 or > 80)
+                return Results.BadRequest(new { message = "Brand name must be 2–80 characters." });
+            var key = name.ToUpperInvariant();
+            if (await db.RetailBrands.AnyAsync(x => x.BusinessId == businessId && x.NameKey == key))
+                return Results.Conflict(new { message = "Brand already exists." });
+            var brand = new RetailBrand { BusinessId = businessId, Name = name, NameKey = key };
+            db.RetailBrands.Add(brand);
+            try { await db.SaveChangesAsync(); }
+            catch (DbUpdateException error) when (RetailModule.IsDuplicateKey(error))
+            {
+                return Results.Conflict(new { message = "Brand already exists." });
+            }
+            return Results.Created($"/api/businesses/{businessId}/brands/{brand.Id}",
+                new { brand.Id, brand.Name, brand.IsActive });
+        });
+
+        brands.MapPut("/{brandId:long}", async (long businessId, long brandId,
+            BrandRequest request, ClaimsPrincipal user, AppDbContext db) =>
+        {
+            var denied = await CheckAccess(db, user, businessId, true);
+            if (denied is not null) return denied;
+            var name = request.Name?.Trim() ?? "";
+            if (name.Length is < 2 or > 80 || request.IsActive is null)
+                return Results.BadRequest(new { message = "Enter a valid brand name and status." });
+            var brand = await db.RetailBrands.SingleOrDefaultAsync(x =>
+                x.Id == brandId && x.BusinessId == businessId);
+            if (brand is null) return Results.NotFound();
+            var key = name.ToUpperInvariant();
+            if (await db.RetailBrands.AnyAsync(x => x.BusinessId == businessId &&
+                x.Id != brandId && x.NameKey == key))
+                return Results.Conflict(new { message = "Brand already exists." });
+            brand.Name = name;
+            brand.NameKey = key;
+            brand.IsActive = request.IsActive.Value;
+            try { await db.SaveChangesAsync(); }
+            catch (DbUpdateException error) when (RetailModule.IsDuplicateKey(error))
+            {
+                return Results.Conflict(new { message = "Brand already exists." });
+            }
+            return Results.Ok(new { brand.Id, brand.Name, brand.IsActive });
+        });
     }
 
     private static bool ValidUnit(string name, string code) =>
         name.Length is >= 2 and <= 60 &&
         code.Length is >= 1 and <= 12 &&
         code.All(ch => char.IsAsciiLetterOrDigit(ch) || ch == '-');
+
+
+    // Flat categories remain valid. Nested categories support three levels at most.
+    private static async Task<string?> ValidateParent(AppDbContext db, long businessId,
+        long? parentId, long? categoryId)
+    {
+        if (parentId is null && categoryId is null) return null;
+        if (parentId is <= 0) return "Select a valid parent category.";
+        var nodes = await db.RetailCategories.AsNoTracking()
+            .Where(x => x.BusinessId == businessId)
+            .Select(x => new { x.Id, x.ParentId, x.IsActive }).ToListAsync();
+        var byId = nodes.ToDictionary(x => x.Id);
+
+        var depth = 0;
+        var seen = new HashSet<long>();
+        for (var current = parentId; current is not null;)
+        {
+            if (!byId.TryGetValue(current.Value, out var ancestor) || !ancestor.IsActive)
+                return "Choose an active parent category from this business.";
+            if (current == categoryId || !seen.Add(current.Value))
+                return "A category cannot be its own parent or descendant.";
+            depth++;
+            if (depth > 2) return "Only Group, Subgroup and Category levels are supported.";
+            current = ancestor.ParentId;
+        }
+
+        if (categoryId is not null)
+        {
+            foreach (var node in nodes)
+            {
+                var below = 0;
+                var current = node.ParentId;
+                while (current is not null && below <= 3)
+                {
+                    below++;
+                    if (current == categoryId && depth + 1 + below > 3)
+                        return "Move child categories first; hierarchy supports only three levels.";
+                    if (!byId.TryGetValue(current.Value, out var ancestor)) break;
+                    current = ancestor.ParentId;
+                }
+            }
+        }
+        return null;
+    }
 
     internal static async Task<IResult?> CheckAccess(AppDbContext db, ClaimsPrincipal user,
         long businessId, bool write)
@@ -213,6 +335,7 @@ public static class RetailMasterEndpoints
         return null;
     }
 
-    private sealed record CategoryRequest(string? Name, bool? IsActive);
+    private sealed record CategoryRequest(string? Name, bool? IsActive, long? ParentId = null);
+    private sealed record BrandRequest(string? Name, bool? IsActive);
     private sealed record UnitRequest(string? Code, string? Name, bool? IsActive);
 }
