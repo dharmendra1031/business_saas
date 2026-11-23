@@ -37,7 +37,7 @@ public static class PlatformBusinessProvisioning
 
         group.MapPost("/businesses", async (ProvisionBusinessRequest request,
             ClaimsPrincipal actor, IConfiguration config, AppDbContext db,
-            UserManager<AppUser> users) =>
+            UserManager<AppUser> users, IWebHostEnvironment environment) =>
         {
             if (!PlatformOwner.IsOwner(actor, config)) return Results.Forbid();
 
@@ -118,6 +118,12 @@ public static class PlatformBusinessProvisioning
                 if (await PlatformStatusEndpoints.ActiveMaintenance(db) is not null)
                     return Results.Conflict(new { code = "PLATFORM_MAINTENANCE",
                         message = "New business creation is temporarily paused for maintenance." });
+
+                foreach (var module in new[] { "CATALOG", "PURCHASE", "INVENTORY" })
+                    if (!await PlatformModuleReleaseEndpoints.Available(db,
+                        environment, module))
+                        return Results.Conflict(new { code = "MODULE_NOT_AVAILABLE",
+                            message = $"Required module {module} is not available for new businesses." });
 
                 var business = new Business
                 {

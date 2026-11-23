@@ -235,6 +235,22 @@ app.Use(async (context, next) =>
                     });
                     return;
                 }
+                if (isWrite)
+                {
+                    var environment = context.RequestServices.GetRequiredService<IWebHostEnvironment>();
+                    foreach (var module in PlatformModuleReleaseEndpoints.ModulesForWrite(parts))
+                    {
+                        if (!await PlatformModuleReleaseEndpoints.Available(db, environment, module))
+                        {
+                            context.Response.StatusCode = StatusCodes.Status409Conflict;
+                            await context.Response.WriteAsJsonAsync(new {
+                                code = "MODULE_NOT_AVAILABLE",
+                                message = $"Module {module} is currently unavailable for new changes."
+                            });
+                            return;
+                        }
+                    }
+                }
             }
         }
     }
@@ -300,6 +316,7 @@ app.MapRetailModule();
 app.MapPlatformEndpoints();
 app.MapPlatformBusinessProvisioning();
 app.MapPlatformTypeAvailability();
+app.MapPlatformModuleRelease();
 app.MapPlatformStatus();
 app.MapPlatformBillingEndpoints();
 app.MapRazorpayPaymentEndpoints();
