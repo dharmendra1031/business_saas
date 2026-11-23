@@ -399,6 +399,49 @@ try {
   }
 
   {
+    const t = await scenario('owner-live-refresh', {
+      role: 'Owner', hasProducts: true, cashSalesFixture: true, ownerPos: true
+    })
+    await t.login()
+    await t.page.getByRole('heading', { name: 'Business Overview' }).waitFor()
+    let total = 370.50
+    let status = 200
+    let calls = 0
+    await t.page.route('**/api/businesses/1/dashboard', route => {
+      calls++
+      if (status !== 200) return response(route, status, { message: 'Temporary outage' })
+      const result = dashboard('Owner', true, 0, 1, 1, true, false, true)
+      result.cashSalesToday.total = total
+      return response(route, 200, result)
+    })
+    await t.page.locator('.app-sidebar .nav-entry').filter({ hasText: 'Products' }).first().click()
+    await t.page.locator('.app-sidebar .nav-entry').filter({ hasText: 'Dashboard' }).first().click()
+    await t.page.waitForFunction(() => document.querySelector('.business-kpi-card')?.textContent?.includes('370.5'))
+    assert.ok(calls > 0, 'Dashboard return reloads the latest API totals')
+
+    total = 410.75
+    await t.page.locator('.app-sidebar .nav-entry').filter({ hasText: 'Open POS Checkout' }).click()
+    await t.page.locator('.pos-shell').waitFor()
+    await t.page.getByRole('button', { name: /Exit POS/ }).click()
+    await t.page.waitForFunction(() => document.querySelector('.business-kpi-card')?.textContent?.includes('410.75'))
+    assert.ok(calls > 1, 'POS exit reloads the owner dashboard')
+
+    status = 503
+    await t.page.locator('.app-sidebar .nav-entry').filter({ hasText: 'Dashboard' }).first().click()
+    await t.page.getByText('Dashboard refresh failed.', { exact: false }).waitFor()
+    assert.equal(await t.page.getByRole('heading', { name: 'Business Overview' }).count(), 1)
+    assert.ok((await t.page.locator('.business-kpi-card').first().innerText()).includes('410.75'))
+
+    status = 404
+    await t.page.locator('.app-sidebar .nav-entry').filter({ hasText: 'Dashboard' }).first().click()
+    await t.page.getByRole('heading', { name: 'Choose a business' }).waitFor()
+    assert.equal(await t.page.locator('.business-kpi-card').count(), 0)
+    await t.check()
+    await t.context.close()
+    console.log('PASS BUS-01 fresh API totals, POS return, outage fallback and access loss')
+  }
+
+  {
     const t = await scenario('owner-verified-stock-alerts', {
       role: 'Owner', hasProducts: true, stockAlertsFixture: true, locationCount: 2,
       width: 360, height: 780
