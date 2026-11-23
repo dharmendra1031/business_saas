@@ -1092,10 +1092,13 @@ try {
         units: [{ id: 51, name: 'Pieces', code: 'PCS', isActive: true }]
       }))
     await t.page.route('**/api/businesses/1/categories?*', route => {
-      const level = Number(new URL(route.request().url()).searchParams.get('level'))
+      const params = new URL(route.request().url()).searchParams
+      const level = Number(params.get('level'))
+      const parent = Number(params.get('parentId') || 0)
       const items = tree.filter(item =>
-        level === 1 ? item.parentId === null :
-          level === 2 ? item.parentId === 2 : level === 3 ? item.parentId === 21 : true)
+        (level === 1 ? item.parentId === null :
+          level === 2 ? item.parentId === 2 : level === 3 ? item.parentId === 21 : true) &&
+        (!parent || item.parentId === parent))
       return response(route, 200, { items, total: items.length, page: 1, pageSize: 20 })
     })
     await t.page.route('**/api/businesses/1/brands?*', route =>
@@ -1114,9 +1117,11 @@ try {
     assert.equal(await t.page.locator('.business-master-tabs button').count(), 5)
     await t.page.getByRole('button', { name: 'Subgroups', exact: true }).click()
     await t.page.getByLabel('Group *').selectOption('2')
+    await t.page.locator('#master-filter-parent').selectOption('2')
     await t.page.getByText('Menswear', { exact: true }).first().waitFor()
     await t.page.getByRole('button', { name: 'Categories', exact: true }).click()
     await t.page.getByLabel('Subgroup *').selectOption('21')
+    await t.page.locator('#master-filter-parent').selectOption('21')
     await t.page.getByText('Shirts', { exact: true }).first().waitFor()
     await t.page.getByRole('button', { name: 'Brands', exact: true }).click()
     await t.page.getByText('Raymond', { exact: true }).waitFor()
