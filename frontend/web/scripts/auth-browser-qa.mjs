@@ -565,6 +565,58 @@ try {
   }
 
   {
+    const t = await scenario('owner-optional-purchase-draft', {
+      role: 'Owner', hasProducts: true, productsFixture: true
+    })
+    let orderCreated = 0
+    let approvals = 0
+    let status = 'Draft'
+    await t.page.route('**/api/businesses/1/purchase-orders**', route => {
+      const path = new URL(route.request().url()).pathname
+      const method = route.request().method()
+      if (path.endsWith('/purchase-orders') && method === 'GET')
+        return response(route, 200, { items: [], total: 0, page: 1, pageSize: 20 })
+      if (path.endsWith('/purchase-orders') && method === 'POST') {
+        orderCreated++
+        return response(route, 201, { id: 82, status: 'Draft' })
+      }
+      if (path.endsWith('/purchase-orders/82') && method === 'GET')
+        return response(route, 200, {
+          id: 82, locationId: 1, supplierId: 21, status,
+          lines: [{ id: 83, productId: 11, name: 'Blue Shirt', sku: 'BLUE-11',
+            orderedQuantity: 1, unitCost: 0, receivedQuantity: 0, remainingQuantity: 1 }],
+          receivings: []
+        })
+      if (path.endsWith('/purchase-orders/82/approve') && method === 'POST') {
+        approvals++
+        status = 'Approved'
+        return response(route, 200, { id: 82, status })
+      }
+      return response(route, 404, { message: 'Unexpected purchase route' })
+    })
+    await t.login()
+    await t.page.locator('.app-sidebar .nav-entry').filter({ hasText: 'Purchase Orders' }).click()
+    await t.page.getByRole('button', { name: 'New Purchase Order' }).click()
+    await t.page.waitForFunction(() =>
+      [...document.querySelectorAll('#purchase-supplier option')].some(option => option.value === '21'))
+    await t.page.waitForFunction(() =>
+      [...document.querySelectorAll('#purchase-product option')].some(option => option.value === '11'))
+    await t.page.locator('#purchase-supplier').selectOption('21')
+    await t.page.locator('#purchase-product').selectOption('11')
+    await t.page.getByRole('button', { name: 'Save Draft', exact: true }).click()
+    await t.page.getByRole('heading', { name: 'Purchase order #82' }).waitFor()
+    await t.page.getByRole('button', { name: 'Approve purchase order' }).waitFor()
+    assert.equal(orderCreated, 1)
+    assert.equal(approvals, 0, 'Saving an unfinished Owner draft must not auto-approve')
+    await t.page.getByRole('button', { name: 'Approve purchase order' }).click()
+    await t.page.getByRole('button', { name: 'Receive goods' }).waitFor()
+    assert.equal(approvals, 1)
+    await t.check()
+    await t.context.close()
+    console.log('PASS Owner Save Draft stays pending until explicit approval')
+  }
+
+  {
     const t = await scenario('manager-purchase-owner-approval-boundary', {
       role: 'Manager', hasProducts: true, productsFixture: true
     })
