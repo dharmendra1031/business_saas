@@ -242,6 +242,27 @@ public sealed class RetailPurchaseTests
             $"/api/businesses/{businessId}/stock/locations/{locationId}");
         Assert.Equal(100m, stockPage.GetProperty("items")[0].GetProperty("quantity").GetDecimal());
 
+        // The inventory screen must show the same two posted receivings as the
+        // database ledger, without exposing them across business or cashier roles.
+        var movementsUrl =
+            $"/api/businesses/{businessId}/stock/locations/{locationId}/movements?productId={productId}";
+        var postedMovements = await owner.GetFromJsonAsync<JsonElement>(movementsUrl);
+        Assert.Equal(2, postedMovements.GetProperty("total").GetInt32());
+        var movementRows = postedMovements.GetProperty("items");
+        Assert.Equal(2, movementRows.GetArrayLength());
+        Assert.All(movementRows.EnumerateArray(), row =>
+        {
+            Assert.Equal("Receiving", row.GetProperty("sourceType").GetString());
+            Assert.True(row.GetProperty("sourceId").GetInt64() > 0);
+        });
+        Assert.Equal(60m, movementRows[0].GetProperty("quantityChange").GetDecimal());
+        Assert.Equal(100m, movementRows[0].GetProperty("balanceAfter").GetDecimal());
+        Assert.Equal(40m, movementRows[1].GetProperty("quantityChange").GetDecimal());
+        Assert.Equal(40m, movementRows[1].GetProperty("balanceAfter").GetDecimal());
+        Assert.Equal(HttpStatusCode.OK, (await manager.GetAsync(movementsUrl)).StatusCode);
+        Assert.Equal(HttpStatusCode.NotFound, (await cashier.GetAsync(movementsUrl)).StatusCode);
+        Assert.Equal(HttpStatusCode.NotFound, (await other.GetAsync(movementsUrl)).StatusCode);
+
         using (var scope = factory.Services.CreateScope())
         {
             var db = scope.ServiceProvider.GetRequiredService<AppDbContext>();
@@ -273,6 +294,15 @@ public sealed class RetailPurchaseTests
             cashSale with { quantity = 2 })).StatusCode);
         Assert.Equal(HttpStatusCode.BadRequest, (await Send(cashier, sales,
             cashSale with { requestKey = "cash-out-of-stock-001", quantity = 98, tendered = 15000m })).StatusCode);
+        // A replayed receipt does not create a second cash movement.
+        var afterSaleMovements = await owner.GetFromJsonAsync<JsonElement>(movementsUrl);
+        Assert.Equal(3, afterSaleMovements.GetProperty("total").GetInt32());
+        var cashMovement = afterSaleMovements.GetProperty("items")[0];
+        Assert.Equal("CashSaleLine", cashMovement.GetProperty("sourceType").GetString());
+        Assert.True(cashMovement.GetProperty("sourceId").GetInt64() > 0);
+        Assert.Equal(-3m, cashMovement.GetProperty("quantityChange").GetDecimal());
+        Assert.Equal(97m, cashMovement.GetProperty("balanceAfter").GetDecimal());
+
         using (var scope = factory.Services.CreateScope())
         {
             var db = scope.ServiceProvider.GetRequiredService<AppDbContext>();
