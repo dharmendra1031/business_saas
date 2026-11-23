@@ -57,6 +57,15 @@
 - The preview-only Sales/Returns, Cash Register, Reports and Business Settings tabs retain working tab selection and genuine read-only business identity when available. Decorative preview welcome cards, empty chart-like panels, and developer-facing implementation guardrails were removed. Missing features remain visibly **Under construction**, with no fake numbers or saves.
 - No backend, SQL, permissions, new UI library or routing framework added. Real browser testing at 1366px/360px and user acceptance are separate; **not DONE** based on source changes alone.
 
+## Frontend + backend integration — stock alert slice (23 November 2026)
+
+- Added nullable per-product ReorderLevel (precision 18,3) with a single SQL Server migration and matching EF model/snapshot. Existing products remain unconfigured by default; no arbitrary threshold or fake quantity is introduced.
+- Products create/edit supports optional reorder quantity with backend validation. Product/location alerts are computed only when an active product has a threshold and a posted balance record; missing opening stock never means zero.
+- Existing authorized business dashboard response gains Owner-only stockAlerts (count, zero-stock count, first five product/location items). Cashier and unauthorized tenants receive no such data. Dashboard shows count only when configured thresholds exist; otherwise a compact link to Products.
+- Zero stock is Out of stock; positive stock at or below reorder level is Low stock. One product across two locations can generate two location-specific alerts. Inactive products are excluded.
+- Reuses Stock module and dashboard API; no duplicate ledger, new service or UI library. SQL, tenant/role, zero-stock, precision and browser tests cover this slice.
+- Integration is partial pending real production data, deployed browser verification, owner visual sign-off and a future dedicated inventory alert filter.
+
 ## Frontend + backend integration — first verified vertical slice (22 Nov 2026)
 
 - Extended the existing authorized business dashboard response rather than adding another endpoint or new data models.

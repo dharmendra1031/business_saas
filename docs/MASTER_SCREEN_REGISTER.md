@@ -169,12 +169,12 @@ The mockup pictures display illustrative controls (Card, UPI, Split, Services, d
 
 | ID | Screen / interaction | Type | Current | Priority | Required outcome / guardrail |
 | --- | --- | --- | --- | --- | --- |
-| BUS-01 | Business Dashboard | Page | Partial | P0 | Owner dashboard now consumes real posted cash-sales total, cash bill count and latest five cash receipts through existing server-owned dashboard API in Development; draft orders already integrated. Stock alerts, other payment channels and production E2E pending. No invented data. |
+| BUS-01 | Business Dashboard | Page | Partial | P0 | Real Owner cash totals, draft POs and configured per-product stock-alert count/top five location-specific items; only initialized stock is evaluated and missing thresholds never imply zero alerts. Real-user E2E and owner approval pending. |
 | BUS-02 | First-run business setup checklist | Page | Missing | P0 | Provisioned business readiness: first location, products, opening stock, receipt settings; resume safely. |
 | BUS-03 | Business selector / context switch | Page | Partial | P0 | Compact membership-only rows with business name/type/role; no owner tenant creation. Repeated clicks guarded and prior context cleared; Chromium fixture QA passed. Real tenant-revocation/authorization E2E and visual owner sign-off pending. |
 | BUS-04 | Locations — list and active location | Page | Partial | P1 | Authorized stock location selection and one-location label verified in Chromium; sidebar uses count for multi-branch rather than assuming first is active. Separate location management/list and authoritative primary/active scope still missing. |
 | BUS-05 | Locations — add / edit | Form | Missing | P1 | Permission and entitlement limits; no unauthorized branch access. |
-| BUS-06 | Products — list / search | Page | Partial | P0 | Existing server paging, SKU/name/barcode search, category/status filters and prices retained. Redundant zero count and one-page pager removed; 360px list prioritizes price/status/edit with SKU under name. Mocked API browser tests and real-world visual acceptance tracked separately. |
+| BUS-06 | Products — list / search | Page | Partial | P0 | Existing paging/search/status plus optional Reorder Level (decimal 18,3) in create/edit, null disables alerts. API validation and tenant isolation retained. Browser acceptance pending. |
 | BUS-07 | Products — create | Form | Partial | P0 | Name, SKU/barcode, category, unit, sale price, tax classification, validation. |
 | BUS-08 | Products — edit | Form | Partial | P1 | Prefill, meaningful update, no stock reset; protected duplicate-SKU checks. |
 | BUS-09 | Products — detail | Panel | Missing | P2 | Product identity, current status and inventory links; no fabricated movement history. |
@@ -195,7 +195,7 @@ The mockup pictures display illustrative controls (Card, UPI, Split, Services, d
 | BUS-24 | Purchases — receipt review/post | State | Partial | P1 | Explicit post action updates stock exactly once, retry-safe. |
 | BUS-25 | Purchases — receiving history | Tab | Partial | P1 | Real posted/pending receipts and outstanding balance. |
 | BUS-26 | Purchases — reversal / correction | Form | Missing | P2 | Compensating transaction with actor/reason; no silent stock overwrite. |
-| BUS-27 | Inventory — stock by location | Page | Partial | P1 | Branch-specific available stock, product search, accurate movement-backed quantity. |
+| BUS-27 | Inventory — stock by location | Page | Partial | P1 | Location balances and movement ledger; Owner stock alerts compare recorded balances against configured product thresholds. Uninitialized product/location pairs deliberately excluded. |
 | BUS-28 | Inventory — stock movement ledger | Tab | Partial | P1 | Origin, actor, time and quantity delta; correct tenant/branch filter. |
 | BUS-29 | Inventory — opening stock | Form | Partial | P1 | Authorized one-time posting and duplicate prevention. |
 | BUS-30 | Inventory — adjustment request | Form | Partial | P1 | Reason, current balance, proposed variance and negative-stock safeguards. |

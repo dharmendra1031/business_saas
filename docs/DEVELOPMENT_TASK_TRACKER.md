@@ -255,7 +255,7 @@
 
 | ID | Task / clear deliverable | Mandatory task-specific UI/UX check | Status |
 | --- | --- | --- | --- |
-| BS-121 | Build real Retail Dashboard actions | Fake KPI या demo data न हों | TODO |
+| BS-121 | Build real Retail Dashboard actions | Cash totals/draft POs and configured stock alerts integration; other payment channels and release E2E pending | PARTIAL |
 | BS-122 | Build date-filtered daily sales report | Business date/timezone स्पष्ट हो | TODO |
 | BS-123 | Build purchase/receiving report | Ordered vs received totals अलग हों | TODO |
 | BS-124 | Build stock balance and movement report | Available vs on-hand समझ आए | TODO |

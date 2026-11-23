@@ -107,7 +107,7 @@ public sealed class OwnerStockAlertTests
             new { productId = foreignProduct, quantity = 0m })).EnsureSuccessStatusCode();
 
         var response = await owner.GetAsync($"/api/businesses/{id}/dashboard");
-        Assert.True(response.IsSuccessStatusCode, await response.Content.ReadAsStringAsync());
+        Assert.Equal(HttpStatusCode.OK, response.StatusCode);
         var result = (await response.Content.ReadFromJsonAsync<JsonElement>());
         var alerts = result.GetProperty("stockAlerts");
         Assert.Equal(2, alerts.GetProperty("count").GetInt32());
