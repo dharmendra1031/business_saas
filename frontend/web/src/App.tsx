@@ -45,10 +45,25 @@ export default function App() {
   const businessNav = useRef<HTMLButtonElement>(null)
   const [sessionExpired, setSessionExpired] = useState(false)
   const [authNotice, setAuthNotice] = useState('')
+  const sessionVersion = useRef(0)
+  const businessesVersion = useRef(0)
+  const openVersion = useRef(0)
+  const openingBusiness = useRef(false)
+
+  // Invalidate requests synchronously before any old response can update the workspace.
+  function invalidatePendingRequests() {
+    sessionVersion.current++
+    businessesVersion.current++
+    openVersion.current++
+    openingBusiness.current = false
+  }
 
   useEffect(() => {
     setSessionExpiredHandler(() => {
+      invalidatePendingRequests()
       resetCsrf()
+      setBusinessesLoading(false)
+      setOpeningBusinessId(null)
       setUser(null)
       setBusinesses([])
       setDashboard(null)
@@ -64,10 +79,13 @@ export default function App() {
   }, [])
 
   async function initializeSession() {
+    invalidatePendingRequests()
+    const session = sessionVersion.current
     setPage('loading')
     setSessionError('')
     try {
       const me = await api<User>('/auth/me')
+      if (session !== sessionVersion.current) return
       setUser(me)
       setSessionExpired(false)
       if (me.isPlatformOwner) {
@@ -75,9 +93,10 @@ export default function App() {
         setPlatformSection('overview')
         setPage(me.mfaVerified ? 'platform' : 'mfa-setup')
       } else {
-        await loadBusinesses(true)
+        await loadBusinesses(true, session)
       }
     } catch (cause) {
+      if (session !== sessionVersion.current) return
       setUser(null)
       setBusinesses([])
       if (cause instanceof ApiResponseError && cause.status === 401) {
@@ -103,7 +122,11 @@ export default function App() {
     return () => window.removeEventListener('keydown', onKeyDown)
   }, [menuOpen])
 
-  async function loadBusinesses(openSingle = false) {
+  async function loadBusinesses(openSingle = false, session = sessionVersion.current) {
+    if (session !== sessionVersion.current) return
+    const request = ++businessesVersion.current
+    openVersion.current++
+    openingBusiness.current = false
     setError('')
     setBusinessesError('')
     setBusinessesLoading(true)
@@ -112,22 +135,31 @@ export default function App() {
     setPage('businesses')
     try {
       const list = await api<Business[]>('/businesses')
+      if (session !== sessionVersion.current || request !== businessesVersion.current) return
       setBusinesses(list)
-      if (openSingle && list.length === 1) await openBusiness(list[0].id)
+      if (openSingle && list.length === 1) await openBusiness(list[0].id, false, session, request)
     } catch (cause) {
-      if (!(cause instanceof SessionExpiredError))
+      if (session === sessionVersion.current && request === businessesVersion.current &&
+          !(cause instanceof SessionExpiredError))
         setBusinessesError(message(cause))
     } finally {
-      setBusinessesLoading(false)
+      if (session === sessionVersion.current && request === businessesVersion.current)
+        setBusinessesLoading(false)
     }
   }
 
-  async function openBusiness(id: number, showOverview = false) {
-    if (openingBusinessId !== null) return
+  async function openBusiness(id: number, showOverview = false,
+    session = sessionVersion.current, listRequest = businessesVersion.current) {
+    if (openingBusiness.current || session !== sessionVersion.current ||
+        listRequest !== businessesVersion.current) return
+    const request = ++openVersion.current
+    openingBusiness.current = true
     setError('')
     setOpeningBusinessId(id)
     try {
       const details = await api<RetailDashboard>(`/businesses/${id}/dashboard`)
+      if (session !== sessionVersion.current || listRequest !== businessesVersion.current ||
+          request !== openVersion.current) return
       if (details.business.typeCode !== 'RETAIL') {
         setDashboard(null)
         setPage('businesses')
@@ -141,23 +173,32 @@ export default function App() {
       setRetailPage(!showOverview && details.cashSaleEnabled && details.roleCode === 'Cashier' ? 'cash' : 'overview')
       setPage('retail')
     } catch (cause) {
-      if (!(cause instanceof SessionExpiredError)) {
+      if (session === sessionVersion.current && listRequest === businessesVersion.current &&
+          request === openVersion.current && !(cause instanceof SessionExpiredError)) {
         setError(message(cause))
         setPage('businesses')
       }
     } finally {
-      setOpeningBusinessId(null)
+      if (request === openVersion.current) {
+        openingBusiness.current = false
+        setOpeningBusinessId(null)
+      }
     }
   }
 
   async function logout() {
+    invalidatePendingRequests()
+    const session = sessionVersion.current
     try {
       await api<void>('/auth/logout', { method: 'POST' })
+      if (session !== sessionVersion.current) return
       resetCsrf()
       setUser(null)
       setDashboard(null)
       setBillingOpen(false)
       setBusinesses([])
+      setOpeningBusinessId(null)
+      setBusinessesLoading(false)
       setPage('login')
       setSessionExpired(false)
       setBusinessesError('')
@@ -165,7 +206,8 @@ export default function App() {
       setError('')
 
     } catch (cause) {
-      setError(message(cause))
+      if (session === sessionVersion.current && !(cause instanceof SessionExpiredError))
+        setError(message(cause))
     }
   }
 
