@@ -242,7 +242,9 @@ public static class BusinessEndpoints
             }
 
             OwnerStockAlerts? stockAlerts = null;
-            if (roleCode == "Owner" && details.TypeCode == "RETAIL")
+            if (roleCode == "Owner" && details.TypeCode == "RETAIL" &&
+                await db.RetailProducts.AsNoTracking().AnyAsync(x =>
+                    x.BusinessId == businessId && x.IsActive && x.ReorderLevel.HasValue))
             {
                 // A threshold is explicit and stock must have been initialized.
                 // An absent balance or unconfigured threshold never implies zero stock.
