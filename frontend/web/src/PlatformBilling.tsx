@@ -1,4 +1,4 @@
-import { useEffect, useState, type FormEvent } from 'react'
+import { useEffect, useRef, useState, type FormEvent } from 'react'
 import { api, operationKey, post, SessionExpiredError } from './api'
 
 interface BillingPreview {
@@ -107,6 +107,9 @@ function money(amount: number, currency: string) {
 
 export default function PlatformBilling({ business, onChooseBusiness }: { business: { id: number; name: string } | null; onChooseBusiness: () => void }) {
   const businessId = business?.id
+  const businessIdRef = useRef(businessId)
+  businessIdRef.current = businessId
+  const previewGeneration = useRef(0)
   const [cycle, setCycle] = useState('Monthly')
   const [periodStart, setPeriodStart] = useState(() => {
     const today = new Date()
@@ -132,6 +135,20 @@ export default function PlatformBilling({ business, onChooseBusiness }: { busine
   const [busy, setBusy] = useState(false)
   const [error, setError] = useState('')
   const [notice, setNotice] = useState('')
+
+  useEffect(() => {
+    // A business switch must discard unsubmitted terms from the previous tenant.
+    previewGeneration.current++
+    setPreview(null)
+    setRequestKey('')
+    setReason('')
+    setSelectedDraftId(null)
+    setPaymentReason('')
+    setPaymentKey('')
+    setBusy(false)
+    setError('')
+    setNotice('')
+  }, [businessId])
 
   useEffect(() => {
     let active = true
@@ -160,6 +177,7 @@ export default function PlatformBilling({ business, onChooseBusiness }: { busine
   }, [page, paymentPage, reconciliationPage, reload])
 
   function clearPreview() {
+    previewGeneration.current++
     setPreview(null)
     setRequestKey('')
     setNotice('')
@@ -175,17 +193,23 @@ export default function PlatformBilling({ business, onChooseBusiness }: { busine
       setError('Choose a valid billing period start date.')
       return
     }
+    const expectedBusinessId = businessId
+    const generation = ++previewGeneration.current
     setBusy(true)
     try {
       const result = await api<BillingPreview>(
-        `/platform/billing/businesses/${Number(businessId)}/preview?cycle=${cycle}&periodStartDate=${periodStart}`)
+        `/platform/billing/businesses/${Number(expectedBusinessId)}/preview?cycle=${cycle}&periodStartDate=${periodStart}`)
+      if (generation !== previewGeneration.current ||
+          businessIdRef.current !== expectedBusinessId) return
       setPreview(result)
       setRequestKey(operationKey())
     } catch (cause) {
-      if (!(cause instanceof SessionExpiredError))
+      if (generation === previewGeneration.current &&
+          businessIdRef.current === expectedBusinessId && !(cause instanceof SessionExpiredError))
         setError(cause instanceof Error ? cause.message : 'Unable to preview billing terms.')
     } finally {
-      setBusy(false)
+      if (generation === previewGeneration.current &&
+          businessIdRef.current === expectedBusinessId) setBusy(false)
     }
   }
 
