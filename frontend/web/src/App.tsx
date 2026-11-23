@@ -40,7 +40,6 @@ export default function App() {
   const [billingBusiness, setBillingBusiness] = useState<{ id: number; name: string } | null>(null)
   const [retailPage, setRetailPage] = useState<RetailPage>('overview')
   const [error, setError] = useState('')
-  const [notice, setNotice] = useState('')
   const [menuOpen, setMenuOpen] = useState(false)
   const menuToggle = useRef<HTMLButtonElement>(null)
   const businessNav = useRef<HTMLButtonElement>(null)
@@ -164,10 +163,20 @@ export default function App() {
       setBusinessesError('')
       setAuthNotice('')
       setError('')
-      setNotice('')
+
     } catch (cause) {
       setError(message(cause))
     }
+  }
+
+  // Keep sidebar transitions consistent; only the overview refreshes dashboard data.
+  function navigateRetail(section: RetailPage) {
+    if (menuOpen) menuToggle.current?.focus()
+    setMenuOpen(false)
+    setApprovalList(false)
+    if (section === 'stock') setStockAlertLocationId(null)
+    if (section === 'overview' && dashboard) void openBusiness(dashboard.business.id, true)
+    else setRetailPage(section)
   }
 
   if (page === 'loading')
@@ -242,14 +251,7 @@ export default function App() {
               ref={section === 'overview' && businesses.length <= 1 ? businessNav : undefined}
               className={`nav-entry${section === 'cash' ? ' pos-nav-entry' : ''}${retailPage === section ? ' active' : ''}`}
               aria-current={retailPage === section ? 'page' : undefined}
-              onClick={() => {
-                if (menuOpen) menuToggle.current?.focus()
-                setMenuOpen(false)
-                setApprovalList(false)
-                if (section === 'stock') setStockAlertLocationId(null)
-                if (section === 'overview') void openBusiness(dashboard.business.id, true)
-                else setRetailPage(section)
-              }}><Icon size={18} /> {label}</button>)}
+              onClick={() => navigateRetail(section)}><Icon size={18} /> {label}</button>)
           {dashboard.roleCode !== 'Cashier' && <>
             <div className="sidebar-heading">SHOP SETUP</div>
             {([
@@ -259,11 +261,7 @@ export default function App() {
             ] as const).map(([section, label, Icon]) => <button key={section} type="button"
               className={`nav-entry${retailPage === section ? ' active' : ''}`}
               aria-current={retailPage === section ? 'page' : undefined}
-              onClick={() => {
-                if (menuOpen) menuToggle.current?.focus()
-                setMenuOpen(false)
-                setRetailPage(section)
-              }}><Icon size={18} /> {label}</button>)}
+              onClick={() => navigateRetail(section)}><Icon size={18} /> {label}</button>)
           </>}
           {dashboard.roleCode !== 'Cashier' && <>
             <div className="sidebar-heading">SALES & REPORTING</div>
@@ -274,28 +272,16 @@ export default function App() {
             ] as const).map(([section, label, Icon]) => <button key={section} type="button"
               className={`nav-entry business-preview-nav${retailPage === section ? ' active' : ''}`}
               aria-current={retailPage === section ? 'page' : undefined}
-              onClick={() => {
-                if (menuOpen) menuToggle.current?.focus()
-                setMenuOpen(false)
-                setRetailPage(section)
-              }}><Icon size={18} /> <span>{label}</span><small>Preview</small></button>)}
+              onClick={() => navigateRetail(section)}><Icon size={18} /> <span>{label}</span><small>Preview</small></button>)
           </>}
           {dashboard.roleCode === 'Owner' && <button type="button"
             className={`nav-entry${retailPage === 'team' ? ' active' : ''}`}
             aria-current={retailPage === 'team' ? 'page' : undefined}
-            onClick={() => {
-              if (menuOpen) menuToggle.current?.focus()
-              setMenuOpen(false)
-              setRetailPage('team')
-            }}><UserRound size={18} /> Staff & Access</button>}
+            onClick={() => navigateRetail('team')}><UserRound size={18} /> Staff & Access</button>}
           {dashboard.roleCode === 'Owner' && <button type="button"
             className={`nav-entry business-preview-nav${retailPage === 'settings' ? ' active' : ''}`}
             aria-current={retailPage === 'settings' ? 'page' : undefined}
-            onClick={() => {
-              if (menuOpen) menuToggle.current?.focus()
-              setMenuOpen(false)
-              setRetailPage('settings')
-            }}><Settings2 size={18} /> <span>Business Settings</span><small>Preview</small></button>}
+            onClick={() => navigateRetail('settings')}><Settings2 size={18} /> <span>Business Settings</span><small>Preview</small></button>}
         </>}
         {canViewPlatform && page === 'platform' && <>
           <div className="sidebar-heading">SUPER ADMIN MODULES</div>
@@ -318,7 +304,7 @@ export default function App() {
                   setMenuOpen(false)
                   setDashboard(null)
                   setError('')
-                  setNotice('')
+
                   setBillingBusiness(null)
                   setPlatformBusinessId(null)
                   setPlatformStartCreate(false)
@@ -387,7 +373,6 @@ export default function App() {
 
         <main className={`page-content${isBusinessOverview ? ' business-dashboard-page' : ''}`}>
           {error && <div className="alert alert-danger" role="alert">{error}</div>}
-          {notice && <div className="alert alert-success" role="status">{notice}</div>}
 
           {page === 'platform' && canViewPlatform && <PlatformAdmin section={platformSection}
             selectedBusinessId={platformBusinessId} billingBusiness={billingBusiness}
