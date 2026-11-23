@@ -565,6 +565,51 @@ try {
   }
 
   {
+    const t = await scenario('manager-purchase-owner-approval-boundary', {
+      role: 'Manager', hasProducts: true, productsFixture: true
+    })
+    let createCount = 0
+    let approvalRequests = 0
+    await t.page.route('**/api/businesses/1/purchase-orders**', route => {
+      const path = new URL(route.request().url()).pathname
+      const method = route.request().method()
+      if (path.endsWith('/purchase-orders') && method === 'GET')
+        return response(route, 200, { items: [], total: 0, page: 1, pageSize: 20 })
+      if (path.endsWith('/purchase-orders') && method === 'POST') {
+        createCount++
+        return response(route, 201, { id: 81, status: 'Draft' })
+      }
+      if (path.endsWith('/purchase-orders/81') && method === 'GET')
+        return response(route, 200, {
+          id: 81, locationId: 1, supplierId: 21, status: 'Draft',
+          lines: [{ id: 82, productId: 11, name: 'Blue Shirt', sku: 'BLUE-11',
+            orderedQuantity: 2, unitCost: 40, receivedQuantity: 0, remainingQuantity: 2 }],
+          receivings: []
+        })
+      if (path.endsWith('/approve')) approvalRequests++
+      return response(route, 403, { message: 'Owner approval required' })
+    })
+    await t.login()
+    await t.page.locator('.app-sidebar .nav-entry').filter({ hasText: 'Purchase Orders' }).click()
+    await t.page.getByRole('button', { name: 'New Purchase Order' }).click()
+    await t.page.waitForFunction(() =>
+      [...document.querySelectorAll('#purchase-supplier option')].some(option => option.value === '21'))
+    await t.page.waitForFunction(() =>
+      [...document.querySelectorAll('#purchase-product option')].some(option => option.value === '11'))
+    await t.page.locator('#purchase-supplier').selectOption('21')
+    await t.page.locator('#purchase-product').selectOption('11')
+    await t.page.getByRole('button', { name: 'Submit for Approval' }).click()
+    await t.page.getByRole('heading', { name: 'Purchase order #81' }).waitFor()
+    await t.page.getByText('Awaiting owner approval').waitFor()
+    assert.equal(createCount, 1, 'Manager creates one draft order')
+    assert.equal(approvalRequests, 0, 'Manager must never invoke Owner approval')
+    assert.equal(await t.page.getByRole('button', { name: 'Approve purchase order' }).count(), 0)
+    await t.check()
+    await t.context.close()
+    console.log('PASS Manager submits one PO draft without Owner approval privileges')
+  }
+
+  {
     const t = await scenario('owner-cash-summary-integrated', {
       role: 'Owner', hasProducts: true, cashSalesFixture: true
     })
