@@ -603,6 +603,12 @@ try {
       role: 'Manager', hasProducts: true, pendingApprovals: 3,
       cashSalesFixture: true, stockAlertsFixture: true
     })
+    // Defense-in-depth: a malformed response must not expose owner receipts.
+    await t.page.route('**/api/businesses/1/dashboard', route => {
+      const malformed = dashboard('Owner', true, 3, 1, 1, true, true)
+      malformed.roleCode = 'Manager'
+      return response(route, 200, malformed)
+    })
     await t.login()
     await t.page.getByRole('heading', { name: 'Business Overview' }).waitFor()
     assert.equal(await t.page.locator('.business-kpi-card').count(), 0,
