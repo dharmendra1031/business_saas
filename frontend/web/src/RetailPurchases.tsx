@@ -143,22 +143,25 @@ export default function RetailPurchases({ businessId, canOperate, locations, rol
   }, [basePath, page, reload, approvalsOnly])
 
   useEffect(() => {
+    // The order register and approval review do not need create-form catalogs.
+    if (!creating) return
     let active = true
     setSuppliers([])
     api<Page<Supplier>>(`/businesses/${businessId}/suppliers?search=${encodeURIComponent(supplierQuery)}&page=1`)
       .then(data => { if (active) setSuppliers(data.items.filter(x => x.isActive)) })
       .catch(cause => { if (active && !(cause instanceof SessionExpiredError)) setError(message(cause)) })
     return () => { active = false }
-  }, [businessId, supplierQuery, reload])
+  }, [businessId, supplierQuery, reload, creating])
 
   useEffect(() => {
+    if (!creating) return
     let active = true
     setProducts([])
     api<Page<Product>>(`/businesses/${businessId}/products?search=${encodeURIComponent(productQuery)}&page=1`)
       .then(data => { if (active) setProducts(data.items.filter(x => x.isActive)) })
       .catch(cause => { if (active && !(cause instanceof SessionExpiredError)) setError(message(cause)) })
     return () => { active = false }
-  }, [businessId, productQuery, reload])
+  }, [businessId, productQuery, reload, creating])
 
   useEffect(() => {
     if (selectedId === null) return
