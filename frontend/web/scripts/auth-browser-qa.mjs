@@ -597,6 +597,31 @@ try {
   }
 
   {
+    // Managers may operate the store, but never receive owner financial KPIs
+    // or owner-only navigation such as staff management and subscriptions.
+    const t = await scenario('manager-role-boundary', {
+      role: 'Manager', hasProducts: true, pendingApprovals: 3,
+      cashSalesFixture: true, stockAlertsFixture: true
+    })
+    await t.login()
+    await t.page.getByRole('heading', { name: 'Business Overview' }).waitFor()
+    assert.equal(await t.page.locator('.business-kpi-card').count(), 0,
+      'Manager must not see owner-only financial and approval KPI cards')
+    assert.equal(await t.page.getByRole('heading', { name: 'Recent Activity' }).count(), 0,
+      'Manager must not see owner-only receipt totals')
+    assert.equal(await t.page.getByRole('button', { name: 'Staff & Access' }).count(), 0)
+    assert.equal(await t.page.getByRole('button', { name: 'Business Settings' }).count(), 0)
+    assert.equal(await t.page.getByText('Subscription & billing').count(), 0)
+    assert.equal(await t.page.getByRole('button', { name: /Open POS Checkout/ }).count(), 0,
+      'POS must only be visible when enabled by the API')
+    await t.page.locator('.app-sidebar .nav-entry').filter({ hasText: 'Inventory' }).click()
+    await t.page.getByRole('heading', { name: 'Inventory', level: 2 }).waitFor()
+    await t.check()
+    await t.context.close()
+    console.log('PASS Manager owner-only KPI, navigation and subscription isolation')
+  }
+
+  {
     const t = await scenario('multi-business', { role: 'Manager', multiple: true })
     await t.login()
     await t.page.getByRole('heading', { name: 'Choose a business' }).waitFor()
