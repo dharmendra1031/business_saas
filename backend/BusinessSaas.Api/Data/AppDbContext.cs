@@ -688,6 +688,9 @@ public sealed class AppDbContext(DbContextOptions<AppDbContext> options)
 
         builder.Entity<RetailCashSaleLine>(entity =>
         {
+            entity.ToTable(x => x.HasCheckConstraint("CK_RetailCashSaleLine_Quantity",
+                "[Quantity] >= 0.001 AND [Quantity] <= 1000000"));
+            entity.Property(x => x.Quantity).HasPrecision(18, 3);
             entity.Property(x => x.ProductName).HasMaxLength(200);
             entity.Property(x => x.UnitPrice).HasPrecision(18, 2);
             entity.HasOne<RetailProduct>().WithMany().HasForeignKey(x => x.ProductId).OnDelete(DeleteBehavior.Restrict);

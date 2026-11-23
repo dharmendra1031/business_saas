@@ -72,16 +72,20 @@ public static class RetailCashSales
                 x.Sku.Contains(term) || x.Barcode == term))
             .OrderByDescending(x => x.Barcode == term || x.Sku == term)
             .ThenBy(x => x.Name).ThenBy(x => x.Id).Take(30)
-            .Select(x => new { x.Id, x.Name, x.Sku, x.Barcode, x.SalePrice, Available = db.RetailStockBalances
+            .Select(x => new { x.Id, x.Name, x.Sku, x.Barcode, x.SalePrice,
+                UnitCode = db.RetailUnits.Where(unit =>
+                    unit.Id == x.UnitId && unit.BusinessId == businessId)
+                    .Select(unit => unit.Code).FirstOrDefault(),
+                Available = db.RetailStockBalances
                 .Where(b => b.BusinessId == businessId && b.LocationId == locationId && b.ProductId == x.Id)
                 .Select(b => (decimal?)b.Quantity).FirstOrDefault() ?? 0 }).ToListAsync();
         return Results.Ok(products);
     }
 
     public sealed record CashRequest(long LocationId, decimal Tendered, string RequestKey,
-        List<Item>? Lines = null, long ProductId = 0, int Quantity = 0, decimal ExpectedUnitPrice = 0);
+        List<Item>? Lines = null, long ProductId = 0, decimal Quantity = 0, decimal ExpectedUnitPrice = 0);
 
-    public sealed record Item(long ProductId, int Quantity, decimal ExpectedUnitPrice);
+    public sealed record Item(long ProductId, decimal Quantity, decimal ExpectedUnitPrice);
 
     private static async Task<IResult> Post(long businessId, CashRequest request,
         ClaimsPrincipal user, AppDbContext db)
@@ -89,7 +93,8 @@ public static class RetailCashSales
         if (!long.TryParse(user.FindFirstValue(ClaimTypes.NameIdentifier), out var actor))
             return Results.NotFound();
         var items = request.Lines ?? [new Item(request.ProductId, request.Quantity, request.ExpectedUnitPrice)];
-        if (items.Count is < 1 or > 100 || items.Any(x => x is null || x.ProductId <= 0 || x.Quantity is < 1 or > 1000000) ||
+        if (items.Count is < 1 or > 100 || items.Any(x => x is null || x.ProductId <= 0 || x.Quantity is < 0.001m or > 1000000m ||
+            decimal.Round(x.Quantity, 3) != x.Quantity) ||
             items.Select(x => x.ProductId).Distinct().Count() != items.Count || string.IsNullOrWhiteSpace(request.RequestKey) || request.RequestKey.Length is < 12 or > 80 ||
             request.Tendered is <= 0 or > 9999999999999999.99m ||
             decimal.Round(request.Tendered, 2) != request.Tendered)
@@ -131,7 +136,8 @@ public static class RetailCashSales
                     return Results.BadRequest(new { message = "Product or price changed. Remove and select the affected item again." });
                 sale.Lines.Add(new RetailCashSaleLine { ProductId = product.Id, ProductName = product.Name,
                     Quantity = item.Quantity, UnitPrice = product.SalePrice });
-                sale.Total += product.SalePrice * item.Quantity;
+                sale.Total += decimal.Round(product.SalePrice * item.Quantity, 2,
+                    MidpointRounding.AwayFromZero);
             }
             if (request.Tendered < sale.Total)
                 return Results.BadRequest(new { message = "Cash received is less than the basket total." });

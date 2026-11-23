@@ -353,6 +353,33 @@ public sealed class RetailPurchaseTests
                 .Select(x => x.Quantity).SingleAsync());
         }
 
+        // Fractional base-unit POS sale uses the same 3-decimal stock ledger precision as receiving.
+        var fractionSale = new { locationId, productId, quantity = 0.125m,
+            expectedUnitPrice = 150m, tendered = 20m, requestKey = "cash-fractional-20261123" };
+        var fractionResponse = await Send(cashier, sales, fractionSale);
+        Assert.Equal(HttpStatusCode.OK, fractionResponse.StatusCode);
+        var fractionReceipt = await fractionResponse.Content.ReadFromJsonAsync<JsonElement>();
+        Assert.Equal(18.75m, fractionReceipt.GetProperty("total").GetDecimal());
+        Assert.Equal(0.125m, fractionReceipt.GetProperty("lines")[0].GetProperty("quantity").GetDecimal());
+        var replayFraction = await Send(cashier, sales, fractionSale);
+        Assert.Equal(HttpStatusCode.OK, replayFraction.StatusCode);
+        Assert.Equal(fractionReceipt.GetProperty("id").GetInt64(),
+            (await replayFraction.Content.ReadFromJsonAsync<JsonElement>()).GetProperty("id").GetInt64());
+        Assert.Equal(HttpStatusCode.BadRequest, (await Send(cashier, sales,
+            fractionSale with { requestKey = "cash-overprecision-20261123", quantity = 0.0001m })).StatusCode);
+        Assert.Equal(HttpStatusCode.Conflict, (await Send(cashier, sales,
+            fractionSale with { quantity = 0.250m })).StatusCode);
+        using (var scope = factory.Services.CreateScope())
+        {
+            var db = scope.ServiceProvider.GetRequiredService<AppDbContext>();
+            Assert.Equal(94.875m, await db.RetailStockBalances.Where(x =>
+                x.BusinessId == businessId && x.ProductId == productId)
+                .Select(x => x.Quantity).SingleAsync());
+            Assert.Equal(0.125m, await db.Set<RetailCashSaleLine>().Where(x =>
+                x.SaleId == fractionReceipt.GetProperty("id").GetInt64())
+                .Select(x => x.Quantity).SingleAsync());
+        }
+
         using (var scope = factory.Services.CreateScope())
         {
             var db = scope.ServiceProvider.GetRequiredService<AppDbContext>();

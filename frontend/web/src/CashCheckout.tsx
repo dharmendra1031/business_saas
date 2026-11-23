@@ -4,13 +4,20 @@ import PosCashPaymentDialog from './PosCashPaymentDialog'
 import { api, ApiResponseError, operationKey, post, type RetailDashboard } from './api'
 
 interface Product {
-  id: number; name: string; sku: string; barcode: string | null; salePrice: number; available: number
+  id: number; name: string; sku: string; barcode: string | null; salePrice: number; available: number;
+  unitCode?: string | null
 }
-interface Line { productId: number; name: string; quantity: number; expectedUnitPrice: number }
+interface Line { productId: number; name: string; quantity: number; expectedUnitPrice: number;
+  unitCode?: string | null }
 interface SaleRequest { locationId: number; requestKey: string; tendered: number; lines: Line[] }
 interface Receipt {
   id: number; total: number; tendered: number; currencyCode: string; postedAtUtc: string
   lines: { id: number; productName: string; unitPrice: number; quantity: number }[]
+}
+
+function validQuantity(value: number): boolean {
+  return Number.isFinite(value) && value >= 0.001 && value <= 1000000 &&
+    Math.abs(Math.round(value * 1000) - value * 1000) < 0.000001
 }
 
 function restore(key: string): SaleRequest | null {
@@ -29,8 +36,7 @@ function restore(key: string): SaleRequest | null {
     }]
     if (!lines.length || lines.length > 100 || lines.some((line: Line) =>
       !Number.isSafeInteger(line.productId) || line.productId < 1 ||
-      typeof line.name !== 'string' || !Number.isSafeInteger(line.quantity) ||
-      line.quantity < 1 || line.quantity > 1000000 ||
+      typeof line.name !== 'string' || !validQuantity(line.quantity) ||
       !Number.isFinite(line.expectedUnitPrice) || line.expectedUnitPrice < 0 ||
       Math.round(line.expectedUnitPrice * 100) !== line.expectedUnitPrice * 100 &&
       Math.abs(Math.round(line.expectedUnitPrice * 100) - line.expectedUnitPrice * 100) > 0.000001))
@@ -67,7 +73,8 @@ export default function CashCheckout({ userId, dashboard, onExit }: {
   const [busy, setBusy] = useState(false)
   const lock = useRef(false)
   const searchInput = useRef<HTMLInputElement>(null)
-  const total = basket.reduce((sum, line) => sum + Math.round(line.expectedUnitPrice * 100) * line.quantity, 0) / 100
+  const total = basket.reduce((sum, line) =>
+    sum + Math.round(Math.round(line.expectedUnitPrice * 100) * line.quantity), 0) / 100
   const money = (amount: number) => business.currencyCode + ' ' + amount.toFixed(2)
 
   useEffect(() => {
@@ -106,8 +113,9 @@ export default function CashCheckout({ userId, dashboard, onExit }: {
   function addProduct(item: Product) {
     if (!dashboard.canOperate || busy || pending || receipt) return
     const existing = basket.find(line => line.productId === item.id)
-    const nextQty = (existing?.quantity ?? 0) + 1
-    if (!Number.isSafeInteger(nextQty) || nextQty > Math.min(item.available, 1000000)) {
+    const nextQty = Number(((existing?.quantity ?? 0) +
+      Math.min(1, item.available - (existing?.quantity ?? 0))).toFixed(3))
+    if (!validQuantity(nextQty) || nextQty > item.available) {
       setError('Insufficient available stock for this product.')
       return
     }
@@ -115,7 +123,8 @@ export default function CashCheckout({ userId, dashboard, onExit }: {
       setError('A receipt supports up to 100 products.')
       return
     }
-    const line = { productId: item.id, name: item.name, quantity: nextQty, expectedUnitPrice: item.salePrice }
+    const line = { productId: item.id, name: item.name, quantity: nextQty,
+      expectedUnitPrice: item.salePrice, unitCode: item.unitCode }
     setBasket(existing ? basket.map(previous => previous.productId === item.id ? line : previous) : [...basket, line])
     setCash('')
     setError('')
@@ -142,7 +151,7 @@ export default function CashCheckout({ userId, dashboard, onExit }: {
   }
 
   function updateQuantity(line: Line, quantity: number) {
-    if (!Number.isSafeInteger(quantity) || quantity < 1 || quantity > 1000000) return
+    if (!validQuantity(quantity)) return
     const knownStock = products.find(x => x.id === line.productId)?.available
     if (knownStock !== undefined && quantity > knownStock) {
       setError('Quantity is greater than available stock.')
@@ -153,13 +162,13 @@ export default function CashCheckout({ userId, dashboard, onExit }: {
     setError('')
   }
 
-  const itemCount = basket.reduce((sum, line) => sum + line.quantity, 0)
+  const itemCount = Number(basket.reduce((sum, line) => sum + line.quantity, 0).toFixed(3))
 
   async function recordSale() {
     const received = Number(cash)
     if (lock.current || !dashboard.canOperate || (pending && lookupState !== 'missing')) return
     if (!pending && (!locationId || !basket.length || basket.some(line =>
-      !Number.isSafeInteger(line.quantity) || line.quantity < 1 ||
+      !validQuantity(line.quantity) ||
       !Number.isFinite(line.expectedUnitPrice) || line.expectedUnitPrice < 0) ||
       !Number.isFinite(total) || total <= 0 || !Number.isFinite(received) ||
       Math.abs(Math.round(received * 100) - received * 100) > 0.000001 || received < total)) {
@@ -283,10 +292,11 @@ export default function CashCheckout({ userId, dashboard, onExit }: {
           </div> : products.length ? <div className="pos-products-grid">
             {products.map(item => {
               const inBasket = basket.find(line => line.productId === item.id)?.quantity ?? 0
-              const canAdd = dashboard.canOperate && !busy && item.available >= inBasket + 1 &&
+              const canAdd = dashboard.canOperate && !busy &&
+                item.available - inBasket >= 0.001 &&
                 (inBasket > 0 || basket.length < 100)
               return <button key={item.id} type="button" className="pos-product-card" disabled={!canAdd}
-                aria-label={`Add ${item.name}, ${money(item.salePrice)}, ${item.available} available`}
+                aria-label={`Add ${item.name}, ${money(item.salePrice)}, ${item.available} ${item.unitCode ?? 'units'} available`}
                 onClick={() => addProduct(item)}>
                 <span className="pos-product-visual"><Package size={33} aria-hidden="true" />
                   {inBasket > 0 && <span className="pos-product-in-cart">{inBasket} in cart</span>}
@@ -295,7 +305,7 @@ export default function CashCheckout({ userId, dashboard, onExit }: {
                   <strong>{item.name}</strong>
                   <small>{item.sku}</small>
                   <span className="pos-product-bottom"><b>{money(item.salePrice)}</b>
-                    <span>{item.available > 0 ? `${item.available} in stock` : 'Out of stock'}</span></span>
+                    <span>{item.available > 0 ? `${item.available} ${item.unitCode ?? 'units'} in stock` : 'Out of stock'}</span></span>
                 </span>
                 <span className="pos-product-plus" aria-hidden="true"><Plus size={15} /></span>
               </button>
@@ -310,7 +320,7 @@ export default function CashCheckout({ userId, dashboard, onExit }: {
       <section className="content-section pos-basket" aria-label="Current sale basket">
         <div className="pos-panel-heading">
           <div><h2>Current Sale</h2><small>Cash payment · {business.currencyCode}</small></div>
-          <span className="pos-count-pill">{itemCount} items</span>
+          <span className="pos-count-pill">{itemCount} units</span>
         </div>
         <div className="pos-basket-toolbar">
           <span><ShoppingBag size={16} /> {basket.length} {basket.length === 1 ? 'product' : 'products'}</span>
@@ -330,15 +340,15 @@ export default function CashCheckout({ userId, dashboard, onExit }: {
           <li key={line.productId} className="pos-basket-line">
             <div className="pos-line-description">
               <strong>{line.name}</strong>
-              <small>{money(line.expectedUnitPrice)} each</small>
-              <b>{money(Math.round(line.expectedUnitPrice * 100) * line.quantity / 100)}</b>
+              <small>{money(line.expectedUnitPrice)} / {line.unitCode ?? 'unit'}</small>
+              <b>{money(Math.round(Math.round(line.expectedUnitPrice * 100) * line.quantity) / 100)}</b>
             </div>
             <div className="pos-quantity-control" aria-label={`Quantity of ${line.name}`}>
               <button type="button" aria-label={`Decrease quantity of ${line.name}`}
                 disabled={busy || line.quantity <= 1}
                 onClick={() => updateQuantity(line, line.quantity - 1)}><Minus size={15} /></button>
               <input className="form-control form-control-sm" aria-label={`Quantity of ${line.name}`}
-                type="number" min="1" max="1000000" step="1" disabled={busy} value={line.quantity}
+                type="number" min="0.001" max="1000000" step="0.001" disabled={busy} value={line.quantity}
                 onChange={event => updateQuantity(line, Number(event.target.value))} />
               <button type="button" aria-label={`Increase quantity of ${line.name}`}
                 disabled={busy || line.quantity >= 1000000}
@@ -357,7 +367,7 @@ export default function CashCheckout({ userId, dashboard, onExit }: {
           <p className="pos-no-discount-note">Additional discounts and payment methods are not enabled for this checkout.</p>
           <button type="button" className="btn btn-primary pos-record-button"
             disabled={!dashboard.canOperate || busy || !basket.length || !Number.isFinite(total) || total <= 0 ||
-              basket.some(line => !Number.isSafeInteger(line.quantity) || line.quantity < 1)}
+              basket.some(line => !validQuantity(line.quantity))}
             onClick={() => { setError(''); setShowPayment(true) }}>
             <Banknote size={19} /> Pay / Checkout <ArrowRight size={18} />
           </button>
@@ -365,7 +375,7 @@ export default function CashCheckout({ userId, dashboard, onExit }: {
       </section>
     </div>}
     {showPayment && !pending && !receipt && <PosCashPaymentDialog amount={total}
-      cash={cash} currency={business.currencyCode} lineCount={itemCount} busy={busy} error={error}
+      cash={cash} currency={business.currencyCode} lineCount={basket.length} busy={busy} error={error}
       onCashChange={value => { setCash(value); setError('') }} onCancel={() => setShowPayment(false)}
       onConfirm={() => void recordSale()} />}
   </section>

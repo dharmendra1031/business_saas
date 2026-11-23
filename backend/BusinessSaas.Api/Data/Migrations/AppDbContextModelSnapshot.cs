@@ -1675,8 +1675,9 @@ namespace BusinessSaas.Api.Data.Migrations
                         .HasMaxLength(200)
                         .HasColumnType("nvarchar(200)");
 
-                    b.Property<int>("Quantity")
-                        .HasColumnType("int");
+                    b.Property<decimal>("Quantity")
+                        .HasPrecision(18, 3)
+                        .HasColumnType("decimal(18,3)");
 
                     b.Property<long>("SaleId")
                         .HasColumnType("bigint");
@@ -1691,7 +1692,11 @@ namespace BusinessSaas.Api.Data.Migrations
 
                     b.HasIndex("SaleId");
 
-                    b.ToTable("RetailCashSaleLine");
+                    b.ToTable("RetailCashSaleLine", t =>
+                        {
+                            t.HasCheckConstraint("CK_RetailCashSaleLine_Quantity",
+                                "[Quantity] >= 0.001 AND [Quantity] <= 1000000");
+                        });
                 });
 
             modelBuilder.Entity("BusinessSaas.Api.Data.RetailCashSale", b =>
