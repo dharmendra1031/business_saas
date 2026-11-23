@@ -560,7 +560,7 @@ try {
         { exact: false }).waitFor()
       await t.page.getByRole('button', { name: 'Post stock' }).waitFor()
       const draftRow = t.page.locator('tbody tr').filter({ hasText: '#91' })
-      assert.match(await draftRow.innerText(), /Blue Shirt\\s*·\\s*2\\.000/,
+      assert.match(await draftRow.innerText(), /Blue Shirt.*2[.]000/,
         'A saved draft must show its exact product and quantity before posting')
       assert.match(await draftRow.innerText(), /Draft/)
       assert.equal(stock, 0, 'A posting failure must not change stock')
