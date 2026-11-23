@@ -11,6 +11,7 @@ export default function BusinessOverview({ dashboard, onNavigate, onReviewApprov
   const { roleCode, locations, subscription, accessStatus, hasProducts, pendingApprovals } = dashboard
   const isOwner = roleCode === 'Owner'
   const cash = dashboard.cashSalesToday
+  const stockAlerts = dashboard.stockAlerts
   const money = new Intl.NumberFormat(undefined, {
     style: 'currency', currency: dashboard.business.currencyCode
   })
@@ -62,6 +63,14 @@ export default function BusinessOverview({ dashboard, onNavigate, onReviewApprov
           </>}
           {isOwner && <div className="business-kpi-card"><small>Draft Purchase Orders</small>
             <strong>{pendingApprovals.toLocaleString()}</strong><span>Owner review</span></div>}
+          {isOwner && stockAlerts && <div className="business-kpi-card">
+            <small>Stock Alerts</small>
+            <strong>{stockAlerts.count.toLocaleString()}</strong>
+            <span>{stockAlerts.outOfStockCount > 0
+              ? stockAlerts.outOfStockCount + ' out of stock · ' +
+                (stockAlerts.count - stockAlerts.outOfStockCount) + ' low stock'
+              : 'Posted stock records only'}</span>
+          </div>}
         </div>
       </section>
 
@@ -73,7 +82,29 @@ export default function BusinessOverview({ dashboard, onNavigate, onReviewApprov
               <span>Review {pendingApprovals} draft purchase {pendingApprovals === 1 ? 'order' : 'orders'}</span>
               <ArrowRight size={16} aria-hidden="true" />
             </button>
-          : <p>{isOwner ? 'No draft purchase orders awaiting review.' : 'No assigned actions to show yet.'}</p>}
+          : !isOwner ? <p>No assigned actions to show yet.</p>
+            : stockAlerts && stockAlerts.count === 0 ? <p>No alerts for monitored stock records.</p> : null}
+        {isOwner && stockAlerts && stockAlerts.count > 0 && <div className="business-stock-alerts">
+          <button type="button" className="business-setup-alert-link"
+            onClick={() => onNavigate('stock')}>
+            Review {stockAlerts.count} stock {stockAlerts.count === 1 ? 'alert' : 'alerts'} in Inventory
+            <ArrowRight size={15} aria-hidden="true" />
+          </button>
+          <ul aria-label="Products needing stock attention">
+            {stockAlerts.items.map(item => <li key={item.locationId + '-' + item.productId}>
+              <span><strong>{item.productName}</strong>
+                <small>{item.locationName} · {item.sku}</small></span>
+              <span>{item.quantity === 0 ? 'Out of stock' : 'Low stock'}
+                <small>{item.quantity} remaining · Alert at {item.reorderLevel}</small></span>
+            </li>)}
+          </ul>
+          <small>Only configured products with recorded stock are monitored.</small>
+        </div>}
+        {isOwner && !stockAlerts && <button type="button" className="business-setup-alert-link"
+          onClick={() => onNavigate('products')}>
+          Configure reorder levels in Products to enable stock alerts
+          <ArrowRight size={15} aria-hidden="true" />
+        </button>}
         {locations.length === 0 && <p role="status">No location assigned. Contact your business administrator.</p>}
       </section>
 

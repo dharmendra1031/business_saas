@@ -76,6 +76,19 @@
   align-items: center; gap: 9px; width: 100%; padding: 0; border: 0; background: none;
   color: #205ab1; font-size: .86rem; font-weight: 720; text-align: left; }
 .business-attention-action:hover { text-decoration: underline; }
+.business-stock-alerts { margin-top: 10px; }
+.business-stock-alerts ul { margin: 8px 0; padding: 0; list-style: none; }
+.business-stock-alerts li { display: flex; justify-content: space-between; align-items: flex-start;
+  gap: 14px; padding: 9px 0; border-top: 1px solid #e6ecf4; font-size: .85rem; }
+.business-stock-alerts li strong { color: #1e395a; font-weight: 740; }
+.business-stock-alerts li > span:last-child { text-align: right; color: #925521; font-weight: 740; }
+.business-stock-alerts small { display: block; color: #647a96; font-size: .76rem;
+  line-height: 1.5; font-weight: 460; }
+.business-setup-alert-link { display: inline-flex; align-items: center; flex-wrap: wrap; gap: 7px;
+  margin-top: 8px; padding: 2px 0; background: none; border: 0;
+  color: #235fb2; font-size: .83rem; font-weight: 720; text-align: left; }
+.business-setup-alert-link:hover { text-decoration: underline; }
+.business-setup-alert-link:focus-visible { outline: 3px solid #80aef2; outline-offset: 2px; }
 .business-location-warning { font-size: .84rem; margin: 12px 0; color: #8a561e; }
 .business-shell .business-subscription-panel { margin-top: 14px; padding: 0; }
 .business-subscription-panel > summary { display: flex; align-items: center; gap: 10px; cursor: pointer;

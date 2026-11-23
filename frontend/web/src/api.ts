@@ -58,6 +58,19 @@ export interface RetailDashboard {
   accessStatus: 'Trial' | 'TrialExpired' | 'Active' | 'Inactive' | 'Suspended'
   hasProducts: boolean
   pendingApprovals: number
+  stockAlerts?: {
+    count: number
+    outOfStockCount: number
+    items: {
+      productId: number
+      productName: string
+      sku: string
+      locationId: number
+      locationName: string
+      quantity: number
+      reorderLevel: number
+    }[]
+  } | null
   cashSalesToday?: {
     total: number
     billCount: number
