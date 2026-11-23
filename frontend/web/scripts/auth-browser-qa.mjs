@@ -964,7 +964,7 @@ try {
       ['Products', 'Products', 'BUS-06-products-compact'],
       ['Purchase Orders', 'Purchase Orders', 'BUS-20-purchases-compact'],
       ['Inventory', 'Inventory', 'BUS-27-inventory-compact'],
-      ['Categories & Units', 'Categories & Units', null],
+      ['Product Masters', 'Product Masters', null],
       ['Suppliers', 'Suppliers', null],
       ['Customers', 'Customers', null],
       ['Sales & Returns', 'Sales & Returns', 'BUS-35-sales-preview-compact'],

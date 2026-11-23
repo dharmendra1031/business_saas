@@ -343,7 +343,7 @@ export default function App() {
           {dashboard.roleCode !== 'Cashier' && <>
             <div className="sidebar-heading">SHOP SETUP</div>
             {([
-              ['masters', 'Categories & Units', Tags],
+              ['masters', 'Product Masters', Tags],
               ['suppliers', 'Suppliers', Truck],
               ['customers', 'Customers', Users]
             ] as const).map(([section, label, Icon]) => <button key={section} type="button"
