@@ -144,7 +144,7 @@ The mockup pictures display illustrative controls (Card, UPI, Split, Services, d
 | SA-19 | Plans & Billing — edit plan draft | Form | Partial | P1 | Validated plan limits/prices/module compatibility, staged changes only. |
 | SA-20 | Plans & Billing — publish plan | Modal | Partial | P1 | Preview old/new terms and confirm atomic publish with auditing. |
 | SA-21 | Plans & Billing — subscription directory | Tab | Missing | P2 | Subscription records per business; not a new top-level navigation module. |
-| SA-22 | Plans & Billing — billing draft list | Tab | Partial | P1 | Server-paginated genuine drafts and status; no fabricated invoice list. |
+| SA-22 | Plans & Billing — billing draft list | Tab | Partial | P1 | Server-paginated drafts now include linked payment request ID/live status; no duplicate prepare action across pages; production acceptance pending. |
 | SA-23 | Plans & Billing — billing preview/create | Form | Partial | P1 | Business, cycle, period, tax/currency precision, preview before draft. |
 | SA-24 | Plans & Billing — payment request preparation | Form | Partial | P1 | Attach draft, authorized reason, audit trail; never imply payment captured by preparation. |
 | SA-25 | Plans & Billing — reconciliation queue | Tab | Partial | P1 | Unknown provider outcomes checked with verified provider/order reference; no double billing. |

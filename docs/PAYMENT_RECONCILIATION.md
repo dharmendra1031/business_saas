@@ -8,6 +8,16 @@ The MFA-verified Platform Owner can use **Plans & Billing → Payment Reconcilia
 
 The review API is `GET /api/platform/billing/reconciliation`. It returns up to 50 payment rows per page and the first 50 requests in `CreatingOrder` or `OrderUncertain`. Non-platform users and owner sessions without verified MFA cannot access it. The API is read-only.
 
+## Billing status and history audit (23 November 2026)
+
+The billing history now resolves each draft's payment request **on the backend** using the existing one-request-per-draft relationship. Both the paged draft list and single-draft detail include nullable `paymentRequestId` and `paymentStatus`. This avoids the earlier UI bug that displayed `Draft (unpaid)` after capture and offered **Prepare Payment** if the matching request was not on the first payment-list page.
+
+A billing **draft** remains a draft even when its payment has been captured: its separate payment status can be `AwaitingGateway`, `CreatingOrder`, `OrderCreated`, `OrderUncertain`, `Captured` or `CapturedReview`. Payment capture alone does **not** prove an active entitlement or statutory invoice. The reconciliation ledger shows refund-adjusted observations and activation/review state separately.
+
+Super Admin now has independent paging for billing drafts, payment requests and captured-payment records; do not mistake one register's first page for complete payment history. Switching a selected business invalidates a pending, unsaved billing preview, including slow responses from the previous business. Existing audit/role checks and payment provider verification remain server-enforced.
+
+Regression coverage: backend tests validate draft payment IDs and statuses before preparation, after preparation and after capture, including the single-draft detail; Chromium UI QA covers captured-draft actions with an intentionally paginated payment-request register. This does not certify production Razorpay settlement, statutory invoice issuance, real refund policy decisions or real-provider acceptance.
+
 ## Recovering a lost order response
 
 When Razorpay creates an order but the application does not receive or persist the response, the request is intentionally stuck at `OrderUncertain`, not retried automatically. A verified Platform Owner:
