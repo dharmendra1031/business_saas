@@ -119,6 +119,33 @@ public sealed class OwnerStockAlertTests
         Assert.Contains(items, item => item.GetProperty("locationId").GetInt64() == secondLocation);
         Assert.DoesNotContain(items, item => item.GetProperty("locationId").GetInt64() == foreignLocation);
 
+        // The Inventory filter has the same server-defined rules as the Owner dashboard.
+        var primaryStockPath = $"/api/businesses/{id}/stock/locations/{location}";
+        var secondStockPath = $"/api/businesses/{id}/stock/locations/{secondLocation}";
+        var filteredPrimary = await owner.GetFromJsonAsync<JsonElement>(
+            primaryStockPath + "?alertsOnly=true&page=1");
+        Assert.Equal(1, filteredPrimary.GetProperty("total").GetInt32());
+        Assert.Equal(monitoredProduct,
+            filteredPrimary.GetProperty("items")[0].GetProperty("id").GetInt64());
+        Assert.Equal(3m,
+            filteredPrimary.GetProperty("items")[0].GetProperty("quantity").GetDecimal());
+        Assert.Equal(5m,
+            filteredPrimary.GetProperty("items")[0].GetProperty("reorderLevel").GetDecimal());
+
+        var filteredSecond = await owner.GetFromJsonAsync<JsonElement>(
+            secondStockPath + "?alertsOnly=true&page=1");
+        Assert.Equal(1, filteredSecond.GetProperty("total").GetInt32());
+        Assert.Equal(0m,
+            filteredSecond.GetProperty("items")[0].GetProperty("quantity").GetDecimal());
+        var unfiltered = await owner.GetFromJsonAsync<JsonElement>(primaryStockPath + "?page=1");
+        Assert.Equal(3, unfiltered.GetProperty("total").GetInt32());
+        Assert.Equal(HttpStatusCode.NotFound,
+            (await other.GetAsync(primaryStockPath + "?alertsOnly=true")).StatusCode);
+        Assert.Equal(HttpStatusCode.NotFound,
+            (await cashier.GetAsync(primaryStockPath + "?alertsOnly=true")).StatusCode);
+        Assert.Equal(HttpStatusCode.BadRequest,
+            (await owner.GetAsync(primaryStockPath + "?alertsOnly=true&page=0")).StatusCode);
+
         var cashierData = await cashier.GetFromJsonAsync<JsonElement>($"/api/businesses/{id}/dashboard");
         Assert.Equal(JsonValueKind.Null, cashierData.GetProperty("stockAlerts").ValueKind);
         Assert.Equal(HttpStatusCode.NotFound,
@@ -130,6 +157,8 @@ public sealed class OwnerStockAlertTests
             basePath + "/" + monitoredProduct, Product("ALERT-MAIN", 5m, isActive: false))).StatusCode);
         result = await owner.GetFromJsonAsync<JsonElement>($"/api/businesses/{id}/dashboard");
         Assert.Equal(0, result.GetProperty("stockAlerts").GetProperty("count").GetInt32());
+        filteredPrimary = await owner.GetFromJsonAsync<JsonElement>(primaryStockPath + "?alertsOnly=true");
+        Assert.Equal(0, filteredPrimary.GetProperty("total").GetInt32());
         Assert.Equal(HttpStatusCode.OK, (await Send(owner, HttpMethod.Put,
             basePath + "/" + monitoredProduct, Product("ALERT-MAIN", 5m))).StatusCode);
         result = await owner.GetFromJsonAsync<JsonElement>($"/api/businesses/{id}/dashboard");
