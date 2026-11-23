@@ -106,7 +106,6 @@ export default function RetailPurchases({ businessId, canOperate, locations, rol
   const [detail, setDetail] = useState<OrderDetail | null>(null)
   const [detailError, setDetailError] = useState('')
   const [receiving, setReceiving] = useState<Record<number, string>>({})
-  const [reviewReceipt, setReviewReceipt] = useState<number | null>(null)
   const [receivingOpen, setReceivingOpen] = useState(false)
   const basePath = `/businesses/${businessId}/purchase-orders`
   const money = (amount: number) =>
@@ -167,7 +166,6 @@ export default function RetailPurchases({ businessId, canOperate, locations, rol
     if (selectedId === null) return
     let active = true
     setDetail(null)
-    setReviewReceipt(null)
     setDetailError('')
     api<OrderDetail>(basePath + '/' + selectedId)
       .then(value => {
@@ -240,9 +238,11 @@ export default function RetailPurchases({ businessId, canOperate, locations, rol
     setReceivingOpen(true)
   }
 
-  async function createOrder(event: FormEvent) {
+  async function createOrder(event: FormEvent<HTMLFormElement>) {
     event.preventDefault()
     if (!canOperate || busy) return
+    const approveNow = roleCode === 'Owner' &&
+      (event.nativeEvent as SubmitEvent).submitter?.getAttribute('data-action') !== 'draft'
     if (!locationId || !supplierId || lines.length === 0 || lines.length > 50 ||
         lines.some(x => Number(x.quantity) <= 0 || Number(x.unitCost) < 0)) {
       setError('Select location, supplier and 1–50 valid product lines.')
@@ -252,22 +252,35 @@ export default function RetailPurchases({ businessId, canOperate, locations, rol
     setBusy(true)
     setError('')
     setNotice('')
+    let savedOrderId: number | null = null
     try {
       const result = await post<{ id: number }>(basePath, {
         locationId, supplierId, lines: lines.map(x => ({
           productId: x.productId, quantity: Number(x.quantity), unitCost: Number(x.unitCost)
         })), requestKey: orderKey
       })
-      setCreating(false)
-      setOrderKey(operationKey())
-      resetOrderDraft()
-      setNotice('Purchase order saved as Draft. Owner approval is required.')
-      setPage(1)
-      setSelectedId(result.id)
-      setReload(value => value + 1)
+      savedOrderId = result.id
+      if (approveNow) await post(`${basePath}/${result.id}/approve`, {})
+      setNotice(approveNow
+        ? 'Purchase order saved and approved. Stock changes only when goods are received.'
+        : roleCode === 'Manager' ? 'Purchase order submitted for Owner approval.'
+          : 'Purchase order saved as Draft.')
+      if (approveNow) setApprovalsOnly(false)
     } catch (cause) {
-      if (!(cause instanceof SessionExpiredError)) setError(message(cause))
+      if (!(cause instanceof SessionExpiredError)) {
+        setError(savedOrderId !== null
+          ? `Purchase order #${savedOrderId} was saved, but approval could not be confirmed. Check its status in the order details; approve there if still Draft. ${message(cause)}`
+          : message(cause))
+      }
     } finally {
+      if (savedOrderId !== null) {
+        setCreating(false)
+        setOrderKey(operationKey())
+        resetOrderDraft()
+        setPage(1)
+        setSelectedId(savedOrderId)
+        setReload(value => value + 1)
+      }
       setBusy(false)
     }
   }
@@ -288,36 +301,54 @@ export default function RetailPurchases({ businessId, canOperate, locations, rol
     }
   }
 
-  async function saveReceiving(event: FormEvent) {
+  async function saveReceiving(event: FormEvent<HTMLFormElement>) {
     event.preventDefault()
     if (!detail || busy || !canOperate) return
+    const draftOnly = (event.nativeEvent as SubmitEvent).submitter?.getAttribute('data-action') === 'draft'
     const receivingLines = detail.lines.filter(line => Number(receiving[line.id] ?? '0') > 0)
       .map(line => ({
         purchaseOrderLineId: line.id, quantity: Number(receiving[line.id])
       }))
-    if (!receivingLines.length || receivingLines.some((line) => {
-      const item = detail.lines.find(x => x.id === line.purchaseOrderLineId)
-      return !item || line.quantity > item.remainingQuantity ||
-        Math.round(line.quantity * 1000) / 1000 !== line.quantity
-    })) {
+    if (!receivingLines.length || Object.values(receiving).some(value =>
+        value.trim() !== '' && (!Number.isFinite(Number(value)) || Number(value) < 0 ||
+          Math.round(Number(value) * 1000) / 1000 !== Number(value))) ||
+        receivingLines.some(line => {
+          const item = detail.lines.find(x => x.id === line.purchaseOrderLineId)
+          return !item || line.quantity > item.remainingQuantity
+        })) {
       setError('Enter valid quantities within the remaining ordered amounts.')
       return
     }
+
     setBusy(true)
     setError('')
     setNotice('')
+    let savedReceivingId: number | null = null
     try {
       const receipt = await post<{ id: number }>(
         basePath + '/' + detail.id + '/receivings',
         { lines: receivingLines, requestKey: receivingKey })
-      setNotice(`Receiving #${receipt.id} saved as Draft. Post it to update stock.`)
-      setReceivingKey(operationKey())
-      setReceiving({})
-      setReceivingOpen(false)
-      setReload(value => value + 1)
+      savedReceivingId = receipt.id
+      if (!draftOnly) {
+        await post(`${basePath}/${detail.id}/receivings/${receipt.id}/post`, {})
+      }
+      setNotice(draftOnly
+        ? `Receiving #${receipt.id} saved as Draft. Stock has not changed.`
+        : `Receiving #${receipt.id} posted. Stock and remaining PO quantity updated.`)
     } catch (cause) {
-      if (!(cause instanceof SessionExpiredError)) setError(message(cause))
+      if (!(cause instanceof SessionExpiredError)) {
+        setError(savedReceivingId !== null
+          ? `Receiving #${savedReceivingId} was saved, but stock posting could not be confirmed. Check Receiving history and use Post stock if still Draft. ${message(cause)}`
+          : message(cause))
+      }
     } finally {
+      if (savedReceivingId !== null) {
+        // A posted receiving or a saved draft has its own ID; never create a duplicate on retry.
+        setReceivingKey(operationKey())
+        setReceiving({})
+        setReceivingOpen(false)
+        setReload(value => value + 1)
+      }
       setBusy(false)
     }
   }
@@ -474,8 +505,12 @@ export default function RetailPurchases({ businessId, canOperate, locations, rol
             onClick={() => { resetOrderDraft(); setCreating(false) }}>Cancel</button>
           <button type="submit" className="btn btn-primary"
             disabled={busy || !supplierId || !lines.length}>
-            {busy ? 'Saving…' : 'Save draft order'}
+            {busy ? 'Saving…' : roleCode === 'Owner' ? 'Save & Approve' : 'Submit for Approval'}
           </button>
+          {roleCode === 'Owner' && <button type="submit" data-action="draft"
+            className="btn btn-outline-secondary" disabled={busy || !supplierId || !lines.length}>
+            Save Draft
+          </button>}
         </div>
       </form>}
 
@@ -555,15 +590,15 @@ export default function RetailPurchases({ businessId, canOperate, locations, rol
             <>
               <button type="button" className="btn btn-outline-primary"
                 onClick={() => { toggleReceiving(); setError('') }}>
-                {receivingOpen ? 'Close receiving form' : 'Create receiving draft'}
+                {receivingOpen ? 'Close receiving form' : 'Receive goods'}
               </button>
               {receivingOpen && <form className="product-form"
                 onSubmit={event => void saveReceiving(event)}>
-                <h3>Goods received</h3>
+                <h3>Goods receiving</h3>
                 <button className="btn btn-outline-secondary" type="button" onClick={() => setReceiving(
                   Object.fromEntries(detail.lines.filter(x => x.remainingQuantity > 0).map(x => [x.id, String(x.remainingQuantity)]))
                 )}>Receive all remaining</button>
-                <p className="field-help">Enter only the quantities delivered. Saving a draft does not change stock.</p>
+                <p className="field-help">Enter the delivered quantities. Stock updates only when a receiving is posted.</p>
                 <div className="table-responsive">
                   <table className="table table-sm align-middle business-record-table">
                     <thead><tr><th>Product</th><th className="text-end">Remaining</th>
@@ -578,9 +613,13 @@ export default function RetailPurchases({ businessId, canOperate, locations, rol
                     </tr>)}</tbody>
                   </table>
                 </div>
-                <button className="btn btn-primary" type="submit" disabled={busy}>
-                  {busy ? 'Saving…' : 'Save receiving draft'}
-                </button>
+                <div className="form-footer">
+                  <button className="btn btn-primary" type="submit" disabled={busy}>
+                    {busy ? 'Processing…' : 'Receive & Post Stock'}
+                  </button>
+                  <button className="btn btn-outline-secondary" type="submit"
+                    data-action="draft" disabled={busy}>Save Draft</button>
+                </div>
               </form>}
             </>}
           <div className="product-form">
@@ -592,21 +631,10 @@ export default function RetailPurchases({ businessId, canOperate, locations, rol
                   <tbody>{detail.receivings.map(receipt => <tr key={receipt.id}>
                     <td>#{receipt.id}</td><td>{receipt.status}</td>
                     <td>{canOperate && receipt.status === 'Draft' &&
-                      (reviewReceipt === receipt.id ? <section aria-label="Confirm stock posting">
-                        <strong>PO #{detail.id} · {locations.find(l => l.id === detail.locationId)?.name}</strong>
-                        <ul>{receipt.lines.map(item => {
-                          const line = detail.lines.find(x => x.id === item.purchaseOrderLineId)!
-                          const left = line.remainingQuantity - item.quantity
-                          return <li key={line.id}>{line.name}: +{item.quantity} · {left < 0 ?
-                            'Exceeds current remaining quantity' : `PO remaining after posting: ${left}`}</li>
-                        })}</ul>
-                        <button type="button" className="btn btn-sm btn-primary" disabled={busy || receipt.lines.some(item =>
-                          item.quantity > (detail.lines.find(x => x.id === item.purchaseOrderLineId)?.remainingQuantity ?? 0))}
-                          onClick={() => void postReceiving(receipt.id)}>Confirm stock posting</button>
-                        <button type="button" className="btn btn-sm btn-link" disabled={busy}
-                          onClick={() => setReviewReceipt(null)}>Cancel</button>
-                      </section> : <button type="button" className="btn btn-sm btn-outline-primary"
-                        disabled={busy} onClick={() => setReviewReceipt(receipt.id)}>Review and post</button>)}</td>
+                      <button type="button" className="btn btn-sm btn-outline-primary" disabled={busy ||
+                        receipt.lines.some(item => item.quantity >
+                          (detail.lines.find(x => x.id === item.purchaseOrderLineId)?.remainingQuantity ?? 0))}
+                        onClick={() => void postReceiving(receipt.id)}>Post stock</button>}</td>
                   </tr>)}</tbody>
                 </table>
               </div>}
