@@ -432,6 +432,120 @@ try {
   }
 
   {
+    // Exercise the full UI contract: create PO -> approve -> receive -> post -> view stock.
+    const t = await scenario('purchase-to-stock-browser-flow', {
+      role: 'Owner', hasProducts: true, productsFixture: true
+    })
+    let order = null
+    let receiving = null
+    let stock = 0
+    let receivingPosts = 0
+    await t.page.route('**/api/businesses/1/purchase-orders**', route => {
+      const request = route.request()
+      const path = new URL(request.url()).pathname
+      const method = request.method()
+      if (path.endsWith('/purchase-orders') && method === 'GET') {
+        const params = new URL(request.url()).searchParams
+        const visible = order && (!params.has('draftOnly') || order.status === 'Draft')
+        return response(route, 200, {
+          items: visible ? [{ id: order.id, locationId: 1, locationName: 'Main Shop',
+            supplierId: 21, supplierName: 'Wholesaler', status: order.status,
+            createdAtUtc: '2026-11-23T02:00:00Z' }] : [],
+          total: visible ? 1 : 0, page: 1, pageSize: 20
+        })
+      }
+      if (path.endsWith('/purchase-orders') && method === 'POST') {
+        const body = request.postDataJSON()
+        assert.equal(body.locationId, 1)
+        assert.equal(body.supplierId, 21)
+        assert.deepEqual(body.lines.map(({ productId, quantity, unitCost }) =>
+          ({ productId, quantity, unitCost })), [{ productId: 11, quantity: 2, unitCost: 40 }])
+        order = { id: 71, status: 'Draft', quantity: 2 }
+        return response(route, 201, { id: 71, status: 'Draft' })
+      }
+      if (path.endsWith('/purchase-orders/71') && method === 'GET') {
+        const posted = receiving?.status === 'Posted' ? receiving.quantity : 0
+        return response(route, 200, { id: 71, locationId: 1, supplierId: 21,
+          status: order.status, createdAtUtc: '2026-11-23T02:00:00Z', approvedAtUtc: null,
+          lines: [{ id: 72, productId: 11, name: 'Blue Shirt', sku: 'BLUE-11',
+            orderedQuantity: 2, unitCost: 40, receivedQuantity: posted,
+            remainingQuantity: 2 - posted }],
+          receivings: receiving ? [{
+            id: 91, status: receiving.status, createdAtUtc: '2026-11-23T02:01:00Z',
+            postedAtUtc: receiving.status === 'Posted' ? '2026-11-23T02:02:00Z' : null,
+            lines: [{ purchaseOrderLineId: 72, quantity: receiving.quantity }]
+          }] : [] })
+      }
+      if (path.endsWith('/purchase-orders/71/approve') && method === 'POST') {
+        assert.equal(order.status, 'Draft')
+        order.status = 'Approved'
+        return response(route, 200, { id: 71, status: 'Approved' })
+      }
+      if (path.endsWith('/purchase-orders/71/receivings') && method === 'POST') {
+        assert.equal(order.status, 'Approved')
+        const body = request.postDataJSON()
+        assert.deepEqual(body.lines, [{ purchaseOrderLineId: 72, quantity: 2 }])
+        receiving = { quantity: 2, status: 'Draft' }
+        return response(route, 201, { id: 91, status: 'Draft' })
+      }
+      if (path.endsWith('/purchase-orders/71/receivings/91/post') && method === 'POST') {
+        assert.equal(receiving.status, 'Draft')
+        receiving.status = 'Posted'
+        stock += receiving.quantity
+        order.status = 'Closed'
+        receivingPosts++
+        return response(route, 200, { id: 91, status: 'Posted', orderClosed: true })
+      }
+      return response(route, 404, { message: 'Unexpected purchase route' })
+    })
+    await t.page.route(/\/api\/businesses\/1\/stock\/locations\/1(?:\?|$)/, route =>
+      response(route, 200, {
+        items: [{ id: 11, name: 'Blue Shirt', sku: 'BLUE-11',
+          isActive: true, reorderLevel: 4, quantity: stock, hasStockRecord: stock > 0 }],
+        total: 1, page: 1, pageSize: 20
+      }))
+
+    await t.login()
+    await t.page.getByRole('heading', { name: 'Business Overview' }).waitFor()
+    await t.page.locator('.app-sidebar .nav-entry').filter({ hasText: 'Purchase Orders' }).click()
+    await t.page.getByRole('button', { name: 'New Purchase Order' }).click()
+    await t.page.waitForFunction(() =>
+      [...document.querySelectorAll('#purchase-supplier option')].some(option => option.value === '21'))
+    await t.page.waitForFunction(() =>
+      [...document.querySelectorAll('#purchase-product option')].some(option => option.value === '11'))
+    await t.page.locator('#purchase-supplier').selectOption('21')
+    await t.page.locator('#purchase-product').selectOption('11')
+    await t.page.getByRole('spinbutton', { name: 'Blue Shirt quantity' }).fill('2')
+    await t.page.getByRole('spinbutton', { name: 'Blue Shirt unit cost' }).fill('40')
+    await t.page.getByRole('button', { name: 'Save draft order' }).click()
+    await t.page.getByRole('heading', { name: 'Purchase order #71' }).waitFor()
+    assert.equal(order.status, 'Draft')
+    assert.equal(stock, 0, 'Purchase order creation must not update stock')
+    await t.page.getByRole('button', { name: 'Approve purchase order' }).click()
+    await t.page.getByRole('button', { name: 'Create receiving draft' }).waitFor()
+    assert.equal(order.status, 'Approved')
+    assert.equal(stock, 0, 'Approval alone must not update stock')
+    await t.page.getByRole('button', { name: 'Create receiving draft' }).click()
+    await t.page.getByRole('button', { name: 'Receive all remaining' }).click()
+    await t.page.getByRole('button', { name: 'Save receiving draft' }).click()
+    await t.page.getByRole('button', { name: 'Review and post' }).waitFor()
+    assert.equal(stock, 0, 'Unposted receiving drafts must not update inventory')
+    await t.page.getByRole('button', { name: 'Review and post' }).click()
+    await t.page.getByRole('button', { name: 'Confirm stock posting' }).click()
+    await t.page.getByText('Receiving #91 posted.', { exact: false }).waitFor()
+    assert.equal(receivingPosts, 1, 'Stock posting must only submit once')
+    assert.equal(order.status, 'Closed')
+    assert.equal(stock, 2)
+    await t.page.locator('.app-sidebar .nav-entry').filter({ hasText: 'Inventory' }).click()
+    const stockRow = t.page.locator('.retail-stock-list tbody tr').filter({ hasText: 'Blue Shirt' })
+    await stockRow.getByText('2.000').waitFor()
+    assert.equal(await stockRow.locator('td').nth(2).innerText(), '2.000')
+    await t.check()
+    await t.context.close()
+    console.log('PASS purchase creation, approval, receiving draft, stock post and inventory refresh')
+  }
+
+  {
     const t = await scenario('owner-cash-summary-integrated', {
       role: 'Owner', hasProducts: true, cashSalesFixture: true
     })
