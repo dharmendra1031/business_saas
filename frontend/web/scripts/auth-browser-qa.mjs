@@ -1348,6 +1348,74 @@ try {
   }
 
   {
+    // Draft payment badges must come from the joined server record, not
+    // only from the first page of the independent payment-request register.
+    const t = await scenario('super-admin-billing-status-and-pagination', { role: 'Platform' })
+    const requestPages = [], capturePages = []
+    await t.page.route('**/api/platform/plans', route =>
+      response(route, 200, { items: [], unknownPlanAssignments: 0 }))
+    await t.page.route('**/api/platform/billing/drafts?*', route =>
+      response(route, 200, {
+        items: [{
+          id: 7, businessId: 11, businessName: 'Paid Retail', publishedPlanVersionId: 5,
+          planCode: 'STARTER', billingCycle: 'Monthly', periodStartDate: '2026-11-01',
+          periodEndDate: '2026-12-01', currencyCode: 'INR', amount: 1099,
+          createdAtUtc: '2026-11-01T00:00:00Z', status: 'Draft',
+          paymentRequestId: 900, paymentStatus: 'Captured'
+        }], total: 1, page: 1, pageSize: 20
+      }))
+    await t.page.route('**/api/platform/billing/payment-requests?*', route => {
+      const page = Number(new URL(route.request().url()).searchParams.get('page') ?? '1')
+      requestPages.push(page)
+      return response(route, 200, {
+        // Request #900 is not in the first page, so the first page cannot be
+        // used to decide whether billing draft #7 has already been prepared.
+        items: page === 1 ? Array.from({ length: 20 }, (_, i) => ({
+          id: 100 + i, billingDraftId: 50 + i, businessId: 12,
+          businessName: 'Other Retail', currencyCode: 'INR', amount: 100,
+          status: 'AwaitingGateway'
+        })) : [{
+          id: 900, billingDraftId: 7, businessId: 11,
+          businessName: 'Paid Retail', currencyCode: 'INR', amount: 1099,
+          status: 'Captured'
+        }],
+        total: 21, page, pageSize: 20
+      })
+    })
+    await t.page.route('**/api/platform/billing/reconciliation?*', route => {
+      const page = Number(new URL(route.request().url()).searchParams.get('page') ?? '1')
+      capturePages.push(page)
+      return response(route, 200, {
+        items: [{ id: page, paymentRequestId: 900,
+          providerPaymentId: 'pay_test_verified', businessId: 11,
+          businessName: 'Paid Retail', amount: 1099, currencyCode: 'INR',
+          refundedAmount: 0, netAmount: 1099, activationStatus: 'Activated' }],
+        total: 21, page, pageSize: 20, unresolvedOrders: []
+      })
+    })
+    await t.login()
+    await t.page.locator('.platform-shell .app-sidebar .nav-entry')
+      .filter({ hasText: 'Plans & Billing' }).click()
+    await t.page.getByRole('heading', { name: 'Plans & Billing' }).waitFor()
+    await t.page.getByRole('tab', { name: 'Billing Drafts' }).click()
+    await t.page.getByRole('heading', { name: 'Billing Draft History' }).waitFor()
+    await t.page.getByText('Captured — verified').waitFor()
+    await t.page.getByText('Request #900').waitFor()
+    assert.equal(await t.page.getByRole('button', { name: 'Prepare Payment', exact: true }).count(),
+      0, 'Existing captured draft may never expose a duplicate payment preparation action')
+    await t.page.getByRole('button', { name: 'Next requests' }).click()
+    await t.page.getByText('21 payment requests · Page 2').waitFor()
+    assert.deepEqual(requestPages.slice(-2), [1, 2])
+    await t.page.getByRole('button', { name: 'Next captures' }).click()
+    await t.page.getByText('Page 2.', { exact: false }).waitFor()
+    assert.deepEqual(capturePages.slice(-2), [1, 2])
+    await t.screenshot('SA-billing-captured-status-pagination')
+    await t.check()
+    await t.context.close()
+    console.log('PASS billing paid status and independent payment/reconciliation pagination')
+  }
+
+  {
     const t = await scenario('platform-live-release-maintenance-and-notices', { role: 'Platform' })
     let typeState = 'Available', typeRevision = 0
     let moduleState = 'Available', moduleRevision = 0
