@@ -9,7 +9,7 @@
 
 The owner approved designing and visually accepting all released screens **before building their missing backend features**. The per-screen source of truth is still this stable 145-item register; the separate [Frontend-First Design & Visual QA Tracker](./FRONTEND_FIRST_DESIGN_TRACKER.md) tracks frontend-only visual implementation versus API-integrated readiness.
 
-**Iteration 1 committed on `development`:** `SA-01` Dashboard visual hierarchy, `SA-03` Businesses directory and fully navigable eight-module platform shell. Existing backend APIs supply actual dashboard/business records; no backend changes were made. `SA-29..39` Licenses and Platform Settings now have explicitly marked **frontend-only design previews** with working tab navigation but **no live save or license issuance**. These screens remain **Partial/Missing for full product release**, not `DONE`.
+**Iteration 1 committed on `development`:** `SA-01` Dashboard visual hierarchy, `SA-03` Businesses directory and fully navigable eight-module platform shell. Existing backend APIs supply actual dashboard/business records; no backend changes were made. `SA-29..32` Licenses remain frontend-only previews. Global `SA-34` Business Type and `SA-35` Module Release controls now have MFA-authorized persistence, server enforcement and audit; maintenance and announcements have active global controls. Other Platform Settings (Languages, Branding, advanced policy) remain previews. These screens remain **Partial/Missing for full product release**, not `DONE`.
 
 **Visual QA remaining:** Compare real authenticated browser captures at 1536×864, 1366×768, 768px and 360px to approved reference images. A matching CSS source and green CI build do **not** certify pixel-level fidelity or owner approval.
 
@@ -26,7 +26,7 @@ The owner approved designing and visually accepting all released screens **befor
 
 Platform Super Admin needs central controls for registered **Business Type creation availability**, independently released modules, **Maintenance** schedules/modes and targeted **Announcements** (“Under Construction”, “Site is being updated”, “Coming Soon”). This is an extension of the existing **Platform Settings** tab; **no ninth top-level sidebar item**.
 
-- `SA-33..39` Platform Settings now has read-only/interactive-local frontend design previews via `PlatformAvailabilityPreview.tsx`, integrated in `PlatformModulePreview.tsx`. `GET /api/business-types` remains the only live business-type catalogue data; no published release/maintenance policies exist.
+- `SA-34/35` Global business-type and module releases now use actual authenticated APIs, tenant write/provisioning gates, and audited revision checks. Maintenance windows and public announcements use UTC-controlled persistence and public status; scoped policies and other Platform Settings remain deferred. Keep all items Partial/Missing until final acceptance.
 - Every new business provisioning path, module write and public notice will ultimately use the same server-owned policy and audited versions; frontend-only status choices cannot authorize or block actions. Existing tenants must not lose data/access because new type creation is paused.
 - Backend model, statuses, safe maintenance modes, notices, precedence and tests are specified in [Platform Release & Maintenance SRS](./PLATFORM_RELEASE_AND_MAINTENANCE_SRS.md). All related screens remain **Partial/Missing** until browser visual acceptance and full backend tests.
 
@@ -148,8 +148,8 @@ The mockup pictures display illustrative controls (Card, UPI, Split, Services, d
 | SA-31 | Licenses — renew / transfer / revoke | Modal | Missing | P2 | Lifecycle transitions and historical license validity, permissions and audit. |
 | SA-32 | Licenses — license history | Tab | Missing | P2 | Issuer, machine, version, event trail from real data. |
 | SA-33 | Platform Settings — landing / policy summary | Page | Missing | P2 | Distinct global settings hub; never tenant retail settings. |
-| SA-34 | Platform Settings — supported business types | Tab | Missing | P2 | Publish supported templates only; unsupported types clearly marked. |
-| SA-35 | Platform Settings — entitlements / modules | Tab | Missing | P2 | Global plan/module catalog with versions and access constraints. |
+| SA-34 | Platform Settings — supported business types | Tab | Partial | P2 | Live global availability policy, revision/audit, server-checked new provisioning; market-specific policy and UX sign-off pending. |
+| SA-35 | Platform Settings — entitlements / modules | Tab | Partial | P2 | Live compiled-module availability and tenant write enforcement; plan-specific entitlements and full release acceptance pending. |
 | SA-36 | Platform Settings — countries, currency, timezones | Tab | Missing | P2 | Approved market configuration; avoid changing legal financial rules silently. |
 | SA-37 | Platform Settings — trial and grace policy | Tab | Missing | P2 | Global policy versions and effective dates, not retroactive silent edits. |
 | SA-38 | Platform Settings — languages / translations | Tab | Missing | P2 | Upload, preview, validate and publish permitted language packs; RTL tests. |
