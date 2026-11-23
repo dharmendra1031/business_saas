@@ -124,6 +124,17 @@ public sealed class OwnerStockAlertTests
         Assert.Equal(HttpStatusCode.NotFound,
             (await other.GetAsync($"/api/businesses/{id}/dashboard")).StatusCode);
 
+        Assert.Equal(HttpStatusCode.BadRequest, (await Send(owner, HttpMethod.Put,
+            basePath + "/" + monitoredProduct, Product("ALERT-MAIN", -0.5m))).StatusCode);
+        Assert.Equal(HttpStatusCode.OK, (await Send(owner, HttpMethod.Put,
+            basePath + "/" + monitoredProduct, Product("ALERT-MAIN", 5m, isActive: false))).StatusCode);
+        result = await owner.GetFromJsonAsync<JsonElement>($"/api/businesses/{id}/dashboard");
+        Assert.Equal(0, result.GetProperty("stockAlerts").GetProperty("count").GetInt32());
+        Assert.Equal(HttpStatusCode.OK, (await Send(owner, HttpMethod.Put,
+            basePath + "/" + monitoredProduct, Product("ALERT-MAIN", 5m))).StatusCode);
+        result = await owner.GetFromJsonAsync<JsonElement>($"/api/businesses/{id}/dashboard");
+        Assert.Equal(2, result.GetProperty("stockAlerts").GetProperty("count").GetInt32());
+
         var updated = await Send(owner, HttpMethod.Put,
             basePath + "/" + monitoredProduct, Product("ALERT-MAIN", null));
         Assert.Equal(HttpStatusCode.OK, updated.StatusCode);
@@ -132,6 +143,12 @@ public sealed class OwnerStockAlertTests
 
         var stored = await owner.GetFromJsonAsync<JsonElement>(basePath + "/" + monitoredProduct);
         Assert.Equal(JsonValueKind.Null, stored.GetProperty("reorderLevel").ValueKind);
+        Assert.Equal(HttpStatusCode.OK, (await Send(owner, HttpMethod.Put,
+            basePath + "/" + (await owner.GetFromJsonAsync<JsonElement>(basePath + "?search=ALERT-UNOPENED"))
+                .GetProperty("items")[0].GetProperty("id").GetInt64(),
+            Product("ALERT-UNOPENED", null))).StatusCode);
+        result = await owner.GetFromJsonAsync<JsonElement>($"/api/businesses/{id}/dashboard");
+        Assert.Equal(JsonValueKind.Null, result.GetProperty("stockAlerts").ValueKind);
     }
 
     private static async Task Login(HttpClient client, string email)
