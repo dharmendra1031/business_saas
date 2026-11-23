@@ -306,3 +306,12 @@
   .business-shell .business-master-tabs { width: 100%; }
   .business-shell .business-master-tabs .btn { flex: 1 1 auto; min-width: 0; padding: 7px 8px; }
 }
+
+/* Parent filter shares the existing search row; stack only when space is scarce. */
+.business-shell .retail-masters .masters-search { flex-wrap: wrap; max-width: 720px; }
+.business-shell .retail-masters .masters-search > input { flex: 2 1 180px; }
+.business-shell .retail-masters .masters-search > div { flex: 1 1 185px; min-width: 0; }
+.business-shell .retail-masters .masters-search > div select { width: 100%; min-height: 41px; }
+@media (max-width: 600px) {
+  .business-shell .retail-masters .masters-search > button { flex: 1 1 100%; }
+}
