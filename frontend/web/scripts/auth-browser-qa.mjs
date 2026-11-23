@@ -346,6 +346,10 @@ try {
     assert.ok(await alertsToggle.isChecked(), 'Alerts Only should be active after dashboard navigation')
     await t.page.getByText('Blue Shirt', { exact: true }).waitFor()
     assert.equal(await t.page.getByText('Fine Notebook').count(), 0)
+    assert.equal(await t.page.getByLabel('Stock adjustments').count(), 0,
+      'Alert filtering should not open the unrelated adjustment workflow')
+    assert.equal(await t.page.locator('.masters-pages').count(), 0,
+      'Single-page alerts should not show disabled pagination controls')
     assert.ok(t.stockQueries.some(path => path.includes('/locations/1?') && path.includes('alertsOnly=true')),
       'Server must filter records at the selected location, not the entire business')
     await t.screenshot('BUS-27-stock-alerts-filter-mobile-360')

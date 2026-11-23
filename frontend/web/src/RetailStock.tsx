@@ -251,7 +251,7 @@ export default function RetailStock({ businessId, locations, canOperate, isOwner
           setAlertsOnly(event.target.checked)
           setPage(1)
         }} />
-        Alerts only <small>At selected location</small>
+        Alerts only <small>{!loading && !error ? `${total} at this location` : 'At selected location'}</small>
       </label>
 
       {loading ? <div role="status" className="business-module-loading">Loading inventory…</div>
@@ -304,7 +304,7 @@ export default function RetailStock({ businessId, locations, canOperate, isOwner
               </table>
             </div>}
 
-      {!loading && !error && total > 0 && <div className="masters-pages">
+      {!loading && !error && (total > 20 || page > 1) && <div className="masters-pages">
         <span className="small text-secondary">Page {page} · {total} {alertsOnly ? 'alerts' : 'products'} at this location</span>
         <div className="btn-group">
           <button type="button" className="btn btn-sm btn-outline-secondary" disabled={page === 1}
@@ -314,10 +314,10 @@ export default function RetailStock({ businessId, locations, canOperate, isOwner
         </div>
       </div>}
 
-      <RetailStockAdjustments key={locationId} businessId={businessId}
-        locationId={locationId} canOperate={canOperate} isOwner={isOwner}
+      {(!alertsOnly || adjusting !== null) && <RetailStockAdjustments key={locationId}
+        businessId={businessId} locationId={locationId} canOperate={canOperate} isOwner={isOwner}
         selected={adjusting} onCancel={() => setAdjusting(null)}
-        onPosted={() => setReload(value => value + 1)} />
+        onPosted={() => setReload(value => value + 1)} />}
 
       {historyProductId !== null && <div className="product-form">
         <div className="masters-heading">
