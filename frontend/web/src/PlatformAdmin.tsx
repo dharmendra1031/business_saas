@@ -1,4 +1,4 @@
-import { useEffect, useState, type FormEvent } from 'react'
+import { useEffect, useRef, useState, type FormEvent } from 'react'
 import { api, post, SessionExpiredError } from './api'
 import PlatformOverview from './PlatformOverview'
 import PlatformCustomers from './PlatformCustomers'
@@ -73,9 +73,19 @@ function PlatformBusinesses({ selectedBusinessId, onBilling, startCreate, onCrea
   const [statusBusy, setStatusBusy] = useState(false)
   const [notice, setNotice] = useState('')
   const [creating, setCreating] = useState(startCreate)
+  // Ignore responses from superseded detail requests (search, back, or another business).
+  const detailRequestId = useRef(0)
 
-  useEffect(() => { if (startCreate) setCreating(true) }, [startCreate])
   useEffect(() => {
+    if (startCreate) {
+      detailRequestId.current += 1
+      setDetailLoading(false)
+      setCreating(true)
+    }
+  }, [startCreate])
+  useEffect(() => {
+    detailRequestId.current += 1
+    setDetailLoading(false)
     setSearch(incomingSearch)
     setTerm(incomingSearch)
     setPage(1)
@@ -101,12 +111,15 @@ function PlatformBusinesses({ selectedBusinessId, onBilling, startCreate, onCrea
 
   function applySearch(event: FormEvent) {
     event.preventDefault()
+    detailRequestId.current += 1
+    setDetailLoading(false)
     setPage(1)
     setTerm(search.trim())
     setDetails(null)
   }
 
   async function openBusiness(id: number) {
+    const requestId = ++detailRequestId.current
     setError('')
     setNotice('')
     setExtending(false)
@@ -114,12 +127,12 @@ function PlatformBusinesses({ selectedBusinessId, onBilling, startCreate, onCrea
     setDetailLoading(true)
     try {
       const result = await api<BusinessDetails>(`/platform/businesses/${id}`)
-      setDetails(result)
+      if (requestId === detailRequestId.current) setDetails(result)
     } catch (cause) {
-      if (!(cause instanceof SessionExpiredError))
+      if (requestId === detailRequestId.current && !(cause instanceof SessionExpiredError))
         setError('Unable to open business details. Please retry.')
     } finally {
-      setDetailLoading(false)
+      if (requestId === detailRequestId.current) setDetailLoading(false)
     }
   }
 
@@ -198,7 +211,12 @@ function PlatformBusinesses({ selectedBusinessId, onBilling, startCreate, onCrea
       <>
         <div className="page-header">
           <div>
-            <button type="button" className="back-link" onClick={() => { setDetails(null); setError('') }}>
+            <button type="button" className="back-link" onClick={() => {
+              detailRequestId.current += 1
+              setDetailLoading(false)
+              setDetails(null)
+              setError('')
+            }}>
               All businesses
             </button>
             <h1>{details.name}</h1>
@@ -341,7 +359,12 @@ function PlatformBusinesses({ selectedBusinessId, onBilling, startCreate, onCrea
           <h1>Businesses</h1>
           <p>View registered businesses, verified owners, plans and subscription status.</p>
         </div>
-        <button type="button" className="btn btn-primary" onClick={() => { setError(''); setCreating(true) }}>
+        <button type="button" className="btn btn-primary" onClick={() => {
+          detailRequestId.current += 1
+          setDetailLoading(false)
+          setError('')
+          setCreating(true)
+        }}>
           <Plus size={18} /> Create Business
         </button>
       </div>
