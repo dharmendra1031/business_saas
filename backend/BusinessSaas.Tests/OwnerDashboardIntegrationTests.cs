@@ -35,10 +35,12 @@ public sealed class OwnerDashboardIntegrationTests
         using var owner = factory.CreateClient();
         using var outsider = factory.CreateClient();
         using var cashier = factory.CreateClient();
+        using var manager = factory.CreateClient();
         using var guest = factory.CreateClient();
         await Login(owner, "dashboard-owner@example.test");
         await Login(outsider, "dashboard-other@example.test");
         await Login(cashier, "dashboard-cashier@example.test");
+        await Login(manager, "dashboard-manager@example.test");
 
         var businessId = await CreateBusiness(owner, "Owner Shop", "owner-dashboard-key-2026");
         var otherId = await CreateBusiness(outsider, "Other Shop", "other-dashboard-key-2026");
@@ -51,16 +53,17 @@ public sealed class OwnerDashboardIntegrationTests
                 .Select(x => x.Id).SingleAsync();
             var cashierId = await db.Users.Where(x => x.Email == "dashboard-cashier@example.test")
                 .Select(x => x.Id).SingleAsync();
+            var managerId = await db.Users.Where(x => x.Email == "dashboard-manager@example.test")
+                .Select(x => x.Id).SingleAsync();
             var otherOwnerId = await db.Users.Where(x => x.Email == "dashboard-other@example.test")
                 .Select(x => x.Id).SingleAsync();
             var locationId = await db.BusinessLocations.Where(x => x.BusinessId == businessId)
                 .Select(x => x.Id).SingleAsync();
             var otherLocationId = await db.BusinessLocations.Where(x => x.BusinessId == otherId)
                 .Select(x => x.Id).SingleAsync();
-            db.BusinessUsers.Add(new BusinessUser
-            {
-                BusinessId = businessId, UserId = cashierId, RoleCode = "Cashier"
-            });
+            db.BusinessUsers.AddRange(
+                new BusinessUser { BusinessId = businessId, UserId = cashierId, RoleCode = "Cashier" },
+                new BusinessUser { BusinessId = businessId, UserId = managerId, RoleCode = "Manager" });
 
             var zone = TimeZoneInfo.FindSystemTimeZoneById("Asia/Kolkata");
             var localDate = TimeZoneInfo.ConvertTimeFromUtc(DateTime.UtcNow, zone).Date;
@@ -106,6 +109,13 @@ public sealed class OwnerDashboardIntegrationTests
         var cashierData = await cashier.GetFromJsonAsync<JsonElement>(
             $"/api/businesses/{businessId}/dashboard");
         Assert.Equal(JsonValueKind.Null, cashierData.GetProperty("cashSalesToday").ValueKind);
+
+        var managerData = await manager.GetFromJsonAsync<JsonElement>(
+            $"/api/businesses/{businessId}/dashboard");
+        Assert.Equal("Manager", managerData.GetProperty("roleCode").GetString());
+        Assert.Equal(JsonValueKind.Null, managerData.GetProperty("cashSalesToday").ValueKind);
+        Assert.Equal(JsonValueKind.Null, managerData.GetProperty("stockAlerts").ValueKind);
+        Assert.Equal(0, managerData.GetProperty("pendingApprovals").GetInt32());
 
         var otherData = await outsider.GetFromJsonAsync<JsonElement>(
             $"/api/businesses/{otherId}/dashboard");
