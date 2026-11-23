@@ -688,8 +688,12 @@ public sealed class AppDbContext(DbContextOptions<AppDbContext> options)
 
         builder.Entity<RetailCashSaleLine>(entity =>
         {
-            entity.ToTable(x => x.HasCheckConstraint("CK_RetailCashSaleLine_Quantity",
-                "[Quantity] >= 0.001 AND [Quantity] <= 1000000"));
+            // SQL Server stores decimals numerically. SQLite test storage uses TEXT affinity,
+            // where comparing decimal text to numeric literals would reject valid sales.
+            // The API validates three-decimal quantities on both providers.
+            if (Database.IsSqlServer())
+                entity.ToTable(x => x.HasCheckConstraint("CK_RetailCashSaleLine_Quantity",
+                    "[Quantity] >= 0.001 AND [Quantity] <= 1000000"));
             entity.Property(x => x.Quantity).HasPrecision(18, 3);
             entity.Property(x => x.ProductName).HasMaxLength(200);
             entity.Property(x => x.UnitPrice).HasPrecision(18, 2);

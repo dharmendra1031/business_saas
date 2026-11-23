@@ -344,8 +344,9 @@ try {
     const t = await scenario('business-owner', { role: 'Owner' })
     await t.login(true)
     await t.page.getByRole('heading', { name: 'Business Dashboard', exact: true }).waitFor()
+    await t.page.getByRole('heading', { name: 'Complete store setup' }).waitFor()
     const ownerText = await t.page.evaluate(() => ({
-      heading: getComputedStyle(document.querySelector('.business-shell .page-header h1')).color,
+      heading: getComputedStyle(document.querySelector('.business-shell .business-setup-panel h2')).color,
       nav: getComputedStyle(document.querySelector('.business-shell .app-sidebar .nav-entry')).color
     }))
     assert.equal(ownerText.heading, 'rgb(0, 0, 0)', 'Light workspace headings are near-black')
