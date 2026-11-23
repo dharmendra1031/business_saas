@@ -121,12 +121,14 @@ public sealed class RetailStockTests
         Assert.Equal(1, stock.GetProperty("total").GetInt32());
         Assert.True(stock.GetProperty("items")[0].GetProperty("hasStockRecord").GetBoolean());
         Assert.Equal(12.125m, stock.GetProperty("items")[0].GetProperty("quantity").GetDecimal());
+        Assert.Equal("PCS", stock.GetProperty("items")[0].GetProperty("unitCode").GetString());
 
         var history = await owner.GetFromJsonAsync<JsonElement>(
             path + $"/movements?productId={product}&page=1");
         Assert.Equal(1, history.GetProperty("total").GetInt32());
         Assert.Equal("Opening", history.GetProperty("items")[0].GetProperty("sourceType").GetString());
         Assert.Equal(12.125m, history.GetProperty("items")[0].GetProperty("quantityChange").GetDecimal());
+        Assert.Equal("PCS", history.GetProperty("items")[0].GetProperty("unitCode").GetString());
 
         using (var scope = factory.Services.CreateScope())
         {

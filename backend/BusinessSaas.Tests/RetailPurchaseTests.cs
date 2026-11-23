@@ -150,6 +150,7 @@ public sealed class RetailPurchaseTests
         var before = await manager.GetFromJsonAsync<JsonElement>(orderPath);
         var orderLineId = before.GetProperty("lines")[0].GetProperty("id").GetInt64();
         Assert.Equal("Draft", before.GetProperty("status").GetString());
+        Assert.Equal("PCS", before.GetProperty("lines")[0].GetProperty("unitCode").GetString());
 
         Assert.Equal(HttpStatusCode.OK,
             (await Send(owner, orderPath + "/approve", new { })).StatusCode);
@@ -241,6 +242,7 @@ public sealed class RetailPurchaseTests
         var stockPage = await owner.GetFromJsonAsync<JsonElement>(
             $"/api/businesses/{businessId}/stock/locations/{locationId}");
         Assert.Equal(100m, stockPage.GetProperty("items")[0].GetProperty("quantity").GetDecimal());
+        Assert.Equal("PCS", stockPage.GetProperty("items")[0].GetProperty("unitCode").GetString());
 
         // The inventory screen must show the same two posted receivings as the
         // database ledger, without exposing them across business or cashier roles.
@@ -250,6 +252,8 @@ public sealed class RetailPurchaseTests
         Assert.Equal(2, postedMovements.GetProperty("total").GetInt32());
         var movementRows = postedMovements.GetProperty("items");
         Assert.Equal(2, movementRows.GetArrayLength());
+        Assert.All(movementRows.EnumerateArray(), row =>
+            Assert.Equal("PCS", row.GetProperty("unitCode").GetString()));
         Assert.All(movementRows.EnumerateArray(), row =>
         {
             Assert.Equal("Receiving", row.GetProperty("sourceType").GetString());

@@ -103,6 +103,9 @@ public sealed class RetailProductTests
         Assert.Equal(HttpStatusCode.BadRequest,
             (await Put(owner, categoriesPath + "/" + groupId,
                 new { name = "Clothing", isActive = true, parentId = groupId })).StatusCode);
+        Assert.Equal(HttpStatusCode.Conflict,
+            (await Put(owner, categoriesPath + "/" + groupId,
+                new { name = "Clothing", isActive = false, parentId = (long?)null })).StatusCode);
         Assert.Equal(HttpStatusCode.NotFound,
             (await Post(other, categoriesPath, new { name = "Wrong Tenant" })).StatusCode);
         Assert.Equal(HttpStatusCode.NotFound,
@@ -182,11 +185,53 @@ public sealed class RetailProductTests
         Assert.Equal(generalId, quickDetails.GetProperty("categoryId").GetInt64());
         Assert.Equal(itemId, quickDetails.GetProperty("unitId").GetInt64());
 
+        // Base unit is editable before any order, stock balance or sale uses the product.
+        Assert.Equal(HttpStatusCode.OK,
+            (await Put(owner, path + "/" + quickId, new
+            {
+                name = "Quick product", sku = $"AUTO-{quickId}", barcode = (string?)null,
+                categoryId = generalId, unitId, salePrice = 20.50m,
+                taxClassification = "", isActive = true
+            })).StatusCode);
+        Assert.Equal(unitId, (await owner.GetFromJsonAsync<JsonElement>(path + "/" + quickId))
+            .GetProperty("unitId").GetInt64());
+
         var first = await Post(owner, path, Product());
         Assert.Equal(HttpStatusCode.Created, first.StatusCode);
         var productId = (await first.Content.ReadFromJsonAsync<JsonElement>())
             .GetProperty("id").GetInt64();
         Assert.True(productId > 0);
+
+        // A referenced master unit code is a stock quantity identity, not a cosmetic label.
+        Assert.Equal(HttpStatusCode.Conflict,
+            (await Put(owner, $"/api/businesses/{businessId}/units/{unitId}",
+                new { code = "BOX", name = "Box", isActive = true })).StatusCode);
+        Assert.Equal(HttpStatusCode.OK,
+            (await Put(owner, $"/api/businesses/{businessId}/units/{unitId}",
+                new { code = "PCS", name = "Individual Pieces", isActive = true })).StatusCode);
+
+        long locationId;
+        using (var scope = factory.Services.CreateScope())
+        {
+            var db = scope.ServiceProvider.GetRequiredService<AppDbContext>();
+            locationId = await db.BusinessLocations.Where(x => x.BusinessId == businessId)
+                .Select(x => x.Id).SingleAsync();
+        }
+        var supplierId = await CreateId(owner, $"/api/businesses/{businessId}/suppliers",
+            new { name = "Unit Test Supplier", phone = "9999999990", email = "" });
+        var orderId = await CreateId(owner, $"/api/businesses/{businessId}/purchase-orders",
+            new
+            {
+                locationId, supplierId, requestKey = "test-product-used-unit-20261123",
+                lines = new[] { new { productId, quantity = 2.5m, unitCost = 10m } }
+            });
+        var orderDetail = await owner.GetFromJsonAsync<JsonElement>(
+            $"/api/businesses/{businessId}/purchase-orders/{orderId}");
+        Assert.Equal("PCS", orderDetail.GetProperty("lines")[0].GetProperty("unitCode").GetString());
+        Assert.Equal(HttpStatusCode.Conflict,
+            (await Put(owner, path + "/" + productId, Product(unit: itemId, isActive: true))).StatusCode);
+        Assert.Equal(unitId, (await owner.GetFromJsonAsync<JsonElement>(path + "/" + productId))
+            .GetProperty("unitId").GetInt64());
 
         Assert.Equal(HttpStatusCode.Conflict,
             (await Post(owner, path, Product(sku: "pen-100", barcode: "890000010002"))).StatusCode);
