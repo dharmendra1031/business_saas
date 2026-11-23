@@ -98,7 +98,7 @@ public static class BusinessEndpoints
 
             var businessType = await db.BusinessTypes.AsNoTracking()
                 .Where(x => x.Id == request.BusinessTypeId && x.IsSupported &&
-                    x.ReleaseState == "Available" && x.Code == "RETAIL")
+                    x.ReleaseState == "Available")
                 .Select(x => x.Code).SingleOrDefaultAsync();
             if (businessType is null)
                 return Results.BadRequest(new { message = "This business type is not available yet." });
