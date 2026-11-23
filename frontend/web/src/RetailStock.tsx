@@ -184,7 +184,7 @@ export default function RetailStock({ businessId, locations, canOperate, isOwner
     </section>
 
   return (
-    <section className="content-section retail-masters business-module-card" aria-label="Retail stock">
+    <section className="content-section retail-masters business-module-card retail-stock-list" aria-label="Retail stock">
       <div className="masters-heading business-module-heading">
         <h2>Inventory</h2>
         <div className="business-location-picker">
@@ -267,12 +267,13 @@ export default function RetailStock({ businessId, locations, canOperate, isOwner
           </div>
             : <div className="table-responsive">
               <table className="table table-sm align-middle business-record-table">
-                <thead><tr><th scope="col">Product</th><th scope="col">SKU</th>
+                <thead><tr><th scope="col">Product</th><th scope="col" className="stock-sku-col">SKU</th>
                   <th scope="col" className="text-end">Available stock</th>
                   <th scope="col" className="text-end">Actions</th></tr></thead>
                 <tbody>{items.map(item => <tr key={item.id}>
-                  <td><strong>{item.name}</strong>{!item.isActive && <small className="product-secondary">Inactive</small>}</td>
-                  <td>{item.sku}</td>
+                  <td><strong>{item.name}</strong><small className="stock-mobile-sku">{item.sku}</small>
+                    {!item.isActive && <small className="product-secondary">Inactive</small>}</td>
+                  <td className="stock-sku-col">{item.sku}</td>
                   <td className="text-end">
                     {item.hasStockRecord
                       ? <>

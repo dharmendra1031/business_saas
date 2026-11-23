@@ -148,6 +148,23 @@
 .business-inventory-alert-filter small { color: #617995; font-size: .76rem; font-weight: 450; }
 .business-stock-threshold { display: block; white-space: normal; color: #925521;
   font-size: .73rem; font-weight: 670; margin-top: 3px; }
+.stock-mobile-sku { display: none; }
+@media (max-width: 600px) {
+  .retail-stock-list .business-record-table { width: 100%; }
+  .retail-stock-list .business-record-table th,
+  .retail-stock-list .business-record-table td { padding: 9px 6px; font-size: .75rem; }
+  .retail-stock-list .business-record-table .stock-sku-col { display: none; }
+  .retail-stock-list .stock-mobile-sku { display: block; margin-top: 4px;
+    overflow-wrap: anywhere; color: #667c96; font-size: .71rem; font-weight: 500; }
+  .retail-stock-list .business-record-table td:first-child { max-width: 98px; overflow-wrap: anywhere; }
+  .retail-stock-list .business-record-table th:last-child,
+  .retail-stock-list .business-record-table td:last-child { width: 80px; text-align: right; }
+  .retail-stock-list .business-record-table td:last-child { white-space: normal !important; }
+  .retail-stock-list .business-record-table td:last-child .btn {
+    display: block; width: 100%; min-height: 30px; margin: 4px 0 !important;
+    padding: 3px 5px; font-size: .72rem; white-space: nowrap;
+  }
+}
 .business-shell .business-module-card .masters-form { padding: 18px; border: 1px solid #e0e7f0; border-radius: 10px;
   background: #fbfcff; margin-top: 15px; }
 .business-shell .business-master-tabs .btn { min-height: 39px; font-weight: 730; }

@@ -360,6 +360,14 @@ try {
     await t.screenshot('BUS-27-alerts-other-location-mobile-360')
     assert.ok(await t.page.evaluate(() => document.documentElement.scrollWidth) <= 361,
       'Alerts table and filter should not overflow mobile viewport')
+    const historyButton = t.page.getByRole('button', { name: 'History' }).first()
+    const adjustButton = t.page.getByRole('button', { name: 'Adjust' }).first()
+    assert.ok(await historyButton.evaluate(button =>
+      button.getBoundingClientRect().right <= window.innerWidth - 15),
+      'History action must be visible without horizontal table scrolling')
+    assert.ok(await adjustButton.evaluate(button =>
+      button.getBoundingClientRect().right <= window.innerWidth - 15),
+      'Adjust action must be visible without horizontal table scrolling')
     await t.page.locator('#stock-location').selectOption('1')
     await t.page.getByText('Blue Shirt', { exact: true }).waitFor()
     await alertsToggle.uncheck()
