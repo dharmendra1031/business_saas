@@ -107,6 +107,8 @@ public static class BusinessEndpoints
             var canOperate = accessStatus is "Active" or "Trial";
 
             var hasProducts = roleCode != "Cashier" && await db.RetailProducts.AnyAsync(x => x.BusinessId == businessId);
+            var hasInitializedStock = roleCode == "Owner" && hasProducts &&
+                await db.RetailStockBalances.AnyAsync(x => x.BusinessId == businessId);
             var pendingApprovals = roleCode == "Owner" ? await db.RetailPurchaseOrders.CountAsync(x =>
                 x.BusinessId == businessId && x.Status == "Draft") : 0;
 
@@ -175,7 +177,7 @@ public static class BusinessEndpoints
                 stockAlerts = new OwnerStockAlerts(alertCount, zeroCount, alertItems);
             }
 
-            return Results.Ok(new { hasProducts, pendingApprovals, cashSalesToday, stockAlerts,
+            return Results.Ok(new { hasProducts, hasInitializedStock, pendingApprovals, cashSalesToday, stockAlerts,
                 business = details, roleCode, locations, subscription, accessStatus,
                 canOperate, cashSaleEnabled = environment.IsDevelopment() });
         });

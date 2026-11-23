@@ -37,18 +37,26 @@ export default function BusinessOverview({ dashboard, onNavigate, onReviewApprov
       </span>
     </div>
 
-    {!hasProducts ? <section className="content-section business-setup-panel" aria-labelledby="business-setup-title">
+    {(!hasProducts || (isOwner && dashboard.hasInitializedStock === false)) &&
+      <section className="content-section business-setup-panel" aria-labelledby="business-setup-title">
       <h2 id="business-setup-title">Complete store setup</h2>
-      <p>Prepare your product catalog before recording stock.</p>
+      <p>{hasProducts ? 'Your catalog is ready for opening stock.' : 'Prepare your product catalog before recording stock.'}</p>
+      <p>{locations.length ? 'Store location assigned' : 'A store location must be assigned before posting stock.'}</p>
       <ol className="business-setup-list">
         <li><span>1</span><button type="button" onClick={() => onNavigate('masters')}>
           Review categories &amp; units <ArrowRight size={15} /></button></li>
-        <li><span>2</span><button type="button" onClick={() => onNavigate('products')}>
-          Add your first product <ArrowRight size={15} /></button></li>
-        <li><span>3</span><span>Record opening stock <small>After adding products</small></span></li>
+        <li><span>2</span>{hasProducts ? <span>First product added</span> :
+          <button type="button" onClick={() => onNavigate('products')}>
+            Add your first product <ArrowRight size={15} /></button>}</li>
+        <li><span>3</span>{hasProducts && locations.length > 0 && dashboard.canOperate
+          ? <button type="button" onClick={() => onNavigate('stock')}>
+            Record opening stock <ArrowRight size={15} /></button>
+          : <span>Record opening stock <small>{!hasProducts ? 'After adding products' :
+            locations.length === 0 ? 'Requires a location' : 'Requires an active subscription'}</small></span>}</li>
         <li><span>4</span><span>Receipt settings <small>Not available yet</small></span></li>
       </ol>
-    </section> : <>
+    </section>}
+    {hasProducts && <>
       <section className="business-operational-section" aria-labelledby="business-overview-title">
         <h2 id="business-overview-title">Business Overview</h2>
         <div className="business-kpi-grid">

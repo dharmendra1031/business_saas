@@ -70,6 +70,7 @@ public sealed class OwnerStockAlertTests
             reorderLevel = threshold, isActive
         };
         var initial = await owner.GetFromJsonAsync<JsonElement>($"/api/businesses/{id}/dashboard");
+        Assert.False(initial.GetProperty("hasInitializedStock").GetBoolean());
         Assert.Equal(JsonValueKind.Null, initial.GetProperty("stockAlerts").ValueKind);
 
         Assert.Equal(HttpStatusCode.BadRequest,
@@ -79,12 +80,17 @@ public sealed class OwnerStockAlertTests
         var monitoredProduct = await CreateId(owner, basePath, Product("ALERT-MAIN", 5m));
         var unopenedId = await CreateId(owner, basePath, Product("ALERT-UNOPENED", 0m));
         await CreateId(owner, basePath, Product("ALERT-NOTHRESHOLD", null));
+        var awaitingStock = await owner.GetFromJsonAsync<JsonElement>($"/api/businesses/{id}/dashboard");
+        Assert.True(awaitingStock.GetProperty("hasProducts").GetBoolean());
+        Assert.False(awaitingStock.GetProperty("hasInitializedStock").GetBoolean());
 
         var opening = $"/api/businesses/{id}/stock/locations/";
         (await Send(owner, HttpMethod.Post, opening + location + "/opening",
             new { productId = monitoredProduct, quantity = 3m })).EnsureSuccessStatusCode();
         (await Send(owner, HttpMethod.Post, opening + secondLocation + "/opening",
             new { productId = monitoredProduct, quantity = 0m })).EnsureSuccessStatusCode();
+        var initialized = await owner.GetFromJsonAsync<JsonElement>($"/api/businesses/{id}/dashboard");
+        Assert.True(initialized.GetProperty("hasInitializedStock").GetBoolean());
 
         var otherOptions = await other.GetFromJsonAsync<JsonElement>($"/api/businesses/{foreignId}/products/options");
         var otherCategory = otherOptions.GetProperty("categories")[0].GetProperty("id").GetInt64();

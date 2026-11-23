@@ -85,8 +85,8 @@ The mockup pictures display illustrative controls (Card, UPI, Split, Services, d
 
 | Current evidence status | Count |
 | --- | ---: |
-| Missing | 58 |
-| Partial | 73 |
+| Missing | 57 |
+| Partial | 74 |
 | Deferred | 14 |
 
 ### A. Entry, authentication and cross-workspace navigation
@@ -170,7 +170,7 @@ The mockup pictures display illustrative controls (Card, UPI, Split, Services, d
 | ID | Screen / interaction | Type | Current | Priority | Required outcome / guardrail |
 | --- | --- | --- | --- | --- | --- |
 | BUS-01 | Business Dashboard | Page | Partial | P0 | Real cash totals, Draft POs and configured stock alerts; Stock Alerts action now opens Inventory at the first affected location with server-filtered Alerts Only. Total counts remain business-wide; Inventory is explicitly location-scoped. Release acceptance pending. |
-| BUS-02 | First-run business setup checklist | Page | Missing | P0 | Provisioned business readiness: first location, products, opening stock, receipt settings; resume safely. |
+| BUS-02 | First-run business setup checklist | Page | Partial | P0 | Dashboard shows location and catalog readiness. Owners can resume setup in Inventory until the first stock balance exists. Receipt settings and hosted acceptance remain pending. |
 | BUS-03 | Business selector / context switch | Page | Partial | P0 | Compact membership-only rows with business name/type/role; no owner tenant creation. Repeated clicks guarded and prior context cleared; Chromium fixture QA passed. Real tenant-revocation/authorization E2E and visual owner sign-off pending. |
 | BUS-04 | Locations — list and active location | Page | Partial | P1 | Authorized stock location selection and one-location label verified in Chromium; sidebar uses count for multi-branch rather than assuming first is active. Separate location management/list and authoritative primary/active scope still missing. |
 | BUS-05 | Locations — add / edit | Form | Missing | P1 | Permission and entitlement limits; no unauthorized branch access. |

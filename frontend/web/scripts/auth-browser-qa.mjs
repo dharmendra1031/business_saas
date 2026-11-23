@@ -1479,6 +1479,27 @@ try {
   }
 
   for (const width of [1366, 360]) {
+    const setup = await scenario('opening-stock-setup-' + width, { role: 'Owner', width })
+    let hasInitializedStock = false
+    await setup.page.route('**/api/businesses/1/dashboard', route => response(route, 200, {
+      ...dashboard('Owner', true), hasInitializedStock
+    }))
+    await setup.login()
+    const checklist = setup.page.getByRole('region', { name: 'Complete store setup' })
+    await checklist.getByText('First product added', { exact: true }).waitFor()
+    await checklist.getByRole('button', { name: 'Record opening stock' }).click()
+    await setup.page.getByRole('heading', { name: 'Inventory', exact: true }).waitFor()
+    hasInitializedStock = true
+    if (width === 360) await setup.page.getByRole('button', { name: 'Open navigation' }).click()
+    await setup.page.locator('.app-sidebar').getByRole('button', { name: 'Dashboard', exact: true }).click()
+    await setup.page.getByRole('heading', { name: 'Business Overview' }).waitFor()
+    await checklist.waitFor({ state: 'hidden' })
+    await setup.check()
+    await setup.context.close()
+    console.log('PASS BUS-02 opening stock setup and dashboard refresh at ' + width + 'px')
+  }
+
+  for (const width of [1366, 360]) {
     const t = await scenario('provisioning-eligibility-' + width, { role: 'Platform', width })
     const block = {
       code: 'MODULE_NOT_AVAILABLE',

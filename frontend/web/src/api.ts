@@ -57,6 +57,7 @@ export interface RetailDashboard {
   } | null
   accessStatus: 'Trial' | 'TrialExpired' | 'Active' | 'Inactive' | 'Suspended'
   hasProducts: boolean
+  hasInitializedStock?: boolean
   pendingApprovals: number
   stockAlerts?: {
     count: number
