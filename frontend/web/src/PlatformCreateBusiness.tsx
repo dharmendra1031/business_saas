@@ -31,6 +31,9 @@ export default function PlatformCreateBusiness({ onCancel, onCreated }: {
   const [timeZone, setTimeZone] = useState('')
   const [ownerEmail, setOwnerEmail] = useState('')
   const [owner, setOwner] = useState<VerifiedOwner | null>(null)
+  const [missingOwner, setMissingOwner] = useState(false)
+  const [invitationReason, setInvitationReason] = useState('')
+  const [invitedEmail, setInvitedEmail] = useState('')
   const [location, setLocation] = useState('Main Shop')
   const [key] = useState(operationKey)
   const [busy, setBusy] = useState(false)
@@ -63,15 +66,38 @@ export default function PlatformCreateBusiness({ onCancel, onCreated }: {
     setError('')
     setBusy(true)
     setOwner(null)
+    setMissingOwner(false)
     try {
       const result = await api<VerifiedOwner>('/platform/owner-lookup?email=' +
         encodeURIComponent(ownerEmail.trim()))
       if (!result.verified) throw new Error('The selected owner account is not email-verified.')
       setOwner(result)
+      setInvitedEmail('')
       setStep(2)
     } catch (cause) {
-      if (!(cause instanceof SessionExpiredError))
+      if (!(cause instanceof SessionExpiredError)) {
+        setMissingOwner(cause instanceof ApiResponseError && cause.status === 404)
         setError(cause instanceof Error ? cause.message : 'Unable to verify owner account.')
+      }
+    } finally { setBusy(false) }
+  }
+
+  async function sendOwnerInvitation() {
+    if (busy || !missingOwner || invitationReason.trim().length < 10) return
+    setBusy(true)
+    setError('')
+    try {
+      const issued = await post<{ email: string; status: string }>(
+        '/platform/owner-invitations', {
+          email: ownerEmail.trim(), reason: invitationReason.trim()
+        })
+      if (issued.status !== 'Sent') throw new Error('Email delivery was not confirmed.')
+      setInvitedEmail(issued.email)
+      setMissingOwner(false)
+      setInvitationReason('')
+    } catch (cause) {
+      if (!(cause instanceof SessionExpiredError))
+        setError(cause instanceof Error ? cause.message : 'Unable to deliver invitation.')
     } finally { setBusy(false) }
   }
 
@@ -220,15 +246,38 @@ export default function PlatformCreateBusiness({ onCancel, onCreated }: {
         {step === 1 && <>
           <div className="provision-form-intro"><span className="provision-intro-icon"><UserRound size={23} /></span>
             <div><h2 id="provision-title">Owner & Access</h2>
-              <p>Assign a verified existing account. No automatic account or invitation is created.</p></div>
+              <p>Verify an existing account or invite the Owner by email before provisioning.</p></div>
           </div>
           <form onSubmit={event => void verifyOwner(event)}>
             <label className="form-label" htmlFor="provision-owner">Owner Email Address *</label>
             <input id="provision-owner" type="email" className="form-control" required autoFocus
               maxLength={254} value={ownerEmail}
               placeholder="owner@company.com"
-              onChange={event => { setOwnerEmail(event.target.value); setOwner(null) }} />
-            <p className="field-help">The owner must already have a verified Business SaaS account. Invitation and email verification delivery are not implemented yet.</p>
+              onChange={event => {
+                setOwnerEmail(event.target.value)
+                setOwner(null)
+                setMissingOwner(false)
+                setInvitedEmail('')
+                setError('')
+              }} />
+            <p className="field-help">The Owner must accept the email invitation and set a password before you can assign the business. Accounts are not automatically created.</p>
+            {invitedEmail && <div className="alert alert-success" role="status">
+              Invitation emailed to {invitedEmail}. Ask the Owner to complete setup, then select Verify Owner.
+            </div>}
+            {missingOwner && <div className="border rounded p-3 mt-3">
+              <h3 className="h6">Invite new Owner</h3>
+              <p className="field-help">An invitation email will be sent only if secure mail delivery is configured. The link expires after 48 hours.</p>
+              <label className="form-label" htmlFor="owner-invite-reason">Reason (audit log)</label>
+              <textarea id="owner-invite-reason" className="form-control" rows={2}
+                minLength={10} maxLength={200} value={invitationReason}
+                placeholder="Reason for inviting this Owner"
+                onChange={event => setInvitationReason(event.target.value)} />
+              <button type="button" className="btn btn-outline-primary mt-2"
+                disabled={busy || invitationReason.trim().length < 10}
+                onClick={() => void sendOwnerInvitation()}>
+                {busy ? 'Sending…' : 'Send secure email invitation'}
+              </button>
+            </div>}
             <div className="form-footer"><button className="btn btn-outline-secondary" type="button" disabled={busy}
               onClick={() => { setError(''); setStep(0) }}>Back</button>
               <button type="submit" className="btn btn-primary" disabled={busy}>
