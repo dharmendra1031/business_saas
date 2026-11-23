@@ -87,6 +87,8 @@ export interface RetailDashboard {
 }
 
 let csrfToken: string | null = null
+let csrfRequest: Promise<string> | null = null
+let authGeneration = 0
 let sessionExpiredHandler: (() => void) | null = null
 
 export class ApiResponseError extends Error {
@@ -115,24 +117,37 @@ export function operationKey(): string {
 
 export function resetCsrf(): void {
   csrfToken = null
+  csrfRequest = null
+  authGeneration++
 }
 
-async function csrf(): Promise<string> {
-  if (csrfToken) return csrfToken
+function csrf(): Promise<string> {
+  if (csrfToken) return Promise.resolve(csrfToken)
+  if (csrfRequest) return csrfRequest
 
-  let response: Response
-  try {
-    response = await fetch('/api/auth/csrf', { credentials: 'same-origin' })
-  } catch {
-    throw new Error('Unable to connect. Check your internet connection.')
-  }
-  if (!response.ok) throw new Error('Unable to initialize a secure session.')
-  const body = (await response.json()) as { token: string }
-  csrfToken = body.token
-  return csrfToken
+  const generation = authGeneration
+  csrfRequest = (async () => {
+    try {
+      let response: Response
+      try {
+        response = await fetch('/api/auth/csrf', { credentials: 'same-origin' })
+      } catch {
+        throw new Error('Unable to connect. Check your internet connection.')
+      }
+      if (!response.ok) throw new Error('Unable to initialize a secure session.')
+      const body = (await response.json()) as { token: string }
+      if (generation !== authGeneration) throw new SessionExpiredError()
+      csrfToken = body.token
+      return body.token
+    } finally {
+      if (generation === authGeneration) csrfRequest = null
+    }
+  })()
+  return csrfRequest
 }
 
 export async function api<T>(path: string, options: RequestInit = {}): Promise<T> {
+  const requestGeneration = authGeneration
   const method = (options.method ?? 'GET').toUpperCase()
   const headers = new Headers(options.headers)
   if (method !== 'GET' && method !== 'HEAD') {
@@ -156,8 +171,11 @@ export async function api<T>(path: string, options: RequestInit = {}): Promise<T
 
   if (!response.ok) {
     if (response.status === 401 && !['/auth/login', '/auth/me', '/auth/mfa/verify', '/auth/mfa/setup', '/auth/mfa/enable'].includes(path)) {
-      resetCsrf()
-      sessionExpiredHandler?.()
+      // A response from the previous login must not expire a newer session.
+      if (requestGeneration === authGeneration) {
+        resetCsrf()
+        sessionExpiredHandler?.()
+      }
       throw new SessionExpiredError()
     }
 
