@@ -10,7 +10,7 @@ const business = role => ({
   id: 1, name: 'Sample Retail', typeCode: 'RETAIL', typeName: 'Retail',
   countryCode: 'IN', currencyCode: 'INR', timeZoneId: 'Asia/Kolkata', roleCode: role
 })
-const dashboard = (role, hasProducts = false, pendingApprovals = 0, selectedBusinessId = 1, locationCount = 1, cashSalesFixture = false, stockAlertsFixture = false) => ({
+const dashboard = (role, hasProducts = false, pendingApprovals = 0, selectedBusinessId = 1, locationCount = 1, cashSalesFixture = false, stockAlertsFixture = false, ownerPos = false) => ({
   business: {
     id: selectedBusinessId, name: selectedBusinessId === 2 ? 'Second Retail' : 'Sample Retail', typeCode: 'RETAIL', typeName: 'Retail',
     countryCode: 'IN', currencyCode: 'INR', timeZoneId: 'Asia/Kolkata'
@@ -23,7 +23,7 @@ const dashboard = (role, hasProducts = false, pendingApprovals = 0, selectedBusi
     trialEndsAtUtc: new Date(Date.now() + 14 * 24 * 60 * 60 * 1000).toISOString(),
     paidStartsAtUtc: null, paidEndsAtUtc: null, paidPlanVersionId: null },
   accessStatus: 'Trial', canOperate: true,
-  hasProducts, pendingApprovals, cashSaleEnabled: role === 'Cashier',
+  hasProducts, pendingApprovals, cashSaleEnabled: role === 'Cashier' || ownerPos,
   stockAlerts: stockAlertsFixture && role === 'Owner' ? {
     count: 2, outOfStockCount: 1,
     items: [
@@ -59,7 +59,7 @@ async function scenario(name, {
   width = 1366, height = 768, role = 'Owner', initialFailure = false,
   businessFailure = false, multiple = false, challenge = false, verified = true,
   badPassword = false, lockedPassword = false, badMfa = false, hasProducts = false, pendingApprovals = 0,
-  locationCount = 1, productsFixture = false, cashSalesFixture = false, stockAlertsFixture = false
+  locationCount = 1, productsFixture = false, cashSalesFixture = false, stockAlertsFixture = false, ownerPos = false
 } = {}) {
   const context = await browser.newContext({ viewport: { width, height }, deviceScaleFactor: 1 })
   const page = await context.newPage()
@@ -124,7 +124,7 @@ async function scenario(name, {
       const first = business(role)
       return response(route, 200, multiple ? [first, { ...first, id: 2, name: 'Second Retail' }] : [first])
     }
-    if (/^\/businesses\/\d+\/dashboard$/.test(path)) return response(route, 200, dashboard(role, hasProducts, pendingApprovals, Number(path.split('/')[2]), locationCount, cashSalesFixture, stockAlertsFixture))
+    if (/^\/businesses\/\d+\/dashboard$/.test(path)) return response(route, 200, dashboard(role, hasProducts, pendingApprovals, Number(path.split('/')[2]), locationCount, cashSalesFixture, stockAlertsFixture, ownerPos))
     if (/^\/businesses\/\d+\/stock\/locations\/\d+$/.test(path)) {
       stockPaths.push(path)
       const url = new URL(route.request().url())
