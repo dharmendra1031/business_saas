@@ -1074,6 +1074,61 @@ try {
     console.log('PASS owner configured stock alerts / navigation / mobile')
   }
 
+
+  // Business owner: one compact master workspace presents each level independently.
+  for (const width of [1366, 360]) {
+    const t = await scenario('product-master-levels-' + width, {
+      role: 'Owner', hasProducts: true, productsFixture: true, width, height: 780
+    })
+    const tree = [
+      { id: 1, name: 'General', parentId: null, isActive: true },
+      { id: 2, name: 'Clothing', parentId: null, isActive: true },
+      { id: 21, name: 'Menswear', parentId: 2, isActive: true },
+      { id: 31, name: 'Shirts', parentId: 21, isActive: true }
+    ]
+    await t.page.route('**/api/businesses/1/products/options*', route =>
+      response(route, 200, {
+        categories: tree, brands: [{ id: 41, name: 'Raymond', isActive: true }],
+        units: [{ id: 51, name: 'Pieces', code: 'PCS', isActive: true }]
+      }))
+    await t.page.route('**/api/businesses/1/categories?*', route => {
+      const level = Number(new URL(route.request().url()).searchParams.get('level'))
+      const items = tree.filter(item =>
+        level === 1 ? item.parentId === null :
+          level === 2 ? item.parentId === 2 : level === 3 ? item.parentId === 21 : true)
+      return response(route, 200, { items, total: items.length, page: 1, pageSize: 20 })
+    })
+    await t.page.route('**/api/businesses/1/brands?*', route =>
+      response(route, 200, {
+        items: [{ id: 41, name: 'Raymond', isActive: true }], total: 1, page: 1, pageSize: 20
+      }))
+    await t.page.route('**/api/businesses/1/units?*', route =>
+      response(route, 200, {
+        items: [{ id: 51, name: 'Pieces', code: 'PCS', isActive: true }],
+        total: 1, page: 1, pageSize: 20
+      }))
+    await t.login()
+    await t.page.locator('.app-sidebar .nav-entry').filter({ hasText: 'Product Masters' }).click()
+    await t.page.getByRole('heading', { name: 'Product Masters' }).waitFor()
+    assert.equal(await t.page.locator('.business-master-tabs button').count(), 5)
+    await t.page.getByRole('button', { name: 'Subgroups', exact: true }).click()
+    await t.page.getByLabel('Group *').selectOption('2')
+    await t.page.getByText('Menswear', { exact: true }).first().waitFor()
+    await t.page.getByRole('button', { name: 'Categories', exact: true }).click()
+    await t.page.getByLabel('Subgroup *').selectOption('21')
+    await t.page.getByText('Shirts', { exact: true }).first().waitFor()
+    await t.page.getByRole('button', { name: 'Brands', exact: true }).click()
+    await t.page.getByText('Raymond', { exact: true }).waitFor()
+    await t.page.getByRole('button', { name: 'Units', exact: true }).click()
+    await t.page.getByText('Pieces', { exact: true }).waitFor()
+    if (width === 360) assert.ok(await t.page.evaluate(() => document.documentElement.scrollWidth) <= 361,
+      'All five master tabs must remain readable without horizontal page overflow')
+    await t.screenshot('BUS-10-classification-masters-' + width)
+    await t.check()
+    await t.context.close()
+    console.log('PASS independent Group/Subgroup/Category/Brand/Unit master tabs at', width)
+  }
+
   {
     const t = await scenario('product-inline-category-unit-brand', {
       role: 'Owner', hasProducts: true, productsFixture: true
