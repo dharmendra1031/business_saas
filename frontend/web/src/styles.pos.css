@@ -29,7 +29,7 @@
 .pos-shell .pos-header { align-items: center; gap: 14px; }
 .pos-shell .pos-header .pos-kicker { color: #4c40a7; font-size: .63rem; letter-spacing: .12em;
   margin-bottom: 4px; font-weight: 830; }
-.pos-shell .pos-header h2 { font-size: clamp(1.25rem, 2vw, 1.62rem); color: #080808;
+.pos-shell .pos-header h2 { font-size: clamp(1.25rem, 2vw, 1.62rem); color: #000000;
   font-weight: 800; letter-spacing: -.025em; margin: 0 0 5px; }
 .pos-shell .pos-header p { font-size: .79rem; color: #435062; }
 .pos-shell .pos-mode { display: inline-flex; align-items: center; gap: 7px; border-color: #d9dcf8;
@@ -39,7 +39,7 @@
 .pos-shell .pos-panel-heading { display: flex; align-items: center; padding: 17px 19px; margin: 0;
   border-bottom: 1px solid #e6eaf2; gap: 12px; min-height: 73px; }
 .pos-shell .pos-panel-heading > div { display: grid; gap: 4px; }
-.pos-shell .pos-panel-heading h2 { color: #080808; font-size: 1rem; font-weight: 790; line-height: 1.3; }
+.pos-shell .pos-panel-heading h2 { color: #000000; font-size: 1rem; font-weight: 790; line-height: 1.3; }
 .pos-shell .pos-panel-heading small { color: #474f5c; font-size: .7rem; line-height: 1.35; }
 .pos-count-pill { background: #efedff; color: #4f3ea7; font-size: .71rem; font-weight: 790;
   padding: 6px 10px; border-radius: 999px; white-space: nowrap; }
@@ -75,7 +75,7 @@
 .pos-product-in-cart { position: absolute; right: 7px; top: 8px; border-radius: 999px;
   background: #5341c4; color: #fff; font-size: .64rem; font-weight: 750; padding: 4px 7px; }
 .pos-product-meta { display: grid; flex: 1; padding: 10px 10px 13px; gap: 4px; }
-.pos-product-meta > strong { color: #080808; font-size: .81rem; font-weight: 770; line-height: 1.32;
+.pos-product-meta > strong { color: #000000; font-size: .81rem; font-weight: 770; line-height: 1.32;
   display: -webkit-box; -webkit-box-orient: vertical; -webkit-line-clamp: 2; overflow: hidden; }
 .pos-product-meta > small { color: #47505e; font-size: .7rem; line-height: 1.3; overflow-wrap: anywhere; }
 .pos-product-bottom { display: flex; flex-wrap: wrap; align-items: baseline; justify-content: space-between; gap: 4px; margin-top: auto; }
@@ -87,7 +87,7 @@
 .pos-products-empty { min-height: 220px; display: grid; place-content: center; justify-items: center;
   gap: 9px; text-align: center; color: #454e5c; padding: 30px 10px; }
 .pos-products-empty > svg { color: #4f467c; }
-.pos-products-empty strong { font-weight: 770; color: #080808; font-size: .87rem; }
+.pos-products-empty strong { font-weight: 770; color: #000000; font-size: .87rem; }
 .pos-products-empty p { font-size: .76rem; max-width: 360px; line-height: 1.5; margin: 0; }
 .pos-catalog-note { padding: 11px 18px 13px; margin: 0; border-top: 1px solid #edf0f6; color: #47515e;
   font-size: .68rem; line-height: 1.4; }
@@ -106,14 +106,14 @@
   border: 1px dashed #dce4f1; display: grid; justify-items: center; gap: 9px;
   text-align: center; background: #fafbff; color: #47505c; font-size: .78rem; }
 .pos-basket-empty svg { color: #514a75; }
-.pos-basket-empty strong { color: #080808; font-size: .86rem; }
+.pos-basket-empty strong { color: #000000; font-size: .86rem; }
 .pos-basket-empty p { max-width: 255px; margin: 0; line-height: 1.5; }
 .pos-shell .pos-basket-lines { margin: 0; padding: 0 17px; min-height: 0; overflow-y: auto; flex: 1;
   overscroll-behavior: contain; }
 .pos-shell .pos-basket-line { display: grid; grid-template-columns: minmax(0, 1fr) 115px 24px; gap: 7px;
   align-items: center; padding: 12px 0; }
 .pos-shell .pos-line-description { min-width: 0; gap: 5px; }
-.pos-shell .pos-line-description strong { color: #080808; font-size: .8rem; line-height: 1.35; font-weight: 760; }
+.pos-shell .pos-line-description strong { color: #000000; font-size: .8rem; line-height: 1.35; font-weight: 760; }
 .pos-shell .pos-line-description small { color: #474f5c; font-size: .69rem; }
 .pos-shell .pos-line-description b { color: #263553; font-size: .8rem; font-weight: 800; }
 .pos-quantity-control { display: inline-flex; align-items: center; border: 1px solid #dce4f0;
@@ -132,9 +132,9 @@
   background: #fafbfe; }
 .pos-subtotal-row, .pos-total-row { display: flex; align-items: baseline; justify-content: space-between; gap: 9px; }
 .pos-subtotal-row { color: #445164; font-size: .79rem; padding-bottom: 13px; }
-.pos-subtotal-row strong { font-size: .85rem; color: #080808; }
+.pos-subtotal-row strong { font-size: .85rem; color: #000000; }
 .pos-shell .pos-total-row { color: #1d2e4e; border-top: 1px solid #e5eaf3; padding: 14px 0 10px; font-weight: 800; }
-.pos-shell .pos-total-row strong { font-size: clamp(1.25rem, 2vw, 1.65rem); color: #080808;
+.pos-shell .pos-total-row strong { font-size: clamp(1.25rem, 2vw, 1.65rem); color: #000000;
   font-weight: 850; letter-spacing: -.03em; font-variant-numeric: tabular-nums; }
 .pos-no-discount-note { color: #4a525f; font-size: .66rem; line-height: 1.4; margin: 0 0 13px; }
 .pos-shell .pos-record-button { display: flex; align-items: center; justify-content: center; gap: 12px;
@@ -150,7 +150,7 @@
 .pos-dialog-heading { display: flex; justify-content: space-between; align-items: flex-start; gap: 14px;
   padding: 22px 24px 18px; border-bottom: 1px solid #e7ebf4; }
 .pos-dialog-kicker { font-size: .67rem; color: #513eaa; letter-spacing: .1em; font-weight: 830; }
-.pos-dialog-heading h2 { font-size: 1.28rem; font-weight: 820; margin: 5px 0 7px; color: #080808; }
+.pos-dialog-heading h2 { font-size: 1.28rem; font-weight: 820; margin: 5px 0 7px; color: #000000; }
 .pos-dialog-heading p { font-size: .77rem; line-height: 1.5; color: #475160; margin: 0; }
 .pos-dialog-close { display: grid; place-items: center; flex: 0 0 32px; width: 32px; height: 32px;
   border: none; border-radius: 7px; color: #455269; background: #f0f3f8; }
@@ -158,13 +158,13 @@
 .pos-dialog-total { display: grid; justify-items: center; gap: 8px; padding: 22px; margin-bottom: 18px;
   border: 1px solid #dad6f6; background: #f5f3ff; border-radius: 10px; }
 .pos-dialog-total span { font-size: .8rem; color: #50477d; font-weight: 760; }
-.pos-dialog-total strong { font-size: clamp(1.7rem, 5vw, 2.35rem); color: #080808;
+.pos-dialog-total strong { font-size: clamp(1.7rem, 5vw, 2.35rem); color: #000000;
   font-weight: 850; font-variant-numeric: tabular-nums; letter-spacing: -.035em; }
 .pos-dialog-total small { font-size: .71rem; color: #50476f; }
 .pos-dialog-method { display: flex; align-items: center; justify-content: space-between; gap: 10px;
   border: 1px solid #b9b1ed; border-radius: 9px; background: #f9f8ff; padding: 12px 14px; margin-bottom: 19px; }
 .pos-dialog-method span { display: flex; align-items: center; gap: 9px; color: #4835ad; font-weight: 750; font-size: .86rem; }
-.pos-dialog-method strong { font-size: .72rem; color: #080808; }
+.pos-dialog-method strong { font-size: .72rem; color: #000000; }
 .pos-dialog-body .form-label { font-size: .83rem; font-weight: 760; color: #2c3d5c; }
 .pos-dialog-body .pos-dialog-cash { min-height: 48px; font-size: 1.03rem; font-weight: 760; color: #243753;
   border: 1px solid #cfd9e9; border-radius: 8px; }

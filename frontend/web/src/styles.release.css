@@ -15,7 +15,7 @@
 .release-panel-heading { display: flex; justify-content: space-between; align-items: center; gap: 12px;
   margin: 0 0 16px; }
 .release-list .release-panel-heading { padding: 18px 18px 0; }
-.platform-shell .release-panel-heading h3 { margin: 0; font-size: .94rem; font-weight: 790; color: #080808; }
+.platform-shell .release-panel-heading h3 { margin: 0; font-size: .94rem; font-weight: 790; color: #000000; }
 .release-panel-heading > span { color: #47506c; background: #f0f2fb; border-radius: 20px;
   padding: 5px 9px; font-size: .68rem; font-weight: 750; white-space: nowrap; }
 .release-list-toolbar { display: flex; gap: 8px; padding: 0 18px 15px; }
@@ -28,7 +28,7 @@
 .release-type-item.is-selected { background: #f2f0ff; box-shadow: inset 3px 0 0 #5c46d4; }
 .release-type-item:focus-visible { outline: 2px solid #8375e6; outline-offset: -3px; }
 .release-type-item > span:nth-child(2) { display: grid; gap: 4px; min-width: 0; flex: 1; }
-.release-type-item strong { font-size: .83rem; color: #080808; font-weight: 770; }
+.release-type-item strong { font-size: .83rem; color: #000000; font-weight: 770; }
 .release-type-item small { font-size: .72rem; line-height: 1.45; color: #475161; overflow-wrap: anywhere; }
 .release-type-item > svg:last-child { color: #495167; flex-shrink: 0; }
 .release-type-symbol { display: grid; place-items: center; width: 37px; height: 37px;
@@ -36,7 +36,7 @@
 .release-empty { padding: 17px 18px; font-size: .82rem; color: #464e5e; line-height: 1.55; }
 .release-selected { display: grid; gap: 5px; padding: 13px 14px; background: #f7f8fc;
   border: 1px solid #e5e8f0; border-radius: 9px; margin-bottom: 18px; }
-.release-selected strong { font-weight: 780; color: #080808; font-size: .95rem; }
+.release-selected strong { font-weight: 780; color: #000000; font-size: .95rem; }
 .release-selected small { color: #495262; font-size: .72rem; }
 .release-editor .form-label { font-size: .79rem; font-weight: 740; color: #354765; margin-bottom: 7px; }
 .release-editor .form-control, .release-editor .form-select { min-height: 42px; border-radius: 8px;

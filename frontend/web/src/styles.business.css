@@ -20,7 +20,7 @@
   color: #254c8d; background: #eaf1fd; }
 .business-shell .page-content { width: 100%; max-width: 1580px; padding: 18px 24px 40px; }
 .business-shell .page-header { align-items: center; margin-bottom: 22px; }
-.business-shell .page-header h1 { font-size: 1.52rem; font-weight: 790; letter-spacing: -.035em; color: #080808; }
+.business-shell .page-header h1 { font-size: 1.52rem; font-weight: 790; letter-spacing: -.035em; color: #000000; }
 .business-shell .page-header p { color: #454f5e; font-size: .84rem; }
 .business-shell .content-section { border: 1px solid #e1e7f1; border-radius: 12px; background: #fff;
   box-shadow: 0 3px 16px #102d5510; }
@@ -40,7 +40,7 @@
 .business-setup-panel, .business-dashboard-panel { padding: 20px; }
 .business-shell .business-setup-panel h2, .business-shell .business-dashboard-panel h2,
 .business-shell .business-operational-section h2 { margin: 0 0 12px; padding: 0; border: 0;
-  color: #080808; font-size: 1.06rem; font-weight: 780; }
+  color: #000000; font-size: 1.06rem; font-weight: 780; }
 .business-setup-panel > p, .business-dashboard-panel p { margin: 0; color: #465161;
   font-size: .84rem; line-height: 1.55; }
 .business-setup-list { display: grid; grid-template-columns: repeat(2,minmax(0,1fr)); gap: 12px 24px;
@@ -60,7 +60,7 @@
 .business-kpi-card { display: flex; flex-direction: column; gap: 5px; min-width: 0; min-height: 122px; height: 100%; padding: 14px;
   border: 1px solid #e1e7f1; border-radius: 9px; background: #fff; }
 .business-kpi-card small { color: #39506b; font-size: .84rem; font-weight: 720; }
-.business-kpi-card strong { color: #080808; font-size: 1.45rem; line-height: 1.2; font-weight: 800; }
+.business-kpi-card strong { color: #000000; font-size: 1.45rem; line-height: 1.2; font-weight: 800; }
 .business-kpi-card span { color: #405266; font-size: .8rem; line-height: 1.4; }
 .business-dashboard-panel { margin-bottom: 14px; }
 .business-receipt-activity { margin: 0; padding: 0; list-style: none; }
@@ -80,7 +80,7 @@
 .business-stock-alerts ul { margin: 8px 0; padding: 0; list-style: none; }
 .business-stock-alerts li { display: flex; justify-content: space-between; align-items: flex-start;
   gap: 14px; padding: 9px 0; border-top: 1px solid #e6ecf4; font-size: .85rem; }
-.business-stock-alerts li strong { color: #080808; font-weight: 740; }
+.business-stock-alerts li strong { color: #000000; font-weight: 740; }
 .business-stock-alerts li > span:last-child { text-align: right; color: #724319; font-weight: 740; }
 .business-stock-alerts small { display: block; color: #415062; font-size: .76rem;
   line-height: 1.5; font-weight: 460; }
@@ -111,7 +111,7 @@
 .business-shell .business-module-heading { display: flex; align-items: center; justify-content: space-between;
   gap: 14px; min-height: 64px; padding: 12px 18px; margin: 0 0 15px; border-bottom: 1px solid #e5ebf4; background: #fff; }
 .business-shell .business-module-heading h2 { padding: 0; margin: 0; border: 0;
-  font-size: 1.15rem; font-weight: 770; color: #080808; }
+  font-size: 1.15rem; font-weight: 770; color: #000000; }
 .business-module-actions { display: flex; align-items: center; flex-wrap: wrap; justify-content: flex-end; gap: 12px; }
 .business-module-count { white-space: nowrap; color: #3a526d; font-size: .83rem; font-weight: 710; }
 .business-module-heading .btn-primary { min-height: 42px; font-size: .88rem; font-weight: 730; }
@@ -131,7 +131,7 @@
 .business-shell .business-module-card > .alert { margin-bottom: 15px; }
 .business-shell .business-module-card .product-form { background: #fcfdff; border: 1px solid #dce6f3;
   border-radius: 10px; padding: 19px; margin-top: 16px; }
-.business-shell .business-module-card .product-form h3 { color: #080808; font-size: 1.03rem; font-weight: 770; }
+.business-shell .business-module-card .product-form h3 { color: #000000; font-size: 1.03rem; font-weight: 770; }
 .business-shell .business-module-card .product-filters { gap: 9px; margin-top: 16px; margin-bottom: 19px; align-items: stretch; }
 .business-shell .business-module-card .product-filters > div { flex: 1 1 145px; }
 .business-shell .business-module-card .product-filters .product-filter-search { position: relative; flex: 2 1 260px; }
@@ -174,7 +174,7 @@
   padding: 13px 15px; white-space: nowrap; border-bottom: 1px solid #e3e9f3; }
 .business-shell .business-record-table tbody td { vertical-align: middle; padding: 12px 15px; font-size: .88rem; color: #243c59; }
 .business-shell .business-record-table tbody tr:hover { background: #f9fbff; }
-.business-shell .business-record-table tbody td strong { font-size: .88rem; font-weight: 730; color: #080808; }
+.business-shell .business-record-table tbody td strong { font-size: .88rem; font-weight: 730; color: #000000; }
 .business-shell .business-record-table tbody td .btn { min-height: 33px; }
 .business-record-status { display: inline-flex; align-items: center; padding: 5px 9px; border-radius: 999px;
   font-size: .71rem; font-weight: 730; white-space: nowrap; }
@@ -206,7 +206,7 @@
 
 /* BUS-03: compact selection of server-assigned businesses, not a second dashboard. */
 .business-picker-header { padding: 0; margin-bottom: 15px; }
-.business-picker-header h1 { font-weight: 770; color: #080808; letter-spacing: -.025em; }
+.business-picker-header h1 { font-weight: 770; color: #000000; letter-spacing: -.025em; }
 .business-picker-header p { font-size: .84rem; line-height: 1.45; margin-top: 4px; }
 .business-assigned-list { display: grid; grid-template-columns: minmax(0, 1fr); gap: 8px;
   max-width: 820px; }
@@ -220,7 +220,7 @@
   background: #e9f1fd; border-radius: 7px; color: #234f90; }
 .business-assigned-list .shop-symbol svg { width: 18px; height: 18px; }
 .business-assigned-list .business-summary { min-width: 0; flex: 1; gap: 2px; }
-.business-assigned-list .business-summary strong { font-size: .89rem; color: #080808; font-weight: 730; }
+.business-assigned-list .business-summary strong { font-size: .89rem; color: #000000; font-weight: 730; }
 .business-assigned-list .business-summary small { font-size: .76rem; color: #435060; line-height: 1.35; }
 .business-assigned-role { flex-shrink: 0; white-space: nowrap; font-size: .74rem; font-weight: 680; color: #355172; }
 .business-opening-label { color: #364f6d; font-size: .76rem; white-space: nowrap; }
@@ -263,7 +263,7 @@
 .business-preview { min-width: 0; }
 .business-preview-heading { display: flex; flex-wrap: wrap; gap: 12px;
   align-items: center; justify-content: space-between; margin-bottom: 14px; }
-.business-preview-heading h2 { margin: 0; color: #080808; font-weight: 760; font-size: 1.12rem; }
+.business-preview-heading h2 { margin: 0; color: #000000; font-weight: 760; font-size: 1.12rem; }
 .business-preview-heading > span { font-size: .76rem; color: #5f4e1c; background: #fff4da;
   border: 1px solid #e6d5a7; padding: 5px 9px; border-radius: 6px; }
 .business-preview-tabs { display: flex; flex-wrap: wrap; gap: 8px; margin-bottom: 14px; }

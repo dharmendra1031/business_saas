@@ -238,7 +238,7 @@ try {
     assert.ok(width <= viewport.width + 1, viewport.name + ': horizontal overflow ' + width)
     assert.equal(await t.page.evaluate(() =>
       getComputedStyle(document.documentElement).getPropertyValue('--ink').trim()),
-      '#080808', 'Light-screen text uses near-black instead of pale blue')
+      '#000000', 'Light-screen text uses near-black instead of pale blue')
     await t.screenshot('login-' + viewport.name)
     await t.check()
     await t.context.close()
@@ -348,7 +348,7 @@ try {
       heading: getComputedStyle(document.querySelector('.business-shell .page-header h1')).color,
       nav: getComputedStyle(document.querySelector('.business-shell .app-sidebar .nav-entry')).color
     }))
-    assert.equal(ownerText.heading, 'rgb(8, 8, 8)', 'Light workspace headings are near-black')
+    assert.equal(ownerText.heading, 'rgb(0, 0, 0)', 'Light workspace headings are near-black')
     assert.equal(ownerText.nav, 'rgb(255, 255, 255)', 'Dark navigation text is pure white')
     const dashboardTop = await t.page.locator('.business-dashboard-summary').boundingBox()
     assert.ok(dashboardTop && dashboardTop.y < 200, 'Dashboard summary must begin near the top')

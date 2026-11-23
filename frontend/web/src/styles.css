@@ -1,12 +1,12 @@
 :root {
   /* High-contrast light canvas: near-black content and white type on dark surfaces. */
-  --ink: #080808;
+  --ink: #000000;
   --muted: #363636;
   --line: #cbd3df;
   --brand: #154789;
   --brand-hover: #0c356c;
-  --bs-body-color: #080808;
-  --bs-heading-color: #080808;
+  --bs-body-color: #000000;
+  --bs-heading-color: #000000;
   --bs-secondary-color: #3b3b3b;
   --bs-tertiary-color: #444444;
   --bs-link-color: #113f83;
@@ -28,7 +28,7 @@ button:focus-visible, a:focus-visible, input:focus-visible, select:focus-visible
 .btn-outline-secondary { --bs-btn-color: #303030; --bs-btn-hover-bg: #303030; --bs-btn-hover-border-color: #303030; --bs-btn-hover-color: #fff; }
 .page-content .text-secondary, .content-section .text-secondary { color: #383838 !important; }
 .page-content .text-muted, .content-section .text-muted { color: #383838 !important; }
-.form-control, .form-select { color: #080808; background-color: #fff; }
+.form-control, .form-select { color: #000000; background-color: #fff; }
 .form-control::placeholder { color: #424242; opacity: 1; }
 .form-control, .form-select { border-color: #cbd8e4; min-height: 42px; border-radius: 6px; }
 .form-control:focus, .form-select:focus { border-color: #77a6cb; box-shadow: 0 0 0 .2rem #175d921c; }
@@ -165,7 +165,7 @@ button:focus-visible, a:focus-visible, input:focus-visible, select:focus-visible
 .platform-metric { min-width: 0; border: 1px solid var(--line); border-radius: 9px; background: #fff; padding: 18px 20px; }
 .platform-metric-top { display: flex; align-items: center; justify-content: space-between; gap: 10px; font-size: .84rem; font-weight: 600; color: #435061; }
 .platform-metric-top svg { color: #1249a5; flex-shrink: 0; }
-.platform-metric > strong { display: block; margin: 11px 0 5px; font-size: clamp(1.35rem, 2.2vw, 2rem); line-height: 1.15; font-weight: 750; color: #080808; }
+.platform-metric > strong { display: block; margin: 11px 0 5px; font-size: clamp(1.35rem, 2.2vw, 2rem); line-height: 1.15; font-weight: 750; color: #000000; }
 .platform-metric > strong.platform-unavailable { font-size: 1.12rem; padding: 7px 0; }
 .platform-metric > small { font-size: .74rem; color: var(--muted); }
 .platform-analytics-grid { display: grid; grid-template-columns: minmax(0, 1.7fr) minmax(320px, 1fr); gap: 16px; margin-bottom: 18px; }
@@ -173,7 +173,7 @@ button:focus-visible, a:focus-visible, input:focus-visible, select:focus-visible
 .platform-dashboard .content-section { padding: 20px; }
 .platform-panel-heading { display: flex; align-items: flex-start; justify-content: space-between; flex-wrap: wrap; gap: 10px; margin-bottom: 10px; }
 .platform-panel-heading h2 { border: 0; padding: 0; margin: 0 0 4px; display: flex; align-items: center; gap: 8px; font-size: 1rem; }
-.platform-panel-heading h2 svg { color: #080808; }
+.platform-panel-heading h2 svg { color: #000000; }
 .platform-panel-heading p { margin: 0; font-size: .78rem; color: var(--muted); }
 .platform-panel-heading .form-select { width: auto; min-height: 35px; }
 .platform-growth-chart { width: 100%; height: auto; max-height: 295px; display: block; }
