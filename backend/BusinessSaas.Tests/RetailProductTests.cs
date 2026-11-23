@@ -80,15 +80,56 @@ public sealed class RetailProductTests
             $"/api/businesses/{otherBusinessId}/categories", new { name = "Other Category" });
         var foreignUnit = await CreateId(other,
             $"/api/businesses/{otherBusinessId}/units", new { code = "EA", name = "Each" });
+        var categoriesPath = $"/api/businesses/{businessId}/categories";
+        var brandsPath = $"/api/businesses/{businessId}/brands";
+        var groupId = await CreateId(owner, categoriesPath, new { name = "Clothing" });
+        var subgroupId = await CreateId(owner, categoriesPath,
+            new { name = "Menswear", parentId = groupId });
+        var leafId = await CreateId(manager, categoriesPath,
+            new { name = "Shirts", parentId = subgroupId });
+        var foreignParent = await CreateId(other,
+            $"/api/businesses/{otherBusinessId}/categories", new { name = "Foreign Group" });
+
+        Assert.Equal(HttpStatusCode.BadRequest,
+            (await Post(owner, categoriesPath, new { name = "Too Deep", parentId = leafId })).StatusCode);
+        Assert.Equal(HttpStatusCode.BadRequest,
+            (await Post(owner, categoriesPath, new { name = "Foreign Child", parentId = foreignParent })).StatusCode);
+        Assert.Equal(HttpStatusCode.BadRequest,
+            (await Put(owner, categoriesPath + "/" + groupId,
+                new { name = "Clothing", isActive = true, parentId = subgroupId })).StatusCode);
+        Assert.Equal(HttpStatusCode.BadRequest,
+            (await Put(owner, categoriesPath + "/" + groupId,
+                new { name = "Clothing", isActive = true, parentId = leafId })).StatusCode);
+        Assert.Equal(HttpStatusCode.BadRequest,
+            (await Put(owner, categoriesPath + "/" + groupId,
+                new { name = "Clothing", isActive = true, parentId = groupId })).StatusCode);
+        Assert.Equal(HttpStatusCode.NotFound,
+            (await Post(other, categoriesPath, new { name = "Wrong Tenant" })).StatusCode);
+        Assert.Equal(HttpStatusCode.NotFound,
+            (await Post(cashier, brandsPath, new { name = "Cashier Brand" })).StatusCode);
+
+        var brandId = await CreateId(manager, brandsPath, new { name = "Raymond" });
+        Assert.Equal(HttpStatusCode.Conflict,
+            (await Post(owner, brandsPath, new { name = " RAYMOND " })).StatusCode);
+        var foreignBrandId = await CreateId(other,
+            $"/api/businesses/{otherBusinessId}/brands", new { name = "Other Label" });
+        var allOptions = await owner.GetFromJsonAsync<JsonElement>(
+            $"/api/businesses/{businessId}/products/options");
+        Assert.Equal(subgroupId, allOptions.GetProperty("categories").EnumerateArray()
+            .Single(x => x.GetProperty("id").GetInt64() == leafId)
+            .GetProperty("parentId").GetInt64());
+        Assert.Contains(allOptions.GetProperty("brands").EnumerateArray(),
+            x => x.GetProperty("id").GetInt64() == brandId);
+
         var path = $"/api/businesses/{businessId}/products";
 
         object Product(string sku = "PEN-100", string? barcode = "890000010001",
             long? category = null, long? unit = null, decimal price = 12.50m,
-            bool? isActive = null) => new
+            bool? isActive = null, long? brand = null) => new
         {
             name = "Blue pen", sku, barcode,
             categoryId = category ?? categoryId, unitId = unit ?? unitId,
-            salePrice = price, taxClassification = "EXEMPT", isActive
+            brandId = brand, salePrice = price, taxClassification = "EXEMPT", isActive
         };
 
         Assert.Equal(HttpStatusCode.BadRequest,
@@ -101,6 +142,31 @@ public sealed class RetailProductTests
             (await Post(owner, path, Product(category: foreignCategory))).StatusCode);
         Assert.Equal(HttpStatusCode.BadRequest,
             (await Post(owner, path, Product(unit: foreignUnit))).StatusCode);
+        Assert.Equal(HttpStatusCode.BadRequest,
+            (await Post(owner, path, Product(brand: foreignBrandId))).StatusCode);
+
+        var brandedId = await CreateId(owner, path,
+            Product(sku: "SHIRT-001", barcode: null, category: leafId, brand: brandId));
+        var branded = await owner.GetFromJsonAsync<JsonElement>(path + "/" + brandedId);
+        Assert.Equal(brandId, branded.GetProperty("brandId").GetInt64());
+        Assert.Equal("Raymond", branded.GetProperty("brandName").GetString());
+        var groupProducts = await owner.GetFromJsonAsync<JsonElement>(
+            path + "?categoryId=" + groupId);
+        Assert.Contains(groupProducts.GetProperty("items").EnumerateArray(),
+            item => item.GetProperty("id").GetInt64() == brandedId);
+        var subgroupProducts = await owner.GetFromJsonAsync<JsonElement>(
+            path + "?categoryId=" + subgroupId);
+        Assert.Contains(subgroupProducts.GetProperty("items").EnumerateArray(),
+            item => item.GetProperty("id").GetInt64() == brandedId);
+
+        Assert.Equal(HttpStatusCode.OK,
+            (await Put(owner, brandsPath + "/" + brandId,
+                new { name = "Raymond", isActive = false })).StatusCode);
+        Assert.Equal(HttpStatusCode.BadRequest,
+            (await Post(owner, path, Product(sku: "SHIRT-002", barcode: null,
+                category: leafId, brand: brandId))).StatusCode);
+        var stillReadable = await owner.GetFromJsonAsync<JsonElement>(path + "/" + brandedId);
+        Assert.Equal(brandId, stillReadable.GetProperty("brandId").GetInt64());
 
         var quick = await Post(owner, path, new
         {
