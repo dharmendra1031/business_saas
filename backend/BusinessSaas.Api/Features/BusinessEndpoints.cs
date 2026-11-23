@@ -258,16 +258,27 @@ public static class BusinessEndpoints
                                    location.BusinessId == businessId &&
                                    product.IsActive && product.ReorderLevel.HasValue &&
                                    balance.Quantity <= product.ReorderLevel.Value
-                             select new LowStockItem(product.Id, product.Name, product.Sku,
-                                 location.Id, location.Name, balance.Quantity, product.ReorderLevel.Value);
+                             select new
+                             {
+                                 ProductId = product.Id,
+                                 ProductName = product.Name,
+                                 product.Sku,
+                                 LocationId = location.Id,
+                                 LocationName = location.Name,
+                                 balance.Quantity,
+                                 ReorderLevel = product.ReorderLevel.Value
+                             };
                 var alertCount = await atRisk.CountAsync();
                 var zeroCount = await atRisk.CountAsync(x => x.Quantity == 0m);
-                var alertItems = await atRisk
+                var firstFive = await atRisk
                     .OrderBy(x => x.Quantity != 0m)
                     .ThenBy(x => x.ProductName)
                     .ThenBy(x => x.LocationName)
                     .ThenBy(x => x.ProductId)
                     .Take(5).ToListAsync();
+                var alertItems = firstFive.Select(x => new LowStockItem(x.ProductId,
+                    x.ProductName, x.Sku, x.LocationId, x.LocationName,
+                    x.Quantity, x.ReorderLevel)).ToList();
                 stockAlerts = new OwnerStockAlerts(alertCount, zeroCount, alertItems);
             }
 

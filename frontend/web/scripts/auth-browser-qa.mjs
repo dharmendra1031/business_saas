@@ -315,7 +315,7 @@ try {
     const alertCard = t.page.locator('.business-kpi-card').filter({ hasText: 'Stock Alerts' })
     assert.equal(await alertCard.locator('strong').innerText(), '2')
     assert.equal(await t.page.locator('.business-stock-alerts li').count(), 2)
-    await t.page.getByText('Out of stock', { exact: true }).waitFor()
+    await t.page.locator('.business-stock-alerts li').filter({ hasText: 'Out of stock' }).waitFor()
     assert.ok(await t.page.evaluate(() => document.documentElement.scrollWidth) <= 361,
       'Configured stock alerts must not cause horizontal overflow')
     await t.screenshot('BUS-01-verified-stock-alerts-mobile-360')
