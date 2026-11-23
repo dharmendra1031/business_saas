@@ -267,6 +267,7 @@ export default function RetailProducts({ businessId, canOperate, currencyCode }:
     }
   }
 
+  const unitSelected = options.units.some(item => item.id === form.unitId)
   const activeNodes = options.categories.filter(item => item.isActive)
   const groups = activeNodes.filter(item => item.parentId == null)
   const selectedTrail = classificationTrail(options.categories, form.categoryId)
