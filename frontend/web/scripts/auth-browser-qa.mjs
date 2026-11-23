@@ -450,15 +450,17 @@ try {
     console.log('PASS Purchase catalogs load on demand; canceled drafts reopen empty')
   }
 
-  {
-    // Exercise the full UI contract: create PO -> approve -> receive -> post -> view stock.
-    const t = await scenario('purchase-to-stock-browser-flow', {
+  for (const retryPosting of [false, true]) {
+    // The same UI path must work normally and after a draft was saved but posting failed.
+    const t = await scenario(retryPosting ? 'purchase-post-recovery' : 'purchase-to-stock-browser-flow', {
       role: 'Owner', hasProducts: true, productsFixture: true
     })
     let order = null
     let receiving = null
     let stock = 0
     let receivingPosts = 0
+    let receivingCreates = 0
+    let postingAttempts = 0
     await t.page.route('**/api/businesses/1/purchase-orders**', route => {
       const request = route.request()
       const path = new URL(request.url()).pathname
@@ -504,10 +506,14 @@ try {
         assert.equal(order.status, 'Approved')
         const body = request.postDataJSON()
         assert.deepEqual(body.lines, [{ purchaseOrderLineId: 72, quantity: 2 }])
+        receivingCreates++
         receiving = { quantity: 2, status: 'Draft' }
         return response(route, 201, { id: 91, status: 'Draft' })
       }
       if (path.endsWith('/purchase-orders/71/receivings/91/post') && method === 'POST') {
+        postingAttempts++
+        if (retryPosting && postingAttempts === 1)
+          return response(route, 503, { message: 'Temporary posting outage' })
         assert.equal(receiving.status, 'Draft')
         receiving.status = 'Posted'
         stock += receiving.quantity
@@ -549,7 +555,23 @@ try {
     assert.equal(await t.page.getByRole('button', { name: 'Save Draft', exact: true }).count(), 1,
       'Unfinished receivings can still be saved as Draft')
     await t.page.getByRole('button', { name: 'Receive & Post Stock' }).click()
+    if (retryPosting) {
+      await t.page.getByText('Receiving #91 was saved, but stock posting could not be confirmed.',
+        { exact: false }).waitFor()
+      await t.page.getByRole('button', { name: 'Post stock' }).waitFor()
+      const draftRow = t.page.locator('tbody tr').filter({ hasText: '#91' })
+      assert.match(await draftRow.innerText(), /Blue Shirt\\s*·\\s*2\\.000/,
+        'A saved draft must show its exact product and quantity before posting')
+      assert.match(await draftRow.innerText(), /Draft/)
+      assert.equal(stock, 0, 'A posting failure must not change stock')
+      await t.page.getByRole('button', { name: 'Post stock' }).click()
+    }
     await t.page.getByText('Receiving #91 posted.', { exact: false }).waitFor()
+    await t.page.getByText('Blue Shirt · 2.000', { exact: true }).waitFor()
+    assert.equal(await t.page.locator('tbody tr').filter({ hasText: '#91' })
+      .getByRole('button', { name: 'Post stock' }).count(), 0,
+      'Posted receipts must not offer another stock posting')
+    assert.equal(receivingCreates, 1, 'Retry after a post failure must reuse the same saved draft')
     assert.equal(await t.page.getByRole('button', { name: 'Review and post' }).count(), 0,
       'Do not reopen a redundant confirmation step after posting')
     assert.equal(receivingPosts, 1, 'Stock posting must only submit once')
@@ -561,7 +583,9 @@ try {
     assert.equal(await stockRow.locator('td').nth(2).innerText(), '2.000')
     await t.check()
     await t.context.close()
-    console.log('PASS one-click Owner save+approve, receive+post and inventory refresh')
+    console.log(retryPosting
+      ? 'PASS saved receiving draft recovers from failed post without duplicate stock'
+      : 'PASS one-click Owner save+approve, receive+post and inventory refresh')
   }
 
   {
