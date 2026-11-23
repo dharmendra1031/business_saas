@@ -499,6 +499,25 @@ try {
   }
 
   {
+    const t = await scenario('stock-history-source-references', {
+      role: 'Owner', hasProducts: true, stockAlertsFixture: true
+    })
+    await t.login()
+    await t.page.getByRole('heading', { name: 'Business Overview' }).waitFor()
+    await t.page.locator('.app-sidebar .nav-entry').filter({ hasText: 'Inventory' }).click()
+    await t.page.getByText('Blue Shirt', { exact: true }).waitFor()
+    await t.page.getByRole('button', { name: 'History' }).first().click()
+    await t.page.getByRole('heading', { name: 'Stock movement history' }).waitFor()
+    await t.page.getByText('Source line #89').waitFor()
+    await t.page.getByText('Source line #77').waitFor()
+    assert.equal(await t.page.getByText('Goods received', { exact: true }).count(), 1)
+    assert.equal(await t.page.getByText('Cash sale', { exact: true }).count(), 1)
+    await t.check()
+    await t.context.close()
+    console.log('PASS inventory movement history shows receiving and cash sale source line IDs')
+  }
+
+  {
     const t = await scenario('owner-verified-stock-alerts', {
       role: 'Owner', hasProducts: true, stockAlertsFixture: true, locationCount: 2,
       width: 360, height: 780
