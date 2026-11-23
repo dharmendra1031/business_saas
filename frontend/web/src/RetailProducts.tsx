@@ -9,6 +9,8 @@ interface Product {
   barcode: string | null
   categoryId: number
   categoryName: string
+  brandId?: number | null
+  brandName?: string | null
   unitId: number
   unitCode: string
   salePrice: number
@@ -28,11 +30,13 @@ interface CatalogOption {
   id: number
   name: string
   code?: string
+  parentId?: number | null
 }
 
 interface CatalogOptions {
   categories: CatalogOption[]
   units: CatalogOption[]
+  brands: CatalogOption[]
 }
 
 interface ProductForm {
@@ -41,6 +45,7 @@ interface ProductForm {
   barcode: string
   categoryId: number
   unitId: number
+  brandId: number
   salePrice: string
   reorderLevel: string
   taxClassification: string
@@ -48,7 +53,7 @@ interface ProductForm {
 }
 
 const initialForm: ProductForm = {
-  name: '', sku: '', barcode: '', categoryId: 0, unitId: 0,
+  name: '', sku: '', barcode: '', categoryId: 0, unitId: 0, brandId: 0,
   salePrice: '', reorderLevel: '', taxClassification: '', isActive: true
 }
 
@@ -62,7 +67,12 @@ export default function RetailProducts({ businessId, canOperate, currencyCode }:
   currencyCode: string
 }) {
   const [products, setProducts] = useState<Product[]>([])
-  const [options, setOptions] = useState<CatalogOptions>({ categories: [], units: [] })
+  const [options, setOptions] = useState<CatalogOptions>({ categories: [], units: [], brands: [] })
+  const [inlineType, setInlineType] = useState<'categories' | 'units' | 'brands' | null>(null)
+  const [inlineName, setInlineName] = useState('')
+  const [inlineCode, setInlineCode] = useState('')
+  const [inlineParent, setInlineParent] = useState(0)
+  const [inlineSaving, setInlineSaving] = useState(false)
   const [page, setPage] = useState(1)
   const [total, setTotal] = useState(0)
   const [search, setSearch] = useState('')
@@ -89,10 +99,10 @@ export default function RetailProducts({ businessId, canOperate, currencyCode }:
   useEffect(() => {
     let active = true
     setOptionsLoading(true)
-    setOptions({ categories: [], units: [] })
+    setOptions({ categories: [], units: [], brands: [] })
     setOptionsError('')
     api<CatalogOptions>(basePath + '/options')
-      .then(value => { if (active) setOptions(value) })
+      .then(value => { if (active) setOptions({ ...value, brands: value.brands ?? [] }) })
       .catch(cause => { if (active && !(cause instanceof SessionExpiredError)) setOptionsError(errorMessage(cause)) })
       .finally(() => { if (active) setOptionsLoading(false) })
     return () => { active = false }
@@ -133,6 +143,7 @@ export default function RetailProducts({ businessId, canOperate, currencyCode }:
 
   function startCreate() {
     setEditingId(null)
+    setInlineType(null)
     setForm({
       ...initialForm,
       categoryId: options.categories.find(item => item.name === 'General')?.id
@@ -148,12 +159,14 @@ export default function RetailProducts({ businessId, canOperate, currencyCode }:
 
   function startEdit(item: Product) {
     setEditingId(item.id)
+    setInlineType(null)
     setForm({
       name: item.name,
       sku: item.sku,
       barcode: item.barcode ?? '',
       categoryId: item.categoryId,
       unitId: item.unitId,
+      brandId: item.brandId ?? 0,
       salePrice: item.salePrice.toFixed(2),
       reorderLevel: item.reorderLevel == null ? '' : String(item.reorderLevel),
       taxClassification: item.taxClassification,
@@ -184,6 +197,7 @@ export default function RetailProducts({ businessId, canOperate, currencyCode }:
       name: form.name.trim(),
       sku: form.sku.trim().toUpperCase(),
       barcode: form.barcode.trim() || null,
+      brandId: form.brandId || null,
       taxClassification: form.taxClassification.trim().toUpperCase(),
       salePrice: Number(form.salePrice),
       reorderLevel: form.reorderLevel.trim() === '' ? null : Number(form.reorderLevel),
@@ -211,6 +225,57 @@ export default function RetailProducts({ businessId, canOperate, currencyCode }:
       }
     } finally {
       setSaving(false)
+    }
+  }
+
+
+  function categoryPath(id: number): string {
+    const names: string[] = []
+    const seen = new Set<number>()
+    let current: number | null = id
+    while (current && !seen.has(current) && names.length < 3) {
+      seen.add(current)
+      const category = options.categories.find(x => x.id === current)
+      if (!category) break
+      names.unshift(category.name)
+      current = category.parentId ?? null
+    }
+    return names.join(' / ')
+  }
+
+  function beginInline(type: 'categories' | 'units' | 'brands') {
+    setInlineType(type === inlineType ? null : type)
+    setInlineName('')
+    setInlineCode('')
+    setInlineParent(0)
+    setError('')
+  }
+
+  async function addInline() {
+    if (!inlineType || !canOperate || inlineSaving) return
+    setInlineSaving(true)
+    setError('')
+    try {
+      const added = await post<{ id: number }>(`/businesses/${businessId}/${inlineType}`, {
+        name: inlineName.trim(),
+        ...(inlineType === 'units' ? { code: inlineCode.trim().toUpperCase() } : {}),
+        ...(inlineType === 'categories' ? { parentId: inlineParent || null } : {})
+      })
+      const updated = await api<CatalogOptions>(basePath + '/options')
+      setOptions({ ...updated, brands: updated.brands ?? [] })
+      const field = inlineType === 'categories' ? 'categoryId' : inlineType === 'units' ? 'unitId' : 'brandId'
+      setForm(value => ({ ...value, [field]: added.id }))
+      setNotice(`${inlineType === 'categories' ? 'Category' : inlineType === 'units' ? 'Unit' : 'Brand'} added to this product.`)
+      setInlineType(null)
+      setInlineName('')
+      setInlineCode('')
+      setInlineParent(0)
+    } catch (cause) {
+      if (!(cause instanceof SessionExpiredError))
+        setError(errorMessage(cause))
+      setOptionsReload(value => value + 1)
+    } finally {
+      setInlineSaving(false)
     }
   }
 
@@ -243,7 +308,7 @@ export default function RetailProducts({ businessId, canOperate, currencyCode }:
       </div>}
       {notice && <div className="alert alert-success" role="status">{notice}</div>}
       {!optionsLoading && !optionsError && !canCreate && <p className="alert alert-info" role="status">
-        No active category or unit found. Open Categories & Units to complete the shop setup.
+        A category and unit are required. Add them from Product Masters first.
       </p>}
 
       {formOpen && canOperate && <form className="product-form" onSubmit={event => void save(event)}>
@@ -262,7 +327,7 @@ export default function RetailProducts({ businessId, canOperate, currencyCode }:
               value={form.salePrice} onChange={event => changeForm('salePrice', event.target.value)} />
           </div>
           <details className="form-wide" key={editingId ?? 'new'} open={editingId !== null || !canCreate}>
-            <summary>More details (SKU, barcode, category, unit, stock alerts, tax)</summary>
+            <summary>More details (category, unit, brand, SKU, barcode, stock alerts, tax)</summary>
             <div className="form-grid mt-3">
           <div>
             <label className="form-label" htmlFor="product-sku">SKU {editingId === null ? '(auto if blank)' : '*'}</label>
@@ -287,8 +352,9 @@ export default function RetailProducts({ businessId, canOperate, currencyCode }:
               <option value={0}>Select category</option>
               {!categorySelected && form.categoryId > 0 &&
                 <option value={form.categoryId}>Previous category (inactive)</option>}
-              {options.categories.map(item => <option key={item.id} value={item.id}>{item.name}</option>)}
+              {options.categories.map(item => <option key={item.id} value={item.id}>{categoryPath(item.id)}</option>)}
             </select>
+            <button type="button" className="btn btn-sm btn-link" onClick={() => beginInline('categories')}>+ Add category</button>
           </div>
           <div>
             <label className="form-label" htmlFor="product-unit">Stock / sales unit *</label>
@@ -301,7 +367,48 @@ export default function RetailProducts({ businessId, canOperate, currencyCode }:
                 {item.name} ({item.code})
               </option>)}
             </select>
+            <button type="button" className="btn btn-sm btn-link" onClick={() => beginInline('units')}>+ Add unit</button>
           </div>
+          <div>
+            <label className="form-label" htmlFor="product-brand">Brand (optional)</label>
+            <select id="product-brand" className="form-select" value={form.brandId}
+              onChange={event => changeForm('brandId', Number(event.target.value))}>
+              <option value={0}>No brand</option>
+              {form.brandId > 0 && !options.brands.some(x => x.id === form.brandId) &&
+                <option value={form.brandId}>Previous brand (inactive)</option>}
+              {options.brands.map(item => <option key={item.id} value={item.id}>{item.name}</option>)}
+            </select>
+            <button type="button" className="btn btn-sm btn-link" onClick={() => beginInline('brands')}>+ Add brand</button>
+          </div>
+          {inlineType && <div className="form-wide product-form" role="group"
+            aria-label={`Add ${inlineType === 'categories' ? 'category' : inlineType === 'units' ? 'unit' : 'brand'}`}
+            onKeyDown={event => { if (event.key === 'Enter') { event.preventDefault(); void addInline() } }}>
+            <label className="form-label" htmlFor="inline-master-name">New {inlineType === 'categories' ? 'category' : inlineType === 'units' ? 'unit' : 'brand'} name</label>
+            <input id="inline-master-name" className="form-control" minLength={2} maxLength={80}
+              value={inlineName} onChange={event => setInlineName(event.target.value)} />
+            {inlineType === 'units' && <>
+              <label className="form-label mt-2" htmlFor="inline-master-code">Unit code</label>
+              <input id="inline-master-code" className="form-control" maxLength={12}
+                value={inlineCode} onChange={event => setInlineCode(event.target.value.toUpperCase())} />
+            </>}
+            {inlineType === 'categories' && <>
+              <label className="form-label mt-2" htmlFor="inline-master-parent">Parent (optional)</label>
+              <select id="inline-master-parent" className="form-select" value={inlineParent}
+                onChange={event => setInlineParent(Number(event.target.value))}>
+                <option value={0}>No parent</option>
+                {options.categories.filter(x => categoryPath(x.id).split(' / ').length < 3)
+                  .map(item => <option key={item.id} value={item.id}>{categoryPath(item.id)}</option>)}
+              </select>
+            </>}
+            <div className="d-flex gap-2 mt-2">
+              <button type="button" className="btn btn-sm btn-primary"
+                disabled={inlineSaving || inlineName.trim().length < 2 ||
+                  inlineType === 'units' && !/^[A-Z0-9-]{1,12}$/.test(inlineCode.trim())}
+                onClick={() => void addInline()}>{inlineSaving ? 'Adding…' : 'Add & select'}</button>
+              <button type="button" className="btn btn-sm btn-outline-secondary" disabled={inlineSaving}
+                onClick={() => setInlineType(null)}>Cancel</button>
+            </div>
+          </div>}
           <div>
             <label className="form-label" htmlFor="product-reorder">Reorder level (optional)</label>
             <input id="product-reorder" className="form-control" type="number" min="0"
@@ -364,7 +471,7 @@ export default function RetailProducts({ businessId, canOperate, currencyCode }:
             <select id="product-filter-category" className="form-select" value={categoryFilter}
               onChange={event => { setPage(1); setCategoryFilter(Number(event.target.value)) }}>
               <option value={0}>All categories</option>
-              {options.categories.map(item => <option key={item.id} value={item.id}>{item.name}</option>)}
+              {options.categories.map(item => <option key={item.id} value={item.id}>{categoryPath(item.id)}</option>)}
             </select>
           </div>
           <button type="submit" className="btn btn-outline-secondary">Search</button>
@@ -384,6 +491,7 @@ export default function RetailProducts({ businessId, canOperate, currencyCode }:
                 <th scope="col" className="product-status-column">Status</th>{canOperate && <th scope="col" className="text-end">Action</th>}</tr></thead>
               <tbody>{products.map(item => <tr key={item.id}>
                 <td><strong>{item.name}</strong>
+                  {item.brandName && <small className="product-secondary">{item.brandName}</small>}
                   <small className="product-mobile-meta">
                     <span>{item.sku}</span>
                     <span className={`business-record-status ${item.isActive ? 'is-active' : 'is-inactive'}`}>

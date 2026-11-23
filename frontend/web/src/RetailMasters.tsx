@@ -1,12 +1,13 @@
 import { useEffect, useRef, useState, type FormEvent } from 'react'
 import { api, post, SessionExpiredError } from './api'
 
-type MasterType = 'categories' | 'units'
+type MasterType = 'categories' | 'units' | 'brands'
 
 interface MasterItem {
   id: number
   name: string
   code?: string
+  parentId?: number | null
   isActive: boolean
 }
 
@@ -30,6 +31,8 @@ export default function RetailMasters({ businessId, canOperate }: {
   const [reload, setReload] = useState(0)
   const [name, setName] = useState('')
   const [code, setCode] = useState('')
+  const [parentId, setParentId] = useState(0)
+  const [parentOptions, setParentOptions] = useState<MasterItem[]>([])
   const [active, setActive] = useState(true)
   const [editingId, setEditingId] = useState<number | null>(null)
   const [loading, setLoading] = useState(true)
@@ -61,10 +64,34 @@ export default function RetailMasters({ businessId, canOperate }: {
     return () => { mounted = false }
   }, [businessId, type, page, query, reload])
 
+  useEffect(() => {
+    if (type !== 'categories') return
+    let active = true
+    api<{ categories: MasterItem[] }>(`/businesses/${businessId}/products/options`)
+      .then(data => { if (active) setParentOptions(data.categories) })
+      .catch(() => { if (active) setParentOptions([]) })
+    return () => { active = false }
+  }, [businessId, type, reload])
+
+  function categoryPath(categoryId: number): string {
+    const names: string[] = []
+    const visited = new Set<number>()
+    let current: number | null = categoryId
+    while (current && !visited.has(current) && names.length < 3) {
+      visited.add(current)
+      const item = parentOptions.find(x => x.id === current)
+      if (!item) break
+      names.unshift(item.name)
+      current = item.parentId ?? null
+    }
+    return names.join(' / ')
+  }
+
   function clearForm() {
     setEditingId(null)
     setName('')
     setCode('')
+    setParentId(0)
     setActive(true)
   }
 
@@ -83,6 +110,7 @@ export default function RetailMasters({ businessId, canOperate }: {
     setEditingId(item.id)
     setName(item.name)
     setCode(item.code ?? '')
+    setParentId(item.parentId ?? 0)
     setActive(item.isActive)
     setError('')
     setNotice('')
@@ -98,6 +126,7 @@ export default function RetailMasters({ businessId, canOperate }: {
     setNotice('')
     const basePath = `/businesses/${businessId}/${type}`
     const body = { name: name.trim(), ...(type === 'units' ? { code: code.trim().toUpperCase() } : {}),
+      ...(type === 'categories' ? { parentId: parentId || null } : {}),
       ...(editingId !== null ? { isActive: active } : {}) }
 
     try {
@@ -106,7 +135,7 @@ export default function RetailMasters({ businessId, canOperate }: {
       else
         await api(`${basePath}/${editingId}`, { method: 'PUT', body: JSON.stringify(body) })
 
-      setNotice(`${type === 'units' ? 'Unit' : 'Category'} ${editingId === null ? 'created' : 'updated'}.`)
+      setNotice(`${type === 'units' ? 'Unit' : type === 'brands' ? 'Brand' : 'Category'} ${editingId === null ? 'created' : 'updated'}.`)
       clearForm()
       setReload(value => value + 1)
       firstInput.current?.focus()
@@ -119,17 +148,19 @@ export default function RetailMasters({ businessId, canOperate }: {
   }
 
   const isUnit = type === 'units'
-  const label = isUnit ? 'Unit' : 'Category'
+  const label = isUnit ? 'Unit' : type === 'brands' ? 'Brand' : 'Category'
 
   return (
     <section className="content-section retail-masters business-module-card" aria-label="Retail master data">
       <div className="masters-heading business-module-heading">
-        <h2>Categories & Units</h2>
+        <h2>Product Masters</h2>
         <div className="btn-group business-master-tabs" role="group" aria-label="Catalog master type">
           <button type="button" className={`btn btn-sm ${isUnit ? 'btn-outline-secondary' : 'btn-primary'}`}
             aria-pressed={!isUnit} onClick={() => changeType('categories')}>Categories</button>
           <button type="button" className={`btn btn-sm ${isUnit ? 'btn-primary' : 'btn-outline-secondary'}`}
             aria-pressed={isUnit} onClick={() => changeType('units')}>Units</button>
+          <button type="button" className={`btn btn-sm ${type === 'brands' ? 'btn-primary' : 'btn-outline-secondary'}`}
+            aria-pressed={type === 'brands'} onClick={() => changeType('brands')}>Brands</button>
         </div>
       </div>
 
@@ -156,6 +187,18 @@ export default function RetailMasters({ businessId, canOperate }: {
               value={code} maxLength={12} pattern="[a-zA-Z0-9-]{1,12}" required
               onChange={event => setCode(event.target.value.toUpperCase())}
               placeholder="e.g. PCS" />
+          </div>}
+          {type === 'categories' && <div>
+            <label className="form-label" htmlFor="master-parent">Parent (optional)</label>
+            <select id="master-parent" className="form-select" value={parentId}
+              onChange={event => setParentId(Number(event.target.value))}>
+              <option value={0}>No parent (group / standalone)</option>
+              {parentOptions.filter(item => item.id !== editingId &&
+                categoryPath(item.id).split(' / ').length <= 2)
+                .map(item => <option key={item.id} value={item.id}>
+                  {categoryPath(item.id)}
+                </option>)}
+            </select>
           </div>}
           {editingId !== null && <div>
             <label className="form-label" htmlFor="master-status">Status</label>
@@ -190,9 +233,12 @@ export default function RetailMasters({ businessId, canOperate }: {
           : <div className="table-responsive">
             <table className="table table-sm align-middle business-record-table">
               <thead><tr><th scope="col">Name</th>{isUnit && <th scope="col">Code</th>}
+                {type === 'categories' && <th scope="col">Parent</th>}
                 <th scope="col">Status</th>{canOperate && <th scope="col" className="text-end">Action</th>}</tr></thead>
               <tbody>{items.map(item => <tr key={item.id}>
                 <td>{item.name}</td>{isUnit && <td>{item.code}</td>}
+                {type === 'categories' && <td>{item.parentId
+                  ? categoryPath(item.parentId) || `#${item.parentId}` : '—'}</td>}
                 <td>{item.isActive ? 'Active' : 'Inactive'}</td>
                 {canOperate && <td className="text-end"><button type="button"
                   className="btn btn-outline-secondary btn-sm" onClick={() => edit(item)}>Edit</button></td>}
