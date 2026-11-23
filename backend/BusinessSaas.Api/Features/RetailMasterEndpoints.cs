@@ -14,17 +14,26 @@ public static class RetailMasterEndpoints
             .RequireAuthorization();
 
         categories.MapGet("", async (long businessId, string? search, int? page,
-            ClaimsPrincipal user, AppDbContext db) =>
+            int? level, long? parentId, ClaimsPrincipal user, AppDbContext db) =>
         {
             var denied = await CheckAccess(db, user, businessId, false);
             if (denied is not null) return denied;
             var currentPage = page ?? 1;
-            if (currentPage is < 1 or > 100000) return Results.BadRequest(new { message = "Invalid page." });
+            if (currentPage is < 1 or > 100000 || level is < 1 or > 3 || parentId is <= 0)
+                return Results.BadRequest(new { message = "Invalid category page, level or parent." });
 
             var term = search?.Trim().ToUpperInvariant() ?? "";
             if (term.Length > 80) return Results.BadRequest(new { message = "Search is too long." });
 
             var query = db.RetailCategories.AsNoTracking().Where(x => x.BusinessId == businessId);
+            if (level == 1) query = query.Where(x => x.ParentId == null);
+            if (level == 2) query = query.Where(x => x.ParentId != null &&
+                db.RetailCategories.Any(parent => parent.Id == x.ParentId &&
+                    parent.BusinessId == businessId && parent.ParentId == null));
+            if (level == 3) query = query.Where(x => x.ParentId != null &&
+                db.RetailCategories.Any(parent => parent.Id == x.ParentId &&
+                    parent.BusinessId == businessId && parent.ParentId != null));
+            if (parentId.HasValue) query = query.Where(x => x.ParentId == parentId.Value);
             if (term.Length > 0) query = query.Where(x => x.NameKey.Contains(term));
 
             var total = await query.CountAsync();
