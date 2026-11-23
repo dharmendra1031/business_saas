@@ -830,6 +830,86 @@ try {
   }
 
   {
+    const t = await scenario('product-inline-category-unit-brand', {
+      role: 'Owner', hasProducts: true, productsFixture: true
+    })
+    const categories = [
+      { id: 1, name: 'General', parentId: null },
+      { id: 2, name: 'Clothing', parentId: null }
+    ]
+    const units = [{ id: 1, name: 'Item', code: 'ITEM' }]
+    const brands = []
+    let savedProduct = null
+    await t.page.route('**/api/businesses/1/products/options', route =>
+      response(route, 200, { categories, units, brands }))
+    await t.page.route('**/api/businesses/1/categories', route => {
+      if (route.request().method() !== 'POST') return route.fallback()
+      const body = route.request().postDataJSON()
+      assert.equal(body.name, 'Shirts')
+      assert.equal(body.parentId, 2)
+      categories.push({ id: 31, name: body.name, parentId: body.parentId })
+      return response(route, 201, { id: 31, name: body.name, parentId: 2, isActive: true })
+    })
+    await t.page.route('**/api/businesses/1/units', route => {
+      if (route.request().method() !== 'POST') return route.fallback()
+      const body = route.request().postDataJSON()
+      assert.equal(body.name, 'Box')
+      assert.equal(body.code, 'BOX')
+      units.push({ id: 32, name: body.name, code: body.code })
+      return response(route, 201, { id: 32, name: body.name, code: body.code, isActive: true })
+    })
+    await t.page.route('**/api/businesses/1/brands', route => {
+      if (route.request().method() !== 'POST') return route.fallback()
+      const body = route.request().postDataJSON()
+      assert.equal(body.name, 'Raymond')
+      brands.push({ id: 33, name: body.name })
+      return response(route, 201, { id: 33, name: body.name, isActive: true })
+    })
+    await t.page.route('**/api/businesses/1/products', route => {
+      if (route.request().method() !== 'POST') return route.fallback()
+      savedProduct = route.request().postDataJSON()
+      return response(route, 201, { id: 41 })
+    })
+
+    await t.login()
+    await t.page.locator('.app-sidebar .nav-entry').filter({ hasText: 'Products' }).click()
+    await t.page.getByRole('button', { name: 'Add Product' }).click()
+    await t.page.getByRole('heading', { name: 'New product' }).waitFor()
+    await t.page.locator('#product-name').fill('Cotton Shirt')
+    await t.page.locator('#product-price').fill('1299')
+    await t.page.locator('details summary').filter({ hasText: 'More details' }).click()
+
+    await t.page.getByRole('button', { name: '+ Add category' }).click()
+    await t.page.locator('#inline-master-name').fill('Shirts')
+    await t.page.locator('#inline-master-parent').selectOption('2')
+    await t.page.getByRole('button', { name: 'Add & select' }).click()
+    await t.page.waitForFunction(() =>
+      document.querySelector('#product-category')?.value === '31')
+    assert.equal(await t.page.locator('#product-category option:checked').innerText(), 'Clothing / Shirts')
+
+    await t.page.getByRole('button', { name: '+ Add unit' }).click()
+    await t.page.locator('#inline-master-name').fill('Box')
+    await t.page.locator('#inline-master-code').fill('BOX')
+    await t.page.getByRole('button', { name: 'Add & select' }).click()
+    await t.page.waitForFunction(() => document.querySelector('#product-unit')?.value === '32')
+
+    await t.page.getByRole('button', { name: '+ Add brand' }).click()
+    await t.page.locator('#inline-master-name').fill('Raymond')
+    await t.page.getByRole('button', { name: 'Add & select' }).click()
+    await t.page.waitForFunction(() => document.querySelector('#product-brand')?.value === '33')
+    await t.page.getByRole('button', { name: 'Save product' }).click()
+    await t.page.getByText('Product added.', { exact: false }).waitFor()
+    assert.equal(savedProduct.name, 'Cotton Shirt')
+    assert.equal(savedProduct.categoryId, 31)
+    assert.equal(savedProduct.unitId, 32)
+    assert.equal(savedProduct.brandId, 33)
+    assert.equal(savedProduct.salePrice, 1299)
+    await t.check()
+    await t.context.close()
+    console.log('PASS Product inline category, unit and brand creation without leaving form')
+  }
+
+  {
     const t = await scenario('owner-product-reorder-control', {
       role: 'Owner', hasProducts: true, productsFixture: true
     })
