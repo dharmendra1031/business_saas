@@ -78,7 +78,7 @@ public sealed class OwnerStockAlertTests
         Assert.Equal(HttpStatusCode.BadRequest,
             (await Send(owner, HttpMethod.Post, basePath, Product("ALERT-PREC", 1.1234m))).StatusCode);
         var monitoredProduct = await CreateId(owner, basePath, Product("ALERT-MAIN", 5m));
-        await CreateId(owner, basePath, Product("ALERT-UNOPENED", 0m));
+        var unopenedId = await CreateId(owner, basePath, Product("ALERT-UNOPENED", 0m));
         await CreateId(owner, basePath, Product("ALERT-NOTHRESHOLD", null));
 
         var opening = $"/api/businesses/{id}/stock/locations/";
@@ -144,9 +144,7 @@ public sealed class OwnerStockAlertTests
         var stored = await owner.GetFromJsonAsync<JsonElement>(basePath + "/" + monitoredProduct);
         Assert.Equal(JsonValueKind.Null, stored.GetProperty("reorderLevel").ValueKind);
         Assert.Equal(HttpStatusCode.OK, (await Send(owner, HttpMethod.Put,
-            basePath + "/" + (await owner.GetFromJsonAsync<JsonElement>(basePath + "?search=ALERT-UNOPENED"))
-                .GetProperty("items")[0].GetProperty("id").GetInt64(),
-            Product("ALERT-UNOPENED", null))).StatusCode);
+            basePath + "/" + unopenedId, Product("ALERT-UNOPENED", null))).StatusCode);
         result = await owner.GetFromJsonAsync<JsonElement>($"/api/businesses/{id}/dashboard");
         Assert.Equal(JsonValueKind.Null, result.GetProperty("stockAlerts").ValueKind);
     }
