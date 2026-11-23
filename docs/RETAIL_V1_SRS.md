@@ -1,7 +1,7 @@
 # Business SaaS — General Retail V1 Requirements
 
 **Status:** Retail specification; catalog masters under review, transactional modules pending  
-**Updated:** 2026-11-21  
+**Updated:** 2026-11-23  
 **Repository:** `dharmendra1031/business_saas` ONLY  
 **Reference UI:** CBK `development` read-only. New React + TypeScript + Bootstrap UI.  
 **Related:** [Master Screen Register](./MASTER_SCREEN_REGISTER.md) · [Master SRS](./BUSINESS_SAAS_MASTER_SRS.md) · [Database](./DATABASE_ARCHITECTURE.md) · [UX Standards](./UX_STANDARDS.md) · [Appointment & Financial Rules (Salon reference)](./APPOINTMENT_FINANCIAL_RULES.md)
@@ -13,7 +13,7 @@
 **In V1:**
 - **Super Admin** creates General Retail business -> assigns Owner -> published plan/trial -> location, business date/timezone/currency and initial settings -> separate Owner/Admin login.
 - Owner/Manager/Cashier roles, store assignment and server-side permissions.
-- Product, Category, Unit and Supplier; customer optional for ordinary walk-in sale.
+- Product Masters: Group, Subgroup, Category, Brand and Unit; Supplier is separate. Customer is optional for an ordinary walk-in sale.
 - Opening Stock with one-time/reversal rules and complete audit.
 - Purchase Order -> Partial/Full Goods Receipt -> balance/ledger.
 - Fast POS with barcode or product search, cart, quantity, approved price/discount, cash and supported card/external payment record, split tender when configured, printed receipt.
@@ -36,10 +36,14 @@ A small store may have one person holding multiple roles; do not force unnecessa
 
 ## 3. Retail setup and product master
 
-**Owner flow:** Accept assigned business invitation / sign in -> select authorized business -> review its provisioned first location -> configure tax/payment/receipt policy -> create Category/Unit -> create Product with name, code/SKU, barcode optional, sale price and unit -> optional opening stock -> New Sale. The Owner does not have a Create Business button.
+**Owner flow:** Accept assigned business invitation / sign in -> select authorized business -> review its provisioned first location -> configure tax/payment/receipt policy -> create Group/optional Subgroup/optional Category, Brand and Unit -> create Product with name, code/SKU, barcode optional, sale price and unit -> optional opening stock -> New Sale. The Owner does not have a Create Business button.
 
 Product:
-- Name, code/SKU (unique within Business), category, unit, active, sale price and applicable tax classification.
+- Five distinct Product Masters tabs: **Groups**, **Subgroups**, **Categories**, **Brands**, **Units**. Groups/Subgroups/Categories reuse one Business-scoped `RetailCategories` parent tree (maximum depth three). Brands remain independently stored in `RetailBrands` and are never classification parents. Units remain independent.
+- In Product Add/Edit, Group → Subgroup → Category are dependent selectors. Group is mandatory; Subgroup/Category may be omitted to preserve existing products and allow simpler retail catalogs. The saved `CategoryId` is the deepest selected node. Changing a parent resets the selected deeper levels rather than leaving stale IDs.
+- Product filters apply the same Group → Subgroup → Category hierarchy and include descendants when filtering by a parent. Existing inactive classification must remain recognizable when editing historical products, but new selections require active masters.
+- No extra Group/Subgroup database tables, no separate ProductGroupId/ProductSubgroupId columns, no automatic migration of existing product IDs and no duplicate category-service implementation.
+- Name, code/SKU (unique within Business), category/group identity, optional brand, unit, active, sale price and applicable tax classification.
 - Barcode can be linked when available; no invented barcode values. Later variants/serial/batches have separate requirements.
 - Purchase unit and sales unit conversion, if needed, require exact defined behavior; V1 may support a single stock unit instead of pretending universal conversions.
 - Products are Business scoped. The exact ProductId is always rechecked for BusinessId and active status.
