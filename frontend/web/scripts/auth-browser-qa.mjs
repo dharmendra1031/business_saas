@@ -222,6 +222,52 @@ async function scenario(name, {
 }
 
 try {
+  {
+    // Invitation URLs must not remain in browser history after the app boots.
+    const context = await browser.newContext({ viewport: { width: 360, height: 780 } })
+    const page = await context.newPage()
+    const errors = []
+    page.on('pageerror', error => errors.push(error.message))
+    const token = 'A'.repeat(43)
+    const expiresAtUtc = new Date(Date.now() + 86400000).toISOString()
+    let accepted
+    await page.route('**/api/**', route => {
+      const path = new URL(route.request().url()).pathname
+      if (path === '/api/auth/csrf') return response(route, 200, { token: 'qa-csrf' })
+      if (path === '/api/auth/owner-invitations/inspect') {
+        assert.equal(route.request().postDataJSON().token, token)
+        return response(route, 200, { email: 'invited-owner@example.test', expiresAtUtc })
+      }
+      if (path === '/api/auth/owner-invitations/accept') {
+        accepted = route.request().postDataJSON()
+        return response(route, 200, {
+          verified: true, email: 'invited-owner@example.test',
+          message: 'Account verified. Sign in to continue.'
+        })
+      }
+      if (path === '/api/public/platform-availability')
+        return response(route, 200, { maintenance: null, announcements: [] })
+      return response(route, 404, {})
+    })
+    await page.goto(base + '/?invite=' + token)
+    await page.getByRole('heading', { name: 'Accept Owner invitation' }).waitFor()
+    assert.equal(new URL(page.url()).search, '',
+      'Invitation bearer token must not remain in browser history')
+    await page.getByText('invited-owner@example.test').waitFor()
+    await page.getByLabel('New password').fill('OwnerPassword123!')
+    await page.getByLabel('Confirm password').fill('NotTheSamePassword123!')
+    assert.equal(await page.getByRole('button', { name: /Verify email & create account/ }).isDisabled(), true)
+    await page.getByLabel('Confirm password').fill('OwnerPassword123!')
+    await page.getByRole('button', { name: /Verify email & create account/ }).click()
+    await page.getByRole('heading', { name: 'Account verified' }).waitFor()
+    assert.deepEqual(accepted, { token, password: 'OwnerPassword123!' })
+    assert.ok(await page.evaluate(() => document.documentElement.scrollWidth) <= 361,
+      'Invitation acceptance must fit 360px mobile without horizontal overflow')
+    assert.deepEqual(errors, [], 'Invitation page must not throw browser errors')
+    await page.screenshot({ path: resolve(output, 'AUTH-owner-invitation-mobile.png'), fullPage: true })
+    await context.close()
+    console.log('PASS secure Owner invitation acceptance, URL cleanup and mobile layout')
+  }
   for (const viewport of [
     { name: '1536-desktop', width: 1536, height: 864 },
     { name: '1366-desktop', width: 1366, height: 768 },
@@ -1733,8 +1779,39 @@ try {
     if (width === 1366) {
       const ownerEmail = 'owner@example.test'
       const submissions = []
-      await t.page.route('**/api/platform/owner-lookup?*', route =>
-        response(route, 200, { id: 20, email: ownerEmail, verified: true }))
+      let emailAccepted = false
+      await t.page.route('**/api/platform/owner-lookup?*', route => {
+        const email = new URL(route.request().url()).searchParams.get('email')
+        if (email === 'new-owner@example.test' && !emailAccepted)
+          return response(route, 404, { message: 'Owner account not found.' })
+        return response(route, 200, { id: 20, email: email ?? ownerEmail, verified: true })
+      })
+      let inviteAttempt = 0
+      await t.page.route('**/api/platform/owner-invitations', route => {
+        const sent = route.request().postDataJSON()
+        assert.equal(sent.email, 'new-owner@example.test')
+        assert.equal(sent.reason, 'Approved new store owner invitation')
+        inviteAttempt++
+        return inviteAttempt === 1
+          ? response(route, 503, { message: 'Email delivery failed. No active invitation remains.' })
+          : response(route, 200, { email: sent.email, status: 'Sent',
+              expiresAtUtc: new Date(Date.now() + 48 * 3600000).toISOString() })
+      })
+      await t.page.getByLabel('Owner Email Address').fill('new-owner@example.test')
+      await t.page.getByRole('button', { name: 'Verify Owner' }).click()
+      await t.page.getByRole('heading', { name: 'Invite new Owner' }).waitFor()
+      await t.page.getByLabel('Reason (audit log)').fill('Approved new store owner invitation')
+      await t.page.getByRole('button', { name: 'Send secure email invitation' }).click()
+      await t.page.getByRole('alert').filter({ hasText: 'Email delivery failed' }).waitFor()
+      assert.equal(await t.page.getByText('Invitation emailed to', { exact: false }).count(), 0)
+      await t.page.getByRole('button', { name: 'Send secure email invitation' }).click()
+      await t.page.getByText('Invitation emailed to new-owner@example.test', { exact: false }).waitFor()
+      assert.equal(inviteAttempt, 2, 'Delivery failure must not show false success')
+      emailAccepted = true
+      await t.page.getByRole('button', { name: 'Verify Owner' }).click()
+      await t.page.getByText('14 days from business creation').waitFor()
+      await t.page.getByRole('button', { name: 'Back', exact: true }).click()
+      await t.page.getByLabel('Owner Email Address').fill(ownerEmail)
       await t.page.route('**/api/platform/businesses', route => {
         if (route.request().method() !== 'POST') return route.fallback()
         submissions.push(route.request().postDataJSON())
