@@ -1,6 +1,6 @@
 import { useEffect, useState } from 'react'
 import {
-  Building2, ChevronRight, Eye, LockKeyhole, Megaphone, Package,
+  Building2, ChevronRight, Eye, Megaphone, Package,
   RefreshCw, ShieldCheck, Wrench
 } from 'lucide-react'
 import { api, post, SessionExpiredError } from './api'
@@ -17,14 +17,10 @@ const releaseStates: { state: ReleaseState; summary: string }[] = [
   { state: 'Retired', summary: 'No new provisioning; migration policy required' }
 ]
 
-const moduleNames = [
-  'Catalog & Products', 'Purchase Orders', 'Inventory & Stock', 'POS & Sales',
-  'Returns & Refunds', 'Cash Register', 'Reports'
-]
 
 const viewDetails = {
   types: { title: 'Business Type Availability', description: 'Control which verticals can be offered when the real release-policy service is integrated.', Icon: Building2 },
-  modules: { title: 'Module Release Status', description: 'Plan rollout states by module, without weakening role or subscription authorization.', Icon: Package },
+  modules: { title: 'Module Release Status', description: 'Control installed modules with audited server-side write gates.', Icon: Package },
   maintenance: { title: 'Maintenance Management', description: 'Design planned maintenance by scope, operating mode and a precise time window.', Icon: Wrench },
   announcements: { title: 'Announcements & Status Messages', description: 'Prepare visible update notices without pretending they are published.', Icon: Megaphone }
 } as const
@@ -32,13 +28,6 @@ const viewDetails = {
 function StateBadge({ state }: { state: ReleaseState }) {
   const css = state === 'Available' ? 'is-available' : state === 'Paused' || state === 'Retired' ? 'is-paused' : 'is-pending'
   return <span className={`release-state-badge ${css}`}>{state}</span>
-}
-
-function DesignCaution({ message }: { message?: string }) {
-  return <div className="release-caution" role="status"><LockKeyhole size={17} aria-hidden="true" />
-    <span><strong>Design preview only.</strong> {message ??
-      'These choices are local draft interactions. They are not saved, published or enforced by the backend.'}</span>
-  </div>
 }
 
 type TypeControl = { id: number; code: string; name: string; isSupported: boolean;
@@ -162,34 +151,98 @@ function BusinessTypePreview() {
   </>
 }
 
+type ModuleControl = { code: string; name: string; installed: boolean; releaseState: ReleaseState;
+  revision: number; canOperate: boolean }
+
 function ModuleReleasePreview() {
-  const [selected, setSelected] = useState(moduleNames[0])
-  const [desiredStatus, setDesiredStatus] = useState<ReleaseState>('Under Construction')
+  const [modules, setModules] = useState<ModuleControl[]>([])
+  const [selected, setSelected] = useState('CATALOG')
+  const [desiredStatus, setDesiredStatus] = useState<ReleaseState>('Available')
+  const [reason, setReason] = useState('')
+  const [error, setError] = useState('')
+  const [notice, setNotice] = useState('')
+  const [busy, setBusy] = useState(false)
+  const [reload, setReload] = useState(0)
+  const current = modules.find(x => x.code === selected)
+  useEffect(() => {
+    let active = true
+    api<ModuleControl[]>('/platform/module-controls').then(items => {
+      if (!active) return
+      setModules(items)
+      setSelected(previous => items.some(x => x.code === previous) ? previous : items[0]?.code ?? '')
+    }).catch(cause => {
+      if (active && !(cause instanceof SessionExpiredError))
+        setError(cause instanceof Error ? cause.message : 'Unable to load module policies.')
+    })
+    return () => { active = false }
+  }, [reload])
+  useEffect(() => {
+    if (current) setDesiredStatus(current.releaseState)
+  }, [selected, current?.revision])
+
+  async function save() {
+    if (!current || busy || reason.trim().length < 10 || desiredStatus === current.releaseState) return
+    setBusy(true); setError(''); setNotice('')
+    try {
+      await post(`/platform/module-controls/${current.code}/release`, {
+        state: desiredStatus, expectedRevision: current.revision, reason: reason.trim()
+      })
+      setReason('')
+      setNotice(`${current.name} release policy applied. New writes now follow the published state.`)
+      setReload(n => n + 1)
+    } catch (cause) {
+      if (!(cause instanceof SessionExpiredError))
+        setError(cause instanceof Error ? cause.message : 'Unable to update the module policy.')
+    } finally { setBusy(false) }
+  }
+
   return <>
-    <DesignCaution message="These are UI planning areas, not a fetched or authoritative module registry. Actual modules and entitlement rules must be server-owned before any policy is published." />
+    <div className="alert alert-info" role="status">
+      Live server module controls. A paused module blocks new writes but preserves historical records.
+      Subscription, role and tenant checks still apply. Disabled modules cannot be activated
+      unless their backend workflow is installed.
+    </div>
+    {error && <div className="alert alert-danger" role="alert">{error}</div>}
+    {notice && <div className="alert alert-success" role="status">{notice}</div>}
     <div className="release-layout">
-      <section className="release-list" aria-label="Illustrative module families">
-        <div className="release-panel-heading"><h3>Module Families</h3><span>Design reference</span></div>
-        <div className="release-type-list">{moduleNames.map(name => <button key={name} type="button"
-          className={`release-type-item${selected === name ? ' is-selected' : ''}`}
-          aria-pressed={selected === name} onClick={() => { setSelected(name); setDesiredStatus('Under Construction') }}>
+      <section className="release-list" aria-label="Installed module registry">
+        <div className="release-panel-heading"><h3>Module Families</h3><span>Server registry</span></div>
+        <div className="release-type-list">{modules.map(module => <button key={module.code}
+          type="button" className={`release-type-item${selected === module.code ? ' is-selected' : ''}`}
+          aria-pressed={selected === module.code}
+          onClick={() => { setSelected(module.code); setReason(''); setNotice('') }}>
           <span className="release-type-symbol"><Package size={18} /></span>
-          <span><strong>{name}</strong><small>Live module status: not connected</small></span>
+          <span><strong>{module.name}</strong>
+            <small>{module.code} · {module.releaseState}
+              {!module.installed ? ' · Not installed' : module.canOperate ? ' · Writes enabled' : ' · Writes blocked'}</small>
+          </span>
           <ChevronRight size={17} /></button>)}</div>
       </section>
-      <section className="release-editor" aria-label="Module release policy design">
-        <div className="release-panel-heading"><h3>Module Policy</h3><span>Unsaved prototype</span></div>
-        <div className="release-selected"><strong>{selected}</strong><small>Independent module release state</small></div>
-        <label className="form-label" htmlFor="release-module-status">Choose a sample module state</label>
-        <select className="form-select" id="release-module-status" value={desiredStatus}
-          onChange={event => setDesiredStatus(event.target.value as ReleaseState)}>
-          {releaseStates.map(entry => <option key={entry.state} value={entry.state}>{entry.state}</option>)}
-        </select>
-        <div className="release-preview-card"><span className="release-preview-label"><Eye size={14} /> Preview only</span>
-          <StateBadge state={desiredStatus} />
-          <p>With an authorized policy backend, the module can be marked as {desiredStatus.toLowerCase()}.</p>
-          <small>Release status does not replace per-user permissions, plan entitlements or verified business-type compatibility.</small>
-        </div>
+      <section className="release-editor" aria-label="Module release policy">
+        <div className="release-panel-heading"><h3>Module Policy</h3><span>Server enforced</span></div>
+        {current ? <>
+          <div className="release-selected"><strong>{current.name}</strong>
+            <small>{current.code} · Revision {current.revision}</small></div>
+          <label className="form-label" htmlFor="release-module-status">Module state</label>
+          <select className="form-select" id="release-module-status" value={desiredStatus}
+            disabled={busy} onChange={event => setDesiredStatus(event.target.value as ReleaseState)}>
+            {releaseStates.map(entry => <option key={entry.state} value={entry.state}
+              disabled={entry.state === 'Available' && !current.installed}>{entry.state}</option>)}
+          </select>
+          <div className="release-preview-card">
+            <span className="release-preview-label"><Eye size={14} /> Current: {current.releaseState}</span>
+            <StateBadge state={desiredStatus} />
+            <p>{releaseStates.find(x => x.state === desiredStatus)?.summary}</p>
+            <small>New operations require the module, an active subscription and correct user permissions.</small>
+          </div>
+          <label className="form-label mt-3" htmlFor="release-module-reason">Audit reason</label>
+          <textarea id="release-module-reason" className="form-control" rows={2} maxLength={200}
+            value={reason} onChange={event => setReason(event.target.value)}
+            placeholder="Why is this module changing state?" />
+          <button type="button" className="btn btn-primary mt-2"
+            disabled={busy || reason.trim().length < 10 || desiredStatus === current.releaseState}
+            onClick={() => void save()}>{busy ? 'Saving…' : 'Apply module policy'}</button>
+        </> : <p className="release-empty">No modules registered.</p>}
       </section>
     </div>
   </>
@@ -430,8 +483,7 @@ export default function PlatformAvailabilityPreview({ view }: { view: Availabili
     {view === 'maintenance' && <MaintenancePreview />}
     {view === 'announcements' && <AnnouncementsPreview />}
     <div className="release-architecture-note"><ShieldCheck size={17} />
-      <span>Planned enforcement: one audited, versioned Super Admin release policy; server-side business creation checks;
-        scoped maintenance windows; independent messages; safe handling of existing tenants.</span>
+      <span>Server-enforced global module and business-type release controls; global maintenance and time-limited public notices. Market- and tenant-scoped policies remain future work.</span>
     </div>
   </div>
 }
