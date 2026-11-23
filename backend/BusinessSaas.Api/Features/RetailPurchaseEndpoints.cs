@@ -151,13 +151,15 @@ public static class RetailPurchaseEndpoints
             var lines = await (from line in db.RetailPurchaseOrderLines.AsNoTracking()
                                join product in db.RetailProducts.AsNoTracking()
                                    on line.ProductId equals product.Id
+                               join unit in db.RetailUnits.AsNoTracking()
+                                   on product.UnitId equals unit.Id
                                where line.PurchaseOrderId == orderId &&
-                                     product.BusinessId == businessId
+                                     product.BusinessId == businessId && unit.BusinessId == businessId
                                orderby line.Id
                                select new
                                {
                                    line.Id, line.ProductId, product.Name, product.Sku,
-                                   line.OrderedQuantity, line.UnitCost
+                                   UnitCode = unit.Code, line.OrderedQuantity, line.UnitCost
                                }).ToListAsync();
 
             var received = await PostedQuantities(db, businessId, orderId);
@@ -167,6 +169,7 @@ public static class RetailPurchaseEndpoints
                 line.ProductId,
                 line.Name,
                 line.Sku,
+                line.UnitCode,
                 line.OrderedQuantity,
                 line.UnitCost,
                 ReceivedQuantity = received.GetValueOrDefault(line.Id),

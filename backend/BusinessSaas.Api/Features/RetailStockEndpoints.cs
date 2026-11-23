@@ -53,6 +53,9 @@ public static class RetailStockEndpoints
                                    product.Id,
                                    product.Name,
                                    product.Sku,
+                                   UnitCode = db.RetailUnits.Where(u =>
+                                       u.Id == product.UnitId && u.BusinessId == businessId)
+                                       .Select(u => u.Code).FirstOrDefault(),
                                    product.IsActive,
                                    product.ReorderLevel,
                                    Quantity = balance == null ? 0m : balance.Quantity,
@@ -85,6 +88,9 @@ public static class RetailStockEndpoints
                             movement.ProductId,
                             product.Name,
                             product.Sku,
+                            UnitCode = db.RetailUnits.Where(u =>
+                                u.Id == product.UnitId && u.BusinessId == businessId)
+                                .Select(u => u.Code).FirstOrDefault(),
                             movement.QuantityChange,
                             movement.BalanceAfter,
                             movement.SourceType,

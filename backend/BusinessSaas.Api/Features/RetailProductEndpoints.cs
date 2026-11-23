@@ -184,6 +184,18 @@ public static class RetailProductEndpoints
                 request.BrandId, request.IsActive.Value))
                 return Results.BadRequest(new { message = "Select a valid category and unit from this business. Active products need active masters." });
 
+            if (product.UnitId != request.UnitId &&
+                (await db.RetailPurchaseOrderLines.AsNoTracking().AnyAsync(x => x.ProductId == productId) ||
+                 await db.RetailStockBalances.AsNoTracking().AnyAsync(x =>
+                     x.BusinessId == businessId && x.ProductId == productId) ||
+                 await db.RetailStockMovements.AsNoTracking().AnyAsync(x =>
+                     x.BusinessId == businessId && x.ProductId == productId) ||
+                 await db.RetailStockAdjustments.AsNoTracking().AnyAsync(x =>
+                     x.BusinessId == businessId && x.ProductId == productId) ||
+                 await db.Set<RetailCashSaleLine>().AsNoTracking().AnyAsync(x => x.ProductId == productId)))
+                return Results.Conflict(new { message =
+                    "Stock unit cannot change after a purchase, stock entry, adjustment or sale. Create a new product for a different base unit." });
+
             product.Name = request.Name!.Trim();
             product.Sku = sku;
             product.Barcode = barcode;

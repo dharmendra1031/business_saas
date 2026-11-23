@@ -12,6 +12,7 @@ interface Product {
   id: number
   name: string
   sku: string
+  unitCode?: string
   isActive: boolean
 }
 
@@ -35,6 +36,7 @@ interface OrderLine {
   productId: number
   name: string
   sku: string
+  unitCode?: string
   orderedQuantity: number
   unitCost: number
   receivedQuantity: number
@@ -61,6 +63,7 @@ interface NewLine {
   productId: number
   name: string
   sku: string
+  unitCode?: string
   quantity: string
   unitCost: string
 }
@@ -222,7 +225,8 @@ export default function RetailPurchases({ businessId, canOperate, locations, rol
     const product = products.find(x => x.id === id)
     if (!product || lines.some(x => x.productId === id) || lines.length >= 50) return
     setLines(value => [...value, {
-      productId: product.id, name: product.name, sku: product.sku, quantity: '1', unitCost: '0'
+      productId: product.id, name: product.name, sku: product.sku,
+      unitCode: product.unitCode, quantity: '1', unitCost: '0'
     }])
     setError('')
   }
@@ -470,17 +474,17 @@ export default function RetailPurchases({ businessId, canOperate, locations, rol
                 onChange={event => addLine(Number(event.target.value))}>
                 <option value={0}>Select a product to add</option>
                 {products.filter(x => !lines.some(line => line.productId === x.id))
-                  .map(x => <option key={x.id} value={x.id}>{x.name} ({x.sku})</option>)}
+                  .map(x => <option key={x.id} value={x.id}>{x.name} ({x.sku}{x.unitCode ? ` · ${x.unitCode}` : ''})</option>)}
               </select>
             </div>
           </div>
           {lines.length >= 50 && <p className="field-help" role="status">Maximum 50 products per purchase order.</p>}
           {lines.length > 0 && <div className="table-responsive">
             <table className="table table-sm align-middle business-record-table">
-              <thead><tr><th>Product</th><th>Order quantity</th>
+              <thead><tr><th>Product</th><th>Order quantity (stock unit)</th>
                 <th>Unit cost ({currencyCode})</th><th></th></tr></thead>
               <tbody>{lines.map(line => <tr key={line.productId}>
-                <td>{line.name}<span className="product-secondary">{line.sku}</span></td>
+                <td>{line.name}<span className="product-secondary">{line.sku}{line.unitCode ? ` · ${line.unitCode}` : ''}</span></td>
                 <td><input type="number" className="form-control" aria-label={`${line.name} quantity`}
                   min="0.001" max="9999999.999" step="0.001" required value={line.quantity}
                   onChange={event => setLines(values => values.map(x =>
@@ -570,7 +574,7 @@ export default function RetailPurchases({ businessId, canOperate, locations, rol
                 <th className="text-end">Received</th><th className="text-end">Remaining</th>
                 <th className="text-end">Unit cost</th></tr></thead>
               <tbody>{detail.lines.map(line => <tr key={line.id}>
-                <td>{line.name}<span className="product-secondary">{line.sku}</span></td>
+                <td>{line.name}<span className="product-secondary">{line.sku}{line.unitCode ? ` · ${line.unitCode}` : ''}</span></td>
                 <td className="text-end">{line.orderedQuantity.toFixed(3)}</td>
                 <td className="text-end">{line.receivedQuantity.toFixed(3)}</td>
                 <td className="text-end"><strong>{line.remainingQuantity.toFixed(3)}</strong></td>
@@ -604,7 +608,8 @@ export default function RetailPurchases({ businessId, canOperate, locations, rol
                     <thead><tr><th>Product</th><th className="text-end">Remaining</th>
                       <th>Receive now</th></tr></thead>
                     <tbody>{detail.lines.filter(x => x.remainingQuantity > 0).map(line => <tr key={line.id}>
-                      <td>{line.name}</td><td className="text-end">{line.remainingQuantity.toFixed(3)}</td>
+                      <td>{line.name}{line.unitCode && <span className="product-secondary">{line.unitCode}</span>}</td>
+                      <td className="text-end">{line.remainingQuantity.toFixed(3)}</td>
                       <td><input className="form-control" type="number" step="0.001" min="0"
                         max={line.remainingQuantity} aria-label={`Receive ${line.name}`}
                         value={receiving[line.id] ?? ''}
@@ -639,7 +644,7 @@ export default function RetailPurchases({ businessId, canOperate, locations, rol
                       <td>{receipt.lines.map(item => {
                         const ordered = detail.lines.find(x => x.id === item.purchaseOrderLineId)
                         return <div key={item.purchaseOrderLineId}>
-                          {ordered?.name ?? 'Unknown PO item'} · {item.quantity.toFixed(3)}
+                          {ordered?.name ?? 'Unknown PO item'} · {item.quantity.toFixed(3)}{ordered?.unitCode ? ` ${ordered.unitCode}` : ''}
                         </div>
                       })}</td>
                       <td>{receipt.status}</td>

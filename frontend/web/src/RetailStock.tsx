@@ -13,6 +13,7 @@ interface StockItem {
   id: number
   name: string
   sku: string
+  unitCode?: string | null
   isActive: boolean
   quantity: number
   hasStockRecord: boolean
@@ -31,6 +32,7 @@ interface StockMovement {
   productId: number
   name: string
   sku: string
+  unitCode?: string | null
   quantityChange: number
   balanceAfter: number
   sourceType: string
@@ -279,11 +281,11 @@ export default function RetailStock({ businessId, locations, canOperate, isOwner
                     {item.hasStockRecord
                       ? <>
                         <strong className={item.quantity > 0 ? 'text-success' : ''}>
-                          {item.quantity.toFixed(3)}
+                          {item.quantity.toFixed(3)}{item.unitCode ? ` ${item.unitCode}` : ''}
                         </strong>
                         {alertsOnly && item.reorderLevel !== null && <small className="business-stock-threshold">
                           {item.quantity === 0 ? 'Out of stock' : 'Low stock'}
-                          {' · '}Reorder at {item.reorderLevel}
+                          {' · '}Reorder at {item.reorderLevel}{item.unitCode ? ` ${item.unitCode}` : ''}
                         </small>}
                       </>
                       : <span className="business-record-status is-inactive">Not initialized</span>}

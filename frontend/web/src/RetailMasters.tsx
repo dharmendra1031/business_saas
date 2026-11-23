@@ -155,8 +155,8 @@ export default function RetailMasters({ businessId, canOperate }: {
       <div className="masters-heading business-module-heading">
         <h2>Product Masters</h2>
         <div className="btn-group business-master-tabs" role="group" aria-label="Catalog master type">
-          <button type="button" className={`btn btn-sm ${isUnit ? 'btn-outline-secondary' : 'btn-primary'}`}
-            aria-pressed={!isUnit} onClick={() => changeType('categories')}>Categories</button>
+          <button type="button" className={`btn btn-sm ${type === 'categories' ? 'btn-primary' : 'btn-outline-secondary'}`}
+            aria-pressed={type === 'categories'} onClick={() => changeType('categories')}>Categories</button>
           <button type="button" className={`btn btn-sm ${isUnit ? 'btn-primary' : 'btn-outline-secondary'}`}
             aria-pressed={isUnit} onClick={() => changeType('units')}>Units</button>
           <button type="button" className={`btn btn-sm ${type === 'brands' ? 'btn-primary' : 'btn-outline-secondary'}`}

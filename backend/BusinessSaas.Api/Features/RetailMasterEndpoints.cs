@@ -87,6 +87,10 @@ public static class RetailMasterEndpoints
 
             var parentError = await ValidateParent(db, businessId, request.ParentId, categoryId);
             if (parentError is not null) return Results.BadRequest(new { message = parentError });
+            if (!request.IsActive.Value && await db.RetailCategories.AsNoTracking().AnyAsync(x =>
+                    x.BusinessId == businessId && x.ParentId == categoryId && x.IsActive))
+                return Results.Conflict(new { message =
+                    "Deactivate or move active subcategories before deactivating their parent." });
             category.Name = name;
             category.NameKey = key;
             category.ParentId = request.ParentId;
@@ -174,6 +178,11 @@ public static class RetailMasterEndpoints
             if (await db.RetailUnits.AnyAsync(x => x.BusinessId == businessId &&
                 x.Id != unitId && (x.Code == code || x.NameKey == key)))
                 return Results.Conflict(new { message = "Unit code or name already exists." });
+
+            if (unit.Code != code && await db.RetailProducts.AsNoTracking().AnyAsync(x =>
+                    x.BusinessId == businessId && x.UnitId == unitId))
+                return Results.Conflict(new { message =
+                    "Unit code is already assigned to products and cannot change. Name and status can still be edited." });
 
             unit.Name = name;
             unit.NameKey = key;
