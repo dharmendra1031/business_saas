@@ -141,6 +141,13 @@
 .business-shell .business-module-card .masters-search { position: relative; max-width: 520px; align-items: stretch; }
 .business-shell .business-module-card .masters-search input { min-height: 41px; }
 .business-shell .business-stock-search input { padding-left: 42px; }
+.business-inventory-alert-filter { display: inline-flex; align-items: center; flex-wrap: wrap; gap: 9px;
+  margin: 2px 0 9px; padding: 0 18px; color: #294665; font-size: .84rem;
+  font-weight: 720; cursor: pointer; }
+.business-inventory-alert-filter input { width: 16px; height: 16px; margin: 0; accent-color: #245bb7; }
+.business-inventory-alert-filter small { color: #617995; font-size: .76rem; font-weight: 450; }
+.business-stock-threshold { display: block; white-space: normal; color: #925521;
+  font-size: .73rem; font-weight: 670; margin-top: 3px; }
 .business-shell .business-module-card .masters-form { padding: 18px; border: 1px solid #e0e7f0; border-radius: 10px;
   background: #fbfcff; margin-top: 15px; }
 .business-shell .business-master-tabs .btn { min-height: 39px; font-weight: 730; }

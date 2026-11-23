@@ -35,6 +35,7 @@ export default function App() {
   const [platformBusinessSearch, setPlatformBusinessSearch] = useState('')
   const [dashboard, setDashboard] = useState<RetailDashboard | null>(null)
   const [approvalList, setApprovalList] = useState(false)
+  const [stockAlertLocationId, setStockAlertLocationId] = useState<number | null>(null)
   const [billingOpen, setBillingOpen] = useState(false)
   const [billingBusiness, setBillingBusiness] = useState<{ id: number; name: string } | null>(null)
   const [retailPage, setRetailPage] = useState<RetailPage>('overview')
@@ -135,6 +136,7 @@ export default function App() {
         return
       }
       setApprovalList(false)
+      setStockAlertLocationId(null)
       setBillingOpen(false)
       setDashboard(details)
       setRetailPage(!showOverview && details.cashSaleEnabled && details.roleCode === 'Cashier' ? 'cash' : 'overview')
@@ -244,6 +246,7 @@ export default function App() {
                 if (menuOpen) menuToggle.current?.focus()
                 setMenuOpen(false)
                 setApprovalList(false)
+                if (section === 'stock') setStockAlertLocationId(null)
                 if (section === 'overview') void openBusiness(dashboard.business.id, true)
                 else setRetailPage(section)
               }}><Icon size={18} /> {label}</button>)}
@@ -455,7 +458,11 @@ export default function App() {
               </div>}
               {retailPage === 'overview' && dashboard.roleCode !== 'Cashier' && <>
                 <BusinessOverview dashboard={dashboard}
-                  onNavigate={section => { setApprovalList(false); setRetailPage(section) }}
+                  onNavigate={(section, alertLocationId) => {
+                    setApprovalList(false)
+                    if (section === 'stock') setStockAlertLocationId(alertLocationId ?? null)
+                    setRetailPage(section)
+                  }}
                   onReviewApprovals={() => { setApprovalList(true); setRetailPage('purchases') }} />
                 {dashboard.roleCode === 'Owner' && <details className="content-section business-subscription-panel" onToggle={event => setBillingOpen(event.currentTarget.open)}>
                   <summary><CreditCard size={17} /> Subscription & billing</summary>
@@ -474,7 +481,7 @@ export default function App() {
                 <RetailCatalog key={dashboard.business.id + '-' + retailPage} section={retailPage} approvalsOnly={approvalList}
                   businessId={dashboard.business.id} canOperate={dashboard.canOperate}
                   currencyCode={dashboard.business.currencyCode} locations={dashboard.locations}
-                  roleCode={dashboard.roleCode} />}
+                  roleCode={dashboard.roleCode} initialStockAlertLocationId={stockAlertLocationId} />}
               {retailPage === 'team' && dashboard.roleCode === 'Owner' &&
                 <TeamMembers businessId={dashboard.business.id} canOperate={dashboard.canOperate} cashSaleEnabled={!!dashboard.cashSaleEnabled} />}
               {(retailPage === 'sales' || retailPage === 'register' || retailPage === 'reports' ||

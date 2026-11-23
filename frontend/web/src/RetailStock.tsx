@@ -16,6 +16,7 @@ interface StockItem {
   isActive: boolean
   quantity: number
   hasStockRecord: boolean
+  reorderLevel: number | null
 }
 
 interface StockPage {
@@ -49,13 +50,16 @@ function message(error: unknown): string {
   return error instanceof Error ? error.message : 'Request failed. Please try again.'
 }
 
-export default function RetailStock({ businessId, locations, canOperate, isOwner }: {
+export default function RetailStock({ businessId, locations, canOperate, isOwner, initialAlertLocationId }: {
   businessId: number
   locations: Location[]
   canOperate: boolean
   isOwner: boolean
+  initialAlertLocationId: number | null
 }) {
-  const [locationId, setLocationId] = useState(locations[0]?.id ?? 0)
+  const selectedLocation = locations.find(x => x.id === initialAlertLocationId)?.id ?? locations[0]?.id ?? 0
+  const [locationId, setLocationId] = useState(selectedLocation)
+  const [alertsOnly, setAlertsOnly] = useState(initialAlertLocationId !== null)
   const [items, setItems] = useState<StockItem[]>([])
   const [total, setTotal] = useState(0)
   const [page, setPage] = useState(1)
@@ -97,7 +101,9 @@ export default function RetailStock({ businessId, locations, canOperate, isOwner
     setError('')
     setItems([])
     setTotal(0)
-    api<StockPage>(basePath + '?' + new URLSearchParams({ page: String(page), search: query }))
+    api<StockPage>(basePath + '?' + new URLSearchParams({
+      page: String(page), search: query, ...(alertsOnly ? { alertsOnly: 'true' } : {})
+    }))
       .then(data => {
         if (!active) return
         setItems(data.items)
@@ -108,7 +114,7 @@ export default function RetailStock({ businessId, locations, canOperate, isOwner
       })
       .finally(() => { if (active) setLoading(false) })
     return () => { active = false }
-  }, [basePath, page, query, reload])
+  }, [basePath, page, query, alertsOnly, reload])
 
   useEffect(() => {
     if (!historyProductId) return
@@ -240,13 +246,22 @@ export default function RetailStock({ businessId, locations, canOperate, isOwner
           onChange={event => setSearch(event.target.value)} />
         <button type="submit" className="btn btn-outline-secondary">Search</button>
       </form>
+      <label className="business-inventory-alert-filter">
+        <input type="checkbox" checked={alertsOnly} onChange={event => {
+          setAlertsOnly(event.target.checked)
+          setPage(1)
+        }} />
+        Alerts only <small>At selected location</small>
+      </label>
 
       {loading ? <div role="status" className="business-module-loading">Loading inventory…</div>
         : error ? null
           : items.length === 0 ? <div className="business-empty-state" role="status">
-            <Boxes size={28} /><strong>{query ? 'No matching products' : 'No products in this inventory'}</strong>
-            <p>{query ? 'Try a different product name or SKU.' :
-              'Add actual products in your catalog, then return to record opening quantities.'}</p>
+            <Boxes size={28} /><strong>{alertsOnly ? 'No stock alerts at this location' :
+              query ? 'No matching products' : 'No products in this inventory'}</strong>
+            <p>{alertsOnly ? 'Only initialized stock at or below a configured reorder level appears here.' :
+              query ? 'Try a different product name or SKU.' :
+                'Add actual products in your catalog, then return to record opening quantities.'}</p>
           </div>
             : <div className="table-responsive">
               <table className="table table-sm align-middle business-record-table">
@@ -258,9 +273,15 @@ export default function RetailStock({ businessId, locations, canOperate, isOwner
                   <td>{item.sku}</td>
                   <td className="text-end">
                     {item.hasStockRecord
-                      ? <strong className={item.quantity > 0 ? 'text-success' : ''}>
-                        {item.quantity.toFixed(3)}
-                      </strong>
+                      ? <>
+                        <strong className={item.quantity > 0 ? 'text-success' : ''}>
+                          {item.quantity.toFixed(3)}
+                        </strong>
+                        {alertsOnly && item.reorderLevel !== null && <small className="business-stock-threshold">
+                          {item.quantity === 0 ? 'Out of stock' : 'Low stock'}
+                          {' · '}Reorder at {item.reorderLevel}
+                        </small>}
+                      </>
                       : <span className="business-record-status is-inactive">Not initialized</span>}
                   </td>
                   <td className="text-end text-nowrap">
@@ -282,7 +303,7 @@ export default function RetailStock({ businessId, locations, canOperate, isOwner
             </div>}
 
       {!loading && !error && total > 0 && <div className="masters-pages">
-        <span className="small text-secondary">Page {page} · {total} products</span>
+        <span className="small text-secondary">Page {page} · {total} {alertsOnly ? 'alerts' : 'products'} at this location</span>
         <div className="btn-group">
           <button type="button" className="btn btn-sm btn-outline-secondary" disabled={page === 1}
             onClick={() => setPage(current => current - 1)}>Previous</button>

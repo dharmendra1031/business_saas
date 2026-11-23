@@ -5,7 +5,7 @@ type SetupAction = 'masters' | 'products' | 'stock'
 
 export default function BusinessOverview({ dashboard, onNavigate, onReviewApprovals }: {
   dashboard: RetailDashboard
-  onNavigate: (page: SetupAction) => void
+  onNavigate: (page: SetupAction, alertLocationId?: number) => void
   onReviewApprovals: () => void
 }) {
   const { roleCode, locations, subscription, accessStatus, hasProducts, pendingApprovals } = dashboard
@@ -86,7 +86,7 @@ export default function BusinessOverview({ dashboard, onNavigate, onReviewApprov
             : stockAlerts && stockAlerts.count === 0 ? <p>No alerts for monitored stock records.</p> : null}
         {isOwner && stockAlerts && stockAlerts.count > 0 && <div className="business-stock-alerts">
           <button type="button" className="business-setup-alert-link"
-            onClick={() => onNavigate('stock')}>
+            onClick={() => onNavigate('stock', stockAlerts.items[0]?.locationId)}>
             Review {stockAlerts.count} stock {stockAlerts.count === 1 ? 'alert' : 'alerts'} in Inventory
             <ArrowRight size={15} aria-hidden="true" />
           </button>
