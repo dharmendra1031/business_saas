@@ -69,6 +69,7 @@ async function scenario(name, {
     badPassword, lockedPassword, badMfa, lastMfaRequest: null }
   let businessRequests = 0
   const stockPaths = []
+  const stockQueries = []
 
   await page.route('**/api/**', route => {
     const path = new URL(route.request().url()).pathname.replace(/^\/api/, '')
@@ -122,6 +123,24 @@ async function scenario(name, {
     if (/^\/businesses\/\d+\/dashboard$/.test(path)) return response(route, 200, dashboard(role, hasProducts, pendingApprovals, Number(path.split('/')[2]), locationCount, cashSalesFixture, stockAlertsFixture))
     if (/^\/businesses\/\d+\/stock\/locations\/\d+$/.test(path)) {
       stockPaths.push(path)
+      const url = new URL(route.request().url())
+      stockQueries.push(path + url.search)
+      if (stockAlertsFixture) {
+        const locationId = Number(path.split('/').at(-1))
+        const items = locationId === 1
+          ? [
+              { id: 11, name: 'Blue Shirt', sku: 'BLUE-11', isActive: true,
+                quantity: 0, hasStockRecord: true, reorderLevel: 4 },
+              { id: 13, name: 'Fine Notebook', sku: 'NOTE-13', isActive: true,
+                quantity: 20, hasStockRecord: true, reorderLevel: 5 }
+            ]
+          : [{ id: 12, name: 'Red Bag', sku: 'BAG-12', isActive: true,
+              quantity: 2, hasStockRecord: true, reorderLevel: 3 }]
+        const filtered = url.searchParams.get('alertsOnly') === 'true'
+          ? items.filter(item => item.reorderLevel !== null && item.quantity <= item.reorderLevel)
+          : items
+        return response(route, 200, { items: filtered, total: filtered.length, page: 1, pageSize: 20 })
+      }
       return response(route, 200, { items: [], total: 0, page: 1, pageSize: 20 })
     }
     if (productsFixture && /^\/businesses\/\d+\/products\/options$/.test(path))
@@ -172,7 +191,7 @@ async function scenario(name, {
     if (viaKeyboard) await page.getByLabel('Password').press('Enter')
     else await page.getByRole('button', { name: /^Sign in/ }).click()
   }
-  return { page, context, state, screenshot, check, login, get businessRequests() { return businessRequests }, stockPaths }
+  return { page, context, state, screenshot, check, login, get businessRequests() { return businessRequests }, stockPaths, stockQueries }
 }
 
 try {
@@ -321,6 +340,28 @@ try {
     await t.screenshot('BUS-01-verified-stock-alerts-mobile-360')
     await t.page.getByRole('button', { name: 'Review 2 stock alerts in Inventory' }).click()
     await t.page.getByRole('heading', { name: 'Inventory', exact: true, level: 2 }).waitFor()
+    assert.equal(await t.page.locator('#stock-location').inputValue(), '1',
+      'Dashboard must select the location of the first real alert')
+    const alertsToggle = t.page.getByRole('checkbox', { name: /Alerts only/ })
+    assert.ok(await alertsToggle.isChecked(), 'Alerts Only should be active after dashboard navigation')
+    await t.page.getByText('Blue Shirt', { exact: true }).waitFor()
+    assert.equal(await t.page.getByText('Fine Notebook').count(), 0)
+    assert.ok(t.stockQueries.some(path => path.includes('/locations/1?') && path.includes('alertsOnly=true')),
+      'Server must filter records at the selected location, not the entire business')
+    await t.screenshot('BUS-27-stock-alerts-filter-mobile-360')
+    await t.page.locator('#stock-location').selectOption('2')
+    await t.page.getByText('Red Bag', { exact: true }).waitFor()
+    assert.ok(await alertsToggle.isChecked(), 'Location switching retains Alerts Only')
+    assert.ok(t.stockQueries.some(path => path.includes('/locations/2?') && path.includes('alertsOnly=true')))
+    await t.screenshot('BUS-27-alerts-other-location-mobile-360')
+    assert.ok(await t.page.evaluate(() => document.documentElement.scrollWidth) <= 361,
+      'Alerts table and filter should not overflow mobile viewport')
+    await t.page.locator('#stock-location').selectOption('1')
+    await t.page.getByText('Blue Shirt', { exact: true }).waitFor()
+    await alertsToggle.uncheck()
+    await t.page.getByText('Fine Notebook', { exact: true }).waitFor()
+    assert.ok(t.stockQueries.some(path => path.includes('/locations/1?') && !path.includes('alertsOnly=true')),
+      'Unchecking restores the unfiltered Inventory API query')
     await t.check()
     await t.context.close()
     console.log('PASS owner configured stock alerts / navigation / mobile')
