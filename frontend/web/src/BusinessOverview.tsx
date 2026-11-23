@@ -10,7 +10,8 @@ export default function BusinessOverview({ dashboard, onNavigate, onReviewApprov
 }) {
   const { roleCode, locations, subscription, accessStatus, hasProducts, pendingApprovals } = dashboard
   const isOwner = roleCode === 'Owner'
-  const cash = dashboard.cashSalesToday
+  // Owner-only figures must remain hidden even if a server response is malformed.
+  const cash = isOwner ? dashboard.cashSalesToday : null
   const stockAlerts = dashboard.stockAlerts
   const money = new Intl.NumberFormat(undefined, {
     style: 'currency', currency: dashboard.business.currencyCode
