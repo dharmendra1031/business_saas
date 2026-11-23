@@ -287,8 +287,7 @@ public sealed class RetailPurchaseTests
         var lookup = await cashier.GetFromJsonAsync<JsonElement>($"{sales}/products?locationId={locationId}&search=RICE");
         Assert.Equal(productId, lookup[0].GetProperty("id").GetInt64());
         var postedSale = await Send(cashier, sales, cashSale);
-        Assert.True(postedSale.StatusCode == HttpStatusCode.OK,
-            $"Cash sale returned {postedSale.StatusCode}: {await postedSale.Content.ReadAsStringAsync()}");
+        Assert.Equal(HttpStatusCode.OK, postedSale.StatusCode);
         var receipt = await postedSale.Content.ReadFromJsonAsync<JsonElement>();
         Assert.Equal(450m, receipt.GetProperty("total").GetDecimal());
         var replay = await Send(cashier, sales, cashSale);
