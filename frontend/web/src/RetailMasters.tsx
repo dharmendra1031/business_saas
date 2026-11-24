@@ -175,21 +175,21 @@ export default function RetailMasters({ businessId, canOperate }: {
         <form className="masters-form" aria-busy={saving} onSubmit={event => void save(event)}>
           <div>
             <label className="form-label" htmlFor="master-name">{label} name *</label>
-            <input ref={firstInput} id="master-name" className="form-control" autoComplete="off"
+            <input ref={firstInput} id="master-name" className="form-control" autoComplete="off" disabled={saving}
               value={name} maxLength={isUnit ? 60 : 80} minLength={2} required
               onChange={event => setName(event.target.value)}
               placeholder={isUnit ? 'e.g. Pieces' : `Enter ${label.toLowerCase()} name`} />
           </div>
           {isUnit && <div>
             <label className="form-label" htmlFor="master-code">Unit code *</label>
-            <input id="master-code" className="form-control" autoComplete="off"
+            <input id="master-code" className="form-control" autoComplete="off" disabled={saving}
               value={code} maxLength={12} pattern="[a-zA-Z0-9-]{1,12}" required
               onChange={event => setCode(event.target.value.toUpperCase())}
               placeholder="e.g. PCS" />
           </div>}
           {(type === 'subgroups' || type === 'categories') && <div>
             <label className="form-label" htmlFor="master-parent">{parentLabel} *</label>
-            <select id="master-parent" className="form-select" value={parentId} required
+            <select id="master-parent" className="form-select" value={parentId} required disabled={saving}
               onChange={event => setParentId(Number(event.target.value))}>
               <option value={0}>Select {parentLabel.toLowerCase()}</option>
               {parentId > 0 && !candidateParents.some(item => item.id === parentId) &&
@@ -200,7 +200,7 @@ export default function RetailMasters({ businessId, canOperate }: {
           </div>}
           {editingId !== null && <div>
             <label className="form-label" htmlFor="master-status">Status</label>
-            <select id="master-status" className="form-select" value={active ? 'active' : 'inactive'}
+            <select id="master-status" className="form-select" value={active ? 'active' : 'inactive'} disabled={saving}
               onChange={event => setActive(event.target.value === 'active')}>
               <option value="active">Active</option>
               <option value="inactive">Inactive</option>
@@ -249,7 +249,7 @@ export default function RetailMasters({ businessId, canOperate }: {
                   ? classificationPath(parentOptions, item.parentId) || `#${item.parentId}` : '—'}</td>}
                 <td>{item.isActive ? 'Active' : 'Inactive'}</td>
                 {canOperate && <td className="text-end"><button type="button"
-                  className="btn btn-outline-secondary btn-sm" onClick={() => edit(item)}>Edit</button></td>}
+                  className="btn btn-outline-secondary btn-sm" disabled={saving} onClick={() => edit(item)}>Edit</button></td>}
               </tr>)}</tbody>
             </table>
           </div>}
