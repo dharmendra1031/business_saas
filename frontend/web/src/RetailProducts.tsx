@@ -2,6 +2,7 @@ import { useEffect, useRef, useState, type FormEvent } from 'react'
 import { api, post, SessionExpiredError } from './api'
 import { Package, Plus, Search } from 'lucide-react'
 import { classificationPath, classificationTrail } from './retailClassification'
+import { ActionButton, useActionFeedback } from './ActionFeedback'
 
 interface Product {
   id: number
@@ -68,6 +69,7 @@ export default function RetailProducts({ businessId, canOperate, currencyCode }:
   canOperate: boolean
   currencyCode: string
 }) {
+  const { run } = useActionFeedback()
   const [products, setProducts] = useState<Product[]>([])
   const [options, setOptions] = useState<CatalogOptions>({ categories: [], units: [], brands: [] })
   const [inlineType, setInlineType] = useState<'categories' | 'units' | 'brands' | null>(null)
@@ -92,7 +94,6 @@ export default function RetailProducts({ businessId, canOperate, currencyCode }:
   const [loadError, setLoadError] = useState('')
   const [optionsError, setOptionsError] = useState('')
   const [optionsReload, setOptionsReload] = useState(0)
-  const [notice, setNotice] = useState('')
   const [skuError, setSkuError] = useState('')
   const firstInput = useRef<HTMLInputElement>(null)
 
@@ -155,7 +156,6 @@ export default function RetailProducts({ businessId, canOperate, currencyCode }:
     })
     setSkuError('')
     setError('')
-    setNotice('')
     setFormOpen(true)
   }
 
@@ -176,7 +176,6 @@ export default function RetailProducts({ businessId, canOperate, currencyCode }:
     })
     setSkuError('')
     setError('')
-    setNotice('')
     setFormOpen(true)
   }
 
@@ -192,7 +191,6 @@ export default function RetailProducts({ businessId, canOperate, currencyCode }:
     setSaving(true)
     setError('')
     setSkuError('')
-    setNotice('')
 
     const body = {
       ...form,
@@ -207,17 +205,17 @@ export default function RetailProducts({ businessId, canOperate, currencyCode }:
     }
 
     try {
-      if (editingId === null)
-        await post(basePath, body)
-      else
-        await api(`${basePath}/${editingId}`, { method: 'PUT', body: JSON.stringify(body) })
-
+      await run('Saving product…',
+        editingId === null ? 'Product added. Set its opening quantity from Stock when ready.'
+          : 'Product updated successfully.', async () => {
+          if (editingId === null)
+            await post(basePath, body)
+          else
+            await api(`${basePath}/${editingId}`, { method: 'PUT', body: JSON.stringify(body) })
+        })
       setFormOpen(false)
       setEditingId(null)
       setForm(initialForm)
-      setNotice(editingId === null
-        ? 'Product added. Set its opening quantity from Stock when ready.'
-        : 'Product updated successfully.')
       setReload(value => value + 1)
     } catch (cause) {
       if (!(cause instanceof SessionExpiredError)) {
@@ -244,16 +242,17 @@ export default function RetailProducts({ businessId, canOperate, currencyCode }:
     setInlineSaving(true)
     setError('')
     try {
-      const added = await post<{ id: number }>(`/businesses/${businessId}/${inlineType}`, {
-        name: inlineName.trim(),
-        ...(inlineType === 'units' ? { code: inlineCode.trim().toUpperCase() } : {}),
-        ...(inlineType === 'categories' ? { parentId: inlineParent || null } : {})
-      })
+      const added = await run(`Adding ${inlineType.slice(0, -1)}…`,
+        `${inlineType === 'categories' ? 'Category' : inlineType === 'units' ? 'Unit' : 'Brand'} added to this product.`,
+        () => post<{ id: number }>(`/businesses/${businessId}/${inlineType}`, {
+          name: inlineName.trim(),
+          ...(inlineType === 'units' ? { code: inlineCode.trim().toUpperCase() } : {}),
+          ...(inlineType === 'categories' ? { parentId: inlineParent || null } : {})
+        }))
       const updated = await api<CatalogOptions>(basePath + '/options?includeInactiveCategories=true')
       setOptions({ ...updated, brands: updated.brands ?? [] })
       const field = inlineType === 'categories' ? 'categoryId' : inlineType === 'units' ? 'unitId' : 'brandId'
       setForm(value => ({ ...value, [field]: added.id }))
-      setNotice(`${inlineType === 'categories' ? 'Category' : inlineType === 'units' ? 'Unit' : 'Brand'} added to this product.`)
       setInlineType(null)
       setInlineName('')
       setInlineCode('')
@@ -305,12 +304,11 @@ export default function RetailProducts({ businessId, canOperate, currencyCode }:
         {optionsError} <button type="button" className="btn btn-sm btn-outline-secondary ms-2"
           onClick={() => setOptionsReload(value => value + 1)}>Retry setup</button>
       </div>}
-      {notice && <div className="alert alert-success" role="status">{notice}</div>}
       {!optionsLoading && !optionsError && !canCreate && <p className="alert alert-info" role="status">
         A group and unit are required. Add them from Product Masters first.
       </p>}
 
-      {formOpen && canOperate && <form className="product-form" onSubmit={event => void save(event)}>
+      {formOpen && canOperate && <form className="product-form" aria-busy={saving} onSubmit={event => void save(event)}>
         <h3>{editingId === null ? 'New product' : 'Edit product'}</h3>
         <div className="form-grid">
           <div className="form-wide">
@@ -398,10 +396,10 @@ export default function RetailProducts({ businessId, canOperate, currencyCode }:
               Subgroup: {classificationPath(options.categories, inlineParent)}
             </p>}
             <div className="d-flex gap-2 mt-2">
-              <button type="button" className="btn btn-sm btn-primary"
-                disabled={inlineSaving || inlineName.trim().length < 2 ||
+              <ActionButton type="button" className="btn-sm" busy={inlineSaving}
+                busyLabel="Adding…" disabled={inlineName.trim().length < 2 ||
                   inlineType === 'units' && !/^[A-Z0-9-]{1,12}$/.test(inlineCode.trim())}
-                onClick={() => void addInline()}>{inlineSaving ? 'Adding…' : 'Add & select'}</button>
+                onClick={() => void addInline()}>Add & select</ActionButton>
               <button type="button" className="btn btn-sm btn-outline-secondary" disabled={inlineSaving}
                 onClick={() => setInlineType(null)}>Cancel</button>
             </div>
@@ -452,11 +450,9 @@ export default function RetailProducts({ businessId, canOperate, currencyCode }:
           </details>
         </div>
         <div className="form-footer">
-          <button type="button" className="btn btn-outline-secondary"
+          <button type="button" className="btn btn-outline-secondary" disabled={saving}
             onClick={() => { setFormOpen(false); setError(''); setSkuError('') }}>Cancel</button>
-          <button type="submit" className="btn btn-primary" disabled={saving || optionsLoading}>
-            {saving ? 'Saving…' : 'Save product'}
-          </button>
+          <ActionButton busy={saving} disabled={optionsLoading}>Save product</ActionButton>
         </div>
       </form>}
 
