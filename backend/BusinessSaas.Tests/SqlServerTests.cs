@@ -464,6 +464,72 @@ public sealed class SqlServerTests
                 .OrderBy(x => x.Id).Select(x => x.QuantityChange).ToListAsync();
             Assert.Equal(new[] { 1.250m, -0.375m }, movements);
         }
+
+        // SQL Server rollback: a later out-of-stock line must not commit an earlier
+        // line's deduction, a receipt, or any cash-sale movement.
+        var unavailableId = await Created(prefix + "/products", new
+        {
+            name = "SQL Unstocked Item", sku = "SQL-UNSTOCKED-ITEM",
+            categoryId, brandId, unitId, salePrice = 10m, taxClassification = ""
+        });
+        var atomicBasket = new
+        {
+            locationId, requestKey = "sql-flow-atomic-basket-20261124", tendered = 100m,
+            lines = new[] {
+                new { productId, quantity = 0.250m, expectedUnitPrice = 80m },
+                new { productId = unavailableId, quantity = 1m, expectedUnitPrice = 10m }
+            }
+        };
+        using (var rejected = await Post(cashier, prefix + "/cash-sales", atomicBasket))
+        {
+            Assert.Equal(HttpStatusCode.BadRequest, rejected.StatusCode);
+            var error = await rejected.Content.ReadFromJsonAsync<JsonElement>();
+            Assert.Equal("CASH_SALE_BASKET_CHANGED", error.GetProperty("code").GetString());
+            Assert.Equal(unavailableId, error.GetProperty("productId").GetInt64());
+        }
+        using (var scope = factory.Services.CreateScope())
+        {
+            var db = scope.ServiceProvider.GetRequiredService<AppDbContext>();
+            Assert.Equal(0.875m, await db.RetailStockBalances.AsNoTracking()
+                .Where(x => x.BusinessId == businessId && x.LocationId == locationId &&
+                    x.ProductId == productId).Select(x => x.Quantity).SingleAsync());
+            Assert.False(await db.RetailCashSales.AsNoTracking()
+                .AnyAsync(x => x.BusinessId == businessId &&
+                    x.RequestKey == atomicBasket.requestKey));
+            Assert.Single(await db.RetailStockMovements.AsNoTracking()
+                .Where(x => x.BusinessId == businessId && x.ProductId == productId &&
+                    x.SourceType == "CashSaleLine").ToListAsync());
+        }
+
+        Assert.Equal(HttpStatusCode.Created,
+            (await Post(owner, stockPath + "/opening",
+                new { productId = unavailableId, quantity = 3m })).StatusCode);
+        using var recoveredBasket = await Post(cashier, prefix + "/cash-sales", atomicBasket);
+        Assert.Equal(HttpStatusCode.OK, recoveredBasket.StatusCode);
+        var recoveredSale = await recoveredBasket.Content.ReadFromJsonAsync<JsonElement>();
+        Assert.Equal(30m, recoveredSale.GetProperty("total").GetDecimal());
+        using var repeatedBasket = await Post(cashier, prefix + "/cash-sales", atomicBasket);
+        Assert.Equal(HttpStatusCode.OK, repeatedBasket.StatusCode);
+        Assert.Equal(recoveredSale.GetProperty("id").GetInt64(),
+            (await repeatedBasket.Content.ReadFromJsonAsync<JsonElement>())
+                .GetProperty("id").GetInt64());
+
+        using (var scope = factory.Services.CreateScope())
+        {
+            var db = scope.ServiceProvider.GetRequiredService<AppDbContext>();
+            Assert.Equal(0.625m, await db.RetailStockBalances.AsNoTracking()
+                .Where(x => x.BusinessId == businessId && x.LocationId == locationId &&
+                    x.ProductId == productId).Select(x => x.Quantity).SingleAsync());
+            Assert.Equal(2m, await db.RetailStockBalances.AsNoTracking()
+                .Where(x => x.BusinessId == businessId && x.LocationId == locationId &&
+                    x.ProductId == unavailableId).Select(x => x.Quantity).SingleAsync());
+            Assert.Equal(1, await db.RetailCashSales.AsNoTracking().CountAsync(x =>
+                x.BusinessId == businessId && x.RequestKey == atomicBasket.requestKey));
+            Assert.Equal(2, await db.RetailStockMovements.AsNoTracking().CountAsync(x =>
+                x.BusinessId == businessId && x.SourceType == "CashSaleLine" &&
+                x.SourceId != 0 && (x.ProductId == productId || x.ProductId == unavailableId) &&
+                x.BalanceAfter >= 0 && x.PostedAtUtc != default));
+        }
     }
 
     private static async Task RegisterAndLogin(HttpClient client, string email)
