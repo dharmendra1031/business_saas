@@ -106,10 +106,13 @@ public sealed class RetailReceiptReportTests
 
     [Theory]
     [InlineData("Thermal80", 1, true)]
+    [InlineData("Thermal80", 3, true)]
     [InlineData("Thermal80", 10, false)]
     [InlineData("Thermal80", 50, true)]
     [InlineData("Thermal80", 100, false)]
     [InlineData("A4", 1, true)]
+    [InlineData("A4", 10, true)]
+    [InlineData("A4", 50, false)]
     [InlineData("A4", 100, false)]
     [Trait("Renderer", "Windows")]
     public void Static_templates_render_real_pdf_on_windows(string paper, int count, bool show)
@@ -126,9 +129,30 @@ public sealed class RetailReceiptReportTests
                 UnitPrice = 10m, LineTotal = 10m, ProductSku = "SKU-" + i, UnitCode = "PCS"
             }).ToList() };
         var data = RetailReceiptReportData.FromCashSale(sale, business, TimeZoneInfo.Utc);
+        var stopwatch = System.Diagnostics.Stopwatch.StartNew();
         var bytes = RetailReceiptRenderer.Render(data, paper);
+        var firstMs = stopwatch.Elapsed.TotalMilliseconds;
+        stopwatch.Restart();
+        var repeat = RetailReceiptRenderer.Render(data, paper);
+        var repeatMs = stopwatch.Elapsed.TotalMilliseconds;
         Assert.True(bytes.AsSpan().StartsWith("%PDF-"u8));
         Assert.True(bytes.Length > 1000);
+        Assert.True(repeat.AsSpan().StartsWith("%PDF-"u8));
+        Assert.True(repeat.Length > 1000);
+
+        // Synthetic samples only; no customer or tenant production data in CI artifacts.
+        var output = Environment.GetEnvironmentVariable("RDLC_TEST_OUTPUT");
+        if (!string.IsNullOrWhiteSpace(output))
+        {
+            Directory.CreateDirectory(output);
+            var name = $"{paper}-{count:D3}-items";
+            File.WriteAllBytes(Path.Combine(output, name + ".pdf"), bytes);
+            File.WriteAllText(Path.Combine(output, name + ".json"),
+                System.Text.Json.JsonSerializer.Serialize(new {
+                    paper, count, optionalColumnsShown = show, firstMs, repeatMs,
+                    bytes = bytes.Length, repeatBytes = repeat.Length
+                }));
+        }
     }
 
     [Fact]

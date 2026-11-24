@@ -31,7 +31,16 @@ jobs:
         with:
           dotnet-version: 10.0.x
       - name: Render actual static RDLC PDFs
+        env:
+          RDLC_TEST_OUTPUT: ${{ github.workspace }}/rdlc-samples
         run: dotnet test backend/BusinessSaas.Tests/BusinessSaas.Tests.csproj --configuration Release --filter "Renderer=Windows"
+      - name: Upload synthetic receipt PDFs and render timings
+        uses: actions/upload-artifact@v4
+        with:
+          name: rdlc-receipt-samples
+          path: rdlc-samples/
+          if-no-files-found: error
+          retention-days: 7
 
   sql-server:
     runs-on: ubuntu-latest

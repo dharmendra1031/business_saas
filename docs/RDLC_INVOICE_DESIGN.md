@@ -75,3 +75,7 @@ Logo uploads are resized in the browser to PNG (maximum 384 × 192 pixels, 32 Ki
 Receipt settings use an explicit revision-guarded update and read the stored row back before committing. No-op writes do not change the revision. Empty legacy merchant fields are not rewritten just because a client submits empty strings. The frontend omits unchanged logo bytes.
 
 Windows renderer tests execute real PDF generation for both templates. The thermal RDLC still has fixed 11-inch pages; real roll paper length and cutter verification are not complete. No browser HTML print fallback is provided.
+
+## Render verification artifacts
+
+The Windows CI job publishes actual synthetic A4 (1, 10, 50, 100 items) and Thermal80 (1, 3, 10, 50, 100 items) PDF samples with per-case initial and repeated render duration and byte counts. These are process-level measurements, not isolated cold-start or printer-spool benchmarks. Review the PDF page dimensions, optional columns and wrapping before tuning thermal pagination. The 11-inch thermal page height has not been shortened by guesswork. The application pins the XML cryptography dependency to 10.0.14 to replace the vulnerable transitive 10.0.0 reported by CI.
