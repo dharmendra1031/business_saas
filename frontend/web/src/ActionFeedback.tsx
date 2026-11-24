@@ -1,8 +1,8 @@
 import { createContext, useCallback, useContext, useEffect, useRef, useState, type ButtonHTMLAttributes, type ReactNode } from 'react'
 import { AlertCircle, CheckCircle2, LoaderCircle, X } from 'lucide-react'
-import { SessionExpiredError } from './api'
+import { SessionExpiredError, UncertainWriteError } from './api'
 
-type Phase = 'saving' | 'success' | 'error'
+type Phase = 'saving' | 'success' | 'error' | 'uncertain'
 interface Feedback { id: number; phase: Phase; message: string }
 
 interface FeedbackActions {
@@ -33,7 +33,7 @@ export function ActionFeedbackProvider({ children }: { children: ReactNode }) {
     } catch (cause) {
       setFeedback(current => current?.id === id
         ? cause instanceof SessionExpiredError ? null
-          : { id, phase: 'error',
+          : { id, phase: cause instanceof UncertainWriteError ? 'uncertain' : 'error',
             message: cause instanceof Error ? cause.message : 'Could not save. Review the form and try again.' }
         : current)
       throw cause
@@ -52,8 +52,8 @@ export function ActionFeedbackProvider({ children }: { children: ReactNode }) {
   return <Context.Provider value={{ run }}>
     {children}
     {feedback && <div className={`action-feedback action-feedback--${feedback.phase}`}
-      role={feedback.phase === 'error' ? 'alert' : 'status'}
-      aria-live={feedback.phase === 'error' ? 'assertive' : 'polite'}
+      role={feedback.phase === 'error' || feedback.phase === 'uncertain' ? 'alert' : 'status'}
+      aria-live={feedback.phase === 'error' || feedback.phase === 'uncertain' ? 'assertive' : 'polite'}
       aria-atomic="true">
       {feedback.phase === 'saving'
         ? <LoaderCircle className="action-feedback-spinner" size={22} aria-hidden="true" />
@@ -62,7 +62,8 @@ export function ActionFeedbackProvider({ children }: { children: ReactNode }) {
           : <AlertCircle size={22} aria-hidden="true" />}
       <div className="action-feedback-copy">
         <strong>{feedback.phase === 'saving' ? 'Saving changes' :
-          feedback.phase === 'success' ? 'Saved successfully' : 'Could not save'}</strong>
+          feedback.phase === 'success' ? 'Saved successfully' :
+          feedback.phase === 'uncertain' ? 'Save status unknown' : 'Could not save'}</strong>
         <span>{feedback.message}</span>
       </div>
       {feedback.phase !== 'saving' && <button type="button"
