@@ -262,8 +262,9 @@ public static class RetailCashSales
     public sealed record Item(long ProductId, decimal Quantity, decimal ExpectedUnitPrice);
 
     private static async Task<IResult> Post(long businessId, CashRequest request,
-        ClaimsPrincipal user, AppDbContext db)
+        ClaimsPrincipal user, AppDbContext db, HttpContext context)
     {
+        var started = Stopwatch.GetTimestamp();
         if (!long.TryParse(user.FindFirstValue(ClaimTypes.NameIdentifier), out var actor))
             return Results.NotFound();
         var items = request.Lines ?? [new Item(request.ProductId, request.Quantity, request.ExpectedUnitPrice)];
@@ -290,6 +291,8 @@ public static class RetailCashSales
                     !recorded.SequenceEqual(items.OrderBy(x => x.ProductId)))
                     return Results.Conflict(new { message = "This receipt key belongs to a different sale." });
                 // Never hide a committed receipt or double-post when settings changed mid-retry.
+                context.Response.Headers["Server-Timing"] = FormattableString.Invariant(
+                    $"sale-replay;dur={Stopwatch.GetElapsedTime(started).TotalMilliseconds:F1}");
                 return Results.Ok(Receipt(previous));
             }
             if (!shop.CashSalesEnabled)
@@ -352,8 +355,10 @@ public static class RetailCashSales
             }
             if (request.Tendered < sale.Total)
                 return Results.BadRequest(new { message = "Cash received is less than the basket total." });
+            var validated = Stopwatch.GetTimestamp();
             db.RetailCashSales.Add(sale);
             await db.SaveChangesAsync();
+            var saved = Stopwatch.GetTimestamp();
             foreach (var line in sale.Lines.OrderBy(x => x.ProductId))
             {
                 if (await StockPosting.ApplyAsync(db, businessId, sale.LocationId, line.ProductId,
@@ -361,7 +366,11 @@ public static class RetailCashSales
                     return Results.BadRequest(new { code = "CASH_SALE_BASKET_CHANGED", line.ProductId,
                         message = $"Insufficient stock for {line.ProductName} at this location. Remove it and select it again if stock is available." });
             }
+            var stockPosted = Stopwatch.GetTimestamp();
             await tx.CommitAsync();
+            var committed = Stopwatch.GetTimestamp();
+            context.Response.Headers["Server-Timing"] = FormattableString.Invariant(
+                $"sale-validate;dur={Stopwatch.GetElapsedTime(started, validated).TotalMilliseconds:F1}, sale-save;dur={Stopwatch.GetElapsedTime(validated, saved).TotalMilliseconds:F1}, sale-stock;dur={Stopwatch.GetElapsedTime(saved, stockPosted).TotalMilliseconds:F1}, sale-commit;dur={Stopwatch.GetElapsedTime(stockPosted, committed).TotalMilliseconds:F1}");
             return Results.Ok(Receipt(sale));
         }
         catch (Exception ex) when (StockPosting.IsSqlConflict(ex))

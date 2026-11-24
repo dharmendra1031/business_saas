@@ -132,6 +132,14 @@ public sealed class RetailReceiptReportTests
     [Trait("Renderer", "ColdWindows")]
     public void Cold_start_Thermal80_long() => RenderSample("Thermal80", 5, true);
 
+    [Fact]
+    [Trait("Renderer", "Windows")]
+    public void Warm_up_renders_both_static_templates()
+    {
+        if (!OperatingSystem.IsWindows()) return;
+        RetailReceiptRenderer.WarmUp();
+    }
+
     private static void RenderSample(string paper, int count, bool show)
     {
         if (!OperatingSystem.IsWindows()) return;

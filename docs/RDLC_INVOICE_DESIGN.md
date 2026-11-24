@@ -146,3 +146,19 @@ Build 45441364250 (commit `62035ed`, Windows synthetic samples) recorded initial
 The authorized PDF endpoint reports `Server-Timing` durations in milliseconds for `receipt-db` (authorization and data retrieval), `receipt-map`, and `receipt-render`. These exclude HTTP transfer, PDF viewer startup, spooler and physical printer time. The immutable receipt and its lines are loaded using a split query to avoid repeating historical header/logo bytes for each line. This adds a database round trip; compare staging latency for short and long receipts before claiming a speed improvement. No generated report, tenant data cache, printer agent or report template changes are introduced. Use synthetic receipts, compare cold/warm process measurements, and separately measure sale POST and print latency on the actual Windows workstation. Retain existing security, money and reprint acceptance gates.
 
 Build 45443499640 (`7d2411a`) reproduced the long thermal sample's initial 3186.1 ms render but its immediate repeat was 146.4 ms. All ten repeat measurements ranged from 132.8 to 212.5 ms. This suggests process initialization or another one-time cost, not an established long-description defect. The Windows job now runs three isolated test-host invocations (A4 one item, thermal three items, thermal long five items), recording first and repeated render, process ID and actual PDF geometry in the existing artifact's `cold/` directory. No renderer warm-up, SLA enforcement or startup changes are made before the isolated results are available. Cold test-host measurements still exclude web-host startup, database, transport and printing.
+
+
+### Optional Windows development warm-up and checkout measurement
+
+Build 45444038090 verified independent test-host first/repeat rendering: A4 1827.4/101.5 ms, short thermal 1759.8/105.4 ms, long thermal 1731.4/105.5 ms. This establishes a first-render penalty across both report types, not a proven exact internal engine bottleneck.
+
+On a Windows Development host, opt in before starting the API using PowerShell:
+
+```powershell
+$env:Receipts__WarmUpOnStart = 'true'
+# Start the API using the existing local setup procedure.
+```
+
+The API renders one synthetic in-memory receipt in each static layout before app.Run; it discards the PDF, never touches merchant data or a printer, logs elapsed startup time, and logs a warning without preventing normal startup on failure. Disabled by default, never runs on Linux or Production. This intentionally moves work into startup; actual first merchant receipt speed must still be measured on the target host. To turn it off, remove the environment setting and restart.
+
+Successful cash POST responses report Server-Timing phases sale-validate, sale-save, sale-stock and sale-commit. An existing-key replay reports sale-replay rather than a new sale. These are handler timings, not full browser/network or middleware latency. The existing SQL Server integration test verifies these headers; it is not a workload benchmark. Compare browser POST elapsed time and subsequent PDF GET timing on isolated staging, then PDF viewer and physical spool latency using the existing workstation pilot. Silent mode is still not released; Chrome policy alone cannot prove print completion.

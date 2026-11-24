@@ -3,6 +3,7 @@ using System.Threading.RateLimiting;
 using Microsoft.AspNetCore.RateLimiting;
 using BusinessSaas.Api.Data;
 using BusinessSaas.Api.Features;
+using BusinessSaas.Api.Reports;
 using Microsoft.AspNetCore.Antiforgery;
 using Microsoft.AspNetCore.Authentication.Cookies;
 using Microsoft.AspNetCore.DataProtection;
@@ -324,6 +325,24 @@ app.MapPlatformBillingEndpoints();
 app.MapRazorpayPaymentEndpoints();
 app.MapPlatformPaymentReviewEndpoints();
 app.MapBillingDocumentEndpoints();
+
+// Opt-in on Windows development hosts only; finish before accepting a first sale.
+// A failed warm-up must not block access to checkout or historical data.
+if (app.Environment.IsDevelopment() && OperatingSystem.IsWindows() &&
+    app.Configuration.GetValue<bool>("Receipts:WarmUpOnStart"))
+{
+    var started = System.Diagnostics.Stopwatch.GetTimestamp();
+    try
+    {
+        RetailReceiptRenderer.WarmUp();
+        app.Logger.LogInformation("RDLC warm-up completed in {ElapsedMs:F1} ms",
+            System.Diagnostics.Stopwatch.GetElapsedTime(started).TotalMilliseconds);
+    }
+    catch (Exception error)
+    {
+        app.Logger.LogWarning(error, "RDLC warm-up failed; normal receipt rendering remains available");
+    }
+}
 
 app.Run();
 

@@ -497,12 +497,17 @@ public sealed class SqlServerTests
         };
         var saleResponse = await Post(cashier, prefix + "/cash-sales", saleRequest);
         Assert.Equal(HttpStatusCode.OK, saleResponse.StatusCode);
+        var saleTiming = Assert.Single(saleResponse.Headers.GetValues("Server-Timing"));
+        foreach (var phase in new[] { "sale-validate", "sale-save", "sale-stock", "sale-commit" })
+            Assert.Contains(phase + ";dur=", saleTiming);
+        Console.WriteLine("SQL synthetic cash checkout: " + saleTiming);
         var sale = await saleResponse.Content.ReadFromJsonAsync<JsonElement>();
         Assert.Equal(30m, sale.GetProperty("total").GetDecimal());
         Assert.Equal("SQL Retail Flow", sale.GetProperty("businessName").GetString());
         Assert.False(string.IsNullOrWhiteSpace(sale.GetProperty("timeZoneId").GetString()));
         var saleRetry = await Post(cashier, prefix + "/cash-sales", saleRequest);
         Assert.Equal(HttpStatusCode.OK, saleRetry.StatusCode);
+        Assert.StartsWith("sale-replay;dur=", Assert.Single(saleRetry.Headers.GetValues("Server-Timing")));
         Assert.Equal(sale.GetProperty("id").GetInt64(),
             (await saleRetry.Content.ReadFromJsonAsync<JsonElement>()).GetProperty("id").GetInt64());
         Assert.Equal(HttpStatusCode.NotFound,

@@ -1,4 +1,5 @@
 using System.Data;
+using BusinessSaas.Api.Data;
 using System.Drawing;
 using System.Globalization;
 using System.Runtime.Versioning;
@@ -9,6 +10,30 @@ namespace BusinessSaas.Api.Reports;
 
 public static class RetailReceiptRenderer
 {
+    // Only synthetic, in-memory data: no tenant access, persisted sale or printer job.
+    [SupportedOSPlatform("windows")]
+    public static void WarmUp()
+    {
+        var business = new Business { Id = 1, Name = "Renderer warm-up" };
+        var sale = new RetailCashSale
+        {
+            Id = 1, BusinessId = 1, CurrencyCode = "INR",
+            Total = 1m, Tendered = 1m, PostedAtUtc = DateTime.UtcNow,
+            Lines = [new RetailCashSaleLine
+            {
+                Id = 1, ProductName = "Sample", Quantity = 1m,
+                UnitPrice = 1m, LineTotal = 1m, ProductSku = "SAMPLE", UnitCode = "PCS"
+            }]
+        };
+        var data = RetailReceiptReportData.FromCashSale(sale, business, TimeZoneInfo.Utc);
+        foreach (var paper in new[] { "A4", "Thermal80" })
+        {
+            var pdf = Render(data, paper);
+            if (!pdf.AsSpan().StartsWith("%PDF-"u8))
+                throw new InvalidDataException("Receipt renderer warm-up did not produce a PDF.");
+        }
+    }
+
     [SupportedOSPlatform("windows")]
     public static byte[] Render(RetailReceiptReportData data, string paperSize)
     {
