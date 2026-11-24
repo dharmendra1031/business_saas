@@ -230,7 +230,7 @@ The mockup pictures display illustrative controls (Card, UPI, Split, Services, d
 | BUS-51 | Subscription — status and entitlements | Page | Partial | P1 | Plan/version, trial/grace, limits and billing status for selected business. |
 | BUS-52 | Subscription — approved payment / renewal | Flow | Partial | P1 | Real provider outcomes, secure checkout and verified reconciliation. |
 | BUS-53 | Business Settings — general / receipt policy | Tab | Missing | P2 | Legal name, timezone, store details and receipt options with audit. |
-| BUS-54 | Business Settings — tax and payment policy | Tab | Missing | P1 | Market-configured tax/payment rules; cannot fake Card/UPI capability. |
+| BUS-54 | Business Settings — Billing & Payments | Tab | Missing | P1 | Business Owner-only, tenant-persisted Cash ON/OFF and Customer Credit/Udhar ON/OFF, enforced at the server on new sales; Customer Credit cannot be enabled before invoice/receivable/collection workflow release. Platform entitlement overrides Owner choice; existing credit dues remain collectible when turned off. Discount/returns and tax/receipt policy remain server-authoritative; never bypass legally required tax or pretend Card/UPI works without verified capability. |
 | BUS-55 | Business Settings — language and preferences | Tab | Missing | P2 | Published locale pack, correct currency and RTL independent of language. |
 
 ### D. Cashier / POS — approved Ibdaa-inspired independent 61/39 layout
@@ -241,10 +241,10 @@ The mockup pictures display illustrative controls (Card, UPI, Split, Services, d
 | --- | --- | --- | --- | --- | --- |
 | POS-01 | New Sale — catalogue + basket | Page | Partial | P0 | FULL-WIDTH: 61% photo product/category/search grid left, 39% cart/customer/total right; no admin sidebar. |
 | POS-02 | Product quick detail / selection | Modal | Missing | P1 | Only if required by real product configuration; use actual price/unit/stock, no tailoring-only fictional controls. |
-| POS-03 | Customer search / walk-in selector | Panel | Missing | P1 | Visible on basket, business-scoped customer lookup; optional only if retail policy permits. |
+| POS-03 | Customer search / walk-in selector | Panel | Missing | P1 | Business-scoped customer lookup; walk-in allowed for Cash but an active customer is mandatory for any released Customer Credit/Udhar sale, including credit-limit and overdue validations before posting. |
 | POS-04 | Quick add customer | Modal | Missing | P2 | Create customer without losing current cart, with duplicate checks. |
 | POS-05 | Cart quantity / remove / clear | State | Partial | P0 | Inline fast edit, exact money and stock checks; no extra page. |
-| POS-06 | Payment Popup — Cash first | Modal | Partial | P0 | Cash-only frontend modal implemented with total, tender, change, focus containment and Cancel/Confirm. Browser visual QA and full cash posting/retry tests still pending. |
+| POS-06 | Payment Popup — Cash first; Credit when released | Modal | Partial | P0 | Existing Development cash-only modal and stock-safe posting verified by SQL/Chromium regression tests. Eventually expose only Owner-enabled **and** released Cash/Credit options: Cash has tender/change, Credit requires customer, outstanding/credit limit and due date. Never show an enabled but unimplemented Credit option. Hosted and real printer acceptance still pending. |
 | POS-07 | Payment Popup — processing / unknown outcome | State | Partial | P0 | Original request is held for receipt lookup and retry. Chromium fixture verified recovery after a lost response and denied retry using the same request key. Hosted acceptance remains pending. |
 | POS-08 | Payment Popup — Card/UPI/Split | Tab | Deferred | P2 | Only show/enabled after verified backend and configured payment capability. |
 | POS-09 | Sale complete / committed receipt | State | Partial | P0 | Chromium fixtures verified the receipt ID and that New Sale clears the original basket after normal posting and recovery. Hosted acceptance remains pending. |
