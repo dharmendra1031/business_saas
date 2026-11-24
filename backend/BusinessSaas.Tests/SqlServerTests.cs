@@ -393,7 +393,7 @@ public sealed class SqlServerTests
             new { name = "Test Pieces", code = "SQPCS" });
         var productId = await Created(prefix + "/products", new
         {
-            name = "SQL Blue Shirt", sku = "SQL-BLUE-SHIRT", categoryId, brandId, unitId,
+            name = "SQL Blue Shirt", sku = "SQL-BLUE-SHIRT", barcode = "890000010001", categoryId, brandId, unitId,
             salePrice = 80m, taxClassification = ""
         });
 
@@ -435,6 +435,27 @@ public sealed class SqlServerTests
         var cashierCatalog = await cashier.GetFromJsonAsync<JsonElement>(
             prefix + "/cash-sales/products?locationId=" + locationId + "&search=SQL-BLUE-SHIRT");
         Assert.Equal(productId, cashierCatalog[0].GetProperty("id").GetInt64());
+        var exactPath = prefix + "/cash-sales/products?locationId=" + locationId + "&exact=true&search=";
+        var exactSku = await cashier.GetFromJsonAsync<JsonElement>(exactPath + "sql-blue-shirt");
+        Assert.Equal(1, exactSku.GetArrayLength());
+        Assert.Equal(productId, exactSku[0].GetProperty("id").GetInt64());
+        Assert.Equal(1.250m, exactSku[0].GetProperty("available").GetDecimal());
+        Assert.Equal("SQPCS", exactSku[0].GetProperty("unitCode").GetString());
+        var exactBarcode = await cashier.GetFromJsonAsync<JsonElement>(exactPath + "890000010001");
+        Assert.Equal(1, exactBarcode.GetArrayLength());
+        Assert.Equal(productId, exactBarcode[0].GetProperty("id").GetInt64());
+        Assert.Equal(0, (await cashier.GetFromJsonAsync<JsonElement>(exactPath + "SQL-BLUE")).GetArrayLength());
+        Assert.Equal(HttpStatusCode.BadRequest, (await cashier.GetAsync(exactPath)).StatusCode);
+        Assert.Equal(HttpStatusCode.NotFound, (await stranger.GetAsync(exactPath + "890000010001")).StatusCode);
+        var ambiguousId = await Created(prefix + "/products", new
+        {
+            name = "SQL Code Collision", sku = "890000010001",
+            categoryId, brandId, unitId, salePrice = 10m, taxClassification = ""
+        });
+        var ambiguous = await cashier.GetFromJsonAsync<JsonElement>(exactPath + "890000010001");
+        Assert.Equal(2, ambiguous.GetArrayLength());
+        Assert.Contains(ambiguous.EnumerateArray(), x => x.GetProperty("id").GetInt64() == productId);
+        Assert.Contains(ambiguous.EnumerateArray(), x => x.GetProperty("id").GetInt64() == ambiguousId);
         var receiptSettingsPath = prefix + "/receipt-settings";
         var initialReceiptSettings = await owner.GetFromJsonAsync<JsonElement>(receiptSettingsPath);
         var logo = Convert.FromBase64String("iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mP8/x8AAwMCAO+j2ZsAAAAASUVORK5CYII=");

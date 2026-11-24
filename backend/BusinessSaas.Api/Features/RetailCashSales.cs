@@ -202,25 +202,33 @@ public static class RetailCashSales
     }
 
     private static async Task<IResult> Search(long businessId, long locationId, string? search,
-        ClaimsPrincipal user, AppDbContext db)
+        ClaimsPrincipal user, AppDbContext db, CancellationToken cancellationToken, bool exact = false)
     {
         if (!long.TryParse(user.FindFirstValue(ClaimTypes.NameIdentifier), out var actor) ||
             await Shop(db, businessId, actor, locationId) is null) return Results.NotFound();
         var term = search?.Trim().ToUpperInvariant() ?? "";
-        if (term.Length > 150) return Results.BadRequest();
-        var products = await db.RetailProducts.AsNoTracking()
+        if (term.Length > 150 || (exact && term.Length == 0)) return Results.BadRequest();
+        var eligible = db.RetailProducts.AsNoTracking()
             .Where(x => x.BusinessId == businessId && x.IsActive && x.SalePrice > 0 &&
-                x.TaxClassification == "" && (x.Name.ToUpper().Contains(term) ||
-                x.Sku.Contains(term) || x.Barcode == term))
-            .OrderByDescending(x => x.Barcode == term || x.Sku == term)
-            .ThenBy(x => x.Name).ThenBy(x => x.Id).Take(30)
-            .Select(x => new { x.Id, x.Name, x.Sku, x.Barcode, x.SalePrice,
+                x.TaxClassification == "");
+        // Exact scans use the existing business/SKU and business/barcode indexes.
+        // Both matches must be returned if a SKU collides with another product's barcode.
+        var matches = exact
+            ? eligible.Where(x => x.Sku == term || x.Barcode == term)
+                .OrderBy(x => x.Id).Take(2)
+            : term.Length == 0
+                ? eligible.OrderBy(x => x.Name).ThenBy(x => x.Id).Take(30)
+                : eligible.Where(x => x.Name.ToUpper().Contains(term) ||
+                    x.Sku.Contains(term) || x.Barcode == term)
+                    .OrderByDescending(x => x.Barcode == term || x.Sku == term)
+                    .ThenBy(x => x.Name).ThenBy(x => x.Id).Take(30);
+        var products = await matches.Select(x => new { x.Id, x.Name, x.Sku, x.Barcode, x.SalePrice,
                 UnitCode = db.RetailUnits.Where(unit =>
                     unit.Id == x.UnitId && unit.BusinessId == businessId)
                     .Select(unit => unit.Code).FirstOrDefault(),
                 Available = db.RetailStockBalances
                 .Where(b => b.BusinessId == businessId && b.LocationId == locationId && b.ProductId == x.Id)
-                .Select(b => (decimal?)b.Quantity).FirstOrDefault() ?? 0 }).ToListAsync();
+                .Select(b => (decimal?)b.Quantity).FirstOrDefault() ?? 0 }).ToListAsync(cancellationToken);
         return Results.Ok(products);
     }
 

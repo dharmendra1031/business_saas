@@ -1041,13 +1041,18 @@ try {
     const lookupGate = new Promise(resolve => { releaseLookup = resolve })
     let releaseAmbiguous
     const ambiguousGate = new Promise(resolve => { releaseAmbiguous = resolve })
+    const exactRequests = []
     await t.page.route('**/api/businesses/1/cash-sales/products*', async route => {
-      const term = new URL(route.request().url()).searchParams.get('search') ?? ''
-      if (term === 'SCAN-401') {
-        await lookupGate
-        return response(route, 200, [first])
+      const params = new URL(route.request().url()).searchParams
+      const term = params.get('search') ?? ''
+      if (params.get('exact') === 'true') {
+        exactRequests.push(term)
+        if (term === 'SCAN-401') {
+          await lookupGate
+          return response(route, 200, [first])
+        }
+        if (term === '900001') await ambiguousGate
       }
-      if (term === '900001') await ambiguousGate
       return response(route, 200, [first, other])
     })
     await t.login()
@@ -1075,6 +1080,7 @@ try {
     await t.page.getByRole('alert').getByText('This code matches multiple products. Select the correct product card.').waitFor()
     assert.equal(await qty.inputValue(), '1')
     assert.equal(await t.page.getByRole('spinbutton', { name: 'Quantity of Other Item' }).count(), 0)
+    assert.deepEqual(exactRequests, ['SCAN-401', '900001'])
     await t.check()
     await t.context.close()
     console.log('PASS POS barcode verifies current location and refuses ambiguous product codes')

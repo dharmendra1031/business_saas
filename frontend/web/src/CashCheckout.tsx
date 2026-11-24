@@ -127,23 +127,24 @@ export default function CashCheckout({ userId, dashboard, onExit }: {
   }, [base, pending, refresh, receipt, busy])
 
   useEffect(() => {
-    if (!locationId || !dashboard.canOperate || pending || receipt) return
+    if (!locationId || !dashboard.canOperate || pending || receipt || scanBusy || historyPage) return
     let active = true
+    const controller = new AbortController()
     setProducts([])
     setProductsLoading(true)
     setHint('')
     const timer = setTimeout(() => {
-      api<Product[]>(`${base}/products?locationId=${locationId}&search=${encodeURIComponent(search)}`)
+      api<Product[]>(`${base}/products?locationId=${locationId}&search=${encodeURIComponent(search)}`,
+        { signal: controller.signal })
         .then(items => {
           if (!active) return
           setProducts(items)
           setProductsLoading(false)
           setHint(items.length ? '' : 'No eligible products found.')
-          // Product cards and barcode entry use the same verified product collection.
         }).catch(cause => { if (active) { setProductsLoading(false); setHint(cause instanceof Error ? cause.message : 'Unable to load products.') } })
     }, 200)
-    return () => { active = false; clearTimeout(timer) }
-  }, [base, search, locationId, dashboard.canOperate, pending, receipt])
+    return () => { active = false; clearTimeout(timer); controller.abort() }
+  }, [base, search, locationId, dashboard.canOperate, pending, receipt, scanBusy, historyPage])
 
   useEffect(() => {
     if (!customerOpen || pending || receipt || !locationId || !dashboard.canOperate) return
@@ -237,7 +238,7 @@ export default function CashCheckout({ userId, dashboard, onExit }: {
     try {
       // The catalogue may contain stale or partial search results. Verify the exact code
       // at the current location, and never silently choose between two matching products.
-      const matching = (await api<Product[]>(`${base}/products?locationId=${locationId}&search=${encodeURIComponent(code)}`))
+      const matching = (await api<Product[]>(`${base}/products?locationId=${locationId}&search=${encodeURIComponent(code)}&exact=true`))
         .filter(x => x.barcode?.toUpperCase() === code || x.sku.toUpperCase() === code)
       if (matching.length === 1) addProduct(matching[0], true)
       else if (matching.length > 1) setError('This code matches multiple products. Select the correct product card.')
