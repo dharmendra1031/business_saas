@@ -577,7 +577,8 @@ export default function App() {
               {(retailPage === 'sales' || retailPage === 'register' || retailPage === 'reports' ||
                 (retailPage === 'settings' && dashboard.roleCode === 'Owner')) &&
                 dashboard.roleCode !== 'Cashier' && <BusinessPreview key={retailPage}
-                  module={retailPage} dashboard={dashboard} />}
+                  module={retailPage} dashboard={dashboard}
+                  onBillingUpdated={() => void refreshDashboard()} />}
             </>
           )}
         </main>
