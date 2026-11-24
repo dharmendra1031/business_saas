@@ -1,4 +1,5 @@
 using System.Data;
+using System.Diagnostics;
 using System.Security.Claims;
 using BusinessSaas.Api.Data;
 using BusinessSaas.Api.Reports;
@@ -93,13 +94,17 @@ public static class RetailCashSales
     private static async Task<IResult> PrintPdf(long businessId, long locationId, long receiptId,
         ClaimsPrincipal user, AppDbContext db, HttpContext context, ILoggerFactory loggerFactory, bool ownerOnly)
     {
+        var started = Stopwatch.GetTimestamp();
         if (!long.TryParse(user.FindFirstValue(ClaimTypes.NameIdentifier), out var actor) ||
             await Shop(db, businessId, actor, locationId, ownerOnly) is not { } business)
             return Results.NotFound();
 
-        var sale = await db.RetailCashSales.AsNoTracking().Include(x => x.Lines)
+        // Posted receipts are immutable. Split the collection load so the receipt's
+        // historical logo and header are not transferred again for every line.
+        var sale = await db.RetailCashSales.AsNoTracking().AsSplitQuery().Include(x => x.Lines)
             .SingleOrDefaultAsync(x => x.Id == receiptId && x.BusinessId == businessId &&
-                x.LocationId == locationId && (ownerOnly || x.CashierId == actor));
+                x.LocationId == locationId && (ownerOnly || x.CashierId == actor), context.RequestAborted);
+        var loaded = Stopwatch.GetTimestamp();
         if (sale is null) return Results.NotFound();
         if (!OperatingSystem.IsWindows())
             return Results.Problem("RDLC PDF printing requires a Windows report host.", statusCode: 503);
@@ -107,7 +112,12 @@ public static class RetailCashSales
         {
             var data = RetailReceiptReportData.FromCashSale(sale, business,
                 TimeZoneInfo.FindSystemTimeZoneById(business.TimeZoneId));
+            var mapped = Stopwatch.GetTimestamp();
             var pdf = RetailReceiptRenderer.Render(data, business.ReceiptPaperSize);
+            var rendered = Stopwatch.GetTimestamp();
+            // Durations only: no customer data, prices or report content in diagnostics.
+            context.Response.Headers["Server-Timing"] = FormattableString.Invariant(
+                $"receipt-db;dur={Stopwatch.GetElapsedTime(started, loaded).TotalMilliseconds:F1}, receipt-map;dur={Stopwatch.GetElapsedTime(loaded, mapped).TotalMilliseconds:F1}, receipt-render;dur={Stopwatch.GetElapsedTime(mapped, rendered).TotalMilliseconds:F1}");
             context.Response.Headers.CacheControl = "no-store";
             context.Response.Headers.ContentDisposition = $"inline; filename=receipt-{sale.Id}.pdf";
             return Results.File(pdf, "application/pdf");

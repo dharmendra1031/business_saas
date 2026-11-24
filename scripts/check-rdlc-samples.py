@@ -38,4 +38,7 @@ for path in samples:
             assert page_mm[0]["height"] <= limit, (path.name, page_mm)
         metadata["pages"] = page_mm
         path.with_suffix(".json").write_text(json.dumps(metadata, indent=2), encoding="utf-8")
-        print(path.name, page_mm, f"render {metadata['firstMs']:.1f}ms")
+        assert metadata["firstMs"] >= 0 and metadata["repeatMs"] >= 0, path.name
+        print(path.name, page_mm,
+              f"initial render {metadata['firstMs']:.1f}ms",
+              f"repeat render {metadata['repeatMs']:.1f}ms")
