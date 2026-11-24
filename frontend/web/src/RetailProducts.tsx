@@ -471,7 +471,7 @@ export default function RetailProducts({ businessId, canOperate, currencyCode }:
           </details>
         </fieldset>
         <div className="form-footer">
-          <button type="button" className="btn btn-outline-secondary" disabled={saving}
+          <button type="button" className="btn btn-outline-secondary" disabled={saving || inlineSaving}
             onClick={() => { setFormOpen(false); setSkuError('') }}>Cancel</button>
           <ActionButton busy={saving} disabled={optionsLoading || inlineSaving || !!inlineType}>Save product</ActionButton>
         </div>
