@@ -1801,11 +1801,19 @@ try {
           assert.equal(new URL(route.request().url()).searchParams.get('locationId'), '1')
           return response(route, 200, { id: 42, total: 24, tendered: 30, currencyCode: 'INR', printAvailable: true,
             postedAtUtc: '2026-11-23T06:00:00Z',
-            lines: [{ id: 1, productName: 'Loose Rice', unitPrice: 96, quantity: 0.25 }] })
+            locationName: 'Main Shop', customerName: 'Sample Customer', customerId: 9,
+            lines: [{ id: 1, productName: 'Loose Rice', productSku: 'RICE-KG', unitCode: 'KG',
+              unitPrice: 96, quantity: 0.25, lineTotal: 24 }] })
         })
         await t.page.getByRole('button', { name: 'Receipt #42' }).click()
         const receipt = t.page.getByRole('region', { name: 'Cash receipt' })
-        await receipt.getByText(/Loose Rice/).waitFor()
+        const originalLines = receipt.getByRole('table', { name: 'Original posted sale lines' })
+        await originalLines.getByText('Loose Rice', { exact: true }).waitFor()
+        await originalLines.getByText('RICE-KG', { exact: true }).waitFor()
+        await originalLines.getByRole('cell', { name: '0.25 KG', exact: true }).waitFor()
+        await originalLines.getByRole('cell', { name: 'INR 24.00', exact: true }).waitFor()
+        await receipt.getByText('Sample Customer', { exact: true }).waitFor()
+        await receipt.getByText('Main Shop', { exact: true }).waitFor()
         await receipt.getByText(/Change INR 6\.00/).waitFor()
         assert.equal(await receipt.getByRole('link', { name: 'Print receipt' }).getAttribute('href'),
           '/api/businesses/1/cash-sales/business-receipts/42/pdf?locationId=1')

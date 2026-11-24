@@ -78,9 +78,13 @@ public static class RetailCashSales
         var first = lines.First();
         return new { sale.Id, sale.BusinessId, sale.LocationId, sale.CashierId, sale.RequestKey,
             sale.Tendered, sale.Total, sale.CurrencyCode, sale.CustomerId, sale.CustomerName,
-            sale.BusinessName, sale.TimeZoneId, printAvailable = OperatingSystem.IsWindows(),
+            sale.BusinessName, sale.LocationName, sale.TimeZoneId, printAvailable = OperatingSystem.IsWindows(),
             PostedAtUtc = DateTime.SpecifyKind(sale.PostedAtUtc, DateTimeKind.Utc),
-            first.ProductId, first.ProductName, first.UnitPrice, first.Quantity, Lines = lines };
+            first.ProductId, first.ProductName, first.UnitPrice, first.Quantity,
+            Lines = lines.Select(line => new { line.Id, line.SaleId, line.ProductId,
+                line.ProductName, line.ProductSku, line.UnitCode, line.Quantity, line.UnitPrice,
+                LineTotal = line.LineTotal ?? decimal.Round(line.Quantity * line.UnitPrice, 2,
+                    MidpointRounding.AwayFromZero) }) };
     }
 
     private static Task<IResult> ReceiptPdf(long businessId, long locationId, long receiptId,

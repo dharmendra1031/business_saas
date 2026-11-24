@@ -111,6 +111,7 @@ UI:
 - Confirm reason and authorized role. Use compensating inventory and financial movements.
 - Exchange is a linked return + new sale with transparent net difference; do not silently edit the original invoice.
 - Refund to original provider requires actual integration capability; otherwise record verified external settlement separately.
+- Implementation prerequisite (24 Nov 2026): the shared read-only cash receipt detail exposes historical SKU, unit, sold quantity, original rate, posted line amount, location and customer name. For older lines without a stored amount, the API derives the original rounded amount using the immutable posted quantity and price, not current masters. These are original sale values, **not** approved return eligibility or a refund balance. No return posting, stock restoration, cash refund or exchange action is enabled until the compensating document, authorization, approval and reconciliation policy is implemented. Owner-wide receipt access remains Owner-only; cashier history remains actor/location scoped.
 
 ## 8. Cash register and basic reports
 

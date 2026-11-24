@@ -504,6 +504,18 @@ public sealed class SqlServerTests
         var sale = await saleResponse.Content.ReadFromJsonAsync<JsonElement>();
         Assert.Equal(30m, sale.GetProperty("total").GetDecimal());
         Assert.Equal("SQL Retail Flow", sale.GetProperty("businessName").GetString());
+        var originalLine = sale.GetProperty("lines")[0];
+        Assert.Equal(0.375m, originalLine.GetProperty("quantity").GetDecimal());
+        Assert.Equal(30m, originalLine.GetProperty("lineTotal").GetDecimal());
+        Assert.Equal("SQL-BLUE-SHIRT", originalLine.GetProperty("productSku").GetString());
+        Assert.Equal("SQPCS", originalLine.GetProperty("unitCode").GetString());
+        var originalReceiptPath = prefix + "/cash-sales/business-receipts/" +
+            sale.GetProperty("id").GetInt64() + "?locationId=" + locationId;
+        var originalReceipt = await owner.GetFromJsonAsync<JsonElement>(originalReceiptPath);
+        Assert.Equal(30m, originalReceipt.GetProperty("lines")[0].GetProperty("lineTotal").GetDecimal());
+        Assert.False(string.IsNullOrWhiteSpace(originalReceipt.GetProperty("locationName").GetString()));
+        Assert.Equal(HttpStatusCode.NotFound, (await cashier.GetAsync(originalReceiptPath)).StatusCode);
+        Assert.Equal(HttpStatusCode.NotFound, (await stranger.GetAsync(originalReceiptPath)).StatusCode);
         Assert.False(string.IsNullOrWhiteSpace(sale.GetProperty("timeZoneId").GetString()));
         var saleRetry = await Post(cashier, prefix + "/cash-sales", saleRequest);
         Assert.Equal(HttpStatusCode.OK, saleRetry.StatusCode);
