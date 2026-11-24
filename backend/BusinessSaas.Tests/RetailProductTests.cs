@@ -189,6 +189,14 @@ public sealed class RetailProductTests
                 category: leafId, brand: brandId))).StatusCode);
         var stillReadable = await owner.GetFromJsonAsync<JsonElement>(path + "/" + brandedId);
         Assert.Equal(brandId, stillReadable.GetProperty("brandId").GetInt64());
+        // A retired brand stays attached to historical products during a price edit.
+        Assert.Equal(HttpStatusCode.OK,
+            (await Put(owner, path + "/" + brandedId, Product(sku: "SHIRT-001",
+                barcode: null, category: leafId, brand: brandId,
+                price: 19.25m, isActive: true))).StatusCode);
+        var brandedAfterEdit = await owner.GetFromJsonAsync<JsonElement>(path + "/" + brandedId);
+        Assert.Equal(brandId, brandedAfterEdit.GetProperty("brandId").GetInt64());
+        Assert.Equal(19.25m, brandedAfterEdit.GetProperty("salePrice").GetDecimal());
 
         var quick = await Post(owner, path, new
         {
@@ -225,6 +233,18 @@ public sealed class RetailProductTests
         Assert.Equal(HttpStatusCode.Conflict,
             (await Put(owner, $"/api/businesses/{businessId}/units/{unitId}",
                 new { code = "BOX", name = "Box", isActive = true })).StatusCode);
+        Assert.Equal(HttpStatusCode.OK,
+            (await Put(owner, $"/api/businesses/{businessId}/units/{unitId}",
+                new { code = "PCS", name = "Individual Pieces", isActive = true })).StatusCode);
+
+        // Keeping an already assigned inactive unit must not block normal product edits.
+        Assert.Equal(HttpStatusCode.OK,
+            (await Put(owner, $"/api/businesses/{businessId}/units/{unitId}",
+                new { code = "PCS", name = "Individual Pieces", isActive = false })).StatusCode);
+        Assert.Equal(HttpStatusCode.OK,
+            (await Put(owner, path + "/" + productId, Product(isActive: true))).StatusCode);
+        Assert.Equal(HttpStatusCode.BadRequest,
+            (await Post(owner, path, Product(sku: "PEN-INACTIVE-UNIT", barcode: null))).StatusCode);
         Assert.Equal(HttpStatusCode.OK,
             (await Put(owner, $"/api/businesses/{businessId}/units/{unitId}",
                 new { code = "PCS", name = "Individual Pieces", isActive = true })).StatusCode);
@@ -302,6 +322,15 @@ public sealed class RetailProductTests
                 new { name = "Stationery", isActive = false })).StatusCode);
         Assert.Equal(HttpStatusCode.BadRequest,
             (await Post(owner, path, Product(sku: "PEN-300", barcode: null))).StatusCode);
+        var activeProductWithRetiredCategory = (await second.Content.ReadFromJsonAsync<JsonElement>())
+            .GetProperty("id").GetInt64();
+        Assert.Equal(HttpStatusCode.OK,
+            (await Put(owner, path + "/" + activeProductWithRetiredCategory,
+                Product(sku: "PEN-202", barcode: null,
+                    price: 17.50m, isActive: true))).StatusCode);
+        Assert.Equal(17.50m, (await owner.GetFromJsonAsync<JsonElement>(
+                path + "/" + activeProductWithRetiredCategory))
+            .GetProperty("salePrice").GetDecimal());
 
         using (var scope = factory.Services.CreateScope())
         {
