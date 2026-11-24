@@ -113,7 +113,7 @@ Chrome 144 or later supports SilentPrintingEnabled. Set the connected thermal pr
 ```powershell
 reg add "HKLM\SOFTWARE\Policies\Google\Chrome" /v SilentPrintingEnabled /t REG_DWORD /d 1 /f
 reg add "HKLM\SOFTWARE\Policies\Google\Chrome" /v PrintPreviewUseSystemDefaultPrinter /t REG_DWORD /d 1 /f
-````
+```
 
 Restart Chrome and inspect chrome://policy for both enabled policies and successful policy status. The policy applies to the browser, not just this SaaS origin; use a dedicated trusted POS workstation and do not overwrite existing organization-managed policy without approval. To undo a locally added policy, restore the prior values (or delete only the values added by this setup if no prior values existed).
 
@@ -126,3 +126,14 @@ Official references:
 - https://chromeenterprise.google/policies/print-preview-use-system-default-printer/
 - https://support.google.com/chrome/a/answer/2657289?hl=en
 - https://learn.microsoft.com/en-us/deployedge/microsoft-edge-browser-policies/silentprintingenabled
+
+### Workstation pilot (development only)
+
+A single standalone test page, `frontend/web/chrome-rdlc-print-pilot.html`, exercises the browser PDF-frame print trigger without touching checkout, inventory, or the API. Vite's existing development server serves it; it is not a production build entry. No dependency or runtime report engine is added. This is a temporary compatibility test, not an invoice template or alternative print implementation. Remove it once the print transport is selected and the result recorded.
+
+1. Pull development and use the existing frontend development server (`npm run dev` from `frontend/web`).
+2. Download and extract the synthetic `rdlc-receipt-samples` artifact from the latest successful Build workflow. Use `Thermal80-003-items.pdf` first. Verify the default physical printer and the Chrome policies documented above.
+3. In Chrome open `http://127.0.0.1:5173/chrome-rdlc-print-pilot.html` (adjust port if needed), select the sample and click **Load PDF & request print once**. This loads the actual PDF and attempts the print only on its frame after the load event. It must not print the pilot page. There is no automatic retry or claim of print success.
+4. Confirm one correct three-item receipt, no dialog, correct width, readable text, no blank tail or clipped totals, and correct cutter feed. Check printer queue and elapsed time. Repeat with A4 and the long receipt, using a suitable default printer and a deliberate page reload between tests. Test disconnected printer and driver copy preferences separately. The iframe trigger is browser-dependent: a load event alone does not prove the viewer is ready; if the attempt fails or prints the wrong content, keep the existing Manual/Preview modes and do not ship the trigger.
+
+Chrome uses default printer settings in silent mode; application-specific copy count or dialog suppression is not assured by JavaScript. Current application modes and schema are unchanged until this test passes on the supported workstation. The pilot must not be used on live customer data.

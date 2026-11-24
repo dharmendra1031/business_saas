@@ -1,0 +1,82 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>RDLC Chrome printing pilot — development only</title>
+  <style>
+    body { font: 16px system-ui, sans-serif; color: #000; background: #fff; margin: 24px; }
+    button, input { font: inherit; margin: 8px 0; }
+    button { padding: 8px 16px; }
+    iframe { display: block; width: 100%; height: 480px; border: 1px solid #000; }
+  </style>
+</head>
+<body>
+  <h1>Chrome RDLC print pilot</h1>
+  <p>Development only. Use a synthetic RDLC PDF from CI, not customer data.
+    Verify the Windows default printer and Chrome policy first. One click may
+    send a physical print job. This page never records a sale.</p>
+  <label for="sample">Select a generated receipt PDF</label>
+  <input id="sample" type="file" accept="application/pdf,.pdf">
+  <button id="test" type="button" disabled>Load PDF &amp; request print once</button>
+  <p id="status" role="status">Choose a PDF.</p>
+  <div id="viewer"></div>
+  <script type="module">
+    const input = document.querySelector('#sample');
+    const button = document.querySelector('#test');
+    const status = document.querySelector('#status');
+    const viewer = document.querySelector('#viewer');
+    let attempted = false;
+    let objectUrl;
+    input.addEventListener('change', () => {
+      if (attempted) return;
+      button.disabled = !input.files?.length;
+      status.textContent = button.disabled ? 'Choose a PDF.' : 'Ready for one test print.';
+    });
+    button.addEventListener('click', async () => {
+      if (attempted) return;
+      const file = input.files?.[0];
+      if (!file) return;
+      // Do not attempt to print HTML, failed HTTP responses or arbitrary URLs.
+      button.disabled = true;
+      input.disabled = true;
+      attempted = true;
+      try {
+        const signature = await file.slice(0, 5).text();
+        if (signature !== '%PDF-' || file.size > 20 * 1024 * 1024) {
+          throw new Error('Choose a valid PDF under 20 MiB.');
+        }
+        if (!navigator.pdfViewerEnabled) throw new Error('Chrome inline PDF viewer is unavailable.');
+        objectUrl = URL.createObjectURL(new Blob([file], { type: 'application/pdf' }));
+        const frame = document.createElement('iframe');
+        frame.title = 'Actual RDLC PDF';
+        const timeout = setTimeout(() => {
+          frame.removeEventListener('load', requestPrint);
+          status.textContent = 'PDF load timed out. No automatic retry. Reload for a deliberate new test.';
+        }, 15000);
+        function requestPrint() {
+          clearTimeout(timeout);
+          try {
+            if (!frame.contentWindow) throw new Error('PDF frame unavailable.');
+            frame.contentWindow.focus();
+            // Experimental: call only the PDF frame, never the parent page.
+            frame.contentWindow.print();
+            status.textContent = 'Print requested. Check the physical receipt and print queue. Browser return is not a print-success acknowledgement.';
+          } catch (error) {
+            status.textContent = 'PDF print trigger failed: ' + error.message + '. Do not retry automatically.';
+          }
+        }
+        frame.addEventListener('load', requestPrint, { once: true });
+        frame.src = objectUrl;
+        status.textContent = 'Loading PDF for one print attempt…';
+        viewer.replaceChildren(frame);
+      } catch (error) {
+        status.textContent = error.message + ' Reload to start a new test.';
+      }
+    });
+    window.addEventListener('pagehide', () => {
+      if (objectUrl) URL.revokeObjectURL(objectUrl);
+    }, { once: true });
+  </script>
+</body>
+</html>
