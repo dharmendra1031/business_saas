@@ -162,11 +162,6 @@ export default function CashCheckout({ userId, dashboard, onExit }: {
   }, [base, customerOpen, customerSearch, locationId, pending, receipt, dashboard.canOperate])
 
   useEffect(() => {
-    if (customerOpen && !showPayment && !pending && !receipt)
-      customerInput.current?.focus()
-  }, [customerOpen, showPayment, pending, receipt])
-
-  useEffect(() => {
     if (!dashboard.canOperate || !cashAvailable || busy || scanBusy || pending ||
       receipt || showPayment || clearArmed || exitArmed) return
     function onKeyDown(event: KeyboardEvent) {
@@ -561,7 +556,7 @@ export default function CashCheckout({ userId, dashboard, onExit }: {
         </div>
         {customerOpen && <div className="px-2 pb-2">
           <label htmlFor="pos-customer-search" className="visually-hidden">Search customer by name or phone</label>
-          <input ref={customerInput} id="pos-customer-search" className="form-control form-control-sm" maxLength={100}
+          <input ref={customerInput} id="pos-customer-search" autoFocus className="form-control form-control-sm" maxLength={100}
             placeholder="Customer name or phone" value={customerSearch} disabled={busy || scanBusy}
             onChange={event => { setCustomerSearch(event.target.value); setCustomerResults([]) }} />
           {customerStatus && <p className="small mb-1" role="status">{customerStatus}</p>}
