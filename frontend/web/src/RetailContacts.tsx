@@ -37,7 +37,6 @@ export default function RetailContacts({ businessId, canOperate, type }: {
   const [editingId, setEditingId] = useState<number | null>(null)
   const [loading, setLoading] = useState(true)
   const [saving, setSaving] = useState(false)
-  const [error, setError] = useState('')
   const [loadError, setLoadError] = useState('')
   const nameInput = useRef<HTMLInputElement>(null)
   const basePath = `/businesses/${businessId}/${type}`
@@ -73,7 +72,6 @@ export default function RetailContacts({ businessId, canOperate, type }: {
   function edit(item: Contact) {
     setEditingId(item.id)
     setForm({ name: item.name, phone: item.phone, email: item.email, isActive: item.isActive })
-    setError('')
     nameInput.current?.focus()
   }
 
@@ -82,7 +80,6 @@ export default function RetailContacts({ businessId, canOperate, type }: {
     if (!canOperate || saving) return
 
     setSaving(true)
-    setError('')
     const body = {
       name: form.name.trim(),
       phone: form.phone.trim(),
@@ -102,9 +99,8 @@ export default function RetailContacts({ businessId, canOperate, type }: {
       setPage(1)
       setReload(value => value + 1)
       nameInput.current?.focus()
-    } catch (cause) {
-      if (!(cause instanceof SessionExpiredError))
-        setError(cause instanceof Error ? cause.message : 'Unable to save changes.')
+    } catch {
+      // Shared failure/unknown popup owns write feedback; keep form values.
     } finally {
       setSaving(false)
     }
@@ -123,7 +119,6 @@ export default function RetailContacts({ businessId, canOperate, type }: {
         {loadError} <button type="button" className="btn btn-sm btn-outline-secondary ms-2"
           onClick={() => setReload(value => value + 1)}>Retry</button>
       </div>}
-      {error && <div className="alert alert-danger" role="alert">{error}</div>}
 
       {canOperate && <form className="masters-form" aria-busy={saving} onSubmit={event => void save(event)}>
         <div>
