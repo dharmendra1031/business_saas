@@ -84,7 +84,7 @@ export default function BusinessBillingSettings({ businessId, canOperate, onSave
           onClick={() => setReload(value => value + 1)}>
           Reload settings (reset selection)
         </button>
-      </div>
+      </div>}
       <div className="form-check form-switch mb-3">
         <input id="billing-cash-toggle" className="form-check-input" type="checkbox"
           checked={cashEnabled} disabled={!canOperate || busy}
