@@ -6,7 +6,8 @@ type Phase = 'saving' | 'success' | 'error'
 interface Feedback { id: number; phase: Phase; message: string }
 
 interface FeedbackActions {
-  run<T>(savingMessage: string, successMessage: string, action: () => Promise<T>): Promise<T>
+  run<T>(savingMessage: string, successMessage: string | ((result: T) => string),
+    action: () => Promise<T>): Promise<T>
 }
 
 const Context = createContext<FeedbackActions | null>(null)
@@ -17,14 +18,17 @@ export function ActionFeedbackProvider({ children }: { children: ReactNode }) {
   const [feedback, setFeedback] = useState<Feedback | null>(null)
   const sequence = useRef(0)
 
-  const run = useCallback(async <T,>(savingMessage: string, successMessage: string,
+  const run = useCallback(async <T,>(savingMessage: string,
+    successMessage: string | ((result: T) => string),
     action: () => Promise<T>): Promise<T> => {
     const id = ++sequence.current
     setFeedback({ id, phase: 'saving', message: savingMessage })
     try {
       const result = await action()
       setFeedback(current => current?.id === id
-        ? { id, phase: 'success', message: successMessage } : current)
+        ? { id, phase: 'success',
+          message: typeof successMessage === 'function' ? successMessage(result) : successMessage }
+        : current)
       return result
     } catch (cause) {
       setFeedback(current => current?.id === id
