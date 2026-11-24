@@ -98,6 +98,15 @@ public sealed class Business
     public bool CashSalesEnabled { get; set; } = true;
     public bool CreditSalesEnabled { get; set; }
     public int BillingSettingsRevision { get; set; }
+    // Retail receipt layout: presentation only. Monetary/legal fields cannot be suppressed.
+    public string ReceiptPaperSize { get; set; } = "Thermal80";
+    public bool ReceiptShowTime { get; set; } = true;
+    public bool ReceiptShowUnitPrice { get; set; } = true;
+    public bool ReceiptShowCashReceived { get; set; } = true;
+    public bool ReceiptShowChange { get; set; } = true;
+    public bool ReceiptShowFooter { get; set; } = true;
+    public string ReceiptFooterText { get; set; } = "Thank you for shopping!";
+    public int ReceiptSettingsRevision { get; set; }
     public DateTime CreatedAtUtc { get; set; } = DateTime.UtcNow;
 }
 
@@ -494,6 +503,8 @@ public sealed class AppDbContext(DbContextOptions<AppDbContext> options)
             entity.Property(x => x.CountryCode).HasMaxLength(2).IsRequired();
             entity.Property(x => x.CurrencyCode).HasMaxLength(3).IsRequired();
             entity.Property(x => x.TimeZoneId).HasMaxLength(80).IsRequired();
+            entity.Property(x => x.ReceiptPaperSize).HasMaxLength(12).IsRequired();
+            entity.Property(x => x.ReceiptFooterText).HasMaxLength(120).IsRequired();
             entity.HasIndex(x => new { x.CreatedByUserId, x.CreationKey }).IsUnique();
             entity.HasOne<BusinessType>().WithMany()
                 .HasForeignKey(x => x.BusinessTypeId).OnDelete(DeleteBehavior.Restrict);
