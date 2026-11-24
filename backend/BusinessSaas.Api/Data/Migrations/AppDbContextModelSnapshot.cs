@@ -256,6 +256,24 @@ namespace BusinessSaas.Api.Data.Migrations
                     b.Property<int>("BillingSettingsRevision")
                         .HasColumnType("int");
 
+                    b.Property<string>("ReceiptPaperSize")
+                        .IsRequired()
+                        .HasMaxLength(12)
+                        .HasColumnType("nvarchar(12)");
+
+                    b.Property<bool>("ReceiptShowTime").HasColumnType("bit");
+                    b.Property<bool>("ReceiptShowUnitPrice").HasColumnType("bit");
+                    b.Property<bool>("ReceiptShowCashReceived").HasColumnType("bit");
+                    b.Property<bool>("ReceiptShowChange").HasColumnType("bit");
+                    b.Property<bool>("ReceiptShowFooter").HasColumnType("bit");
+
+                    b.Property<string>("ReceiptFooterText")
+                        .IsRequired()
+                        .HasMaxLength(120)
+                        .HasColumnType("nvarchar(120)");
+
+                    b.Property<int>("ReceiptSettingsRevision").HasColumnType("int");
+
                     b.HasKey("Id");
 
                     b.HasIndex("BusinessTypeId");
