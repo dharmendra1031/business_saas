@@ -7,6 +7,7 @@ import type { RetailDashboard } from './api'
 import BusinessPostedSales from './BusinessPostedSales'
 import BusinessDailySales from './BusinessDailySales'
 import BusinessBillingSettings from './BusinessBillingSettings'
+import BusinessReceiptSettings from './BusinessReceiptSettings'
 
 export type BusinessPreviewModule = 'sales' | 'register' | 'reports' | 'settings'
 
@@ -40,7 +41,7 @@ const modules = {
     title: 'Business Settings',
     tabs: [
       { name: 'General', Icon: Store, title: 'Business Identity', description: 'Registered business and market information.' },
-      { name: 'Receipts', Icon: FileText, title: 'Receipt Preferences', description: 'Store information and receipt printing preferences.' },
+      { name: 'Invoice & Print', Icon: FileText, title: 'Invoice & Print', description: '80mm/A4 templates and visible receipt fields.' },
       { name: 'Billing & Payments', Icon: CreditCard, title: 'Billing & Payments', description: 'Choose which released payment methods are available for your store.' },
       { name: 'Language', Icon: Globe2, title: 'Language & Locale', description: 'Approved locale and language settings.' }
     ]
@@ -57,13 +58,14 @@ export default function BusinessPreview({ module, dashboard, onBillingUpdated }:
   const selected = item.tabs[tab]
   const generalSettings = module === 'settings' && tab === 0
   const billingSettings = module === 'settings' && tab === 2 && dashboard.roleCode === 'Owner'
+  const receiptSettings = module === 'settings' && tab === 1 && dashboard.roleCode === 'Owner'
   const postedSales = module === 'sales' && tab === 0 && dashboard.roleCode === 'Owner'
   const dailySales = module === 'reports' && tab === 0 && dashboard.roleCode === 'Owner'
 
   return <div className="business-preview">
     <div className="business-preview-heading">
       <h2>{item.title}</h2>
-      {!postedSales && !dailySales && !billingSettings && <span>Under construction</span>}
+      {!postedSales && !dailySales && !billingSettings && !receiptSettings && <span>Under construction</span>}
     </div>
 
     <div className="business-preview-tabs" role="tablist" aria-label={`${item.title} sections`}>
@@ -81,7 +83,9 @@ export default function BusinessPreview({ module, dashboard, onBillingUpdated }:
       <h3>{selected.title}</h3>
       <p className="business-preview-description">{dailySales ? 'Totals from posted cash receipts.' : selected.description}</p>
       {postedSales ? <BusinessPostedSales dashboard={dashboard} /> :
-        dailySales ? <BusinessDailySales dashboard={dashboard} /> : billingSettings ? <BusinessBillingSettings
+        dailySales ? <BusinessDailySales dashboard={dashboard} /> : receiptSettings ?
+          <BusinessReceiptSettings businessId={dashboard.business.id} canOperate={dashboard.canOperate} /> :
+          billingSettings ? <BusinessBillingSettings
         businessId={dashboard.business.id} canOperate={dashboard.canOperate}
         onSaved={() => onBillingUpdated?.()} /> : generalSettings ? <dl className="business-preview-identity">
         <div><dt>Business name</dt><dd>{dashboard.business.name}</dd></div>
