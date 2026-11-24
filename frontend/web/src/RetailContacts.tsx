@@ -123,25 +123,25 @@ export default function RetailContacts({ businessId, canOperate, type }: {
       {canOperate && <form className="masters-form" aria-busy={saving} onSubmit={event => void save(event)}>
         <div>
           <label className="form-label" htmlFor="contact-name">{label} name *</label>
-          <input ref={nameInput} id="contact-name" className="form-control" required
+          <input ref={nameInput} id="contact-name" className="form-control" required disabled={saving}
             maxLength={120} minLength={2} value={form.name}
             onChange={event => setForm(current => ({ ...current, name: event.target.value }))} />
         </div>
         <div>
           <label className="form-label" htmlFor="contact-phone">Phone {supplier ? '(or email) *' : '(optional)'}</label>
-          <input id="contact-phone" className="form-control" type="tel" maxLength={25}
+          <input id="contact-phone" className="form-control" type="tel" maxLength={25} disabled={saving}
             pattern="[0-9+() -]*" value={form.phone}
             onChange={event => setForm(current => ({ ...current, phone: event.target.value }))} />
         </div>
         <div>
           <label className="form-label" htmlFor="contact-email">Email {supplier ? '(or phone) *' : '(optional)'}</label>
-          <input id="contact-email" className="form-control" type="email" maxLength={160}
+          <input id="contact-email" className="form-control" type="email" maxLength={160} disabled={saving}
             value={form.email} onChange={event =>
               setForm(current => ({ ...current, email: event.target.value }))} />
         </div>
         {editingId !== null && <div>
           <label className="form-label" htmlFor="contact-status">Status</label>
-          <select id="contact-status" className="form-select" value={form.isActive ? 'active' : 'inactive'}
+          <select id="contact-status" className="form-select" value={form.isActive ? 'active' : 'inactive'} disabled={saving}
             onChange={event => setForm(current => ({ ...current, isActive: event.target.value === 'active' }))}>
             <option value="active">Active</option>
             <option value="inactive">Inactive</option>
@@ -185,7 +185,7 @@ export default function RetailContacts({ businessId, canOperate, type }: {
                   <td>{item.isActive ? 'Active' : 'Inactive'}</td>
                   {canOperate && <td className="text-end">
                     <button type="button" className="btn btn-sm btn-outline-secondary"
-                      onClick={() => edit(item)} aria-label={`Edit ${item.name}`}>Edit</button>
+                      disabled={saving} onClick={() => edit(item)} aria-label={`Edit ${item.name}`}>Edit</button>
                   </td>}
                 </tr>)}</tbody>
               </table>
