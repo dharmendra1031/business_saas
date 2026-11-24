@@ -1817,6 +1817,26 @@ try {
         await receipt.getByText(/Change INR 6\.00/).waitFor()
         assert.equal(await receipt.getByRole('link', { name: 'Print receipt' }).getAttribute('href'),
           '/api/businesses/1/cash-sales/business-receipts/42/pdf?locationId=1')
+        await t.page.route('**/api/businesses/1/cash-sales/business-receipts/42/return-estimate', route => {
+          assert.equal(route.request().method(), 'POST')
+          const request = route.request().postDataJSON()
+          assert.equal(request.locationId, 1)
+          assert.equal(request.lines[0].lineId, 1)
+          const qty = request.lines[0].quantity
+          return response(route, 200, { receiptId: 42, currencyCode: 'INR', total: qty * 96,
+            lines: [{ lineId: 1, quantity: qty, amount: qty * 96 }], canPost: false })
+        })
+        await receipt.getByRole('button', { name: 'Estimate return' }).click()
+        const estimate = receipt.getByRole('region', { name: 'Return estimate' })
+        await estimate.getByRole('button', { name: 'Select full quantity' }).click()
+        await estimate.getByRole('button', { name: 'Calculate estimate' }).click()
+        await estimate.getByText('Estimated return amount: INR 24.00', { exact: true }).waitFor()
+        const quantity = estimate.getByRole('spinbutton', { name: 'Return quantity for Loose Rice' })
+        await quantity.fill('0.3')
+        assert.equal(await estimate.getByRole('button', { name: 'Calculate estimate' }).isDisabled(), true)
+        await quantity.fill('0.125')
+        await estimate.getByRole('button', { name: 'Calculate estimate' }).click()
+        await estimate.getByText('Estimated return amount: INR 12.00', { exact: true }).waitFor()
         await receipt.getByRole('button', { name: 'Back to receipts' }).click()
         assert.equal(await t.page.getByLabel('Receipt number').inputValue(), '42')
         assert.equal(await t.page.getByLabel('Posted date').inputValue(), '2026-11-23')

@@ -60,7 +60,10 @@ export default function BusinessPostedSales({ dashboard }: { dashboard: RetailDa
 
   if (receipt) return <CashReceipt receipt={receipt} businessName={business.name}
     pdfPath={`/api/businesses/${business.id}/cash-sales/business-receipts/${receipt.id}/pdf?locationId=${locationId}`}
-    timeZone={business.timeZoneId} backLabel="Back to receipts" onBack={closeReceipt} />
+    timeZone={business.timeZoneId} backLabel="Back to receipts" onBack={closeReceipt}
+    returnEstimate={dashboard.roleCode === 'Owner' && dashboard.canOperate ? {
+      path: `/businesses/${business.id}/cash-sales/business-receipts/${receipt.id}/return-estimate`, locationId
+    } : undefined} />
   if (selectedId !== null) return <>
     {receiptError ? <p className="alert alert-danger" role="alert">{receiptError}</p> :
       <p role="status">Loading receipt…</p>}

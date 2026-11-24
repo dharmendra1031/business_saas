@@ -516,6 +516,24 @@ public sealed class SqlServerTests
         Assert.False(string.IsNullOrWhiteSpace(originalReceipt.GetProperty("locationName").GetString()));
         Assert.Equal(HttpStatusCode.NotFound, (await cashier.GetAsync(originalReceiptPath)).StatusCode);
         Assert.Equal(HttpStatusCode.NotFound, (await stranger.GetAsync(originalReceiptPath)).StatusCode);
+        var estimatePath = prefix + "/cash-sales/business-receipts/" +
+            sale.GetProperty("id").GetInt64() + "/return-estimate";
+        var lineId = originalLine.GetProperty("id").GetInt64();
+        object Estimate(decimal quantity) => new { locationId, lines = new[] { new { lineId, quantity } } };
+        using var partialEstimate = await Post(owner, estimatePath, Estimate(0.125m));
+        Assert.Equal(HttpStatusCode.OK, partialEstimate.StatusCode);
+        var partialBody = await partialEstimate.Content.ReadFromJsonAsync<JsonElement>();
+        Assert.Equal(10m, partialBody.GetProperty("total").GetDecimal());
+        Assert.False(partialBody.GetProperty("canPost").GetBoolean());
+        using var fullEstimate = await Post(owner, estimatePath, Estimate(0.375m));
+        Assert.Equal(HttpStatusCode.OK, fullEstimate.StatusCode);
+        Assert.Equal(30m, (await fullEstimate.Content.ReadFromJsonAsync<JsonElement>()).GetProperty("total").GetDecimal());
+        Assert.Equal(HttpStatusCode.BadRequest, (await Post(owner, estimatePath, Estimate(0.376m))).StatusCode);
+        Assert.Equal(HttpStatusCode.BadRequest, (await Post(owner, estimatePath, Estimate(0.0001m))).StatusCode);
+        Assert.Equal(HttpStatusCode.BadRequest, (await Post(owner, estimatePath, new { locationId,
+            lines = new[] { new { lineId, quantity = 0.125m }, new { lineId, quantity = 0.125m } } })).StatusCode);
+        Assert.Equal(HttpStatusCode.NotFound, (await Post(cashier, estimatePath, Estimate(0.125m))).StatusCode);
+        Assert.Equal(HttpStatusCode.NotFound, (await Post(stranger, estimatePath, Estimate(0.125m))).StatusCode);
         Assert.False(string.IsNullOrWhiteSpace(sale.GetProperty("timeZoneId").GetString()));
         var saleRetry = await Post(cashier, prefix + "/cash-sales", saleRequest);
         Assert.Equal(HttpStatusCode.OK, saleRetry.StatusCode);

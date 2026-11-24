@@ -21,6 +21,7 @@ public static class RetailCashSales
         group.MapGet("/receipts", ReceiptHistory);
         group.MapGet("/business-receipts", BusinessReceiptHistory);
         group.MapGet("/business-receipts/{receiptId:long}", BusinessReceiptById);
+        group.MapPost("/business-receipts/{receiptId:long}/return-estimate", EstimateReturn);
         group.MapGet("/business-receipts/{receiptId:long}/pdf", BusinessReceiptPdf);
         group.MapGet("/daily-report", DailyReport);
         group.MapPost("", Post);
@@ -141,6 +142,52 @@ public static class RetailCashSales
         var sale = await db.RetailCashSales.AsNoTracking().Include(x => x.Lines)
             .SingleOrDefaultAsync(x => x.Id == receiptId && x.BusinessId == businessId && x.LocationId == locationId);
         return sale is null ? Results.NotFound() : Results.Ok(Receipt(sale));
+    }
+
+    public sealed record ReturnEstimateLine(long LineId, decimal Quantity);
+    public sealed record ReturnEstimateRequest(long LocationId, List<ReturnEstimateLine>? Lines);
+
+    // Read-only estimate of the original sale; not a refund authorization or posting.
+    private static async Task<IResult> EstimateReturn(long businessId, long receiptId,
+        ReturnEstimateRequest request, ClaimsPrincipal user, AppDbContext db)
+    {
+        if (!long.TryParse(user.FindFirstValue(ClaimTypes.NameIdentifier), out var actor) ||
+            await Shop(db, businessId, actor, request.LocationId, ownerOnly: true) is null)
+            return Results.NotFound();
+
+        var sale = await db.RetailCashSales.AsNoTracking().Include(x => x.Lines)
+            .SingleOrDefaultAsync(x => x.Id == receiptId && x.BusinessId == businessId &&
+                x.LocationId == request.LocationId);
+        if (sale is null) return Results.NotFound();
+        var requested = request.Lines;
+        if (requested is null || requested.Count is < 1 or > 100 ||
+            requested.Any(x => x is null || x.LineId <= 0 || x.Quantity <= 0 ||
+                decimal.Round(x.Quantity, 3) != x.Quantity) ||
+            requested.Select(x => x.LineId).Distinct().Count() != requested.Count)
+            return Results.BadRequest(new { message = "Choose each return line once and enter a positive quantity with up to three decimals." });
+
+        var original = sale.Lines.ToDictionary(x => x.Id);
+        decimal PostedAmount(RetailCashSaleLine line) => line.LineTotal ??
+            decimal.Round(line.Quantity * line.UnitPrice, 2, MidpointRounding.AwayFromZero);
+        if (sale.Lines.Count == 0 || sale.Lines.Any(x => x.Quantity <= 0 || PostedAmount(x) < 0) ||
+            sale.Lines.Sum(PostedAmount) != sale.Total)
+            return Results.Conflict(new { message = "Original receipt amounts require reconciliation." });
+
+        var estimates = new List<object>();
+        decimal total = 0;
+        foreach (var item in requested)
+        {
+            if (!original.TryGetValue(item.LineId, out var line) || item.Quantity > line.Quantity)
+                return Results.BadRequest(new { message = "Return quantity cannot exceed the original sold quantity." });
+            // Allocate the immutable posted amount proportionally, rounded to currency cents.
+            // A future posting flow must allocate cumulative amounts against prior returns.
+            var amount = decimal.Round(PostedAmount(line) * (item.Quantity / line.Quantity),
+                2, MidpointRounding.AwayFromZero);
+            if (item.Quantity == line.Quantity) amount = PostedAmount(line);
+            estimates.Add(new { item.LineId, item.Quantity, Amount = amount });
+            total += amount;
+        }
+        return Results.Ok(new { receiptId, sale.CurrencyCode, total, lines = estimates, canPost = false });
     }
 
     private static async Task<IResult> ReceiptHistory(long businessId, long locationId, ClaimsPrincipal user,

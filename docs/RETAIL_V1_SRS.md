@@ -113,6 +113,8 @@ UI:
 - Refund to original provider requires actual integration capability; otherwise record verified external settlement separately.
 - Implementation prerequisite (24 Nov 2026): the shared read-only cash receipt detail exposes historical SKU, unit, sold quantity, original rate, posted line amount, location and customer name. For older lines without a stored amount, the API derives the original rounded amount using the immutable posted quantity and price, not current masters. These are original sale values, **not** approved return eligibility or a refund balance. No return posting, stock restoration, cash refund or exchange action is enabled until the compensating document, authorization, approval and reconciliation policy is implemented. Owner-wide receipt access remains Owner-only; cashier history remains actor/location scoped.
 
+The Development-only Owner receipt detail now offers a read-only full/partial return estimate using original posted line amounts, bounded by original sold quantity, with three-decimal quantity validation and duplicate-line rejection. The API explicitly returns canPost=false. The estimate is not a refundable balance and is not stored; when actual returns are implemented it must use cumulative returned quantity and allocated cents, with final return consuming the exact remaining amount. No refund, cash movement or stock restoration is posted. Owner-only preview is a conservative implementation choice pending refund approval and drawer rules.
+
 ## 8. Cash register and basic reports
 
 - Register session has user, business/location, opened time, opening float, posted cash movements, counted cash, variance and close approval.
