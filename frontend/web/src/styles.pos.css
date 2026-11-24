@@ -170,7 +170,7 @@
 .pos-dialog-security { display: flex; gap: 7px; align-items: center; color: #4a5059;
   font-size: .7rem; line-height: 1.5; margin: 12px 0 0; }
 .pos-dialog-security svg { flex: 0 0 auto; }
-.pos-dialog-footer { display: flex; justify-content: flex-end; gap: 10px; padding: 17px 24px 21px;
+.pos-dialog-footer { display: flex; flex-wrap: wrap; justify-content: flex-end; gap: 10px; padding: 17px 24px 21px;
   border-top: 1px solid #e7ebf3; }
 .pos-dialog-footer .btn { display: inline-flex; justify-content: center; align-items: center; min-height: 43px;
   border-radius: 8px; font-weight: 750; font-size: .83rem; }

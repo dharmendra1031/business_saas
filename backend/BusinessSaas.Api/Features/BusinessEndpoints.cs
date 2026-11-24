@@ -87,6 +87,7 @@ public static class BusinessEndpoints
                                      business.CountryCode,
                                      business.TimeZoneId,
                                      business.CashSalesEnabled,
+                                     business.ReceiptAutoOpen,
                                      TypeCode = type.Code,
                                      TypeName = type.Name
                                  }).SingleAsync();
@@ -181,7 +182,8 @@ public static class BusinessEndpoints
             return Results.Ok(new { hasProducts, hasInitializedStock, pendingApprovals, cashSalesToday, stockAlerts,
                 business = details, roleCode, locations, subscription, accessStatus,
                 canOperate, cashSaleEnabled = environment.IsDevelopment(),
-                cashPaymentEnabled = details.CashSalesEnabled });
+                cashPaymentEnabled = details.CashSalesEnabled,
+                receiptAutoOpen = details.ReceiptAutoOpen && environment.IsDevelopment() && OperatingSystem.IsWindows() });
         });
     }
 

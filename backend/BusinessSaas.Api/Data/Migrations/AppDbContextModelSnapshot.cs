@@ -282,6 +282,7 @@ namespace BusinessSaas.Api.Data.Migrations
                     b.Property<byte[]>("ReceiptLogo").HasMaxLength(32768).HasColumnType("varbinary(max)");
                     b.Property<bool>("ReceiptShowLogo").HasColumnType("bit");
                     b.Property<int>("ReceiptPrintCopies").HasColumnType("int");
+                    b.Property<bool>("ReceiptAutoOpen").HasColumnType("bit");
                     b.Property<bool>("ReceiptShowFooter").HasColumnType("bit");
 
                     b.Property<string>("ReceiptFooterText")

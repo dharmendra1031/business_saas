@@ -62,6 +62,7 @@ export default function CashCheckout({ userId, dashboard, onExit }: {
   const [lookupState, setLookupState] = useState<'checking' | 'missing' | 'unknown'>('checking')
   const [refresh, setRefresh] = useState(0)
   const [receipt, setReceipt] = useState<Receipt | null>(null)
+  const [printNotice, setPrintNotice] = useState('')
   const [locationId, setLocation] = useState(pending?.locationId ?? locations[0]?.id ?? 0)
   const [customer, setCustomer] = useState<SaleCustomer | null>(() => pending?.customerId
     ? { id: pending.customerId, name: `Customer #${pending.customerId}`, phone: '' } : null)
@@ -227,7 +228,7 @@ export default function CashCheckout({ userId, dashboard, onExit }: {
 
   const itemCount = Number(basket.reduce((sum, line) => sum + line.quantity, 0).toFixed(3))
 
-  async function recordSale() {
+  async function recordSale(openPrint = false) {
     const received = Number(cash)
     if (lock.current || !dashboard.canOperate || needsReview || (!pending && !cashAvailable) ||
       (pending && lookupState !== 'missing')) return
@@ -244,11 +245,38 @@ export default function CashCheckout({ userId, dashboard, onExit }: {
     setBusy(true)
     setLookupState('checking')
     setError('')
+    setPrintNotice('')
+    // Open during the cashier's click, before the async POST can lose user activation.
+    let printTab: Window | null = null
+    if (openPrint) {
+      try {
+        printTab = window.open('about:blank', '_blank')
+        if (printTab) {
+          printTab.opener = null
+          printTab.document.title = 'Preparing receipt'
+          printTab.document.body.textContent = 'Saving sale and preparing receipt…'
+        }
+      } catch { printTab?.close(); printTab = null }
+    }
     try {
       try { sessionStorage.setItem(key, JSON.stringify(request)) } catch { /* Keep the request key in memory. */ }
       setPending(request)
-      setReceipt(await post<Receipt>(base, request))
+      const posted = await post<Receipt>(base, request)
+      setReceipt(posted)
+      if (openPrint) {
+        // Printing is a read-only action; it must never trigger another sale POST.
+        if (!posted.printAvailable) {
+          printTab?.close()
+          setPrintNotice('Sale saved. RDLC printing is unavailable on this host.')
+        } else if (!printTab || printTab.closed) {
+          setPrintNotice('Sale saved. Use Print receipt to open the PDF.')
+        } else {
+          try { printTab.location.replace(`/api${base}/receipts/${posted.id}/pdf?locationId=${request.locationId}`) }
+          catch { printTab.close(); setPrintNotice('Sale saved. Use Print receipt to open the PDF.') }
+        }
+      }
     } catch (cause) {
+      printTab?.close()
       setError(cause instanceof Error ? cause.message : 'Unable to confirm sale.')
       // Verified basket errors can be corrected after recovery; ambiguous outcomes
       // and access failures keep the original key available for receipt lookup.
@@ -283,6 +311,7 @@ export default function CashCheckout({ userId, dashboard, onExit }: {
     setBusy(true)
     setError('')
     const path = receiptId ? '/receipts/' + receiptId : '/latest'
+    setPrintNotice('')
     try { setReceipt(await api<Receipt>(base + path + '?locationId=' + locationId)) }
     catch (cause) {
       setError(cause instanceof ApiResponseError && cause.status === 404
@@ -291,7 +320,7 @@ export default function CashCheckout({ userId, dashboard, onExit }: {
   }
 
   if (receipt) return <CashReceipt receipt={receipt} businessName={business.name} timeZone={business.timeZoneId}
-    pdfPath={`/api${base}/receipts/${receipt.id}/pdf?locationId=${locationId}`}
+    pdfPath={`/api${base}/receipts/${receipt.id}/pdf?locationId=${locationId}`} printNotice={printNotice}
     backLabel={pending ? 'New sale' : 'Back to checkout'} onBack={() => {
       if (pending) {
         try { sessionStorage.removeItem(key) } catch { /* Storage may be unavailable. */ }
@@ -301,6 +330,7 @@ export default function CashCheckout({ userId, dashboard, onExit }: {
         setCash('')
       }
       setReceipt(null)
+      setPrintNotice('')
       setSearch('')
       setShowPayment(false)
     }} />
@@ -531,6 +561,7 @@ export default function CashCheckout({ userId, dashboard, onExit }: {
     {showPayment && !pending && !receipt && <PosCashPaymentDialog amount={total}
       cash={cash} currency={business.currencyCode} lineCount={basket.length} busy={busy} error={error}
       onCashChange={value => { setCash(value); setError('') }} onCancel={() => setShowPayment(false)}
-      onConfirm={() => void recordSale()} />}
+      autoOpen={dashboard.receiptAutoOpen === true}
+      onConfirm={openPrint => void recordSale(openPrint)} />}
   </section>
 }

@@ -818,7 +818,7 @@ try {
     })
     let putCount = 0
     let current = {
-      paperSize: 'Thermal80', showTime: true, showUnitPrice: true,
+      paperSize: 'Thermal80', autoOpen: false, showTime: true, showUnitPrice: true,
       showCashReceived: true, showChange: true, showFooter: true,
       footerText: 'Thank you for shopping!', revision: 0,
       mandatoryFields: ['Business name', 'Receipt number', 'Date',
@@ -842,6 +842,7 @@ try {
     await t.page.getByText(/RDLC render\/print adapter is not connected yet/).waitFor()
     assert.ok((await t.page.getByText(/Always shown:/).innerText()).includes('Total payable'))
     await t.page.locator('#receipt-paper-size').selectOption('A4')
+    await t.page.locator('#receipt-auto-open').selectOption('auto')
     await t.page.locator('#receipt-showTime').uncheck()
     await t.page.locator('#receipt-showUnitPrice').uncheck()
     await t.page.locator('#receipt-footer-text').fill('Please visit again')
@@ -850,11 +851,13 @@ try {
     await t.page.locator('.action-feedback--success').waitFor()
     assert.equal(putCount, 1)
     assert.equal(current.paperSize, 'A4')
+    assert.equal(current.autoOpen, true)
     assert.equal(current.showUnitPrice, false)
     assert.equal(current.revision, 1)
     await t.page.getByRole('tab', { name: 'General' }).click()
     await t.page.getByRole('tab', { name: 'Invoice & Print' }).click()
     assert.equal(await t.page.locator('#receipt-paper-size').inputValue(), 'A4')
+    assert.equal(await t.page.locator('#receipt-auto-open').inputValue(), 'auto')
     assert.equal(await t.page.locator('#receipt-showTime').isChecked(), false)
     assert.equal(await t.page.locator('#receipt-showUnitPrice').isChecked(), false)
     assert.equal(await t.page.locator('#receipt-footer-text').inputValue(), 'Please visit again')
@@ -1034,6 +1037,9 @@ try {
     const t = await scenario('pos-fractional-' + mode, {
       role: 'Cashier', hasProducts: true
     })
+    if (mode === 'checkout') await t.page.route('**/api/businesses/1/dashboard', route => response(route, 200, {
+      ...dashboard('Cashier', true), receiptAutoOpen: true
+    }))
     let posted = null
     let posts = 0
     let originalRequest
@@ -1135,7 +1141,15 @@ try {
     await t.page.getByRole('button', { name: /Pay \/ Checkout/ }).click()
     await t.page.getByRole('dialog', { name: 'Complete Payment' }).waitFor()
     await t.page.getByLabel('Cash received').fill('10')
-    await t.page.getByRole('button', { name: 'Confirm Cash Payment' }).click()
+    if (mode === 'checkout') {
+      await t.context.route('**/api/businesses/1/cash-sales/receipts/501/pdf?*', route =>
+        route.fulfill({ status: 200, contentType: 'text/plain', body: 'Synthetic RDLC PDF endpoint' }))
+      const popupPromise = t.page.waitForEvent('popup')
+      await t.page.getByRole('button', { name: 'Save & Print' }).click()
+      const popup = await popupPromise
+      await popup.waitForURL('**/cash-sales/receipts/501/pdf?locationId=1')
+      await popup.close()
+    } else await t.page.getByRole('button', { name: 'Save Only' }).click()
     if (mode === 'out-of-stock') {
       await t.page.getByRole('alert').getByText(/Insufficient stock for Loose Rice/).waitFor()
       await t.page.getByText('Review required. Remove this item and select it again.').waitFor()
@@ -1165,7 +1179,7 @@ try {
       await t.page.getByRole('button', { name: /Pay \/ Checkout/ }).click()
       assert.equal(await t.page.getByLabel('Cash received').inputValue(), '')
       await t.page.getByLabel('Cash received').fill('30')
-      await t.page.getByRole('button', { name: 'Confirm Cash Payment' }).click()
+      await t.page.getByRole('button', { name: 'Save Only' }).click()
       await t.page.getByRole('heading', { name: 'Cash receipt #501' }).waitFor()
       const receiptView = t.page.getByRole('region', { name: 'Cash receipt' })
       await receiptView.getByText(/Total INR 24\.00/).waitFor()
@@ -1189,7 +1203,7 @@ try {
       assert.equal(await kgQuantity.inputValue(), '0.25')
       await t.page.getByRole('button', { name: /Pay \/ Checkout/ }).click()
       await t.page.getByLabel('Cash received').fill('30')
-      await t.page.getByRole('button', { name: 'Confirm Cash Payment' }).click()
+      await t.page.getByRole('button', { name: 'Save Only' }).click()
       await t.page.getByRole('heading', { name: 'Cash receipt #501' }).waitFor()
       assert.equal(posts, 3)
       assert.notEqual(posted.requestKey, originalRequest.requestKey)
@@ -1296,7 +1310,7 @@ try {
     assert.match(await t.page.locator('.pos-total-row').innerText(), /₹2\.01/)
     await t.page.getByRole('button', { name: /Pay \/ Checkout/ }).click()
     await t.page.getByLabel('Cash received').fill('2.01')
-    await t.page.getByRole('button', { name: 'Confirm Cash Payment' }).click()
+    await t.page.getByRole('button', { name: 'Save Only' }).click()
     await t.page.getByRole('heading', { name: 'Cash receipt #601' }).waitFor()
     assert.equal(salePosts, 1)
     await t.check()

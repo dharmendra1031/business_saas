@@ -26,6 +26,7 @@ interface ReceiptSettings {
   logo: string
   showLogo: boolean
   printCopies: number
+  autoOpen: boolean
   footerText: string
   revision: number
   mandatoryFields: string[]
@@ -51,8 +52,8 @@ const options = [
   { group: 'Receipt details', key: 'showFooter', label: 'Footer message', help: 'Show your approved receipt footer.' }
 ] as const
 
-export default function BusinessReceiptSettings({ businessId, canOperate }: {
-  businessId: number; canOperate: boolean
+export default function BusinessReceiptSettings({ businessId, canOperate, onSaved }: {
+  businessId: number; canOperate: boolean; onSaved?: () => void
 }) {
   const { run } = useActionFeedback()
   const [saved, setSaved] = useState<ReceiptSettings | null>(null)
@@ -91,7 +92,7 @@ export default function BusinessReceiptSettings({ businessId, canOperate }: {
 
   const changed = !!saved && !!draft && (
     saved.paperSize !== draft.paperSize || saved.footerText !== draft.footerText ||
-    saved.logo !== draft.logo || saved.printCopies !== draft.printCopies ||
+    saved.logo !== draft.logo || saved.printCopies !== draft.printCopies || saved.autoOpen !== draft.autoOpen ||
     saved.legalName !== draft.legalName ||
     saved.address !== draft.address ||
     saved.phone !== draft.phone ||
@@ -134,6 +135,7 @@ export default function BusinessReceiptSettings({ businessId, canOperate }: {
             logo: draft.logo === saved.logo ? undefined : draft.logo,
             showLogo: draft.showLogo,
             printCopies: draft.printCopies,
+            autoOpen: draft.autoOpen,
             footerText: draft.footerText,
             expectedRevision: saved.revision,
             reason: reason.trim()
@@ -142,6 +144,7 @@ export default function BusinessReceiptSettings({ businessId, canOperate }: {
       setSaved(result.settings)
       setDraft(result.settings)
       setReason('')
+      onSaved?.()
     } catch (cause) {
       if (cause instanceof UncertainWriteError ||
           (cause instanceof ApiResponseError && cause.status === 409))
@@ -212,6 +215,13 @@ export default function BusinessReceiptSettings({ businessId, canOperate }: {
           <option value="Thermal80">80mm compact receipt</option>
           <option value="A4">A4 retail receipt</option>
         </select>
+        <label htmlFor="receipt-auto-open" className="form-label">After payment</label>
+        <select id="receipt-auto-open" className="form-select mb-2" value={draft.autoOpen ? "auto" : "manual"}
+          onChange={event => change("autoOpen", event.target.value === "auto")}>
+          <option value="manual">Save only — print manually</option>
+          <option value="auto">Save &amp; Print — open RDLC PDF automatically</option>
+        </select>
+        <p className="small text-body-secondary">Automatic mode opens the receipt PDF after a successful sale. The browser print dialog still requires confirmation.</p>
         <label htmlFor="receipt-copies" className="form-label">Print copies</label>
         <select id="receipt-copies" className="form-select mb-2" value={draft.printCopies}
           onChange={event => change('printCopies', Number(event.target.value))}>

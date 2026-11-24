@@ -135,6 +135,7 @@ public static class RetailBillingSettingsEndpoints
                 request.Logo.Length == 0 ? null : request.Logo;
             var showLogo = request.ShowLogo ?? business.ReceiptShowLogo;
             var printCopies = request.PrintCopies ?? business.ReceiptPrintCopies;
+            var autoOpen = request.AutoOpen ?? business.ReceiptAutoOpen;
             var logoChanged = !(business.ReceiptLogo ?? []).AsSpan().SequenceEqual(logo ?? []);
             var footer = request.FooterText.Trim();
             if (business.ReceiptPaperSize == request.PaperSize &&
@@ -154,7 +155,7 @@ public static class RetailBillingSettingsEndpoints
                 business.ReceiptShowCustomerPhone == showCustomerPhone &&
                 business.ReceiptShowCustomerAddress == showCustomerAddress &&
                 !logoChanged && business.ReceiptShowLogo == showLogo &&
-                business.ReceiptPrintCopies == printCopies &&
+                business.ReceiptPrintCopies == printCopies && business.ReceiptAutoOpen == autoOpen &&
                 business.ReceiptFooterText == footer)
                 return Results.Ok(new { settings = ReceiptView(business, rendererAvailable), unchanged = true });
 
@@ -185,6 +186,7 @@ public static class RetailBillingSettingsEndpoints
                     .SetProperty(x => x.ReceiptLogo, logo)
                     .SetProperty(x => x.ReceiptShowLogo, showLogo)
                     .SetProperty(x => x.ReceiptPrintCopies, printCopies)
+                    .SetProperty(x => x.ReceiptAutoOpen, autoOpen)
                     .SetProperty(x => x.ReceiptFooterText, footer)
                     .SetProperty(x => x.ReceiptSettingsRevision, newRevision));
             if (changed != 1)
@@ -204,7 +206,7 @@ public static class RetailBillingSettingsEndpoints
                         request.ShowChange, request.ShowFooter, request.ShowBranch ?? business.ReceiptShowBranch,
                         request.ShowSku ?? business.ReceiptShowSku, request.ShowUnit ?? business.ReceiptShowUnit,
                         showLegalName, showAddress, showPhone, showEmail, showCustomerName, showCustomerPhone, showCustomerAddress, showLogo }.Select(value => value ? "1" : "0")) +
-                    $";copies={printCopies};logoChanged={(logoChanged ? 1 : 0)};m={business.ReceiptLegalName != legalName || business.ReceiptAddress != address || business.ReceiptPhone != phone || business.ReceiptEmail != email}",
+                    $";copies={printCopies};auto={(autoOpen ? 1 : 0)};logoChanged={(logoChanged ? 1 : 0)};m={business.ReceiptLegalName != legalName || business.ReceiptAddress != address || business.ReceiptPhone != phone || business.ReceiptEmail != email}",
                 Reason = request.Reason.Trim()
             });
             await db.SaveChangesAsync();
@@ -238,6 +240,7 @@ public static class RetailBillingSettingsEndpoints
         logo = business.ReceiptLogo is null ? "" : Convert.ToBase64String(business.ReceiptLogo),
         showLogo = business.ReceiptShowLogo,
         printCopies = business.ReceiptPrintCopies,
+        autoOpen = business.ReceiptAutoOpen,
         footerText = business.ReceiptFooterText,
         revision = business.ReceiptSettingsRevision,
         // Business name, receipt ID, date, product/qty, line total, payable total
@@ -257,7 +260,7 @@ public static class RetailBillingSettingsEndpoints
         string? Phone = null, bool? ShowPhone = null,
         string? Email = null, bool? ShowEmail = null,
         bool? ShowCustomerName = null, bool? ShowCustomerPhone = null, bool? ShowCustomerAddress = null,
-        byte[]? Logo = null, bool? ShowLogo = null, int? PrintCopies = null);
+        byte[]? Logo = null, bool? ShowLogo = null, int? PrintCopies = null, bool? AutoOpen = null);
 
     // Missing values preserve existing preferences; clearing a blank field is a no-op.
     private static string? UpdateOptionalText(string? requested, string? existing)

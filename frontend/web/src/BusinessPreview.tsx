@@ -84,7 +84,8 @@ export default function BusinessPreview({ module, dashboard, onBillingUpdated }:
       <p className="business-preview-description">{dailySales ? 'Totals from posted cash receipts.' : selected.description}</p>
       {postedSales ? <BusinessPostedSales dashboard={dashboard} /> :
         dailySales ? <BusinessDailySales dashboard={dashboard} /> : receiptSettings ?
-          <BusinessReceiptSettings businessId={dashboard.business.id} canOperate={dashboard.canOperate} /> :
+          <BusinessReceiptSettings businessId={dashboard.business.id} canOperate={dashboard.canOperate}
+            onSaved={() => onBillingUpdated?.()} /> :
           billingSettings ? <BusinessBillingSettings
         businessId={dashboard.business.id} canOperate={dashboard.canOperate}
         onSaved={() => onBillingUpdated?.()} /> : generalSettings ? <dl className="business-preview-identity">

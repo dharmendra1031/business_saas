@@ -110,6 +110,7 @@ public sealed class Business
     public byte[]? ReceiptLogo { get; set; }
     public bool ReceiptShowLogo { get; set; } = true;
     public int ReceiptPrintCopies { get; set; } = 1;
+    public bool ReceiptAutoOpen { get; set; }
     public string ReceiptPaperSize { get; set; } = "Thermal80";
     public bool ReceiptShowTime { get; set; } = true;
     public bool ReceiptShowUnitPrice { get; set; } = true;

@@ -442,7 +442,7 @@ public sealed class SqlServerTests
             paperSize = "A4", showTime = true, showUnitPrice = true,
             showCashReceived = true, showChange = true, showFooter = true,
             footerText = "Thank you", expectedRevision = initialReceiptSettings.GetProperty("revision").GetInt32(),
-            reason = "Verify receipt logo preferences", logo, showLogo = true, printCopies = 2,
+            reason = "Verify receipt logo preferences", logo, showLogo = true, printCopies = 2, autoOpen = true,
             legalName = "", address = "", phone = "", email = ""
         };
         Assert.Equal(HttpStatusCode.NotFound, (await cashier.GetAsync(receiptSettingsPath)).StatusCode);
@@ -457,6 +457,7 @@ public sealed class SqlServerTests
         Assert.Equal(HttpStatusCode.Conflict, (await Put(owner, receiptSettingsPath, receiptSettings)).StatusCode);
         var savedReceiptSettings = await owner.GetFromJsonAsync<JsonElement>(receiptSettingsPath);
         Assert.Equal(2, savedReceiptSettings.GetProperty("printCopies").GetInt32());
+        Assert.True(savedReceiptSettings.GetProperty("autoOpen").GetBoolean());
         Assert.Equal(Convert.ToBase64String(logo), savedReceiptSettings.GetProperty("logo").GetString());
 
         using var unchangedSettings = await Put(owner, receiptSettingsPath, receiptSettings with {

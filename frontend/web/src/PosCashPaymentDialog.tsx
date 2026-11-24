@@ -10,11 +10,12 @@ interface PosCashPaymentDialogProps {
   error: string
   onCashChange: (value: string) => void
   onCancel: () => void
-  onConfirm: () => void
+  autoOpen: boolean
+  onConfirm: (openPrint: boolean) => void
 }
 
 export default function PosCashPaymentDialog({
-  amount, cash, currency, lineCount, busy, error, onCashChange, onCancel, onConfirm
+  amount, cash, currency, lineCount, busy, error, onCashChange, onCancel, onConfirm, autoOpen
 }: PosCashPaymentDialogProps) {
   const dialogRef = useRef<HTMLDivElement>(null)
   const cashRef = useRef<HTMLInputElement>(null)
@@ -64,7 +65,7 @@ export default function PosCashPaymentDialog({
 
   function submit(event: FormEvent) {
     event.preventDefault()
-    if (validCash && !busy) onConfirm()
+    if (validCash && !busy) onConfirm(autoOpen)
   }
 
   return <div className="pos-modal-layer" role="presentation">
@@ -98,8 +99,10 @@ export default function PosCashPaymentDialog({
         </div>
         <div className="pos-dialog-footer">
           <button type="button" className="btn btn-outline-secondary" disabled={busy} onClick={onCancel}>Back to Cart</button>
+          {autoOpen && <button type="button" className="btn btn-outline-primary" disabled={busy || !validCash || amount <= 0}
+            onClick={() => onConfirm(false)}>Save Only</button>}
           <button type="submit" className="btn btn-primary" disabled={busy || !validCash || amount <= 0}>
-            {busy ? 'Confirming…' : 'Confirm Cash Payment'}
+            {busy ? 'Saving…' : autoOpen ? 'Save & Print' : 'Save Only'}
           </button>
         </div>
       </form>
