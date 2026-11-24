@@ -53,6 +53,7 @@ export default function CashCheckout({ userId, dashboard, onExit }: {
   userId: number; dashboard: RetailDashboard; onExit: () => void
 }) {
   const { business, locations } = dashboard
+  const cashAvailable = dashboard.cashPaymentEnabled !== false
   const key = `cash-checkout:${userId}:${business.id}`
   const base = `/businesses/${business.id}/cash-sales`
   const [pending, setPending] = useState(() => restore(key))
@@ -133,7 +134,7 @@ export default function CashCheckout({ userId, dashboard, onExit }: {
   }, [base, search, locationId, dashboard.canOperate, pending, receipt])
 
   function addProduct(item: Product) {
-    if (!dashboard.canOperate || busy || pending || receipt) return
+    if (!dashboard.canOperate || !cashAvailable || busy || pending || receipt) return
     const existing = basket.find(line => line.productId === item.id)
     const nextQty = Number(((existing?.quantity ?? 0) +
       Math.min(1, item.available - (existing?.quantity ?? 0))).toFixed(3))
@@ -159,7 +160,7 @@ export default function CashCheckout({ userId, dashboard, onExit }: {
   async function submitBarcode(event: FormEvent) {
     event.preventDefault()
     const code = search.trim().toUpperCase()
-    if (!code || scanBusy || busy || !dashboard.canOperate || !locationId) return
+    if (!code || scanBusy || busy || !dashboard.canOperate || !cashAvailable || !locationId) return
     setScanBusy(true)
     try {
       const matching = products.find(x => x.barcode?.toUpperCase() === code || x.sku.toUpperCase() === code) ??
@@ -204,7 +205,8 @@ export default function CashCheckout({ userId, dashboard, onExit }: {
 
   async function recordSale() {
     const received = Number(cash)
-    if (lock.current || !dashboard.canOperate || needsReview || (pending && lookupState !== 'missing')) return
+    if (lock.current || !dashboard.canOperate || needsReview || (!pending && !cashAvailable) ||
+      (pending && lookupState !== 'missing')) return
     if (!pending && (!locationId || !basket.length || basket.some(line =>
       !validQuantity(line.quantity) ||
       !Number.isFinite(line.expectedUnitPrice) || line.expectedUnitPrice < 0) ||
@@ -226,10 +228,12 @@ export default function CashCheckout({ userId, dashboard, onExit }: {
       setError(cause instanceof Error ? cause.message : 'Unable to confirm sale.')
       // Verified basket errors can be corrected after recovery; ambiguous outcomes
       // and access failures keep the original key available for receipt lookup.
-      const editableRejection = cause instanceof ApiResponseError && cause.status === 400 &&
-        (cause.code === 'CASH_SALE_BASKET_CHANGED' || cause.code === 'CASH_SALE_ZERO_VALUE_LINE')
+      const editableRejection = cause instanceof ApiResponseError && (
+        (cause.status === 400 &&
+          (cause.code === 'CASH_SALE_BASKET_CHANGED' || cause.code === 'CASH_SALE_ZERO_VALUE_LINE')) ||
+        (cause.status === 409 && cause.code === 'CASH_SALES_DISABLED'))
       if (cause instanceof ApiResponseError && [400, 403].includes(cause.status) &&
-        (!pending || editableRejection)) {
+        (!pending || editableRejection) || editableRejection) {
         try { sessionStorage.removeItem(key) } catch { /* Storage may be unavailable. */ }
         setPending(null)
         if (editableRejection) {
@@ -291,6 +295,9 @@ export default function CashCheckout({ userId, dashboard, onExit }: {
       <button type="button" className="btn btn-outline-secondary btn-sm" onClick={() => setExitArmed(false)}>Stay in POS</button>
     </div>}
     {error && !showPayment && <div role="alert" className="alert alert-danger">{error}</div>}
+    {!cashAvailable && <div className="alert alert-warning" role="status">
+      Cash checkout is disabled in Business Settings. Existing receipts can still be reviewed.
+    </div>}
     {pending ? <section className="content-section pos-pending" aria-label="Pending sale recovery">
       <div className="pos-panel-heading"><h2>Pending cash sale</h2><span>Reference held for safe retry</span></div>
       <ul>{pending.lines.map(line => <li key={line.productId}>{line.name} · {line.quantity} × {money(line.expectedUnitPrice)}</li>)}</ul>
@@ -330,7 +337,7 @@ export default function CashCheckout({ userId, dashboard, onExit }: {
             placeholder="Search product, SKU or scan barcode…" maxLength={150} value={search}
             disabled={!dashboard.canOperate || busy} onChange={event => setSearch(event.target.value)} />
           <button type="submit" className="btn btn-outline-primary btn-sm"
-            disabled={!search.trim() || scanBusy || busy || !dashboard.canOperate} aria-label="Add exact barcode or SKU">
+            disabled={!search.trim() || scanBusy || busy || !dashboard.canOperate || !cashAvailable} aria-label="Add exact barcode or SKU">
             {scanBusy ? 'Checking…' : 'Scan / Enter'}
           </button>
         </form>}
@@ -379,7 +386,7 @@ export default function CashCheckout({ userId, dashboard, onExit }: {
           </div> : products.length ? <div className="pos-products-grid">
             {products.map(item => {
               const inBasket = basket.find(line => line.productId === item.id)?.quantity ?? 0
-              const canAdd = dashboard.canOperate && !busy &&
+              const canAdd = dashboard.canOperate && cashAvailable && !busy &&
                 item.available - inBasket >= 0.001 &&
                 (inBasket > 0 || basket.length < 100)
               return <button key={item.id} type="button" className="pos-product-card" disabled={!canAdd}
@@ -459,7 +466,7 @@ export default function CashCheckout({ userId, dashboard, onExit }: {
           <div className="pos-subtotal-row"><span>Subtotal</span><strong>{money(total)}</strong></div>
           <div className="pos-total-row"><span>Total Payable</span><strong>{money(total)}</strong></div>
           <button type="button" className="btn btn-primary pos-record-button"
-            disabled={!dashboard.canOperate || busy || needsReview || hasZeroValueLine ||
+            disabled={!dashboard.canOperate || !cashAvailable || busy || needsReview || hasZeroValueLine ||
               !basket.length || !Number.isFinite(total) || total <= 0 ||
               basket.some(line => !validQuantity(line.quantity))}
             onClick={() => { setError(''); setShowPayment(true) }}>
