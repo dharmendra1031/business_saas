@@ -1,5 +1,5 @@
 import { useEffect, useState, type FormEvent } from 'react'
-import { api } from './api'
+import { api, ApiResponseError, UncertainWriteError } from './api'
 import { ActionButton, useActionFeedback } from './ActionFeedback'
 
 interface BillingSettings {
@@ -20,12 +20,14 @@ export default function BusinessBillingSettings({ businessId, canOperate, onSave
   const [busy, setBusy] = useState(false)
   const [error, setError] = useState('')
   const [reload, setReload] = useState(0)
+  const [needsRefresh, setNeedsRefresh] = useState(false)
   const changed = !!settings && cashEnabled !== settings.cashSalesEnabled
 
   useEffect(() => {
     let active = true
     setSettings(null)
     setError('')
+    setNeedsRefresh(false)
     api<BillingSettings>(`/businesses/${businessId}/billing-settings`)
       .then(result => {
         if (!active) return
@@ -36,9 +38,11 @@ export default function BusinessBillingSettings({ businessId, canOperate, onSave
     return () => { active = false }
   }, [businessId, reload])
 
+  useEffect(() => { setReason('') }, [businessId])
+
   async function save(event: FormEvent) {
     event.preventDefault()
-    if (!settings || !changed || busy || !canOperate || reason.trim().length < 10) return
+    if (!settings || !changed || busy || needsRefresh || !canOperate || reason.trim().length < 10) return
     setBusy(true)
     setError('')
     try {
@@ -58,7 +62,11 @@ export default function BusinessBillingSettings({ businessId, canOperate, onSave
       setReason('')
       onSaved()
     } catch (cause) {
-      setError(cause instanceof Error ? cause.message : 'Unable to save settings.')
+      // A stale revision or a lost write response must be reconciled before retry.
+      // The shared popup reports the error; do not duplicate it in this form.
+      if (cause instanceof UncertainWriteError ||
+          (cause instanceof ApiResponseError && cause.status === 409))
+        setNeedsRefresh(true)
     } finally {
       setBusy(false)
     }
@@ -69,7 +77,14 @@ export default function BusinessBillingSettings({ businessId, canOperate, onSave
       {error}{' '}<button type="button" className="btn btn-link p-0"
         onClick={() => setReload(x => x + 1)}>Reload settings</button>
     </div>}
-    {!settings ? <p role="status">Loading saved payment preferences…</p> : <>
+    {!settings ? !error && <p role="status">Loading saved payment preferences…</p> : <>
+      {needsRefresh && <div role="status" className="alert alert-warning">
+        The saved setting may have changed. Review the latest value before saving again.
+        <button type="button" className="btn btn-outline-secondary btn-sm ms-2"
+          onClick={() => setReload(value => value + 1)}>
+          Reload settings (reset selection)
+        </button>
+      </div>
       <div className="form-check form-switch mb-3">
         <input id="billing-cash-toggle" className="form-check-input" type="checkbox"
           checked={cashEnabled} disabled={!canOperate || busy}
@@ -99,7 +114,7 @@ export default function BusinessBillingSettings({ businessId, canOperate, onSave
         maxLength={200} minLength={10} value={reason}
         onChange={event => setReason(event.target.value)} disabled={!canOperate || busy}
         placeholder="Why are you changing the store payment options?" />
-      <ActionButton busy={busy} disabled={!changed || !canOperate || reason.trim().length < 10}>
+      <ActionButton busy={busy} disabled={!changed || needsRefresh || !canOperate || reason.trim().length < 10}>
         Save payment settings
       </ActionButton>
       {!canOperate && <p className="small text-body-secondary mt-2">
