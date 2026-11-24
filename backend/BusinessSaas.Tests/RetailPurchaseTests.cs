@@ -473,6 +473,76 @@ public sealed class RetailPurchaseTests
             Assert.Equal(new[] { 0.625m, -0.125m }, kgMovements);
         }
 
+        // A fractional product must not reduce stock when the charged line
+        // would round down to zero, even alongside other billable items.
+        var tinyId = await CreateId(owner, $"/api/businesses/{businessId}/products", new {
+            name = "Fractional tiny price", sku = "TINY-FRAC-01",
+            categoryId, unitId = kgUnitId, salePrice = 0.01m, taxClassification = ""
+        });
+        Assert.Equal(HttpStatusCode.Created, (await Send(owner,
+            $"/api/businesses/{businessId}/stock/locations/{locationId}/opening",
+            new { productId = tinyId, quantity = 1m })).StatusCode);
+
+        var zeroRequest = new {
+            locationId, requestKey = "cash-zero-value-20261124", tendered = 1m,
+            lines = new[] { new { productId = tinyId, quantity = 0.001m,
+                expectedUnitPrice = 0.01m } }
+        };
+        var zeroResponse = await Send(cashier, sales, zeroRequest);
+        Assert.Equal(HttpStatusCode.BadRequest, zeroResponse.StatusCode);
+        var zeroError = await zeroResponse.Content.ReadFromJsonAsync<JsonElement>();
+        Assert.Equal("CASH_SALE_ZERO_VALUE_LINE", zeroError.GetProperty("code").GetString());
+        Assert.Equal(tinyId, zeroError.GetProperty("productId").GetInt64());
+
+        var mixedZeroRequest = new {
+            locationId, requestKey = "cash-mixed-zero-value-20261124", tendered = 20m,
+            lines = new[] {
+                new { productId = kgProductId, quantity = 0.125m, expectedUnitPrice = 89.99m },
+                new { productId = tinyId, quantity = 0.001m, expectedUnitPrice = 0.01m }
+            }
+        };
+        var mixedZeroResponse = await Send(cashier, sales, mixedZeroRequest);
+        Assert.Equal(HttpStatusCode.BadRequest, mixedZeroResponse.StatusCode);
+        Assert.Equal("CASH_SALE_ZERO_VALUE_LINE",
+            (await mixedZeroResponse.Content.ReadFromJsonAsync<JsonElement>())
+                .GetProperty("code").GetString());
+        using (var scope = factory.Services.CreateScope())
+        {
+            var db = scope.ServiceProvider.GetRequiredService<AppDbContext>();
+            Assert.Equal(0.500m, await db.RetailStockBalances.AsNoTracking()
+                .Where(x => x.BusinessId == businessId && x.ProductId == kgProductId)
+                .Select(x => x.Quantity).SingleAsync());
+            Assert.Equal(1m, await db.RetailStockBalances.AsNoTracking()
+                .Where(x => x.BusinessId == businessId && x.ProductId == tinyId)
+                .Select(x => x.Quantity).SingleAsync());
+            Assert.False(await db.RetailCashSales.AsNoTracking()
+                .AnyAsync(x => x.RequestKey == zeroRequest.requestKey ||
+                    x.RequestKey == mixedZeroRequest.requestKey));
+            Assert.False(await db.RetailStockMovements.AsNoTracking()
+                .AnyAsync(x => x.ProductId == tinyId && x.SourceType == "CashSaleLine"));
+        }
+
+        var tinyValid = new {
+            locationId, requestKey = "cash-smallest-cent-20261124", tendered = 0.01m,
+            lines = new[] { new { productId = tinyId, quantity = 0.500m,
+                expectedUnitPrice = 0.01m } }
+        };
+        var tinyPaid = await Send(cashier, sales, tinyValid);
+        Assert.Equal(HttpStatusCode.OK, tinyPaid.StatusCode);
+        Assert.Equal(0.01m, (await tinyPaid.Content.ReadFromJsonAsync<JsonElement>())
+            .GetProperty("total").GetDecimal());
+        Assert.Equal(HttpStatusCode.OK, (await Send(cashier, sales, tinyValid)).StatusCode);
+        using (var scope = factory.Services.CreateScope())
+        {
+            var db = scope.ServiceProvider.GetRequiredService<AppDbContext>();
+            Assert.Equal(0.500m, await db.RetailStockBalances.AsNoTracking()
+                .Where(x => x.BusinessId == businessId && x.ProductId == tinyId)
+                .Select(x => x.Quantity).SingleAsync());
+            Assert.Equal(1, await db.RetailStockMovements.AsNoTracking()
+                .CountAsync(x => x.BusinessId == businessId && x.ProductId == tinyId &&
+                    x.SourceType == "CashSaleLine"));
+        }
+
         using (var scope = factory.Services.CreateScope())
         {
             var db = scope.ServiceProvider.GetRequiredService<AppDbContext>();
