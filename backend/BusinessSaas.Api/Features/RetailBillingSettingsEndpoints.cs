@@ -141,9 +141,9 @@ public static class RetailBillingSettingsEndpoints
                 Action = "Business.ReceiptSettingsChanged",
                 TargetType = "Business", TargetId = businessId,
                 PreviousValue = $"revision={business.ReceiptSettingsRevision};paper={business.ReceiptPaperSize}",
-                NewValue = $"revision={newRevision};paper={request.PaperSize};" +
-                    $"time={request.ShowTime};rate={request.ShowUnitPrice};" +
-                    $"tender={request.ShowCashReceived};change={request.ShowChange};footer={request.ShowFooter}",
+                NewValue = $"v={newRevision};paper={request.PaperSize};" +
+                    $"t={request.ShowTime};u={request.ShowUnitPrice};" +
+                    $"c={request.ShowCashReceived};h={request.ShowChange};f={request.ShowFooter}",
                 Reason = request.Reason.Trim()
             });
             await db.SaveChangesAsync();
