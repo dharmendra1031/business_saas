@@ -158,7 +158,7 @@ export default function RetailMasters({ businessId, canOperate }: {
         <div className="btn-group business-master-tabs" role="group" aria-label="Product master type">
           {(['groups', 'subgroups', 'categories', 'brands', 'units'] as MasterType[]).map(tab =>
             <button key={tab} type="button" className={`btn btn-sm ${type === tab ? 'btn-primary' : 'btn-outline-secondary'}`}
-              aria-pressed={type === tab} onClick={() => changeType(tab)}>
+              aria-pressed={type === tab} disabled={saving} onClick={() => changeType(tab)}>
               {tab === 'groups' ? 'Groups' : tab === 'subgroups' ? 'Subgroups' :
                 tab === 'categories' ? 'Categories' : tab === 'brands' ? 'Brands' : 'Units'}
             </button>)}
