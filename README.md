@@ -1,8 +1,8 @@
 # Business SaaS
 
-**Status:** Development foundation with Retail catalog, stock, purchase orders and receiving. Not production-ready; POS billing and production release checks are pending.
+**Status:** Active development. Platform administration, Retail catalog, purchase/receiving and stock workflows have working API/UI slices. Cash-only POS and receipt workflows are enabled in Development, not production. Full Retail and platform acceptance is pending; **not production-ready**.
 
-A multi-business SaaS platform with **Super Admin-controlled business creation** and separate Business Owner/Admin and Cashier/POS workspaces. The platform owner provisions the business, assigns/invites its Owner and provisions the compatible plan and first location. Authorized users then operate only their business; actual code still needs the P0 provisioning/role-flow change described in the screen register.
+A multi-business SaaS platform with **Super Admin-controlled business creation** and separate Business Owner/Admin and Cashier/POS workspaces. The Platform Super Admin provisions businesses, assigns or invites verified Owners, and configures a compatible trial and first location. Authorized users operate only their assigned businesses. Production owner invitation email delivery and real-environment onboarding acceptance are still pending.
 
 ## Where to start
 
@@ -63,4 +63,8 @@ The long-term goal of **1,000+ business categories** is a product coverage targe
 
 ## Work status
 
-The development branch includes authentication, existing **owner self-service** business/trial creation (to be replaced with Super Admin-only provisioning), tenant-scoped Retail masters, stock ledger and adjustment review, purchase orders and partial goods receiving, a Development-only cash-sale prototype and partial UI components. The CI covers backend, SQL Server migration/integration and a locked frontend build. **The approved Ibdaa-style POS layout and Payment Popup, release-ready POS tax/payments, returns, register, reports, verified owner onboarding, subscription-payment acceptance, restore drills and production-scale security/load testing remain pending or incomplete.** Production signup is disabled until email verification is implemented.
+The `development` branch includes shared authentication and Platform Owner MFA, **Super Admin-only business provisioning**, tenant-scoped Retail Groups/Subgroups/Categories/Brands/Units and Products, Suppliers/Customers, stock ledger and adjustments, purchase approvals and partial goods receiving. Cash-only POS checkout, receipt recovery/printing and a daily cash-sales summary are implemented for **Development-only** operation. The UI also contains clearly labeled previews for unfinished workflows. GitHub CI tests backend APIs, SQL Server migration/integration, frontend builds and mocked-API Chromium journeys.
+
+**Still pending:** production-ready POS pricing/tax/payment decisions and hardware acceptance, returns/refunds, cash register/day closing, broader reports, language/RTL, verified hosted owner onboarding and email delivery, subscription-payment live acceptance, independent restore drills, security/load tests and real authenticated browser acceptance across roles. Passing CI or a design preview does not mean these are complete. Production self-registration stays disabled until verified-email onboarding is implemented.
+
+**Long-term change policy:** [Engineering Guardrails — Long-term maintainability contract](docs/ENGINEERING_GUARDRAILS.md#1a-long-term-maintainability-contract-24-november-2026). All feature changes stay on `development` until tested and approved for release.
