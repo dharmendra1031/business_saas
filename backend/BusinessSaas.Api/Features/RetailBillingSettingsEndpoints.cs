@@ -89,6 +89,10 @@ public static class RetailBillingSettingsEndpoints
         {
             var actor = await OwnerId(db, businessId, user);
             if (actor is null) return Results.NotFound();
+            var subscription = await db.BusinessSubscriptions.AsNoTracking()
+                .SingleOrDefaultAsync(x => x.BusinessId == businessId);
+            if (subscription is null || !SubscriptionAccess.CanOperate(subscription, DateTime.UtcNow))
+                return Results.StatusCode(StatusCodes.Status403Forbidden);
             if (request.ExpectedRevision < 0 ||
                 request.PaperSize is not ("Thermal80" or "A4") ||
                 request.FooterText is null || request.FooterText.Length > 120 ||
