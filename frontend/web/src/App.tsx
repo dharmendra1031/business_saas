@@ -197,13 +197,13 @@ export default function App() {
 
   // Keep the current dashboard visible while refreshing live figures.
   // Failed reads must not send an authorized owner out of their workspace.
-  async function refreshDashboard() {
+  async function refreshDashboard(preservePage = false) {
     if (!dashboard) return
     const businessId = dashboard.business.id
     const session = sessionVersion.current
     const listRequest = businessesVersion.current
     const request = ++dashboardRefreshVersion.current
-    setRetailPage('overview')
+    if (!preservePage) setRetailPage('overview')
     setError('')
     setDashboardRefreshing(true)
     try {
@@ -215,7 +215,8 @@ export default function App() {
         return
       }
       setDashboard(details)
-      setRetailPage(details.roleCode === 'Cashier' && details.cashSaleEnabled ? 'cash' : 'overview')
+      if (!preservePage)
+        setRetailPage(details.roleCode === 'Cashier' && details.cashSaleEnabled ? 'cash' : 'overview')
     } catch (cause) {
       if (session !== sessionVersion.current || listRequest !== businessesVersion.current ||
           request !== dashboardRefreshVersion.current || cause instanceof SessionExpiredError) return
@@ -578,7 +579,7 @@ export default function App() {
                 (retailPage === 'settings' && dashboard.roleCode === 'Owner')) &&
                 dashboard.roleCode !== 'Cashier' && <BusinessPreview key={retailPage}
                   module={retailPage} dashboard={dashboard}
-                  onBillingUpdated={() => void refreshDashboard()} />}
+                  onBillingUpdated={() => void refreshDashboard(true)} />}
             </>
           )}
         </main>
