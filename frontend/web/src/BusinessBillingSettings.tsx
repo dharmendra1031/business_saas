@@ -1,5 +1,6 @@
 import { useEffect, useState, type FormEvent } from 'react'
 import { api } from './api'
+import { ActionButton, useActionFeedback } from './ActionFeedback'
 
 interface BillingSettings {
   cashSalesEnabled: boolean
@@ -12,12 +13,12 @@ interface BillingSettings {
 export default function BusinessBillingSettings({ businessId, canOperate, onSaved }: {
   businessId: number; canOperate: boolean; onSaved: () => void
 }) {
+  const { run } = useActionFeedback()
   const [settings, setSettings] = useState<BillingSettings | null>(null)
   const [cashEnabled, setCashEnabled] = useState(true)
   const [reason, setReason] = useState('')
   const [busy, setBusy] = useState(false)
   const [error, setError] = useState('')
-  const [message, setMessage] = useState('')
   const [reload, setReload] = useState(0)
   const changed = !!settings && cashEnabled !== settings.cashSalesEnabled
 
@@ -40,21 +41,21 @@ export default function BusinessBillingSettings({ businessId, canOperate, onSave
     if (!settings || !changed || busy || !canOperate || reason.trim().length < 10) return
     setBusy(true)
     setError('')
-    setMessage('')
     try {
-      const result = await api<{ settings: BillingSettings }>(`/businesses/${businessId}/billing-settings`, {
-        method: 'PUT',
-        body: JSON.stringify({
-          cashSalesEnabled: cashEnabled,
-          creditSalesEnabled: false,
-          expectedRevision: settings.revision,
-          reason: reason.trim()
-        })
-      })
+      const result = await run('Saving payment settings…',
+        'Billing preferences saved. New sales now follow this setting.',
+        () => api<{ settings: BillingSettings }>(`/businesses/${businessId}/billing-settings`, {
+          method: 'PUT',
+          body: JSON.stringify({
+            cashSalesEnabled: cashEnabled,
+            creditSalesEnabled: false,
+            expectedRevision: settings.revision,
+            reason: reason.trim()
+          })
+        }))
       setSettings(result.settings)
       setCashEnabled(result.settings.cashSalesEnabled)
       setReason('')
-      setMessage('Billing preferences saved. New sales now follow this setting.')
       onSaved()
     } catch (cause) {
       setError(cause instanceof Error ? cause.message : 'Unable to save settings.')
@@ -68,12 +69,11 @@ export default function BusinessBillingSettings({ businessId, canOperate, onSave
       {error}{' '}<button type="button" className="btn btn-link p-0"
         onClick={() => setReload(x => x + 1)}>Reload settings</button>
     </div>}
-    {message && <p role="status" className="alert alert-success">{message}</p>}
     {!settings ? <p role="status">Loading saved payment preferences…</p> : <>
       <div className="form-check form-switch mb-3">
         <input id="billing-cash-toggle" className="form-check-input" type="checkbox"
           checked={cashEnabled} disabled={!canOperate || busy}
-          onChange={event => { setCashEnabled(event.target.checked); setMessage('') }} />
+          onChange={event => setCashEnabled(event.target.checked)} />
         <label htmlFor="billing-cash-toggle" className="form-check-label">
           <strong>Cash sales</strong>
           <span className="d-block small text-body-secondary">Allow new cash checkout at the POS. Existing receipts remain accessible.</span>
@@ -99,10 +99,9 @@ export default function BusinessBillingSettings({ businessId, canOperate, onSave
         maxLength={200} minLength={10} value={reason}
         onChange={event => setReason(event.target.value)} disabled={!canOperate || busy}
         placeholder="Why are you changing the store payment options?" />
-      <button type="submit" className="btn btn-primary"
-        disabled={!changed || !canOperate || busy || reason.trim().length < 10}>
-        {busy ? 'Saving…' : 'Save payment settings'}
-      </button>
+      <ActionButton busy={busy} disabled={!changed || !canOperate || reason.trim().length < 10}>
+        Save payment settings
+      </ActionButton>
       {!canOperate && <p className="small text-body-secondary mt-2">
         Changes are unavailable while your business subscription is inactive.
       </p>}
