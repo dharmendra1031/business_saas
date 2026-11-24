@@ -4,15 +4,17 @@ export interface Receipt {
   tendered: number
   currencyCode: string
   postedAtUtc: string
+  printAvailable?: boolean
   businessName?: string | null
   timeZoneId?: string | null
   lines: { id: number; productName: string; unitPrice: number; quantity: number }[]
 }
 
-export default function CashReceipt({ receipt, businessName, timeZone, backLabel, onBack }: {
+export default function CashReceipt({ receipt, businessName, timeZone, pdfPath, backLabel, onBack }: {
   receipt: Receipt
   businessName: string
   timeZone: string
+  pdfPath: string
   backLabel: string
   onBack: () => void
 }) {
@@ -23,7 +25,9 @@ export default function CashReceipt({ receipt, businessName, timeZone, backLabel
     <ul>{receipt.lines.map(line => <li key={line.id}>{line.productName} · {line.quantity} × {money(line.unitPrice)}</li>)}</ul>
     <p><strong>Total {money(receipt.total)}</strong><br />Cash received {money(receipt.tendered)}<br />
       Change {money(receipt.tendered - receipt.total)}</p>
-    <p className="small text-body-secondary" role="status">RDLC printing is not available yet.</p>
+    {receipt.printAvailable
+      ? <a className="btn btn-outline-secondary me-2" href={pdfPath} target="_blank" rel="noopener noreferrer">Print receipt</a>
+      : <p className="small text-body-secondary" role="status">RDLC printing requires a Windows report host.</p>}
     <button type="button" className="btn btn-primary" onClick={onBack}>{backLabel}</button>
   </section>
 }

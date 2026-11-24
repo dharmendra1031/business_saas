@@ -1,6 +1,6 @@
 # Business SaaS — Retail invoice / receipt RDLC design contract
 
-**Status (24 Nov 2026):** Two source-controlled design-time RDLCs, typed XSD, snapshot DTO, owner print-preference API and Business Settings UI implemented. **RDLC rendering and real thermal printing are NOT integrated or benchmarked.** Cash POS remains Development-only. The templates are **retail cash receipts, not legally issued tax invoices**.
+**Status (24 Nov 2026):** Two source-controlled design-time RDLCs, typed XSD, snapshot DTO, owner print-preference API and Business Settings UI implemented. A Windows-only RDLC PDF adapter is connected in Development; actual render CI and physical thermal printing remain release gates. Cash POS remains Development-only. The templates are **retail cash receipts, not legally issued tax invoices**.
 
 ## Developer-owned files (no runtime layout generation)
 
@@ -14,7 +14,7 @@
 | `frontend/web/src/BusinessReceiptSettings.tsx` | Business Settings → Invoice & Print, high-contrast form and shared save feedback |
 | `backend/BusinessSaas.Tests/RetailReceiptReportTests.cs` | XML, XSD, contract and money-snapshot tests |
 
-**No report renderer or new NuGet package is installed.** The user cannot upload/edit RDLC XML; an ordinary developer edits the two checked-in files using a compatible Visual Studio RDLC designer, reviews the XML diff and ships the reviewed change. **Do not** save templates in a database, generate XML strings at runtime, dynamically edit report definitions, or create per-tenant copies. Select between the two approved file names only.
+`ReportViewerCore.NETCore` 15.1.33 is pinned for Windows PDF rendering. The user cannot upload/edit RDLC XML; an ordinary developer edits the two checked-in files using a compatible Visual Studio RDLC designer, reviews the XML diff and ships the reviewed change. **Do not** save templates in a database, generate XML strings at runtime, dynamically edit report definitions, or create per-tenant copies. Select between the two approved file names only.
 
 ## RDLC DataSets and field contract
 
@@ -22,7 +22,7 @@
 
 `InvoiceLines`: **one or more** rows with `LineNumber`, `ProductName`, `Quantity`, `UnitPrice`, `LineTotal`, `ProductSku`, `UnitCode`. `LineTotal` uses the same two-decimal midpoint-away-from-zero rule as POS posting. The backend verifies that the stored line totals sum exactly to the posted sale total before creating the report data. Printed monetary fields are never recomputed from the current Product table.
 
-A future, explicitly reviewed rendering adapter needs only to bind these **exact DataSet names** and pass these sixteen strongly named **Boolean report parameters**:
+The rendering adapter binds these **exact DataSet names** and pass these sixteen strongly named **Boolean report parameters**:
 
 | RDLC parameter | Owner setting | Behavior |
 | --- | --- | --- |
@@ -52,11 +52,11 @@ The selection `paperSize = Thermal80 | A4` determines which **fixed** `.rdlc` th
 - GET/PUT `/api/businesses/{businessId}/receipt-settings`. Only a Retail Business Owner may read/change them; unauthorized/cross-tenant resources return 404.
 - The database saves paper selection, 1–5 print copies, 16 display flags, optional merchant details and logo, footer text (maximum 120 characters) and a separate monotonic `ReceiptSettingsRevision`. These settings cannot change monetary values or historical sale records.
 - A PUT requires the expected revision and 10–200 character audit reason, and is blocked for inactive subscriptions. Server conflict (409) or ambiguous write response requires a fresh GET before another save.
-- UI clearly says that **these preferences are persisted but printing is unavailable until the RDLC adapter is verified**. The former HTML print implementation has been removed.
+- The former HTML print implementation is removed. Windows Development hosts expose the read-only receipt PDF action; unsupported hosts show an availability message.
 
 ## Real printing — separate release gate
 
-Rendering necessarily needs a small runtime integration **later**; the prohibition is on runtime report-definition generation or hidden/magical binding. Before enabling, choose and pin an engine compatible with the actual .NET 10 hosting OS, then implement one explicit read-only adapter for the two DataSets and parameters. Don't load RDLC from a user-supplied path. Never query Product price at render time. Never trigger sale/stock mutations from print or reprint.
+The adapter loads the two embedded static RDLC files and the existing XSD, maps the posted data explicitly and returns a PDF through the same cashier/owner receipt authorization rules. Linux PDF rendering is intentionally not enabled. Don't load RDLC from a user-supplied path. Never query Product price at render time. Never trigger sale/stock mutations from print or reprint.
 
 The thermal adapter must handle **continuous paper length correctly**: RDLC page height and printer driver can introduce long blank tails. Do not ship until a physical 80mm printer test confirms that 1, 10, 50 and 100 item receipts print without truncation, empty pages, repeated headings, 3-meter blank tails or wrong cutter feeds. Measure warm/cold rendering, total spool latency, memory and multi-cashier contention; `CI PASS` alone does not establish fast printing. A4 page breaks and footer placement must also be tested. PDF and printer rendering must be compared against committed source totals; printing failure allows **reprint only**, never a second sale.
 
@@ -70,6 +70,8 @@ A4 uses seven fixed columns (number, product, SKU, quantity, unit, rate, amount)
 
 Walk-in remains the default. Optional active customers are selected through a location-authorized, tenant-scoped search. Customer ID is preserved in pending checkout and compared on replay. New sales retain historical customer name, phone and address. No invented data is backfilled into older sales. The on-screen receipt uses stored business name and timezone when available. It is a read-only view, not a print fallback.
 
-Logo uploads are resized in the browser to PNG (maximum 384 × 192 pixels, 32 KiB). The server bounds and checks the PNG envelope; actual decoder validation is still required before rendering. Omitted logo preserves existing data; an empty byte array removes it. New sales snapshot logo bytes. Print copies and template choice are saved preferences, not active RDLC printing.
+Logo uploads are resized in the browser to PNG (maximum 384 × 192 pixels, 32 KiB). The server bounds and checks the PNG envelope; actual decoder validation is still required before rendering. Omitted logo preserves existing data; an empty byte array removes it. New sales snapshot logo bytes. Template choice selects the actual RDLC. Print copies remain a preference to select in the native PDF print dialog; silent printing and automatic copy count are not implemented.
 
 Receipt settings use an explicit revision-guarded update and read the stored row back before committing. No-op writes do not change the revision. Empty legacy merchant fields are not rewritten just because a client submits empty strings. The frontend omits unchanged logo bytes.
+
+Windows renderer tests execute real PDF generation for both templates. The thermal RDLC still has fixed 11-inch pages; real roll paper length and cutter verification are not complete. No browser HTML print fallback is provided.

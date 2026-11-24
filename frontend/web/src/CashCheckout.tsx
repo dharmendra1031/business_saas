@@ -291,6 +291,7 @@ export default function CashCheckout({ userId, dashboard, onExit }: {
   }
 
   if (receipt) return <CashReceipt receipt={receipt} businessName={business.name} timeZone={business.timeZoneId}
+    pdfPath={`/api${base}/receipts/${receipt.id}/pdf?locationId=${locationId}`}
     backLabel={pending ? 'New sale' : 'Back to checkout'} onBack={() => {
       if (pending) {
         try { sessionStorage.removeItem(key) } catch { /* Storage may be unavailable. */ }

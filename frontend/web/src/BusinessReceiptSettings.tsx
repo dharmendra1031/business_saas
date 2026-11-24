@@ -106,7 +106,7 @@ export default function BusinessReceiptSettings({ businessId, canOperate }: {
     setBusy(true)
     try {
       const result = await run('Saving invoice print preferences…',
-        'Print preferences saved. RDLC printing remains inactive until its renderer is verified.',
+        'Print preferences saved.',
         () => api<{ settings: ReceiptSettings }>(`/businesses/${businessId}/receipt-settings`, {
           method: 'PUT',
           body: JSON.stringify({
@@ -195,8 +195,8 @@ export default function BusinessReceiptSettings({ businessId, canOperate }: {
         No RDLC markup is generated or edited by users.
       </p>
       {!draft.rendererAvailable && <div className="alert alert-warning" role="status">
-        RDLC render/print adapter is not connected yet. Preferences are saved, but
-        printing is unavailable until RDLC integration is verified.
+        RDLC render/print adapter is not connected yet on this host. Preferences are saved, but
+        printing requires a Windows development report host.
       </div>}
       {needsRefresh && <div className="alert alert-warning" role="alert">
         The save may have completed or settings changed elsewhere. Reload before another update.
@@ -217,6 +217,7 @@ export default function BusinessReceiptSettings({ businessId, canOperate }: {
           onChange={event => change('printCopies', Number(event.target.value))}>
           {[1, 2, 3, 4, 5].map(count => <option key={count} value={count}>{count}</option>)}
         </select>
+        <p className="small text-body-secondary">Select the saved number of copies in the PDF print dialog.</p>
         <p className="small text-body-secondary">
           A4 is a retail receipt layout, not a released statutory GST tax invoice.
         </p>

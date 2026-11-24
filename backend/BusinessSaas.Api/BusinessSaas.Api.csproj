@@ -5,6 +5,7 @@
     <ImplicitUsings>enable</ImplicitUsings>
   </PropertyGroup>
   <ItemGroup>
+    <PackageReference Include="ReportViewerCore.NETCore" Version="15.1.33" />
     <PackageReference Include="Microsoft.AspNetCore.Identity.EntityFrameworkCore" Version="10.0.14" />
     <PackageReference Include="Microsoft.EntityFrameworkCore.SqlServer" Version="10.0.14" />
     <PackageReference Include="Microsoft.EntityFrameworkCore.Design" Version="10.0.14">
@@ -14,5 +15,7 @@
   </ItemGroup>
   <ItemGroup>
     <EmbeddedResource Include="Data/countries.json" />
+    <EmbeddedResource Include="Reports/*.rdlc" />
+    <EmbeddedResource Include="Reports/RetailReceiptDataSet.xsd" />
   </ItemGroup>
 </Project>

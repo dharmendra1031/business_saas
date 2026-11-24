@@ -134,19 +134,19 @@
         </TablixBody>
         <TablixColumnHierarchy><TablixMembers><TablixMember /><TablixMember /></TablixMembers></TablixColumnHierarchy>
         <TablixRowHierarchy><TablixMembers>
-<TablixMember><Visibility><Hidden>=Not(Parameters!ShowLogo.Value) Or IsNothing(First(Fields!MerchantLogo.Value, &quot;InvoiceHeader&quot;))</Hidden></Visibility><KeepWithGroup>After</KeepWithGroup></TablixMember>
-<TablixMember><KeepWithGroup>After</KeepWithGroup></TablixMember>
-<TablixMember><Visibility><Hidden>=Not(Parameters!ShowLegalName.Value) Or Len(First(Fields!MerchantLegalName.Value, &quot;InvoiceHeader&quot;)) = 0</Hidden></Visibility><KeepWithGroup>After</KeepWithGroup></TablixMember>
-<TablixMember><Visibility><Hidden>=Not(Parameters!ShowAddress.Value) Or Len(First(Fields!MerchantAddress.Value, &quot;InvoiceHeader&quot;)) = 0</Hidden></Visibility><KeepWithGroup>After</KeepWithGroup></TablixMember>
-<TablixMember><Visibility><Hidden>=Not(Parameters!ShowPhone.Value) Or Len(First(Fields!MerchantPhone.Value, &quot;InvoiceHeader&quot;)) = 0</Hidden></Visibility><KeepWithGroup>After</KeepWithGroup></TablixMember>
-<TablixMember><Visibility><Hidden>=Not(Parameters!ShowEmail.Value) Or Len(First(Fields!MerchantEmail.Value, &quot;InvoiceHeader&quot;)) = 0</Hidden></Visibility><KeepWithGroup>After</KeepWithGroup></TablixMember>
-<TablixMember><Visibility><Hidden>=Not(Parameters!ShowBranch.Value) Or Len(First(Fields!LocationName.Value, &quot;InvoiceHeader&quot;)) = 0</Hidden></Visibility><KeepWithGroup>After</KeepWithGroup></TablixMember>
-<TablixMember><KeepWithGroup>After</KeepWithGroup></TablixMember>
-<TablixMember><KeepWithGroup>After</KeepWithGroup></TablixMember>
-<TablixMember><KeepWithGroup>After</KeepWithGroup></TablixMember>
-<TablixMember><Visibility><Hidden>=Not(Parameters!ShowCustomerName.Value) Or Len(First(Fields!CustomerName.Value, &quot;InvoiceHeader&quot;)) = 0</Hidden></Visibility><KeepWithGroup>After</KeepWithGroup></TablixMember>
-<TablixMember><Visibility><Hidden>=Not(Parameters!ShowCustomerPhone.Value) Or Len(First(Fields!CustomerPhone.Value, &quot;InvoiceHeader&quot;)) = 0</Hidden></Visibility><KeepWithGroup>After</KeepWithGroup></TablixMember>
-<TablixMember><Visibility><Hidden>=Not(Parameters!ShowCustomerAddress.Value) Or Len(First(Fields!CustomerAddress.Value, &quot;InvoiceHeader&quot;)) = 0</Hidden></Visibility><KeepWithGroup>After</KeepWithGroup></TablixMember>
+<TablixMember><Visibility><Hidden>=Not(Parameters!ShowLogo.Value) Or IsNothing(First(Fields!MerchantLogo.Value, &quot;InvoiceHeader&quot;))</Hidden></Visibility><KeepWithGroup>After</KeepWithGroup><RepeatOnNewPage>true</RepeatOnNewPage></TablixMember>
+<TablixMember><KeepWithGroup>After</KeepWithGroup><RepeatOnNewPage>true</RepeatOnNewPage></TablixMember>
+<TablixMember><Visibility><Hidden>=Not(Parameters!ShowLegalName.Value) Or Len(First(Fields!MerchantLegalName.Value, &quot;InvoiceHeader&quot;)) = 0</Hidden></Visibility><KeepWithGroup>After</KeepWithGroup><RepeatOnNewPage>true</RepeatOnNewPage></TablixMember>
+<TablixMember><Visibility><Hidden>=Not(Parameters!ShowAddress.Value) Or Len(First(Fields!MerchantAddress.Value, &quot;InvoiceHeader&quot;)) = 0</Hidden></Visibility><KeepWithGroup>After</KeepWithGroup><RepeatOnNewPage>true</RepeatOnNewPage></TablixMember>
+<TablixMember><Visibility><Hidden>=Not(Parameters!ShowPhone.Value) Or Len(First(Fields!MerchantPhone.Value, &quot;InvoiceHeader&quot;)) = 0</Hidden></Visibility><KeepWithGroup>After</KeepWithGroup><RepeatOnNewPage>true</RepeatOnNewPage></TablixMember>
+<TablixMember><Visibility><Hidden>=Not(Parameters!ShowEmail.Value) Or Len(First(Fields!MerchantEmail.Value, &quot;InvoiceHeader&quot;)) = 0</Hidden></Visibility><KeepWithGroup>After</KeepWithGroup><RepeatOnNewPage>true</RepeatOnNewPage></TablixMember>
+<TablixMember><Visibility><Hidden>=Not(Parameters!ShowBranch.Value) Or Len(First(Fields!LocationName.Value, &quot;InvoiceHeader&quot;)) = 0</Hidden></Visibility><KeepWithGroup>After</KeepWithGroup><RepeatOnNewPage>true</RepeatOnNewPage></TablixMember>
+<TablixMember><KeepWithGroup>After</KeepWithGroup><RepeatOnNewPage>true</RepeatOnNewPage></TablixMember>
+<TablixMember><KeepWithGroup>After</KeepWithGroup><RepeatOnNewPage>true</RepeatOnNewPage></TablixMember>
+<TablixMember><KeepWithGroup>After</KeepWithGroup><RepeatOnNewPage>true</RepeatOnNewPage></TablixMember>
+<TablixMember><Visibility><Hidden>=Not(Parameters!ShowCustomerName.Value) Or Len(First(Fields!CustomerName.Value, &quot;InvoiceHeader&quot;)) = 0</Hidden></Visibility><KeepWithGroup>After</KeepWithGroup><RepeatOnNewPage>true</RepeatOnNewPage></TablixMember>
+<TablixMember><Visibility><Hidden>=Not(Parameters!ShowCustomerPhone.Value) Or Len(First(Fields!CustomerPhone.Value, &quot;InvoiceHeader&quot;)) = 0</Hidden></Visibility><KeepWithGroup>After</KeepWithGroup><RepeatOnNewPage>true</RepeatOnNewPage></TablixMember>
+<TablixMember><Visibility><Hidden>=Not(Parameters!ShowCustomerAddress.Value) Or Len(First(Fields!CustomerAddress.Value, &quot;InvoiceHeader&quot;)) = 0</Hidden></Visibility><KeepWithGroup>After</KeepWithGroup><RepeatOnNewPage>true</RepeatOnNewPage></TablixMember>
 <TablixMember><KeepWithGroup>After</KeepWithGroup><RepeatOnNewPage>true</RepeatOnNewPage></TablixMember>
 <TablixMember><Group Name="ReceiptLineDetailGroup" /></TablixMember>
 <TablixMember><KeepWithGroup>Before</KeepWithGroup></TablixMember>

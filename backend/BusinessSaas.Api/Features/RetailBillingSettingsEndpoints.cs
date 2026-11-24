@@ -72,6 +72,7 @@ public static class RetailBillingSettingsEndpoints
             return Results.Ok(new { settings = View(business), unchanged = false });
         });
 
+        var rendererAvailable = app.Environment.IsDevelopment() && OperatingSystem.IsWindows();
         // A static, source-controlled RDLC consumes these parameters; never edit
         // report XML at runtime and never allow required financial fields to hide.
         var receipt = app.MapGroup("/api/businesses/{businessId:long}/receipt-settings")
@@ -81,7 +82,7 @@ public static class RetailBillingSettingsEndpoints
         {
             if (await OwnerId(db, businessId, user) is null) return Results.NotFound();
             var business = await db.Businesses.AsNoTracking().SingleAsync(x => x.Id == businessId);
-            return Results.Ok(ReceiptView(business));
+            return Results.Ok(ReceiptView(business, rendererAvailable));
         });
 
         receipt.MapPut("", async (long businessId, ReceiptSettingsRequest request,
@@ -155,7 +156,7 @@ public static class RetailBillingSettingsEndpoints
                 !logoChanged && business.ReceiptShowLogo == showLogo &&
                 business.ReceiptPrintCopies == printCopies &&
                 business.ReceiptFooterText == footer)
-                return Results.Ok(new { settings = ReceiptView(business), unchanged = true });
+                return Results.Ok(new { settings = ReceiptView(business, rendererAvailable), unchanged = true });
 
             var newRevision = business.ReceiptSettingsRevision + 1;
             var changed = await db.Businesses.Where(x => x.Id == businessId &&
@@ -209,11 +210,11 @@ public static class RetailBillingSettingsEndpoints
             await db.SaveChangesAsync();
             var saved = await db.Businesses.AsNoTracking().SingleAsync(x => x.Id == businessId);
             await tx.CommitAsync();
-            return Results.Ok(new { settings = ReceiptView(saved), unchanged = false });
+            return Results.Ok(new { settings = ReceiptView(saved, rendererAvailable), unchanged = false });
         });
     }
 
-    private static object ReceiptView(Business business) => new {
+    private static object ReceiptView(Business business, bool rendererAvailable) => new {
         paperSize = business.ReceiptPaperSize,
         showTime = business.ReceiptShowTime,
         showUnitPrice = business.ReceiptShowUnitPrice,
@@ -243,7 +244,7 @@ public static class RetailBillingSettingsEndpoints
         // are statutory/transaction-critical and NOT configurable.
         mandatoryFields = new[] { "Business name", "Receipt number", "Date",
             "Items and quantities", "Line totals", "Total payable" },
-        rendererAvailable = false
+        rendererAvailable
     };
 
     private sealed record ReceiptSettingsRequest(

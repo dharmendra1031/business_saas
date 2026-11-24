@@ -1,6 +1,7 @@
 using System.Data;
 using System.Security.Claims;
 using BusinessSaas.Api.Data;
+using BusinessSaas.Api.Reports;
 using Microsoft.EntityFrameworkCore;
 
 namespace BusinessSaas.Api.Features;
@@ -15,9 +16,11 @@ public static class RetailCashSales
         group.MapGet("/receipt", FindReceipt);
         group.MapGet("/latest", Latest);
         group.MapGet("/receipts/{receiptId:long}", ReceiptById);
+        group.MapGet("/receipts/{receiptId:long}/pdf", ReceiptPdf);
         group.MapGet("/receipts", ReceiptHistory);
         group.MapGet("/business-receipts", BusinessReceiptHistory);
         group.MapGet("/business-receipts/{receiptId:long}", BusinessReceiptById);
+        group.MapGet("/business-receipts/{receiptId:long}/pdf", BusinessReceiptPdf);
         group.MapGet("/daily-report", DailyReport);
         group.MapPost("", Post);
     }
@@ -74,9 +77,46 @@ public static class RetailCashSales
         var first = lines.First();
         return new { sale.Id, sale.BusinessId, sale.LocationId, sale.CashierId, sale.RequestKey,
             sale.Tendered, sale.Total, sale.CurrencyCode, sale.CustomerId, sale.CustomerName,
-            sale.BusinessName, sale.TimeZoneId,
+            sale.BusinessName, sale.TimeZoneId, printAvailable = OperatingSystem.IsWindows(),
             PostedAtUtc = DateTime.SpecifyKind(sale.PostedAtUtc, DateTimeKind.Utc),
             first.ProductId, first.ProductName, first.UnitPrice, first.Quantity, Lines = lines };
+    }
+
+    private static Task<IResult> ReceiptPdf(long businessId, long locationId, long receiptId,
+        ClaimsPrincipal user, AppDbContext db, HttpContext context, ILoggerFactory loggerFactory) =>
+        PrintPdf(businessId, locationId, receiptId, user, db, context, loggerFactory, ownerOnly: false);
+
+    private static Task<IResult> BusinessReceiptPdf(long businessId, long locationId, long receiptId,
+        ClaimsPrincipal user, AppDbContext db, HttpContext context, ILoggerFactory loggerFactory) =>
+        PrintPdf(businessId, locationId, receiptId, user, db, context, loggerFactory, ownerOnly: true);
+
+    private static async Task<IResult> PrintPdf(long businessId, long locationId, long receiptId,
+        ClaimsPrincipal user, AppDbContext db, HttpContext context, ILoggerFactory loggerFactory, bool ownerOnly)
+    {
+        if (!long.TryParse(user.FindFirstValue(ClaimTypes.NameIdentifier), out var actor) ||
+            await Shop(db, businessId, actor, locationId, ownerOnly) is not { } business)
+            return Results.NotFound();
+
+        var sale = await db.RetailCashSales.AsNoTracking().Include(x => x.Lines)
+            .SingleOrDefaultAsync(x => x.Id == receiptId && x.BusinessId == businessId &&
+                x.LocationId == locationId && (ownerOnly || x.CashierId == actor));
+        if (sale is null) return Results.NotFound();
+        if (!OperatingSystem.IsWindows())
+            return Results.Problem("RDLC PDF printing requires a Windows report host.", statusCode: 503);
+        try
+        {
+            var data = RetailReceiptReportData.FromCashSale(sale, business,
+                TimeZoneInfo.FindSystemTimeZoneById(business.TimeZoneId));
+            var pdf = RetailReceiptRenderer.Render(data, business.ReceiptPaperSize);
+            context.Response.Headers.CacheControl = "no-store";
+            context.Response.Headers.ContentDisposition = $"inline; filename=receipt-{sale.Id}.pdf";
+            return Results.File(pdf, "application/pdf");
+        }
+        catch (Exception error)
+        {
+            loggerFactory.CreateLogger("RetailReceiptRenderer").LogError(error, "RDLC render failed for business {BusinessId}, receipt {ReceiptId}", businessId, receiptId);
+            return Results.Problem("Unable to render this posted receipt. Retry printing; do not record another sale.", statusCode: 500);
+        }
     }
 
     private static async Task<IResult> BusinessReceiptById(long businessId, long locationId, long receiptId,

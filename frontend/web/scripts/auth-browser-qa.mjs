@@ -1038,6 +1038,7 @@ try {
     let posts = 0
     let originalRequest
     const receipt = {
+      printAvailable: true,
       id: 501, total: 10, tendered: 10, currencyCode: 'INR',
       postedAtUtc: '2026-11-23T06:00:00Z',
       lines: [{ id: 502, productName: 'Loose Rice', unitPrice: 80, quantity: 0.125 }]
@@ -1205,9 +1206,10 @@ try {
     assert.equal(posted.lines[0].productId, 91)
     assert.equal(posted.lines[0].quantity, 0.125)
     assert.equal(posted.tendered, 10)
-    const printReceipt = t.page.getByRole('button', { name: 'Print receipt' })
-    assert.equal(await printReceipt.count(), 0, 'Legacy HTML printing must not be offered')
-    await t.page.getByText('RDLC printing is not available yet.', { exact: true }).waitFor()
+    const printReceipt = t.page.getByRole('link', { name: 'Print receipt' })
+    await printReceipt.waitFor()
+    assert.equal(await printReceipt.getAttribute('href'), '/api/businesses/1/cash-sales/receipts/501/pdf?locationId=1')
+    assert.equal(await printReceipt.getAttribute('target'), '_blank')
     assert.equal(posts, recover ? 2 : 1)
     await t.page.getByRole('button', { name: 'New sale', exact: true }).click()
     await t.page.getByText('Your basket is empty', { exact: true }).waitFor()
@@ -1224,8 +1226,7 @@ try {
       await t.page.getByLabel('Receipt number').fill('501')
       await t.page.getByRole('button', { name: 'Find receipt' }).click()
       await t.page.getByRole('heading', { name: 'Cash receipt #501' }).waitFor()
-      assert.equal(await printReceipt.count(), 0)
-      await t.page.getByText('RDLC printing is not available yet.', { exact: true }).waitFor()
+      assert.equal(await printReceipt.getAttribute('href'), '/api/businesses/1/cash-sales/receipts/501/pdf?locationId=1')
       await t.page.getByRole('button', { name: 'Back to checkout' }).click()
       assert.equal(await kgQuantity.inputValue(), '0.625')
       await t.page.getByRole('button', { name: 'Back to products' }).click()
@@ -1671,7 +1672,7 @@ try {
         await t.page.route('**/api/businesses/1/cash-sales/business-receipts/42?*', route => {
           assert.equal(route.request().method(), 'GET')
           assert.equal(new URL(route.request().url()).searchParams.get('locationId'), '1')
-          return response(route, 200, { id: 42, total: 24, tendered: 30, currencyCode: 'INR',
+          return response(route, 200, { id: 42, total: 24, tendered: 30, currencyCode: 'INR', printAvailable: true,
             postedAtUtc: '2026-11-23T06:00:00Z',
             lines: [{ id: 1, productName: 'Loose Rice', unitPrice: 96, quantity: 0.25 }] })
         })
@@ -1679,8 +1680,8 @@ try {
         const receipt = t.page.getByRole('region', { name: 'Cash receipt' })
         await receipt.getByText(/Loose Rice/).waitFor()
         await receipt.getByText(/Change INR 6\.00/).waitFor()
-        assert.equal(await receipt.getByRole('button', { name: 'Print receipt' }).count(), 0)
-        await receipt.getByText('RDLC printing is not available yet.', { exact: true }).waitFor()
+        assert.equal(await receipt.getByRole('link', { name: 'Print receipt' }).getAttribute('href'),
+          '/api/businesses/1/cash-sales/business-receipts/42/pdf?locationId=1')
         await receipt.getByRole('button', { name: 'Back to receipts' }).click()
         assert.equal(await t.page.getByLabel('Receipt number').inputValue(), '42')
         assert.equal(await t.page.getByLabel('Posted date').inputValue(), '2026-11-23')

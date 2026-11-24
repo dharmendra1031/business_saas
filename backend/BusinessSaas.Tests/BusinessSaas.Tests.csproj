@@ -18,8 +18,7 @@
     <ProjectReference Include="../BusinessSaas.Api/BusinessSaas.Api.csproj" />
   </ItemGroup>
   <ItemGroup>
-    <!-- Design-time RDLC and XSD are copied only for contract validation tests;
-         do not add a report engine to the application. -->
+    <!-- Copy the design-time sources for independent contract checks. -->
     <None Include="../BusinessSaas.Api/Reports/*.rdlc"
           Link="ReportFixtures/%(Filename)%(Extension)" CopyToOutputDirectory="PreserveNewest" />
     <None Include="../BusinessSaas.Api/Reports/*.xsd"
