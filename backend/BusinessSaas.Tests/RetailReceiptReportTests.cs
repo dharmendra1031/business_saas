@@ -33,7 +33,7 @@ public sealed class RetailReceiptReportTests
         Assert.Equal(2, sets.Count);
         Assert.Equal(new[] { "BusinessName", "ReceiptNumber", "DateText", "TimeText",
             "CurrencyCode", "PaymentMethod", "TotalAmount", "CashReceived",
-            "ChangeAmount", "FooterText", "LocationName" }, sets["InvoiceHeader"]);
+            "ChangeAmount", "FooterText", "MerchantLegalName", "MerchantAddress", "MerchantPhone", "MerchantEmail", "LocationName" }, sets["InvoiceHeader"]);
         Assert.Equal(new[] { "LineNumber", "ProductName", "Quantity", "UnitPrice",
             "LineTotal", "ProductSku", "UnitCode" }, sets["InvoiceLines"]);
         Assert.Equal("InvoiceLines", Assert.Single(r.Descendants(rdl + "Tablix"))
@@ -42,7 +42,7 @@ public sealed class RetailReceiptReportTests
         var parameters = r.Descendants(rdl + "ReportParameter")
             .Select(x => (string)x.Attribute("Name")!).ToArray();
         Assert.Equal(new[] { "ShowTime", "ShowUnitPrice", "ShowCashReceived",
-            "ShowChange", "ShowFooter", "ShowBranch", "ShowSku", "ShowUnit" }, parameters);
+            "ShowChange", "ShowFooter", "ShowBranch", "ShowSku", "ShowUnit", "ShowLegalName", "ShowAddress", "ShowPhone", "ShowEmail" }, parameters);
         var expressions = r.Descendants(rdl + "Value").Select(x => x.Value)
             .Concat(r.Descendants(rdl + "Hidden").Select(x => x.Value)).ToArray();
         Assert.Contains(expressions, x => x.Contains("Fields!TotalAmount.Value"));
@@ -51,9 +51,9 @@ public sealed class RetailReceiptReportTests
         Assert.Contains(expressions, x => x.Contains("Parameters!ShowUnitPrice.Value"));
         foreach (var optional in new[] { "ShowCashReceived", "ShowChange", "ShowFooter" })
             Assert.Contains(expressions, x => x == $"=Not(Parameters!{optional}.Value)");
-        foreach (var optional in new[] { "ShowBranch", "ShowSku", "ShowUnit" })
+        foreach (var optional in new[] { "ShowBranch", "ShowSku", "ShowUnit", "ShowLegalName", "ShowAddress", "ShowPhone", "ShowEmail" })
             Assert.Contains(expressions, x => x.Contains($"Parameters!{optional}.Value"));
-        foreach (var field in new[] { "LocationName", "ProductSku", "UnitCode" })
+        foreach (var field in new[] { "LocationName", "ProductSku", "UnitCode", "MerchantLegalName", "MerchantAddress", "MerchantPhone", "MerchantEmail" })
             Assert.Contains(expressions, x => x.Contains($"Fields!{field}.Value"));
         var tablix = Assert.Single(r.Descendants(rdl + "Tablix"));
         var columnCount = tablix.Descendants(rdl + "TablixColumn").Count();
@@ -95,7 +95,7 @@ public sealed class RetailReceiptReportTests
                 .Descendants(xs + "element").Select(f => (string)f.Attribute("name")!).ToArray());
         Assert.Equal(new[] { "BusinessName", "ReceiptNumber", "DateText", "TimeText",
             "CurrencyCode", "PaymentMethod", "TotalAmount", "CashReceived",
-            "ChangeAmount", "FooterText", "LocationName" }, fields["InvoiceHeader"]);
+            "ChangeAmount", "FooterText", "MerchantLegalName", "MerchantAddress", "MerchantPhone", "MerchantEmail", "LocationName" }, fields["InvoiceHeader"]);
         Assert.Equal(new[] { "LineNumber", "ProductName", "Quantity", "UnitPrice",
             "LineTotal", "ProductSku", "UnitCode" }, fields["InvoiceLines"]);
     }
@@ -139,6 +139,13 @@ public sealed class RetailReceiptReportTests
             Assert.Equal("", line.ProductSku);
             Assert.Equal("", line.UnitCode);
         });
+        Assert.Equal("", report.Header.MerchantAddress);
+        sale.MerchantLegalName = "Original Legal Name";
+        sale.MerchantAddress = "Original Address";
+        sale.MerchantPhone = "1234567890";
+        sale.MerchantEmail = "sales@example.test";
+        business.ReceiptAddress = "New Address";
+        business.ReceiptShowAddress = false;
         sale.BusinessName = "Original Store";
         sale.LocationName = "Original Branch";
         sale.TimeZoneId = "Asia/Kolkata";
@@ -148,6 +155,11 @@ public sealed class RetailReceiptReportTests
         business.Name = "Renamed Store";
         var reprint = RetailReceiptReportData.FromCashSale(sale, business, TimeZoneInfo.Utc);
         Assert.Equal("Original Store", reprint.Header.BusinessName);
+        Assert.Equal("Original Legal Name", reprint.Header.MerchantLegalName);
+        Assert.Equal("Original Address", reprint.Header.MerchantAddress);
+        Assert.Equal("1234567890", reprint.Header.MerchantPhone);
+        Assert.Equal("sales@example.test", reprint.Header.MerchantEmail);
+        Assert.False(reprint.Parameters.ShowAddress);
         Assert.Equal("Original Branch", reprint.Header.LocationName);
         Assert.Equal(report.Header.TimeText, reprint.Header.TimeText);
         Assert.Equal("SOAP-01", reprint.Lines[1].ProductSku);

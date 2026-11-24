@@ -22,7 +22,7 @@
 
 `InvoiceLines`: **one or more** rows with `LineNumber`, `ProductName`, `Quantity`, `UnitPrice`, `LineTotal`. `LineTotal` uses the same two-decimal midpoint-away-from-zero rule as POS posting. The backend verifies that the stored line totals sum exactly to the posted sale total before creating the report data. Printed monetary fields are never recomputed from the current Product table.
 
-A future, explicitly reviewed rendering adapter needs only to bind these **exact DataSet names** and pass these eight strongly named **Boolean report parameters**:
+A future, explicitly reviewed rendering adapter needs only to bind these **exact DataSet names** and pass these twelve strongly named **Boolean report parameters**:
 
 | RDLC parameter | Owner setting | Behavior |
 | --- | --- | --- |
@@ -37,7 +37,7 @@ A future, explicitly reviewed rendering adapter needs only to bind these **exact
 
 The selection `paperSize = Thermal80 | A4` determines which **fixed** `.rdlc` the adapter loads. Mandatory fields are **always visible**: business name, receipt/reference number, date, item descriptions/quantities, line amounts and total payable. The Owner may not hide these or alter RDLC expressions via an API.
 
-**Snapshot rule:** `ReceiptNumber` is currently the internal cash receipt ID, **not** a registered statutory invoice number. New cash sales snapshot business display name, location, timezone, SKU, unit and line total in the posting transaction. Legacy rows remain nullable (no fabricated master-data backfill); they retain the legacy display-name and timezone fallback. Legal merchant identity/address, tax and customer snapshots remain pending. The templates intentionally contain no GST/CGST/SGST/HSN claims, discounts, customer credit balance or fake QR codes because these business fields are not yet posted on RetailCashSale.
+**Snapshot rule:** `ReceiptNumber` is currently the internal cash receipt ID, **not** a registered statutory invoice number. New cash sales snapshot business display name, location, timezone, SKU, unit and line total in the posting transaction. Legacy rows remain nullable (no fabricated master-data backfill); they retain the legacy display-name and timezone fallback. Optional merchant name/address/contact snapshots are now supported; statutory merchant registration, tax and customer snapshots remain pending. The templates intentionally contain no GST/CGST/SGST/HSN claims, discounts, customer credit balance or fake QR codes because these business fields are not yet posted on RetailCashSale.
 
 ## Owner settings and access
 
@@ -54,7 +54,7 @@ The thermal adapter must handle **continuous paper length correctly**: RDLC page
 
 ## Future capabilities (not silently enabled)
 
-Tax/GST invoice registration, statutory numbering, store legal address/GSTIN, discount snapshots, customer identity, Credit/Refund, logo/QR, tax breakup and historical settings snapshot require separate SRS/design approval and end-to-end posting. Compliance-required fields are never controlled by a cosmetic visibility switch. Follow the existing `docs/UX_STANDARDS.md` shared Save/Success/Failure/Unknown states; no duplicate popup or second printing framework.
+Tax/GST invoice registration, statutory numbering, verified statutory merchant registration/GSTIN, discount snapshots, customer identity, Credit/Refund, logo/QR, tax breakup and historical settings snapshot require separate SRS/design approval and end-to-end posting. Compliance-required fields are never controlled by a cosmetic visibility switch. Follow the existing `docs/UX_STANDARDS.md` shared Save/Success/Failure/Unknown states; no duplicate popup or second printing framework.
 
 ## Receipt snapshot dataset extension
 
@@ -63,3 +63,7 @@ Tax/GST invoice registration, statutory numbering, store legal address/GSTIN, di
 ## Phase 2 layout
 
 A4 has seven fixed design-time columns (number, product, SKU, quantity, unit, rate, amount). Optional columns use static tablix-member visibility; thermal uses two compact columns and inline optional fields. Branch row collapses when hidden or absent. All text and table borders are black, paper background white. Item headings are marked to repeat on new pages. The fixed thermal page height is unchanged until actual driver/renderer validation. Actual visual rendering, Designer compatibility and printer feed remain release gates.
+
+## Phase 3A merchant details
+
+The existing Owner receipt-settings endpoint saves optional legal display name, address, phone and email with independent visibility flags, bounded lengths and email validation. New cash sales snapshot these four text fields in the same transaction; legacy receipts never substitute the current merchant details. Both RDLC files and XSD expose the fields and collapse empty/hidden rows. Existing clients may omit the new settings without resetting them. Audit summaries remain below 100 characters and omit raw contact details. These are optional cash-receipt identity fields, not verified statutory tax details. Logo upload, customer selection and customer snapshots are still pending. No renderer is installed.

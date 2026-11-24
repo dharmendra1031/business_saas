@@ -238,6 +238,10 @@ public static class RetailCashSales
             var sale = new RetailCashSale {
                 BusinessId = businessId, CashierId = actor, LocationId = request.LocationId,
                 Tendered = request.Tendered, CurrencyCode = shop.CurrencyCode,
+                MerchantLegalName = shop.ReceiptLegalName,
+                MerchantAddress = shop.ReceiptAddress,
+                MerchantPhone = shop.ReceiptPhone,
+                MerchantEmail = shop.ReceiptEmail,
                 BusinessName = shop.Name, LocationName = locationName, TimeZoneId = shop.TimeZoneId,
                 PostedAtUtc = DateTime.UtcNow, RequestKey = request.RequestKey
             };

@@ -12,6 +12,14 @@ interface ReceiptSettings {
   showSku: boolean
   showUnit: boolean
   showFooter: boolean
+  legalName: string
+  showLegalName: boolean
+  address: string
+  showAddress: boolean
+  phone: string
+  showPhone: boolean
+  email: string
+  showEmail: boolean
   footerText: string
   revision: number
   mandatoryFields: string[]
@@ -26,6 +34,10 @@ const options = [
   { key: 'showBranch', label: 'Branch / location', help: 'Shows the location recorded at checkout.' },
   { key: 'showSku', label: 'Product SKU', help: 'Shows the SKU recorded at checkout.' },
   { key: 'showUnit', label: 'Unit of measure', help: 'Shows the unit recorded at checkout.' },
+  { key: 'showLegalName', label: 'Legal business name', help: 'Shows the value saved when the sale was posted.' },
+  { key: 'showAddress', label: 'Business address', help: 'Shows the value saved when the sale was posted.' },
+  { key: 'showPhone', label: 'Business phone', help: 'Shows the value saved when the sale was posted.' },
+  { key: 'showEmail', label: 'Business email', help: 'Shows the value saved when the sale was posted.' },
   { key: 'showFooter', label: 'Footer message', help: 'Show your approved receipt footer.' }
 ] as const
 
@@ -64,6 +76,10 @@ export default function BusinessReceiptSettings({ businessId, canOperate }: {
 
   const changed = !!saved && !!draft && (
     saved.paperSize !== draft.paperSize || saved.footerText !== draft.footerText ||
+    saved.legalName !== draft.legalName ||
+    saved.address !== draft.address ||
+    saved.phone !== draft.phone ||
+    saved.email !== draft.email ||
     options.some(option => saved[option.key] !== draft[option.key])
   )
 
@@ -87,6 +103,14 @@ export default function BusinessReceiptSettings({ businessId, canOperate }: {
             showSku: draft.showSku,
             showUnit: draft.showUnit,
             showFooter: draft.showFooter,
+            legalName: draft.legalName,
+            showLegalName: draft.showLegalName,
+            address: draft.address,
+            showAddress: draft.showAddress,
+            phone: draft.phone,
+            showPhone: draft.showPhone,
+            email: draft.email,
+            showEmail: draft.showEmail,
             footerText: draft.footerText,
             expectedRevision: saved.revision,
             reason: reason.trim()
@@ -142,6 +166,22 @@ export default function BusinessReceiptSettings({ businessId, canOperate }: {
           A4 is a retail receipt layout, not a released statutory GST tax invoice.
         </p>
 
+        <fieldset className="mb-3">
+          <legend className="h6">Receipt merchant details</legend>
+          <p className="small text-body-secondary">Optional details are recorded on new cash sales. Existing receipts are not rewritten.</p>
+          <label htmlFor="receipt-legalName" className="form-label">Legal business name</label>
+          <input id="receipt-legalName" className="form-control mb-2" maxLength={150}
+            value={draft.legalName} onChange={event => change('legalName', event.target.value)} />
+          <label htmlFor="receipt-address" className="form-label">Business address</label>
+          <input id="receipt-address" className="form-control mb-2" maxLength={300}
+            value={draft.address} onChange={event => change('address', event.target.value)} />
+          <label htmlFor="receipt-phone" className="form-label">Business phone</label>
+          <input id="receipt-phone" className="form-control mb-2" type="tel" maxLength={25}
+            value={draft.phone} onChange={event => change('phone', event.target.value)} />
+          <label htmlFor="receipt-email" className="form-label">Business email</label>
+          <input id="receipt-email" className="form-control mb-2" type="email" maxLength={254}
+            value={draft.email} onChange={event => change('email', event.target.value)} />
+        </fieldset>
         <fieldset className="mb-3">
           <legend className="h6">Optional fields to show</legend>
           {options.map(option => <div className="form-check mb-2" key={option.key}>

@@ -8,6 +8,10 @@ public sealed class RetailCashSale
     public long LocationId { get; set; }
     public long CashierId { get; set; }
     public string RequestKey { get; set; } = "";
+    public string? MerchantLegalName { get; set; }
+    public string? MerchantAddress { get; set; }
+    public string? MerchantPhone { get; set; }
+    public string? MerchantEmail { get; set; }
     public string? BusinessName { get; set; }
     public string? LocationName { get; set; }
     public string? TimeZoneId { get; set; }

@@ -19,6 +19,10 @@
               <xs:element name="CashReceived" type="xs:decimal" minOccurs="0" />
               <xs:element name="ChangeAmount" type="xs:decimal" minOccurs="0" />
               <xs:element name="FooterText" type="xs:string" minOccurs="0" />
+              <xs:element name="MerchantLegalName" type="xs:string" minOccurs="0" />
+              <xs:element name="MerchantAddress" type="xs:string" minOccurs="0" />
+              <xs:element name="MerchantPhone" type="xs:string" minOccurs="0" />
+              <xs:element name="MerchantEmail" type="xs:string" minOccurs="0" />
               <xs:element name="LocationName" type="xs:string" minOccurs="0" />
             </xs:sequence>
           </xs:complexType>

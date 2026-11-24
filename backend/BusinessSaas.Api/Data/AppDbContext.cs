@@ -99,6 +99,14 @@ public sealed class Business
     public bool CreditSalesEnabled { get; set; }
     public int BillingSettingsRevision { get; set; }
     // Retail receipt layout: presentation only. Monetary/legal fields cannot be suppressed.
+    public string? ReceiptLegalName { get; set; }
+    public bool ReceiptShowLegalName { get; set; } = true;
+    public string? ReceiptAddress { get; set; }
+    public bool ReceiptShowAddress { get; set; } = true;
+    public string? ReceiptPhone { get; set; }
+    public bool ReceiptShowPhone { get; set; } = true;
+    public string? ReceiptEmail { get; set; }
+    public bool ReceiptShowEmail { get; set; } = true;
     public string ReceiptPaperSize { get; set; } = "Thermal80";
     public bool ReceiptShowTime { get; set; } = true;
     public bool ReceiptShowUnitPrice { get; set; } = true;
@@ -506,6 +514,10 @@ public sealed class AppDbContext(DbContextOptions<AppDbContext> options)
             entity.Property(x => x.CountryCode).HasMaxLength(2).IsRequired();
             entity.Property(x => x.CurrencyCode).HasMaxLength(3).IsRequired();
             entity.Property(x => x.TimeZoneId).HasMaxLength(80).IsRequired();
+            entity.Property(x => x.ReceiptLegalName).HasMaxLength(150);
+            entity.Property(x => x.ReceiptAddress).HasMaxLength(300);
+            entity.Property(x => x.ReceiptPhone).HasMaxLength(25);
+            entity.Property(x => x.ReceiptEmail).HasMaxLength(254);
             entity.Property(x => x.ReceiptPaperSize).HasMaxLength(12).IsRequired();
             entity.Property(x => x.ReceiptFooterText).HasMaxLength(120).IsRequired();
             entity.HasIndex(x => new { x.CreatedByUserId, x.CreationKey }).IsUnique();
@@ -793,6 +805,10 @@ public sealed class AppDbContext(DbContextOptions<AppDbContext> options)
 
         builder.Entity<RetailCashSale>(entity =>
         {
+            entity.Property(x => x.MerchantLegalName).HasMaxLength(150);
+            entity.Property(x => x.MerchantAddress).HasMaxLength(300);
+            entity.Property(x => x.MerchantPhone).HasMaxLength(25);
+            entity.Property(x => x.MerchantEmail).HasMaxLength(254);
             entity.Property(x => x.BusinessName).HasMaxLength(150);
             entity.Property(x => x.LocationName).HasMaxLength(120);
             entity.Property(x => x.TimeZoneId).HasMaxLength(80);

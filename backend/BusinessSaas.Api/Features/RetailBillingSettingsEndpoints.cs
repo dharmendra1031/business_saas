@@ -97,9 +97,14 @@ public static class RetailBillingSettingsEndpoints
                 request.PaperSize is not ("Thermal80" or "A4") ||
                 request.FooterText is null || request.FooterText.Length > 120 ||
                 request.FooterText.Any(char.IsControl) ||
+                !ValidOptionalText(request.LegalName, 150) ||
+                !ValidOptionalText(request.Address, 300) ||
+                !ValidOptionalText(request.Phone, 25) ||
+                !ValidOptionalText(request.Email, 254) ||
+                !ValidEmail(request.Email) ||
                 request.Reason?.Trim().Length is not (>= 10 and <= 200))
                 return Results.BadRequest(new {
-                    message = "Choose 80mm or A4 paper, a footer of up to 120 characters, and a 10–200 character reason."
+                    message = "Check paper size, merchant details, email, footer and the 10–200 character change reason."
                 });
 
             await using var tx = await db.Database.BeginTransactionAsync(IsolationLevel.Serializable);
@@ -112,6 +117,14 @@ public static class RetailBillingSettingsEndpoints
                     message = "Invoice print settings changed. Reload before saving."
                 });
 
+            var legalName = request.LegalName is null ? business.ReceiptLegalName : request.LegalName.Trim();
+            var showLegalName = request.ShowLegalName ?? business.ReceiptShowLegalName;
+            var address = request.Address is null ? business.ReceiptAddress : request.Address.Trim();
+            var showAddress = request.ShowAddress ?? business.ReceiptShowAddress;
+            var phone = request.Phone is null ? business.ReceiptPhone : request.Phone.Trim();
+            var showPhone = request.ShowPhone ?? business.ReceiptShowPhone;
+            var email = request.Email is null ? business.ReceiptEmail : request.Email.Trim();
+            var showEmail = request.ShowEmail ?? business.ReceiptShowEmail;
             var footer = request.FooterText.Trim();
             if (business.ReceiptPaperSize == request.PaperSize &&
                 business.ReceiptShowTime == request.ShowTime &&
@@ -122,6 +135,10 @@ public static class RetailBillingSettingsEndpoints
                 business.ReceiptShowSku == (request.ShowSku ?? business.ReceiptShowSku) &&
                 business.ReceiptShowUnit == (request.ShowUnit ?? business.ReceiptShowUnit) &&
                 business.ReceiptShowFooter == request.ShowFooter &&
+                business.ReceiptLegalName == legalName && business.ReceiptShowLegalName == showLegalName &&
+                business.ReceiptAddress == address && business.ReceiptShowAddress == showAddress &&
+                business.ReceiptPhone == phone && business.ReceiptShowPhone == showPhone &&
+                business.ReceiptEmail == email && business.ReceiptShowEmail == showEmail &&
                 business.ReceiptFooterText == footer)
                 return Results.Ok(new { settings = ReceiptView(business), unchanged = true });
 
@@ -138,6 +155,14 @@ public static class RetailBillingSettingsEndpoints
                     .SetProperty(x => x.ReceiptShowSku, request.ShowSku ?? business.ReceiptShowSku)
                     .SetProperty(x => x.ReceiptShowUnit, request.ShowUnit ?? business.ReceiptShowUnit)
                     .SetProperty(x => x.ReceiptShowFooter, request.ShowFooter)
+                    .SetProperty(x => x.ReceiptLegalName, legalName)
+                    .SetProperty(x => x.ReceiptShowLegalName, showLegalName)
+                    .SetProperty(x => x.ReceiptAddress, address)
+                    .SetProperty(x => x.ReceiptShowAddress, showAddress)
+                    .SetProperty(x => x.ReceiptPhone, phone)
+                    .SetProperty(x => x.ReceiptShowPhone, showPhone)
+                    .SetProperty(x => x.ReceiptEmail, email)
+                    .SetProperty(x => x.ReceiptShowEmail, showEmail)
                     .SetProperty(x => x.ReceiptFooterText, footer)
                     .SetProperty(x => x.ReceiptSettingsRevision, newRevision));
             if (changed != 1)
@@ -151,10 +176,13 @@ public static class RetailBillingSettingsEndpoints
                 Action = "Business.ReceiptSettingsChanged",
                 TargetType = "Business", TargetId = businessId,
                 PreviousValue = $"revision={business.ReceiptSettingsRevision};paper={business.ReceiptPaperSize}",
-                NewValue = $"v={newRevision};paper={request.PaperSize};" +
-                    $"t={request.ShowTime};u={request.ShowUnitPrice};" +
-                    $"c={request.ShowCashReceived};h={request.ShowChange};f={request.ShowFooter};" +
-                    $"branch={request.ShowBranch ?? business.ReceiptShowBranch};sku={request.ShowSku ?? business.ReceiptShowSku};unit={request.ShowUnit ?? business.ReceiptShowUnit}",
+                // Keep the audit summary inside the existing 100-character limit; no raw contact data.
+                NewValue = $"v={newRevision};p={request.PaperSize};flags=" +
+                    string.Concat(new[] { request.ShowTime, request.ShowUnitPrice, request.ShowCashReceived,
+                        request.ShowChange, request.ShowFooter, request.ShowBranch ?? business.ReceiptShowBranch,
+                        request.ShowSku ?? business.ReceiptShowSku, request.ShowUnit ?? business.ReceiptShowUnit,
+                        showLegalName, showAddress, showPhone, showEmail }.Select(value => value ? "1" : "0")) +
+                    $";merchantChanged={business.ReceiptLegalName != legalName || business.ReceiptAddress != address || business.ReceiptPhone != phone || business.ReceiptEmail != email}",
                 Reason = request.Reason.Trim()
             });
             await db.SaveChangesAsync();
@@ -169,6 +197,14 @@ public static class RetailBillingSettingsEndpoints
             business.ReceiptShowSku = request.ShowSku ?? business.ReceiptShowSku;
             business.ReceiptShowUnit = request.ShowUnit ?? business.ReceiptShowUnit;
             business.ReceiptShowFooter = request.ShowFooter;
+            business.ReceiptLegalName = legalName;
+            business.ReceiptShowLegalName = showLegalName;
+            business.ReceiptAddress = address;
+            business.ReceiptShowAddress = showAddress;
+            business.ReceiptPhone = phone;
+            business.ReceiptShowPhone = showPhone;
+            business.ReceiptEmail = email;
+            business.ReceiptShowEmail = showEmail;
             business.ReceiptFooterText = footer;
             business.ReceiptSettingsRevision = newRevision;
             return Results.Ok(new { settings = ReceiptView(business), unchanged = false });
@@ -185,6 +221,14 @@ public static class RetailBillingSettingsEndpoints
         showSku = business.ReceiptShowSku,
         showUnit = business.ReceiptShowUnit,
         showFooter = business.ReceiptShowFooter,
+        legalName = business.ReceiptLegalName ?? "",
+        showLegalName = business.ReceiptShowLegalName,
+        address = business.ReceiptAddress ?? "",
+        showAddress = business.ReceiptShowAddress,
+        phone = business.ReceiptPhone ?? "",
+        showPhone = business.ReceiptShowPhone,
+        email = business.ReceiptEmail ?? "",
+        showEmail = business.ReceiptShowEmail,
         footerText = business.ReceiptFooterText,
         revision = business.ReceiptSettingsRevision,
         // Business name, receipt ID, date, product/qty, line total, payable total
@@ -198,7 +242,18 @@ public static class RetailBillingSettingsEndpoints
         string PaperSize, bool ShowTime, bool ShowUnitPrice,
         bool ShowCashReceived, bool ShowChange, bool ShowFooter,
         string FooterText, int ExpectedRevision, string? Reason,
-        bool? ShowBranch = null, bool? ShowSku = null, bool? ShowUnit = null);
+        bool? ShowBranch = null, bool? ShowSku = null, bool? ShowUnit = null,
+        string? LegalName = null, bool? ShowLegalName = null,
+        string? Address = null, bool? ShowAddress = null,
+        string? Phone = null, bool? ShowPhone = null,
+        string? Email = null, bool? ShowEmail = null);
+
+    private static bool ValidOptionalText(string? value, int maxLength) =>
+        value is null || (value.Length <= maxLength && !value.Any(char.IsControl));
+
+    private static bool ValidEmail(string? value) => string.IsNullOrWhiteSpace(value) ||
+        (System.Net.Mail.MailAddress.TryCreate(value.Trim(), out var address) &&
+            string.Equals(address.Address, value.Trim(), StringComparison.OrdinalIgnoreCase));
 
     private static object View(Business business) => new {
         cashSalesEnabled = business.CashSalesEnabled,
