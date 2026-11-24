@@ -135,9 +135,8 @@ export default function RetailMasters({ businessId, canOperate }: {
       clearForm()
       setReload(value => value + 1)
       firstInput.current?.focus()
-    } catch (cause) {
-      if (!(cause instanceof SessionExpiredError))
-        setError(cause instanceof Error ? cause.message : 'Unable to save changes.')
+    } catch {
+      // Shared popup handles API errors; keep local input and field validation.
     } finally {
       setSaving(false)
     }
