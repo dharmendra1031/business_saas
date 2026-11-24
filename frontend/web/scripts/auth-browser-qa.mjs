@@ -914,23 +914,57 @@ try {
     assert.equal(await t.page.locator('#billing-cash-toggle').isChecked(), false)
     assert.equal(await t.page.getByLabel('Reason for changing payment options').inputValue(),
       'Close register during store reconciliation', 'Failed write must preserve form inputs')
-    assert.equal(await t.page.getByRole('button', { name: 'Save payment settings' }).isDisabled(), false)
+    assert.equal(await t.page.getByRole('button', { name: 'Save payment settings' }).isDisabled(), true,
+      'Stale settings must be reloaded before another write')
     assert.equal(attempts, 1, 'No automatic retry for failed write')
     assert.ok(await t.page.evaluate(() => document.documentElement.scrollWidth <= 361),
       'Global save popup must not add horizontal overflow at 360px')
     await t.page.getByRole('button', { name: 'Dismiss notification' }).click()
     assert.equal(await t.page.locator('.action-feedback').count(), 0)
+    await t.page.getByRole('button', { name: 'Reload settings (reset selection)' }).click()
+    await t.page.locator('#billing-cash-toggle').waitFor()
+    await t.page.locator('#billing-cash-toggle').uncheck()
     await t.page.getByRole('button', { name: 'Save payment settings' }).click()
     await t.page.locator('.action-feedback--uncertain').waitFor()
     assert.ok((await t.page.locator('.action-feedback--uncertain').innerText())
       .includes('The action may have completed. Check the record before retrying.'))
     assert.equal(attempts, 2, 'Lost response must not trigger automatic repeated mutation')
+    assert.equal(await t.page.getByRole('button', { name: 'Save payment settings' }).isDisabled(), true,
+      'Unknown outcome must be reconciled before another write')
     assert.equal(await t.page.locator('#billing-cash-toggle').isChecked(), false)
     assert.equal(await t.page.getByLabel('Reason for changing payment options').inputValue(),
       'Close register during store reconciliation')
     await t.check()
     await t.context.close()
     console.log('PASS shared save failure/unknown popups, input preservation and mobile layout')
+  }
+
+  {
+    const t = await scenario('owner-billing-load-failure-recovery', {
+      role: 'Owner', hasProducts: true, ownerPos: true
+    })
+    let loads = 0
+    await t.page.route('**/api/businesses/1/billing-settings', route => {
+      loads++
+      if (loads === 1) return response(route, 503, { message: 'Billing preferences are unavailable.' })
+      return response(route, 200, {
+        cashSalesEnabled: true, creditSalesEnabled: false, creditAvailable: false,
+        revision: 0, salesPaused: false
+      })
+    })
+    await t.login()
+    await t.page.locator('.business-preview-nav').filter({ hasText: 'Business Settings' }).click()
+    await t.page.getByRole('tab', { name: 'Billing & Payments' }).click()
+    await t.page.getByText('Billing preferences are unavailable.').waitFor()
+    assert.equal(await t.page.getByText('Loading saved payment preferences…').count(), 0,
+      'A failed GET must not show an infinite loading status')
+    await t.page.getByRole('button', { name: 'Reload settings' }).click()
+    await t.page.locator('#billing-cash-toggle').waitFor()
+    assert.equal(await t.page.locator('#billing-cash-toggle').isChecked(), true)
+    assert.equal(loads, 2)
+    await t.check()
+    await t.context.close()
+    console.log('PASS BUS-54 failed settings load stops spinner and has working retry')
   }
 
   for (const mode of ['checkout', 'recover', 'review', 'out-of-stock', 'recover-review']) {
@@ -1431,6 +1465,62 @@ try {
     await t.check()
     await t.context.close()
     console.log('PASS Product inline category, unit and brand creation without leaving form')
+  }
+
+  {
+    const t = await scenario('product-inline-create-refresh-failure', {
+      role: 'Owner', hasProducts: true, productsFixture: true
+    })
+    let reads = 0
+    let brandCreates = 0
+    let productCreates = 0
+    await t.page.route('**/api/businesses/1/products/options*', route => {
+      reads++
+      if (reads > 1) return response(route, 503, { message: 'Options service offline' })
+      return response(route, 200, {
+        categories: [{ id: 1, name: 'General', parentId: null, isActive: true }],
+        units: [{ id: 1, name: 'Item', code: 'ITEM', isActive: true }], brands: []
+      })
+    })
+    await t.page.route('**/api/businesses/1/brands', route => {
+      brandCreates++
+      assert.equal(route.request().method(), 'POST')
+      assert.equal(route.request().postDataJSON().name, 'Fresh Brand')
+      return response(route, 201, { id: 77, name: 'Fresh Brand', isActive: true })
+    })
+    await t.page.route('**/api/businesses/1/products', route => {
+      productCreates++
+      assert.equal(route.request().method(), 'POST')
+      assert.equal(route.request().postDataJSON().brandId, 77)
+      return response(route, 201, { id: 78 })
+    })
+    await t.login()
+    await t.page.locator('.app-sidebar .nav-entry').filter({ hasText: 'Products' }).click()
+    await t.page.getByRole('button', { name: 'Add Product' }).click()
+    await t.page.locator('#product-name').fill('Checked Product')
+    await t.page.locator('#product-price').fill('25')
+    await t.page.getByRole('button', { name: '+ Add brand' }).click()
+    const input = t.page.locator('#inline-master-name')
+    await input.fill(' ')
+    await input.press('Enter')
+    assert.equal(brandCreates, 0, 'Enter must respect validation and cannot bypass disabled Add')
+    assert.equal(await t.page.getByRole('button', { name: 'Save product' }).isDisabled(), true,
+      'Product submission must wait for inline master resolution')
+    await input.fill('Fresh Brand')
+    await t.page.getByRole('button', { name: 'Add & select' }).click()
+    await t.page.getByText(/Master created and selected, but the options list could not refresh/).waitFor()
+    assert.equal(brandCreates, 1)
+    assert.equal(await t.page.getByLabel('Add brand').count(), 0,
+      'Successful create must close the inline panel even if read refresh failed')
+    assert.equal(await t.page.locator('#product-brand').inputValue(), '77',
+      'The committed Brand ID must remain selected as an optimistic fallback')
+    await t.page.getByRole('button', { name: 'Save product' }).click()
+    await t.page.getByText('Product added.', { exact: false }).waitFor()
+    assert.equal(productCreates, 1)
+    assert.equal(brandCreates, 1, 'Failed options GET must not cause duplicate master creates')
+    await t.check()
+    await t.context.close()
+    console.log('PASS Product inline create cannot duplicate on options refresh failure')
   }
 
   {
