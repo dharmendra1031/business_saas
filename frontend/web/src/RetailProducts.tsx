@@ -1,5 +1,5 @@
 import { useEffect, useRef, useState, type FormEvent } from 'react'
-import { api, post, SessionExpiredError } from './api'
+import { api, post, SessionExpiredError, UncertainWriteError } from './api'
 import { Package, Plus, Search } from 'lucide-react'
 import { classificationPath, classificationTrail } from './retailClassification'
 import { ActionButton, useActionFeedback } from './ActionFeedback'
@@ -77,6 +77,7 @@ export default function RetailProducts({ businessId, canOperate, currencyCode }:
   const [inlineCode, setInlineCode] = useState('')
   const [inlineParent, setInlineParent] = useState(0)
   const [inlineSaving, setInlineSaving] = useState(false)
+  const [inlineNeedsReview, setInlineNeedsReview] = useState(false)
   const [page, setPage] = useState(1)
   const [total, setTotal] = useState(0)
   const [search, setSearch] = useState('')
@@ -90,7 +91,6 @@ export default function RetailProducts({ businessId, canOperate, currencyCode }:
   const [loading, setLoading] = useState(true)
   const [optionsLoading, setOptionsLoading] = useState(true)
   const [saving, setSaving] = useState(false)
-  const [error, setError] = useState('')
   const [loadError, setLoadError] = useState('')
   const [optionsError, setOptionsError] = useState('')
   const [optionsReload, setOptionsReload] = useState(0)
@@ -155,7 +155,6 @@ export default function RetailProducts({ businessId, canOperate, currencyCode }:
         ?? options.units[0]?.id ?? 0
     })
     setSkuError('')
-    setError('')
     setFormOpen(true)
   }
 
@@ -175,7 +174,6 @@ export default function RetailProducts({ businessId, canOperate, currencyCode }:
       isActive: item.isActive
     })
     setSkuError('')
-    setError('')
     setFormOpen(true)
   }
 
@@ -189,7 +187,6 @@ export default function RetailProducts({ businessId, canOperate, currencyCode }:
     if (!canOperate || saving) return
 
     setSaving(true)
-    setError('')
     setSkuError('')
 
     const body = {
@@ -218,9 +215,9 @@ export default function RetailProducts({ businessId, canOperate, currencyCode }:
       setForm(initialForm)
       setReload(value => value + 1)
     } catch (cause) {
+      // Shared feedback reports the failure. Only SKU/barcode gets a field hint.
       if (!(cause instanceof SessionExpiredError)) {
         const message = errorMessage(cause)
-        setError(message)
         if (message.toLowerCase().includes('sku or barcode')) setSkuError(message)
       }
     } finally {
@@ -234,33 +231,56 @@ export default function RetailProducts({ businessId, canOperate, currencyCode }:
     setInlineName('')
     setInlineCode('')
     setInlineParent(type === 'categories' ? selectedSubgroup : 0)
-    setError('')
+    setInlineNeedsReview(false)
   }
 
+  const inlineValid = inlineName.trim().length >= 2 &&
+    (inlineType !== 'units' || /^[A-Z0-9-]{1,12}$/.test(inlineCode.trim())) &&
+    (inlineType !== 'categories' || inlineParent > 0)
+
   async function addInline() {
-    if (!inlineType || !canOperate || inlineSaving) return
+    if (!inlineType || !canOperate || inlineSaving || saving || inlineNeedsReview || !inlineValid) return
+    const type = inlineType
+    const name = inlineName.trim()
+    const code = inlineCode.trim().toUpperCase()
+    const parentId = inlineParent
     setInlineSaving(true)
-    setError('')
+    let added: { id: number }
     try {
-      const added = await run(`Adding ${inlineType === 'categories' ? 'category' : inlineType === 'units' ? 'unit' : 'brand'}…`,
-        `${inlineType === 'categories' ? 'Category' : inlineType === 'units' ? 'Unit' : 'Brand'} added to this product.`,
-        () => post<{ id: number }>(`/businesses/${businessId}/${inlineType}`, {
-          name: inlineName.trim(),
-          ...(inlineType === 'units' ? { code: inlineCode.trim().toUpperCase() } : {}),
-          ...(inlineType === 'categories' ? { parentId: inlineParent || null } : {})
+      added = await run(`Adding ${type === 'categories' ? 'category' : type === 'units' ? 'unit' : 'brand'}…`,
+        `${type === 'categories' ? 'Category' : type === 'units' ? 'Unit' : 'Brand'} created.`,
+        () => post<{ id: number }>(`/businesses/${businessId}/${type}`, {
+          name,
+          ...(type === 'units' ? { code } : {}),
+          ...(type === 'categories' ? { parentId } : {})
         }))
+    } catch (cause) {
+      if (cause instanceof UncertainWriteError) setInlineNeedsReview(true)
+      // Never auto-retry a possibly committed create. Retain inputs for review.
+      setInlineSaving(false)
+      return
+    }
+
+    // The master was committed. Close the add panel before the follow-up
+    // GET: a failed refresh must not offer a second Create for the same item.
+    const field = type === 'categories' ? 'categoryId' : type === 'units' ? 'unitId' : 'brandId'
+    const option: CatalogOption = { id: added.id, name, isActive: true,
+      ...(type === 'units' ? { code } : {}),
+      ...(type === 'categories' ? { parentId } : {}) }
+    setOptions(current => ({ ...current, [type]: [...current[type], option] }))
+    setForm(current => ({ ...current, [field]: added.id }))
+    setInlineType(null)
+    setInlineNeedsReview(false)
+    setInlineName('')
+    setInlineCode('')
+    setInlineParent(0)
+    try {
       const updated = await api<CatalogOptions>(basePath + '/options?includeInactiveCategories=true')
       setOptions({ ...updated, brands: updated.brands ?? [] })
-      const field = inlineType === 'categories' ? 'categoryId' : inlineType === 'units' ? 'unitId' : 'brandId'
-      setForm(value => ({ ...value, [field]: added.id }))
-      setInlineType(null)
-      setInlineName('')
-      setInlineCode('')
-      setInlineParent(0)
+      setOptionsError('')
     } catch (cause) {
       if (!(cause instanceof SessionExpiredError))
-        setError(errorMessage(cause))
-      setOptionsReload(value => value + 1)
+        setOptionsError('Master created and selected, but the options list could not refresh. Use Retry setup.')
     } finally {
       setInlineSaving(false)
     }
@@ -295,7 +315,6 @@ export default function RetailProducts({ businessId, canOperate, currencyCode }:
       {!canOperate && <div className="alert alert-warning" role="status">
         Your subscription is inactive. Products are read-only.
       </div>}
-      {error && <div className="alert alert-danger" role="alert">{error}</div>}
       {loadError && <div className="alert alert-danger" role="alert">
         {loadError} <button type="button" className="btn btn-sm btn-outline-secondary ms-2"
           onClick={() => setReload(value => value + 1)}>Retry</button>
@@ -308,9 +327,9 @@ export default function RetailProducts({ businessId, canOperate, currencyCode }:
         A group and unit are required. Add them from Product Masters first.
       </p>}
 
-      {formOpen && canOperate && <form className="product-form" aria-busy={saving} onSubmit={event => void save(event)}>
+      {formOpen && canOperate && <form className="product-form" aria-busy={saving || inlineSaving} onSubmit={event => void save(event)}>
         <h3>{editingId === null ? 'New product' : 'Edit product'}</h3>
-        <div className="form-grid">
+        <fieldset className="form-grid" disabled={saving || inlineSaving}>
           <div className="form-wide">
             <label className="form-label" htmlFor="product-name">Product name *</label>
             <input ref={firstInput} id="product-name" className="form-control" required
@@ -383,7 +402,7 @@ export default function RetailProducts({ businessId, canOperate, currencyCode }:
           </div>
           {inlineType && <div className="form-wide product-form" role="group"
             aria-label={`Add ${inlineType === 'categories' ? 'category' : inlineType === 'units' ? 'unit' : 'brand'}`}
-            onKeyDown={event => { if (event.key === 'Enter') { event.preventDefault(); void addInline() } }}>
+            onKeyDown={event => { if (event.key === 'Enter') { event.preventDefault(); if (inlineValid) void addInline() } }}>
             <label className="form-label" htmlFor="inline-master-name">New {inlineType === 'categories' ? 'category' : inlineType === 'units' ? 'unit' : 'brand'} name</label>
             <input id="inline-master-name" className="form-control" minLength={2} maxLength={80}
               value={inlineName} onChange={event => setInlineName(event.target.value)} />
@@ -395,10 +414,12 @@ export default function RetailProducts({ businessId, canOperate, currencyCode }:
             {inlineType === 'categories' && <p className="field-help mt-2">
               Subgroup: {classificationPath(options.categories, inlineParent)}
             </p>}
+            {inlineNeedsReview && <p role="alert" className="alert alert-warning">
+              Creation status is unknown. Check Product Masters before attempting this again.
+            </p>}
             <div className="d-flex gap-2 mt-2">
               <ActionButton type="button" className="btn-sm" busy={inlineSaving}
-                busyLabel="Adding…" disabled={inlineName.trim().length < 2 ||
-                  inlineType === 'units' && !/^[A-Z0-9-]{1,12}$/.test(inlineCode.trim())}
+                busyLabel="Adding…" disabled={!inlineValid || inlineNeedsReview || saving}
                 onClick={() => void addInline()}>Add & select</ActionButton>
               <button type="button" className="btn btn-sm btn-outline-secondary" disabled={inlineSaving}
                 onClick={() => setInlineType(null)}>Cancel</button>
@@ -448,11 +469,11 @@ export default function RetailProducts({ businessId, canOperate, currencyCode }:
           </div>}
             </div>
           </details>
-        </div>
+        </fieldset>
         <div className="form-footer">
           <button type="button" className="btn btn-outline-secondary" disabled={saving}
             onClick={() => { setFormOpen(false); setError(''); setSkuError('') }}>Cancel</button>
-          <ActionButton busy={saving} disabled={optionsLoading}>Save product</ActionButton>
+          <ActionButton busy={saving} disabled={optionsLoading || inlineSaving || !!inlineType}>Save product</ActionButton>
         </div>
       </form>}
 
