@@ -81,7 +81,7 @@ UI:
 - Tax, discount and item/total policy are server-authoritative. Price overrides require appropriate permission. Legally required tax must not be bypassed with a payment-settings toggle.
 - Cash shows paid/tendered/change; credit shows customer, limit, existing outstanding, new outstanding and due date without pretending payment has been collected. Card and split tender show remaining, no blind assumptions of provider success.
 - Payment failure, pending, unknown and success states are separate. Re-try checks original operation first.
-- Receipt printing is post-commit and retryable without a new invoice.
+- Receipt printing is post-commit and retryable without a new invoice. A fixed developer-maintained 80mm/A4 RDLC design and typed header/line dataset must be used when the renderer is approved; no runtime RDLC XML generation or per-tenant template copies.
 - Held bills remain drafts and cannot deduct stock or count as sales unless a documented reservation policy is later adopted.
 - Keyboard shortcuts and barcode scanners should be tested with actual hardware; touch POS screens must remain operable.
 
@@ -96,6 +96,13 @@ UI:
 - Collections can be posted against prior credit invoices and must reduce outstanding exactly once, with method, actor, location, timestamp and receipt reference. Cash collection impacts a cash register; an unpaid credit sale does **not** increase cash takings. Returns, refunds, reports and day closing reconcile invoice totals separately from receipts and receivables.
 - Turning Credit OFF blocks **new** credit invoices only. Existing customer dues remain visible, collectible and reportable; disabling must not erase or silently settle them. Changes to discount or refund policy must not rewrite historical bills.
 - **Implementation status (24 Nov 2026):** The Owner Cash ON/OFF setting has a persisted Business-scoped revision, owner-only API, change audit, POS view and server gate. Credit setting is visibly locked and cannot be enabled by API until its receivable/collection workflow is released. Cash POS remains Development-only. Credit invoices, ledger and collections are **not implemented**. Hosted browser and retailer acceptance remain pending.
+
+## 6B. Owner-managed Invoice & Print preferences — 24 Nov 2026
+
+- Per-business, Owner-only, revision-checked and auditable settings: approved **80mm/A4** retail cash receipt template, show/hide sale time, unit price, cash received, change and footer, and optional footer text (up to 120 characters). New inactive subscriptions cannot edit. A manager/cashier cannot change the settings.
+- Mandatory printed information (merchant name, receipt reference, date, product/qty, each line amount and total payable) is **never hideable**. No tax invoice, discount or customer credit fields are fabricated until transactional models and legal requirements support them.
+- Static RDLC source files and two-table XSD are checked into `backend/BusinessSaas.Api/Reports/`. `RetailReceiptReportData.FromCashSale` reads posted sale values, verifies total reconciliation and prevents cross-business mapping. Report XML contains no queries and is not rewritten at runtime.
+- **Release gate:** An actual report renderer/driver integration, tested .NET 10 hosting compatibility, 80mm continuous-paper height, A4 pagination, printed tax requirements, device performance and real printer acceptance are **not** complete. Saved settings presently do not modify the older browser `window.print()` flow. See `docs/RDLC_INVOICE_DESIGN.md`.
 
 ## 7. Sales return, refund and exchange
 
