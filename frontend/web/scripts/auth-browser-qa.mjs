@@ -1042,6 +1042,56 @@ try {
   }
 
   {
+    const t = await scenario('pos-zero-value-fractional-line', {
+      role: 'Cashier', hasProducts: true
+    })
+    let salePosts = 0
+    await t.page.route('**/api/businesses/1/cash-sales/products*', route => response(route, 200, [
+      { id: 301, name: 'Regular Item', sku: 'REG-301', barcode: null,
+        salePrice: 2, available: 3, unitCode: 'PCS' },
+      { id: 302, name: 'Tiny Item', sku: 'TINY-302', barcode: null,
+        salePrice: 0.01, available: 3, unitCode: 'KG' }
+    ]))
+    await t.page.route('**/api/businesses/1/cash-sales', route => {
+      if (route.request().method() !== 'POST') return response(route, 404, {})
+      salePosts++
+      const sent = route.request().postDataJSON()
+      assert.equal(sent.tendered, 2.01)
+      assert.equal(sent.lines.length, 2)
+      assert.equal(sent.lines.find(line => line.productId === 302).quantity, 0.5)
+      return response(route, 200, {
+        id: 601, total: 2.01, tendered: 2.01, currencyCode: 'INR',
+        postedAtUtc: '2026-11-24T05:00:00Z',
+        lines: [
+          { id: 602, productName: 'Regular Item', unitPrice: 2, quantity: 1 },
+          { id: 603, productName: 'Tiny Item', unitPrice: 0.01, quantity: 0.5 }
+        ]
+      })
+    })
+    await t.login()
+    await t.page.getByRole('button', { name: /Add Regular Item/ }).click()
+    await t.page.getByRole('button', { name: /Add Tiny Item/ }).click()
+    const tinyQuantity = t.page.getByRole('spinbutton', { name: 'Quantity of Tiny Item' })
+    await tinyQuantity.fill('0.001')
+    await t.page.getByText(/A product line rounds to ₹0\.00/).waitFor()
+    assert.equal(await t.page.getByRole('button', { name: /Pay \/ Checkout/ }).isDisabled(), true,
+      'Non-zero basket must still reject a product whose line rounds to zero')
+    assert.match(await t.page.locator('.pos-total-row').innerText(), /₹2\.00/)
+    assert.equal(salePosts, 0)
+    await tinyQuantity.fill('0.500')
+    assert.equal(await t.page.getByText(/A product line rounds to ₹0\.00/).count(), 0)
+    assert.match(await t.page.locator('.pos-total-row').innerText(), /₹2\.01/)
+    await t.page.getByRole('button', { name: /Pay \/ Checkout/ }).click()
+    await t.page.getByLabel('Cash received').fill('2.01')
+    await t.page.getByRole('button', { name: 'Confirm Cash Payment' }).click()
+    await t.page.getByRole('heading', { name: 'Cash receipt #601' }).waitFor()
+    assert.equal(salePosts, 1)
+    await t.check()
+    await t.context.close()
+    console.log('PASS POS-06 zero-value fractional line blocked; valid cent checkout succeeds')
+  }
+
+  {
     const t = await scenario('stock-history-source-references', {
       role: 'Owner', hasProducts: true, stockAlertsFixture: true
     })
