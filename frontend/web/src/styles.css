@@ -292,3 +292,36 @@ button:focus-visible, a:focus-visible, input:focus-visible, select:focus-visible
   .pos-add-row label { flex: 1 1 90px; }
 }
 
+
+/* Shared mutation feedback for every workspace: compact, keyboard accessible and
+   non-blocking. Financial/unknown-outcome workflows retain their dedicated dialogs. */
+.action-feedback {
+  position: fixed; z-index: 1600; top: 18px; right: 18px;
+  width: min(420px, calc(100vw - 28px)); min-height: 70px;
+  display: flex; align-items: flex-start; gap: 12px;
+  padding: 16px; border: 1px solid #c6d5e8; border-left: 5px solid #154789;
+  border-radius: 10px; background: #ffffff; color: #000000;
+  box-shadow: 0 16px 38px #1025443d;
+}
+.action-feedback--success { border-left-color: #14532d; }
+.action-feedback--error { border-left-color: #991b1b; }
+.action-feedback--success > svg { color: #14532d; flex: 0 0 auto; }
+.action-feedback--error > svg { color: #991b1b; flex: 0 0 auto; }
+.action-feedback--saving > svg { color: #154789; flex: 0 0 auto; }
+.action-feedback-copy { display: grid; gap: 3px; min-width: 0; overflow-wrap: anywhere; line-height: 1.4; }
+.action-feedback-copy strong { color: #000000; font-size: .92rem; }
+.action-feedback-copy span { color: #202020; font-size: .84rem; }
+.action-feedback-dismiss {
+  margin: -5px -5px 0 auto; border: 0; background: transparent; color: #232323;
+  padding: 7px; border-radius: 6px; display: grid; place-items: center;
+}
+.action-feedback-dismiss:hover { background: #e8eff7; }
+.action-feedback-dismiss:focus-visible { outline: 3px solid #154789; outline-offset: 1px; }
+.action-feedback-spinner { animation: action-feedback-spin .9s linear infinite; flex-shrink: 0; }
+@keyframes action-feedback-spin { to { transform: rotate(360deg); } }
+@media (max-width: 600px) {
+  .action-feedback { top: 10px; right: 10px; width: calc(100vw - 20px); }
+}
+@media (prefers-reduced-motion: reduce) {
+  .action-feedback-spinner { animation: none; }
+}
