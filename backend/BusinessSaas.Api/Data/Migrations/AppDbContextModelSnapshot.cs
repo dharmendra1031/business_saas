@@ -247,6 +247,15 @@ namespace BusinessSaas.Api.Data.Migrations
                         .HasMaxLength(80)
                         .HasColumnType("nvarchar(80)");
 
+                    b.Property<bool>("CashSalesEnabled")
+                        .HasColumnType("bit");
+
+                    b.Property<bool>("CreditSalesEnabled")
+                        .HasColumnType("bit");
+
+                    b.Property<int>("BillingSettingsRevision")
+                        .HasColumnType("int");
+
                     b.HasKey("Id");
 
                     b.HasIndex("BusinessTypeId");
