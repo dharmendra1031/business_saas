@@ -43,9 +43,8 @@ export default function TeamMembers({ businessId, canOperate, cashSaleEnabled }:
         () => post<StaffMember>(path, { email: email.trim(), roleCode: role }))
       setMembers(current => [...current, member])
       setEmail('')
-    } catch (cause) {
-      if (!(cause instanceof SessionExpiredError))
-        setError(cause instanceof Error ? cause.message : 'Unable to add user.')
+    } catch {
+      // The app-wide status popup handles the failed or ambiguous mutation.
     } finally {
       setBusy(false)
     }
@@ -60,9 +59,8 @@ export default function TeamMembers({ businessId, canOperate, cashSaleEnabled }:
         () => api<void>(`${path}/${member.userId}`, { method: 'DELETE' }))
       setMembers(current => current.filter(item => item.userId !== member.userId))
       setConfirmRemove(null)
-    } catch (cause) {
-      if (!(cause instanceof SessionExpiredError))
-        setError(cause instanceof Error ? cause.message : 'Unable to remove user.')
+    } catch {
+      // Keep the row and the explicit confirmation for safe reconciliation.
     } finally {
       setBusy(false)
     }
