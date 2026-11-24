@@ -10,6 +10,7 @@ import './styles.pos.css'
 import App from './App'
 import PlatformNoticeBanner from './PlatformNoticeBanner'
 import OwnerInviteAcceptance from './OwnerInviteAcceptance'
+import { ActionFeedbackProvider } from './ActionFeedback'
 
 // Remove the emailed secret from browser history before any API requests or analytics.
 const invitationToken = new URLSearchParams(window.location.search).get('invite')
@@ -17,7 +18,9 @@ if (invitationToken) window.history.replaceState(null, '', window.location.pathn
 
 ReactDOM.createRoot(document.getElementById('root')!).render(
   <React.StrictMode>
-    <PlatformNoticeBanner />
-    {invitationToken ? <OwnerInviteAcceptance token={invitationToken} /> : <App />}
+    <ActionFeedbackProvider>
+      <PlatformNoticeBanner />
+      {invitationToken ? <OwnerInviteAcceptance token={invitationToken} /> : <App />}
+    </ActionFeedbackProvider>
   </React.StrictMode>
 )
