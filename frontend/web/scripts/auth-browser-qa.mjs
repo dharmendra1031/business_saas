@@ -1486,7 +1486,7 @@ try {
     let productCreates = 0
     await t.page.route('**/api/businesses/1/products/options*', route => {
       reads++
-      if (reads > 1) return response(route, 503, { message: 'Options service offline' })
+      if (brandCreates > 0) return response(route, 503, { message: 'Options service offline' })
       return response(route, 200, {
         categories: [{ id: 1, name: 'General', parentId: null, isActive: true }],
         units: [{ id: 1, name: 'Item', code: 'ITEM', isActive: true }], brands: []
