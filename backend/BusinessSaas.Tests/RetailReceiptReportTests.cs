@@ -82,8 +82,11 @@ public sealed class RetailReceiptReportTests
                 .Contains((string?)x.Attribute("name")))
             .ToDictionary(x => (string)x.Attribute("name")!, x => x
                 .Descendants(xs + "element").Select(f => (string)f.Attribute("name")!).ToArray());
-        Assert.Equal(10, fields["InvoiceHeader"].Length);
-        Assert.Equal(5, fields["InvoiceLines"].Length);
+        Assert.Equal(new[] { "BusinessName", "ReceiptNumber", "DateText", "TimeText",
+            "CurrencyCode", "PaymentMethod", "TotalAmount", "CashReceived",
+            "ChangeAmount", "FooterText" }, fields["InvoiceHeader"]);
+        Assert.Equal(new[] { "LineNumber", "ProductName", "Quantity", "UnitPrice",
+            "LineTotal" }, fields["InvoiceLines"]);
     }
 
     [Fact]
