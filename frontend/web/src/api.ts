@@ -84,6 +84,7 @@ export interface RetailDashboard {
     }[]
   } | null
   cashSaleEnabled?: boolean
+  cashPaymentEnabled?: boolean
   canOperate: boolean
 }
 
