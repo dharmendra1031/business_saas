@@ -91,6 +91,7 @@ export default function CashCheckout({ userId, dashboard, onExit }: {
   const [hint, setHint] = useState('')
   const [busy, setBusy] = useState(false)
   const lock = useRef(false)
+  const scanLock = useRef(false)
   const searchInput = useRef<HTMLInputElement>(null)
   const total = basket.reduce((sum, line) =>
     sum + Math.round(Math.round(line.expectedUnitPrice * 100) * line.quantity), 0) / 100
@@ -158,9 +159,14 @@ export default function CashCheckout({ userId, dashboard, onExit }: {
     return () => { active = false; clearTimeout(timer) }
   }, [base, customerOpen, customerSearch, locationId, pending, receipt, dashboard.canOperate])
 
-  function addProduct(item: Product) {
-    if (!dashboard.canOperate || !cashAvailable || busy || pending || receipt) return
+  function addProduct(item: Product, fromScan = false) {
+    if (!dashboard.canOperate || !cashAvailable || lock.current || busy || pending || receipt ||
+      (scanLock.current && !fromScan)) return
     const existing = basket.find(line => line.productId === item.id)
+    if (item.available - (existing?.quantity ?? 0) < 0.001 - 0.0000001) {
+      setError('Insufficient available stock for this product.')
+      return
+    }
     const nextQty = Number(((existing?.quantity ?? 0) +
       Math.min(1, item.available - (existing?.quantity ?? 0))).toFixed(3))
     if (!validQuantity(nextQty) || nextQty > item.available) {
@@ -185,17 +191,22 @@ export default function CashCheckout({ userId, dashboard, onExit }: {
   async function submitBarcode(event: FormEvent) {
     event.preventDefault()
     const code = search.trim().toUpperCase()
-    if (!code || scanBusy || busy || !dashboard.canOperate || !cashAvailable || !locationId) return
+    if (!code || scanLock.current || lock.current || busy || pending || receipt ||
+      !dashboard.canOperate || !cashAvailable || !locationId) return
+    scanLock.current = true
     setScanBusy(true)
+    setError('')
     try {
-      const matching = products.find(x => x.barcode?.toUpperCase() === code || x.sku.toUpperCase() === code) ??
-        (await api<Product[]>(`${base}/products?locationId=${locationId}&search=${encodeURIComponent(code)}`))
-          .find(x => x.barcode?.toUpperCase() === code || x.sku.toUpperCase() === code)
-      if (matching) addProduct(matching)
-      else setHint('No exact barcode or SKU match. Select a product card from the results.')
+      // The catalogue may contain stale or partial search results. Verify the exact code
+      // at the current location, and never silently choose between two matching products.
+      const matching = (await api<Product[]>(`${base}/products?locationId=${locationId}&search=${encodeURIComponent(code)}`))
+        .filter(x => x.barcode?.toUpperCase() === code || x.sku.toUpperCase() === code)
+      if (matching.length === 1) addProduct(matching[0], true)
+      else if (matching.length > 1) setError('This code matches multiple products. Select the correct product card.')
+      else setError('No exact barcode or SKU match. Select a product card from the results.')
     } catch (cause) {
-      setHint(cause instanceof Error ? cause.message : 'Unable to verify barcode.')
-    } finally { setScanBusy(false) }
+      setError(cause instanceof Error ? cause.message : 'Unable to verify barcode.')
+    } finally { scanLock.current = false; setScanBusy(false) }
   }
 
   // A filtered product search must not erase the stock limit for items in the basket.
@@ -205,7 +216,7 @@ export default function CashCheckout({ userId, dashboard, onExit }: {
   }
 
   function updateQuantity(line: Line, quantity: number) {
-    if (!validQuantity(quantity)) return
+    if (scanLock.current || !validQuantity(quantity)) return
     const knownStock = availableStock(line)
     if (knownStock !== undefined && quantity > knownStock) {
       setError(`Only ${knownStock} ${line.unitCode ?? 'units'} available at this location.`)
@@ -230,7 +241,7 @@ export default function CashCheckout({ userId, dashboard, onExit }: {
 
   async function recordSale(openPrint = false) {
     const received = Number(cash)
-    if (lock.current || !dashboard.canOperate || needsReview || (!pending && !cashAvailable) ||
+    if (lock.current || scanLock.current || !dashboard.canOperate || needsReview || (!pending && !cashAvailable) ||
       (pending && lookupState !== 'missing')) return
     if (!pending && (!locationId || !basket.length || basket.some(line =>
       !validQuantity(line.quantity) ||
@@ -315,7 +326,7 @@ export default function CashCheckout({ userId, dashboard, onExit }: {
   }
 
   async function lookupReceipt(receiptId?: string) {
-    if (lock.current || !locationId || pending) return
+    if (lock.current || scanLock.current || !locationId || pending) return
     lock.current = true
     setBusy(true)
     setError('')
@@ -353,14 +364,14 @@ export default function CashCheckout({ userId, dashboard, onExit }: {
       <div className="pos-header-actions">
         <span className="pos-mode"><Check size={15} /> Cash checkout · {business.currencyCode}</span>
         <button type="button" className="btn btn-outline-secondary btn-sm pos-exit-button"
-          disabled={busy || !!pending} onClick={() => basket.length ? setExitArmed(true) : onExit()}>
+          disabled={busy || scanBusy || !!pending} onClick={() => basket.length ? setExitArmed(true) : onExit()}>
           <ArrowLeft size={15} /> Exit POS
         </button>
       </div>
     </header>
     {exitArmed && <div className="pos-exit-confirm" role="alert">
       <span>Unposted basket items will be discarded when you leave checkout.</span>
-      <button type="button" className="btn btn-outline-danger btn-sm" onClick={onExit}>Discard and exit</button>
+      <button type="button" className="btn btn-outline-danger btn-sm" disabled={scanBusy} onClick={onExit}>Discard and exit</button>
       <button type="button" className="btn btn-outline-secondary btn-sm" onClick={() => setExitArmed(false)}>Stay in POS</button>
     </div>}
     {error && !showPayment && <div role="alert" className="alert alert-danger">{error}</div>}
@@ -375,8 +386,8 @@ export default function CashCheckout({ userId, dashboard, onExit }: {
       <p role="status">{busy ? 'Recording sale…' : lookupState === 'missing' ? 'No posted receipt found for this sale.'
         : lookupState === 'unknown' ? 'Receipt status could not be verified. Do not create another sale.' : 'Checking for the posted receipt…'}</p>
       {lookupState === 'missing' && <button type="button" className="btn btn-primary me-2"
-        disabled={busy || !dashboard.canOperate} onClick={() => void recordSale()}>Record original request</button>}
-      <button type="button" className="btn btn-outline-secondary" disabled={busy || lookupState === 'checking'}
+        disabled={busy || scanBusy || !dashboard.canOperate} onClick={() => void recordSale()}>Record original request</button>}
+      <button type="button" className="btn btn-outline-secondary" disabled={busy || scanBusy || lookupState === 'checking'}
         onClick={() => { setLookupState('checking'); setRefresh(n => n + 1) }}>Check status again</button>
     </section> : <div className="pos-grid">
       <section className="content-section pos-catalog" aria-label="Product selection">
@@ -387,14 +398,14 @@ export default function CashCheckout({ userId, dashboard, onExit }: {
         <div className="pos-location-row">
           <label className="form-label" htmlFor="pos-location">Store location
             <select id="pos-location" className="form-select" value={locationId}
-              disabled={busy || basket.length > 0} onChange={event => {
+              disabled={busy || scanBusy || basket.length > 0} onChange={event => {
                 setHistoryPage(0)
                 setLocation(Number(event.target.value))
               }}>
               {locations.map(location => <option key={location.id} value={location.id}>{location.name}</option>)}
             </select>
           </label>
-          <button type="button" className="btn btn-outline-secondary btn-sm" disabled={busy || !locationId}
+          <button type="button" className="btn btn-outline-secondary btn-sm" disabled={busy || scanBusy || !locationId}
             aria-expanded={historyPage > 0} aria-controls="pos-receipt-history"
             onClick={() => setHistoryPage(page => page ? 0 : 1)}>
             <ReceiptText size={16} /> {historyPage > 0 ? 'Back to products' : 'Receipt history'}
@@ -405,7 +416,7 @@ export default function CashCheckout({ userId, dashboard, onExit }: {
           <Search size={19} aria-hidden="true" />
           <input ref={searchInput} id="pos-product-search" autoFocus className="form-control" type="search"
             placeholder="Search product, SKU or scan barcode…" maxLength={150} value={search}
-            disabled={!dashboard.canOperate || busy} onChange={event => setSearch(event.target.value)} />
+            disabled={!dashboard.canOperate || busy} readOnly={scanBusy} onChange={event => setSearch(event.target.value)} />
           <button type="submit" className="btn btn-outline-primary btn-sm"
             disabled={!search.trim() || scanBusy || busy || !dashboard.canOperate || !cashAvailable} aria-label="Add exact barcode or SKU">
             {scanBusy ? 'Checking…' : 'Scan / Enter'}
@@ -419,7 +430,7 @@ export default function CashCheckout({ userId, dashboard, onExit }: {
           {historyPage > 0 ? <section id="pos-receipt-history" aria-label="Cash receipt history" className="pos-receipt-history">
             <div className="pos-receipt-heading">
               <h3>Receipt history</h3>
-              <button type="button" className="btn btn-outline-secondary btn-sm" disabled={busy || !locationId}
+              <button type="button" className="btn btn-outline-secondary btn-sm" disabled={busy || scanBusy || !locationId}
                 onClick={() => void lookupReceipt()}><ReceiptText size={16} /> Last Receipt</button>
             </div>
         <form className="pos-search" role="search" aria-label="Receipt lookup" onSubmit={event => {
@@ -427,26 +438,26 @@ export default function CashCheckout({ userId, dashboard, onExit }: {
           if (validReceiptNumber) void lookupReceipt(receiptNumber.trim())
         }}>
           <input className="form-control" aria-label="Receipt number" placeholder="Receipt number"
-            inputMode="numeric" maxLength={19} value={receiptNumber} disabled={busy || !locationId}
+            inputMode="numeric" maxLength={19} value={receiptNumber} disabled={busy || scanBusy || !locationId}
             onChange={event => setReceiptNumber(event.target.value)} />
           <button type="submit" className="btn btn-outline-secondary btn-sm"
-            disabled={busy || !locationId || !validReceiptNumber}>Find receipt</button>
+            disabled={busy || scanBusy || !locationId || !validReceiptNumber}>Find receipt</button>
         </form>
           {historyError ? <div role="alert">Unable to load receipt history.{' '}
             <button type="button" onClick={() => setHistoryRetry(value => value + 1)}>Retry history</button>
           </div> : !history ? <p role="status">Loading receipt history…</p> : <>
             {history.items.length === 0 ? <p>No receipts on this page.</p> :
               <ul className="list-group mb-2">{history.items.map(item => <li key={item.id} className="list-group-item">
-                <button type="button" className="btn btn-link p-0" disabled={busy}
+                <button type="button" className="btn btn-link p-0" disabled={busy || scanBusy}
                   onClick={() => void lookupReceipt(String(item.id))}>Receipt #{item.id}</button>
                 {' · '}{item.currencyCode} {item.total.toFixed(2)}{' · '}
                 {new Date(item.postedAtUtc).toLocaleString(undefined, { timeZone: business.timeZoneId })}
               </li>)}</ul>}
             <div className="d-flex gap-2 align-items-center">
-              <button type="button" className="btn btn-outline-secondary btn-sm" disabled={busy || historyPage === 1}
+              <button type="button" className="btn btn-outline-secondary btn-sm" disabled={busy || scanBusy || historyPage === 1}
                 onClick={() => setHistoryPage(page => page - 1)}>Previous</button>
               <span>Page {historyPage}</span>
-              <button type="button" className="btn btn-outline-secondary btn-sm" disabled={busy || !history.hasMore}
+              <button type="button" className="btn btn-outline-secondary btn-sm" disabled={busy || scanBusy || !history.hasMore}
                 onClick={() => setHistoryPage(page => page + 1)}>Next</button>
             </div>
           </>}
@@ -456,7 +467,7 @@ export default function CashCheckout({ userId, dashboard, onExit }: {
           </div> : products.length ? <div className="pos-products-grid">
             {products.map(item => {
               const inBasket = basket.find(line => line.productId === item.id)?.quantity ?? 0
-              const canAdd = dashboard.canOperate && cashAvailable && !busy &&
+              const canAdd = dashboard.canOperate && cashAvailable && !busy && !scanBusy &&
                 item.available - inBasket >= 0.001 &&
                 (inBasket > 0 || basket.length < 100)
               return <button key={item.id} type="button" className="pos-product-card" disabled={!canAdd}
@@ -486,10 +497,10 @@ export default function CashCheckout({ userId, dashboard, onExit }: {
         <div className="pos-basket-toolbar">
           <span><ShoppingBag size={16} /> {itemCount} units</span>
           {basket.length > 0 && !clearArmed && <button type="button" className="pos-basket-clear"
-            disabled={busy} onClick={() => setClearArmed(true)}><Trash2 size={15} /> Clear</button>}
+            disabled={busy || scanBusy} onClick={() => setClearArmed(true)}><Trash2 size={15} /> Clear</button>}
           {clearArmed && <div className="pos-clear-confirm">
             <span>Clear this basket?</span>
-            <button type="button" disabled={busy} onClick={() => {
+            <button type="button" disabled={busy || scanBusy} onClick={() => {
               setBasket([]); setCustomer(null); setCustomerOpen(false); setCustomerSearch(''); setReviewProductId(null); setClearArmed(false); setCash('')
             }}>Yes, clear</button>
             <button type="button" onClick={() => setClearArmed(false)}>Cancel</button>
@@ -497,22 +508,22 @@ export default function CashCheckout({ userId, dashboard, onExit }: {
         </div>
         <div className="d-flex align-items-center justify-content-between gap-2 px-2 py-1">
           <span className="small text-truncate">Customer: <strong>{customer?.name ?? 'Walk-in'}</strong></span>
-          <button type="button" className="btn btn-outline-secondary btn-sm" disabled={busy || !dashboard.canOperate || !cashAvailable}
+          <button type="button" className="btn btn-outline-secondary btn-sm" disabled={busy || scanBusy || !dashboard.canOperate || !cashAvailable}
             aria-expanded={customerOpen} onClick={() => { setCustomerOpen(v => !v); setCustomerSearch(''); setCustomerResults([]) }}>
             {customerOpen ? 'Close' : 'Select customer'}
           </button>
-          {customer && <button type="button" className="btn btn-outline-secondary btn-sm" disabled={busy}
+          {customer && <button type="button" className="btn btn-outline-secondary btn-sm" disabled={busy || scanBusy}
             onClick={() => { setCustomer(null); setCustomerOpen(false); setCustomerSearch('') }}>Walk-in</button>}
         </div>
         {customerOpen && <div className="px-2 pb-2">
           <label htmlFor="pos-customer-search" className="visually-hidden">Search customer by name or phone</label>
           <input id="pos-customer-search" className="form-control form-control-sm" maxLength={100}
-            placeholder="Customer name or phone" value={customerSearch} disabled={busy}
+            placeholder="Customer name or phone" value={customerSearch} disabled={busy || scanBusy}
             onChange={event => { setCustomerSearch(event.target.value); setCustomerResults([]) }} />
           {customerStatus && <p className="small mb-1" role="status">{customerStatus}</p>}
           {customerResults.length > 0 && <div className="list-group overflow-auto" style={{ maxHeight: 150 }}>
             {customerResults.map(item => <button key={item.id} type="button" className="list-group-item list-group-item-action"
-              disabled={busy} onClick={() => { setCustomer(item); setCustomerOpen(false); setCustomerSearch('') }}>
+              disabled={busy || scanBusy} onClick={() => { setCustomer(item); setCustomerOpen(false); setCustomerSearch('') }}>
               {item.name}{item.phone ? ' · ' + item.phone : ''}
             </button>)}
           </div>}
@@ -532,18 +543,18 @@ export default function CashCheckout({ userId, dashboard, onExit }: {
             </div>
             <div className="pos-quantity-control" aria-label={`Quantity of ${line.name}`}>
               <button type="button" aria-label={`Decrease quantity of ${line.name}`}
-                disabled={busy || line.quantity === 1 || line.quantity <= 0.001}
+                disabled={busy || scanBusy || line.quantity === 1 || line.quantity <= 0.001}
                 onClick={() => stepQuantity(line, -1)}><Minus size={15} /></button>
               <input className="form-control form-control-sm" aria-label={`Quantity of ${line.name}`}
-                type="number" min="0.001" max="1000000" step="0.001" disabled={busy} value={line.quantity}
+                type="number" min="0.001" max="1000000" step="0.001" disabled={busy || scanBusy} value={line.quantity}
                 onChange={event => updateQuantity(line, Number(event.target.value))} />
               <button type="button" aria-label={`Increase quantity of ${line.name}`}
-                disabled={busy || line.quantity + 0.001 >
+                disabled={busy || scanBusy || line.quantity + 0.001 >
                   Math.min(1000000, availableStock(line) ?? 1000000)}
                 onClick={() => stepQuantity(line, 1)}><Plus size={15} /></button>
             </div>
             <b className="pos-line-amount">{money(Math.round(Math.round(line.expectedUnitPrice * 100) * line.quantity) / 100)}</b>
-            <button type="button" className="pos-remove-item" disabled={busy}
+            <button type="button" className="pos-remove-item" disabled={busy || scanBusy}
               aria-label={`Remove ${line.name}`} onClick={() => {
                 setBasket(previous => previous.filter(x => x.productId !== line.productId))
                 if (line.productId === reviewProductId) setReviewProductId(null)
@@ -558,7 +569,7 @@ export default function CashCheckout({ userId, dashboard, onExit }: {
           <div className="pos-subtotal-row"><span>Subtotal</span><strong>{money(total)}</strong></div>
           <div className="pos-total-row"><span>Total Payable</span><strong>{money(total)}</strong></div>
           <button type="button" className="btn btn-primary pos-record-button"
-            disabled={!dashboard.canOperate || !cashAvailable || busy || needsReview || hasZeroValueLine ||
+            disabled={!dashboard.canOperate || !cashAvailable || busy || scanBusy || needsReview || hasZeroValueLine ||
               !basket.length || !Number.isFinite(total) || total <= 0 ||
               basket.some(line => !validQuantity(line.quantity))}
             onClick={() => { setError(''); setShowPayment(true) }}>

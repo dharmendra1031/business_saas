@@ -1031,6 +1031,46 @@ try {
     console.log('PASS BUS-54 failed settings load stops spinner and has working retry')
   }
 
+  {
+    const t = await scenario('pos-safe-barcode', { role: 'Cashier', hasProducts: true })
+    const first = { id: 401, name: 'Scan Item', sku: 'SCAN-401', barcode: '900001',
+      salePrice: 25, available: 3, unitCode: 'PCS' }
+    const other = { id: 402, name: 'Other Item', sku: '900001', barcode: null,
+      salePrice: 50, available: 5, unitCode: 'PCS' }
+    let releaseLookup
+    const lookupGate = new Promise(resolve => { releaseLookup = resolve })
+    await t.page.route('**/api/businesses/1/cash-sales/products*', async route => {
+      const term = new URL(route.request().url()).searchParams.get('search') ?? ''
+      if (term === 'SCAN-401') {
+        await lookupGate
+        return response(route, 200, [first])
+      }
+      return response(route, 200, term === '900001' ? [first, other] : [first, other])
+    })
+    await t.login()
+    await t.page.getByRole('button', { name: /Add Scan Item/ }).waitFor()
+    const search = t.page.locator('#pos-product-search')
+    await search.fill('SCAN-401')
+    await search.press('Enter')
+    try {
+      await t.page.getByRole('button', { name: 'Add exact barcode or SKU' }).getByText('Checking…').waitFor()
+      assert.equal(await t.page.locator('#pos-location').isDisabled(), true)
+      assert.equal(await t.page.getByRole('button', { name: 'Exit POS' }).isDisabled(), true)
+      assert.equal(await t.page.getByRole('button', { name: /Pay \/ Checkout/ }).isDisabled(), true)
+    } finally { releaseLookup() }
+    const qty = t.page.getByRole('spinbutton', { name: 'Quantity of Scan Item' })
+    await qty.waitFor()
+    assert.equal(await qty.inputValue(), '1')
+    await search.fill('900001')
+    await search.press('Enter')
+    await t.page.getByRole('alert').getByText('This code matches multiple products. Select the correct product card.').waitFor()
+    assert.equal(await qty.inputValue(), '1')
+    assert.equal(await t.page.getByRole('spinbutton', { name: 'Quantity of Other Item' }).count(), 0)
+    await t.check()
+    await t.context.close()
+    console.log('PASS POS barcode verifies current location and refuses ambiguous product codes')
+  }
+
   for (const mode of ['checkout', 'blocked-print', 'save-only', 'recover', 'review', 'out-of-stock', 'recover-review']) {
     const recover = mode === 'recover'
     const recoveringReview = mode === 'recover-review'
