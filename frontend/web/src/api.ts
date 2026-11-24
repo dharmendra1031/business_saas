@@ -110,8 +110,8 @@ export class SessionExpiredError extends Error {
 // A dropped response to a write does not prove the write failed.
 // Callers must check the record or retry with their original operation key.
 export class UncertainWriteError extends Error {
-  constructor() {
-    super('Connection lost. The action may have completed. Check the record before retrying.')
+  constructor(message = 'Connection lost. The action may have completed. Check the record before retrying.') {
+    super(message)
   }
 }
 
@@ -213,9 +213,9 @@ export async function api<T>(path: string, options: RequestInit = {}): Promise<T
     return data
   } catch (cause) {
     if (cause instanceof SessionExpiredError) throw cause
-    throw new Error(method === 'GET' || method === 'HEAD'
-      ? 'The server returned an incomplete response. Please retry.'
-      : 'The server response was incomplete. Check the record before retrying.')
+    if (method === 'GET' || method === 'HEAD')
+      throw new Error('The server returned an incomplete response. Please retry.')
+    throw new UncertainWriteError('The server response was incomplete. Check the record before retrying.')
   }
 }
 
