@@ -145,9 +145,8 @@ export default function PlatformPlans({ business, onChooseBusiness }: { business
       setPublishing(null)
       setPublishReason('')
       setReload(value => value + 1)
-    } catch (cause) {
-      if (!(cause instanceof SessionExpiredError))
-        setError(cause instanceof Error ? cause.message : 'Unable to publish the plan.')
+    } catch {
+      // Shared popup reports the server result; retain publication form.
     } finally {
       setBusy(false)
     }
@@ -191,9 +190,8 @@ export default function PlatformPlans({ business, onChooseBusiness }: { business
           }))
       setEditing(null)
       setReload(value => value + 1)
-    } catch (cause) {
-      if (!(cause instanceof SessionExpiredError))
-        setError(cause instanceof Error ? cause.message : 'Unable to save plan draft.')
+    } catch {
+      // Shared popup reports the server result; retain the unsaved draft.
     } finally {
       setBusy(false)
     }
