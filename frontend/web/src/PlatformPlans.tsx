@@ -1,6 +1,7 @@
 import { useEffect, useRef, useState, type FormEvent } from 'react'
 import { api, post, SessionExpiredError } from './api'
 import PlatformBilling from './PlatformBilling'
+import { ActionButton, useActionFeedback } from './ActionFeedback'
 import { BadgeCheck, Building2, CheckCircle2, CreditCard, RefreshCw, Store, Users } from 'lucide-react'
 
 interface PlanDraft {
@@ -80,12 +81,12 @@ function numberOrNull(value: string): number | null {
 }
 
 export default function PlatformPlans({ business, onChooseBusiness }: { business: { id: number; name: string } | null; onChooseBusiness: () => void }) {
+  const { run } = useActionFeedback()
   const [activeTab, setActiveTab] = useState<'catalog' | 'billing'>(business ? 'billing' : 'catalog')
   const [data, setData] = useState<PlanResponse | null>(null)
   const [loading, setLoading] = useState(true)
   const [busy, setBusy] = useState(false)
   const [error, setError] = useState('')
-  const [notice, setNotice] = useState('')
   const [reload, setReload] = useState(0)
   const [editing, setEditing] = useState<Plan | null>(null)
   const [publishing, setPublishing] = useState<Plan | null>(null)
@@ -117,7 +118,6 @@ export default function PlatformPlans({ business, onChooseBusiness }: { business
     setEditing(plan)
     setForm(formFromDraft(plan.draft))
     setError('')
-    setNotice('')
   }
 
   function openPublish(plan: Plan) {
@@ -125,22 +125,23 @@ export default function PlatformPlans({ business, onChooseBusiness }: { business
     setPublishing(plan)
     setPublishReason('')
     setError('')
-    setNotice('')
   }
 
   async function publishPlan(event: FormEvent) {
     event.preventDefault()
-    if (!publishing?.draft || !publishing.isPublic) return
+    if (!publishing?.draft || !publishing.isPublic || busy) return
     setBusy(true)
     setError('')
     try {
-      const result = await post<{ version: number; auditId: number }>(
-        `/platform/plans/${publishing.code}/publish`, {
-          expectedDraftRevision: publishing.draft.revision,
-          expectedPublishedVersion: publishing.published?.version ?? 0,
-          reason: publishReason.trim()
-        })
-      setNotice(`${publishing.name} catalog version ${result.version} published. Audit #${result.auditId} recorded.`)
+      await run(`Publishing ${publishing.name} plan…`,
+        (result: { version: number; auditId: number }) =>
+          `${publishing.name} catalog version ${result.version} published. Audit #${result.auditId} recorded.`,
+        () => post<{ version: number; auditId: number }>(
+          `/platform/plans/${publishing.code}/publish`, {
+            expectedDraftRevision: publishing.draft!.revision,
+            expectedPublishedVersion: publishing.published?.version ?? 0,
+            reason: publishReason.trim()
+          }))
       setPublishing(null)
       setPublishReason('')
       setReload(value => value + 1)
@@ -169,24 +170,26 @@ export default function PlatformPlans({ business, onChooseBusiness }: { business
 
   async function saveDraft(event: FormEvent) {
     event.preventDefault()
-    if (!editing) return
+    if (!editing || busy) return
     setBusy(true)
     setError('')
     try {
-      const result = await post<{ revision: number; auditId: number }>(
-        `/platform/plans/${editing.code}/draft`, {
-          expectedRevision: editing.draft?.revision ?? 0,
-          currencyCode: form.currencyCode.trim().toUpperCase() || null,
-          monthlyPrice: numberOrNull(form.monthlyPrice),
-          quarterlyPrice: numberOrNull(form.quarterlyPrice),
-          yearlyPrice: numberOrNull(form.yearlyPrice),
-          maxLocations: numberOrNull(form.maxLocations),
-          maxUsers: numberOrNull(form.maxUsers),
-          maxProducts: numberOrNull(form.maxProducts),
-          reason: form.reason.trim()
-        })
+      await run(`Saving ${editing.name} draft…`,
+        (result: { revision: number; auditId: number }) =>
+          `${editing.name} draft v${result.revision} saved. Audit #${result.auditId} recorded.`,
+        () => post<{ revision: number; auditId: number }>(
+          `/platform/plans/${editing.code}/draft`, {
+            expectedRevision: editing.draft?.revision ?? 0,
+            currencyCode: form.currencyCode.trim().toUpperCase() || null,
+            monthlyPrice: numberOrNull(form.monthlyPrice),
+            quarterlyPrice: numberOrNull(form.quarterlyPrice),
+            yearlyPrice: numberOrNull(form.yearlyPrice),
+            maxLocations: numberOrNull(form.maxLocations),
+            maxUsers: numberOrNull(form.maxUsers),
+            maxProducts: numberOrNull(form.maxProducts),
+            reason: form.reason.trim()
+          }))
       setEditing(null)
-      setNotice(`${editing.name} draft v${result.revision} saved. Audit #${result.auditId} recorded.`)
       setReload(value => value + 1)
     } catch (cause) {
       if (!(cause instanceof SessionExpiredError))
@@ -204,7 +207,6 @@ export default function PlatformPlans({ business, onChooseBusiness }: { business
       <button type="button" className="btn btn-outline-secondary btn-sm"
         disabled={loading || busy} onClick={() => setReload(value => value + 1)}><RefreshCw size={15} /> Refresh</button>
     </div>
-    {notice && <div className="alert alert-success" role="status">{notice}</div>}
     {error && <div className="alert alert-danger" role="alert">{error}
       {!editing && !publishing && <button type="button" className="btn btn-outline-secondary btn-sm ms-2"
         onClick={() => setReload(value => value + 1)}>Retry</button>}
@@ -321,10 +323,9 @@ export default function PlatformPlans({ business, onChooseBusiness }: { business
         <div className="form-footer">
           <button type="button" className="btn btn-outline-secondary" disabled={busy}
             onClick={() => { setPublishing(null); setError('') }}>Cancel</button>
-          <button type="submit" className="btn btn-primary"
-            disabled={busy || publishReason.trim().length < 10}>
-            {busy ? 'Publishing…' : 'Confirm Catalog Publication'}
-          </button>
+          <ActionButton busy={busy} busyLabel="Publishing…" disabled={publishReason.trim().length < 10}>
+            Confirm Catalog Publication
+          </ActionButton>
         </div>
       </form>
     </section>}
@@ -390,10 +391,9 @@ export default function PlatformPlans({ business, onChooseBusiness }: { business
         <div className="form-footer">
           <button type="button" className="btn btn-outline-secondary"
             disabled={busy} onClick={() => { setEditing(null); setError('') }}>Cancel</button>
-          <button type="submit" className="btn btn-primary"
-            disabled={busy || form.reason.trim().length < 10}>
-            {busy ? 'Saving…' : 'Save Draft'}
-          </button>
+          <ActionButton busy={busy} disabled={form.reason.trim().length < 10}>
+            Save Draft
+          </ActionButton>
         </div>
       </form>
     </section>}
