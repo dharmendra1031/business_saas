@@ -550,17 +550,24 @@ public sealed class SqlServerTests
         };
         const string firstKey = "sql-cash-race-first-20261124";
         const string secondKey = "sql-cash-race-second-20261124";
-        using var firstRace = await Post(cashier, prefix + "/cash-sales", RaceRequest(firstKey));
-        using var secondRace = await Post(cashier, prefix + "/cash-sales", RaceRequest(secondKey));
-        // Separate sequential attempts also confirm the no-oversell rule; concurrent
-        // requests below are sent together using independent HTTP requests.
-        Assert.Equal(HttpStatusCode.OK, firstRace.StatusCode);
-        Assert.Equal(HttpStatusCode.BadRequest, secondRace.StatusCode);
-        var firstSale = await firstRace.Content.ReadFromJsonAsync<JsonElement>();
-        using var firstReplay = await Post(cashier, prefix + "/cash-sales", RaceRequest(firstKey));
-        Assert.Equal(HttpStatusCode.OK, firstReplay.StatusCode);
-        Assert.Equal(firstSale.GetProperty("id").GetInt64(),
-            (await firstReplay.Content.ReadFromJsonAsync<JsonElement>()).GetProperty("id").GetInt64());
+        var raceResponses = await Task.WhenAll(
+            Post(cashier, prefix + "/cash-sales", RaceRequest(firstKey)),
+            Post(cashier, prefix + "/cash-sales", RaceRequest(secondKey)));
+        using var firstRace = raceResponses[0];
+        using var secondRace = raceResponses[1];
+        var successes = raceResponses.Where(r => r.StatusCode == HttpStatusCode.OK).ToArray();
+        Assert.Single(successes);
+        var rejected = raceResponses.Single(r => r.StatusCode != HttpStatusCode.OK);
+        Assert.True(rejected.StatusCode is HttpStatusCode.BadRequest or HttpStatusCode.Conflict,
+            $"Concurrent checkout must reject the oversell; status {(int)rejected.StatusCode}: " +
+            await rejected.Content.ReadAsStringAsync());
+
+        var winningKey = firstRace.StatusCode == HttpStatusCode.OK ? firstKey : secondKey;
+        var successfulSale = await successes[0].Content.ReadFromJsonAsync<JsonElement>();
+        using var replay = await Post(cashier, prefix + "/cash-sales", RaceRequest(winningKey));
+        Assert.Equal(HttpStatusCode.OK, replay.StatusCode);
+        Assert.Equal(successfulSale.GetProperty("id").GetInt64(),
+            (await replay.Content.ReadFromJsonAsync<JsonElement>()).GetProperty("id").GetInt64());
 
         using (var scope = factory.Services.CreateScope())
         {
