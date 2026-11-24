@@ -230,8 +230,8 @@
 | BS-103 | Implement cart quantity/add/remove | Total तत्काल update हो | TODO |
 | BS-104 | Calculate discounts and tax on server | Price breakdown transparent हो | TODO |
 | BS-105 | Implement cash tender/change | Pay/Change values clearly separated हों | TODO |
-| BS-106 | Implement card/external tender records | External payment verified state दिखे | TODO |
-| BS-107 | Implement supported split tender | Remaining amount तुरंत दिखे | TODO |
+| BS-106 | Implement Owner-gated Customer Credit/Udhar invoices and receivable ledger; card/external tender remains separately gated | Customer, limit, due date, outstanding, auditable collections और disabled-credit safety स्पष्ट हो; Card/UPI capability fake न हो | TODO |
+| BS-107 | Implement authorized Customer Credit collections and supported split tender after payment rules are approved | Customer outstanding, collected amount, remaining balance और duplicate-safe cash movement दिखे | TODO |
 | BS-108 | Post invoice idempotently | Double tap से दूसरा bill न बने | TODO |
 | BS-109 | Add hold/resume draft bills | Held vs posted visual distinction हो | TODO |
 | BS-110 | Print/reprint receipts without reposting | Print fail पर sale safe और reprint available | TODO |
