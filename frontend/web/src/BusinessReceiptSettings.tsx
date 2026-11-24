@@ -75,6 +75,7 @@ export default function BusinessReceiptSettings({ businessId, canOperate }: {
     setDraft(null)
     setLoadingError('')
     setNeedsRefresh(false)
+    setReason('')
     api<ReceiptSettings>(`/businesses/${businessId}/receipt-settings`)
       .then(data => {
         if (!active) return
@@ -87,8 +88,6 @@ export default function BusinessReceiptSettings({ businessId, canOperate }: {
       })
     return () => { active = false; logoRequest.current++ }
   }, [businessId, reload])
-
-  useEffect(() => { setReason('') }, [businessId])
 
   const changed = !!saved && !!draft && (
     saved.paperSize !== draft.paperSize || saved.footerText !== draft.footerText ||
@@ -131,7 +130,8 @@ export default function BusinessReceiptSettings({ businessId, canOperate }: {
             showCustomerName: draft.showCustomerName,
             showCustomerPhone: draft.showCustomerPhone,
             showCustomerAddress: draft.showCustomerAddress,
-            logo: draft.logo,
+            // Omit unchanged logo bytes rather than resending them on every settings save.
+            logo: draft.logo === saved.logo ? undefined : draft.logo,
             showLogo: draft.showLogo,
             printCopies: draft.printCopies,
             footerText: draft.footerText,
@@ -252,19 +252,20 @@ export default function BusinessReceiptSettings({ businessId, canOperate }: {
         <fieldset className="mb-3">
           <legend className="h6">Optional fields to show</legend>
           <div className="row g-3">
-          {(['Company details', 'Customer details', 'Item details', 'Receipt details'] as const).map(group =>
-            <div className="col-12 col-md-6" key={group}>
-              <h3 className="h6">{group}</h3>
-              {options.filter(option => option.group === group).map(option => <div className="form-check mb-2" key={option.key}>
-            <input id={`receipt-${option.key}`} className="form-check-input" type="checkbox"
-              checked={draft[option.key]}
-              onChange={event => change(option.key, event.target.checked)} />
-            <label htmlFor={`receipt-${option.key}`} className="form-check-label">
-              {option.label}
-              <span className="d-block small text-body-secondary">{option.help}</span>
-            </label>
+            {(['Company details', 'Customer details', 'Item details', 'Receipt details'] as const).map(group =>
+              <div className="col-12 col-md-6" key={group}>
+                <h3 className="h6">{group}</h3>
+                {options.filter(option => option.group === group).map(option =>
+                  <div className="form-check mb-2" key={option.key}>
+                    <input id={`receipt-${option.key}`} className="form-check-input" type="checkbox"
+                      checked={draft[option.key]}
+                      onChange={event => change(option.key, event.target.checked)} />
+                    <label htmlFor={`receipt-${option.key}`} className="form-check-label">
+                      {option.label}
+                      <span className="d-block small text-body-secondary">{option.help}</span>
+                    </label>
+                  </div>)}
               </div>)}
-            </div>)}
           </div>
         </fieldset>
         <label htmlFor="receipt-footer-text" className="form-label">Footer text (up to 120 characters)</label>

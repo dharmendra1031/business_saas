@@ -63,7 +63,8 @@ export default function CashCheckout({ userId, dashboard, onExit }: {
   const [refresh, setRefresh] = useState(0)
   const [receipt, setReceipt] = useState<Receipt | null>(null)
   const [locationId, setLocation] = useState(pending?.locationId ?? locations[0]?.id ?? 0)
-  const [customer, setCustomer] = useState<SaleCustomer | null>(null)
+  const [customer, setCustomer] = useState<SaleCustomer | null>(() => pending?.customerId
+    ? { id: pending.customerId, name: `Customer #${pending.customerId}`, phone: '' } : null)
   const [customerOpen, setCustomerOpen] = useState(false)
   const [customerSearch, setCustomerSearch] = useState('')
   const [customerResults, setCustomerResults] = useState<SaleCustomer[]>([])
@@ -255,8 +256,9 @@ export default function CashCheckout({ userId, dashboard, onExit }: {
         (cause.status === 400 &&
           (cause.code === 'CASH_SALE_BASKET_CHANGED' || cause.code === 'CASH_SALE_ZERO_VALUE_LINE' || cause.code === 'CASH_SALE_CUSTOMER_CHANGED')) ||
         (cause.status === 409 && cause.code === 'CASH_SALES_DISABLED'))
-      if (cause instanceof ApiResponseError && [400, 403].includes(cause.status) &&
-        (!pending || editableRejection) || editableRejection) {
+      const initialRejection = !pending && cause instanceof ApiResponseError &&
+        [400, 403].includes(cause.status)
+      if (initialRejection || editableRejection) {
         try { sessionStorage.removeItem(key) } catch { /* Storage may be unavailable. */ }
         setPending(null)
         if (editableRejection) {

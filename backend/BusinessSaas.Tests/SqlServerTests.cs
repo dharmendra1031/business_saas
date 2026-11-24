@@ -442,17 +442,31 @@ public sealed class SqlServerTests
             paperSize = "A4", showTime = true, showUnitPrice = true,
             showCashReceived = true, showChange = true, showFooter = true,
             footerText = "Thank you", expectedRevision = initialReceiptSettings.GetProperty("revision").GetInt32(),
-            reason = "Verify receipt logo preferences", logo, showLogo = true, printCopies = 2
+            reason = "Verify receipt logo preferences", logo, showLogo = true, printCopies = 2,
+            legalName = "", address = "", phone = "", email = ""
         };
         Assert.Equal(HttpStatusCode.NotFound, (await cashier.GetAsync(receiptSettingsPath)).StatusCode);
         Assert.Equal(HttpStatusCode.NotFound, (await Put(stranger, receiptSettingsPath, receiptSettings)).StatusCode);
         Assert.Equal(HttpStatusCode.BadRequest, (await Put(owner, receiptSettingsPath, receiptSettings with { printCopies = 6 })).StatusCode);
         Assert.Equal(HttpStatusCode.BadRequest, (await Put(owner, receiptSettingsPath, receiptSettings with { logo = new byte[50] })).StatusCode);
-        Assert.Equal(HttpStatusCode.OK, (await Put(owner, receiptSettingsPath, receiptSettings)).StatusCode);
+        using var settingsSaved = await Put(owner, receiptSettingsPath, receiptSettings);
+        Assert.Equal(HttpStatusCode.OK, settingsSaved.StatusCode);
+        var settingsBody = await settingsSaved.Content.ReadFromJsonAsync<JsonElement>();
+        Assert.False(settingsBody.GetProperty("unchanged").GetBoolean());
+        Assert.Equal(2, settingsBody.GetProperty("settings").GetProperty("printCopies").GetInt32());
         Assert.Equal(HttpStatusCode.Conflict, (await Put(owner, receiptSettingsPath, receiptSettings)).StatusCode);
         var savedReceiptSettings = await owner.GetFromJsonAsync<JsonElement>(receiptSettingsPath);
         Assert.Equal(2, savedReceiptSettings.GetProperty("printCopies").GetInt32());
         Assert.Equal(Convert.ToBase64String(logo), savedReceiptSettings.GetProperty("logo").GetString());
+
+        using var unchangedSettings = await Put(owner, receiptSettingsPath, receiptSettings with {
+            expectedRevision = savedReceiptSettings.GetProperty("revision").GetInt32()
+        });
+        Assert.Equal(HttpStatusCode.OK, unchangedSettings.StatusCode);
+        var unchangedBody = await unchangedSettings.Content.ReadFromJsonAsync<JsonElement>();
+        Assert.True(unchangedBody.GetProperty("unchanged").GetBoolean());
+        Assert.Equal(savedReceiptSettings.GetProperty("revision").GetInt32(),
+            unchangedBody.GetProperty("settings").GetProperty("revision").GetInt32());
 
         var saleRequest = new
         {
@@ -463,6 +477,8 @@ public sealed class SqlServerTests
         Assert.Equal(HttpStatusCode.OK, saleResponse.StatusCode);
         var sale = await saleResponse.Content.ReadFromJsonAsync<JsonElement>();
         Assert.Equal(30m, sale.GetProperty("total").GetDecimal());
+        Assert.Equal("SQL Retail Flow", sale.GetProperty("businessName").GetString());
+        Assert.False(string.IsNullOrWhiteSpace(sale.GetProperty("timeZoneId").GetString()));
         var saleRetry = await Post(cashier, prefix + "/cash-sales", saleRequest);
         Assert.Equal(HttpStatusCode.OK, saleRetry.StatusCode);
         Assert.Equal(sale.GetProperty("id").GetInt64(),

@@ -119,13 +119,13 @@ public static class RetailBillingSettingsEndpoints
                     message = "Invoice print settings changed. Reload before saving."
                 });
 
-            var legalName = request.LegalName is null ? business.ReceiptLegalName : request.LegalName.Trim();
+            var legalName = UpdateOptionalText(request.LegalName, business.ReceiptLegalName);
             var showLegalName = request.ShowLegalName ?? business.ReceiptShowLegalName;
-            var address = request.Address is null ? business.ReceiptAddress : request.Address.Trim();
+            var address = UpdateOptionalText(request.Address, business.ReceiptAddress);
             var showAddress = request.ShowAddress ?? business.ReceiptShowAddress;
-            var phone = request.Phone is null ? business.ReceiptPhone : request.Phone.Trim();
+            var phone = UpdateOptionalText(request.Phone, business.ReceiptPhone);
             var showPhone = request.ShowPhone ?? business.ReceiptShowPhone;
-            var email = request.Email is null ? business.ReceiptEmail : request.Email.Trim();
+            var email = UpdateOptionalText(request.Email, business.ReceiptEmail);
             var showEmail = request.ShowEmail ?? business.ReceiptShowEmail;
             var showCustomerName = request.ShowCustomerName ?? business.ReceiptShowCustomerName;
             var showCustomerPhone = request.ShowCustomerPhone ?? business.ReceiptShowCustomerPhone;
@@ -207,34 +207,9 @@ public static class RetailBillingSettingsEndpoints
                 Reason = request.Reason.Trim()
             });
             await db.SaveChangesAsync();
+            var saved = await db.Businesses.AsNoTracking().SingleAsync(x => x.Id == businessId);
             await tx.CommitAsync();
-
-            business.ReceiptPaperSize = request.PaperSize;
-            business.ReceiptShowTime = request.ShowTime;
-            business.ReceiptShowUnitPrice = request.ShowUnitPrice;
-            business.ReceiptShowCashReceived = request.ShowCashReceived;
-            business.ReceiptShowChange = request.ShowChange;
-            business.ReceiptShowBranch = request.ShowBranch ?? business.ReceiptShowBranch;
-            business.ReceiptShowSku = request.ShowSku ?? business.ReceiptShowSku;
-            business.ReceiptShowUnit = request.ShowUnit ?? business.ReceiptShowUnit;
-            business.ReceiptShowFooter = request.ShowFooter;
-            business.ReceiptLegalName = legalName;
-            business.ReceiptShowLegalName = showLegalName;
-            business.ReceiptAddress = address;
-            business.ReceiptShowAddress = showAddress;
-            business.ReceiptPhone = phone;
-            business.ReceiptShowPhone = showPhone;
-            business.ReceiptEmail = email;
-            business.ReceiptShowEmail = showEmail;
-            business.ReceiptShowCustomerName = showCustomerName;
-            business.ReceiptShowCustomerPhone = showCustomerPhone;
-            business.ReceiptShowCustomerAddress = showCustomerAddress;
-            business.ReceiptLogo = logo;
-            business.ReceiptShowLogo = showLogo;
-            business.ReceiptPrintCopies = printCopies;
-            business.ReceiptFooterText = footer;
-            business.ReceiptSettingsRevision = newRevision;
-            return Results.Ok(new { settings = ReceiptView(business), unchanged = false });
+            return Results.Ok(new { settings = ReceiptView(saved), unchanged = false });
         });
     }
 
@@ -282,6 +257,14 @@ public static class RetailBillingSettingsEndpoints
         string? Email = null, bool? ShowEmail = null,
         bool? ShowCustomerName = null, bool? ShowCustomerPhone = null, bool? ShowCustomerAddress = null,
         byte[]? Logo = null, bool? ShowLogo = null, int? PrintCopies = null);
+
+    // Missing values preserve existing preferences; clearing a blank field is a no-op.
+    private static string? UpdateOptionalText(string? requested, string? existing)
+    {
+        if (requested is null) return existing;
+        var trimmed = requested.Trim();
+        return trimmed.Length == 0 && string.IsNullOrEmpty(existing) ? existing : trimmed;
+    }
 
     private static bool ValidOptionalText(string? value, int maxLength) =>
         value is null || (value.Length <= maxLength && !value.Any(char.IsControl));

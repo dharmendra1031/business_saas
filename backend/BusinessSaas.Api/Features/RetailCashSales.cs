@@ -74,6 +74,7 @@ public static class RetailCashSales
         var first = lines.First();
         return new { sale.Id, sale.BusinessId, sale.LocationId, sale.CashierId, sale.RequestKey,
             sale.Tendered, sale.Total, sale.CurrencyCode, sale.CustomerId, sale.CustomerName,
+            sale.BusinessName, sale.TimeZoneId,
             PostedAtUtc = DateTime.SpecifyKind(sale.PostedAtUtc, DateTimeKind.Utc),
             first.ProductId, first.ProductName, first.UnitPrice, first.Quantity, Lines = lines };
     }
