@@ -813,6 +813,57 @@ try {
   }
 
   {
+    const t = await scenario('owner-invoice-print-preferences', {
+      role: 'Owner', hasProducts: true, ownerPos: true
+    })
+    let putCount = 0
+    let current = {
+      paperSize: 'Thermal80', showTime: true, showUnitPrice: true,
+      showCashReceived: true, showChange: true, showFooter: true,
+      footerText: 'Thank you for shopping!', revision: 0,
+      mandatoryFields: ['Business name', 'Receipt number', 'Date',
+        'Items and quantities', 'Line totals', 'Total payable'],
+      rendererAvailable: false
+    }
+    await t.page.route('**/api/businesses/1/receipt-settings', route => {
+      if (route.request().method() === 'GET') return response(route, 200, current)
+      assert.equal(route.request().method(), 'PUT')
+      const requested = route.request().postDataJSON()
+      assert.equal(requested.expectedRevision, current.revision)
+      assert.ok(requested.reason.length >= 10)
+      putCount++
+      current = { ...current, ...requested, revision: current.revision + 1 }
+      return response(route, 200, { settings: current, unchanged: false })
+    })
+    await t.login()
+    await t.page.locator('.business-preview-nav').filter({ hasText: 'Business Settings' }).click()
+    await t.page.getByRole('tab', { name: 'Invoice & Print' }).click()
+    await t.page.getByRole('form', { name: 'Invoice print settings' }).waitFor()
+    await t.page.getByText(/RDLC render\/print adapter is not connected yet/).waitFor()
+    assert.ok((await t.page.getByText(/Always shown:/).innerText()).includes('Total payable'))
+    await t.page.locator('#receipt-paper-size').selectOption('A4')
+    await t.page.locator('#receipt-showTime').uncheck()
+    await t.page.locator('#receipt-showUnitPrice').uncheck()
+    await t.page.locator('#receipt-footer-text').fill('Please visit again')
+    await t.page.locator('#receipt-settings-reason').fill('Retail owner approved this compact printed layout')
+    await t.page.getByRole('button', { name: 'Save print settings' }).click()
+    await t.page.locator('.action-feedback--success').waitFor()
+    assert.equal(putCount, 1)
+    assert.equal(current.paperSize, 'A4')
+    assert.equal(current.showUnitPrice, false)
+    assert.equal(current.revision, 1)
+    await t.page.getByRole('tab', { name: 'General' }).click()
+    await t.page.getByRole('tab', { name: 'Invoice & Print' }).click()
+    assert.equal(await t.page.locator('#receipt-paper-size').inputValue(), 'A4')
+    assert.equal(await t.page.locator('#receipt-showTime').isChecked(), false)
+    assert.equal(await t.page.locator('#receipt-showUnitPrice').isChecked(), false)
+    assert.equal(await t.page.locator('#receipt-footer-text').inputValue(), 'Please visit again')
+    await t.check()
+    await t.context.close()
+    console.log('PASS owner receipt preferences save/reload, mandatory fields and renderer-disabled notice')
+  }
+
+  {
     const t = await scenario('owner-billing-methods', {
       role: 'Owner', hasProducts: true, ownerPos: true
     })
