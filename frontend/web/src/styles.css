@@ -305,8 +305,10 @@ button:focus-visible, a:focus-visible, input:focus-visible, select:focus-visible
 }
 .action-feedback--success { border-left-color: #14532d; }
 .action-feedback--error { border-left-color: #991b1b; }
+.action-feedback--uncertain { border-left-color: #92400e; }
 .action-feedback--success > svg { color: #14532d; flex: 0 0 auto; }
 .action-feedback--error > svg { color: #991b1b; flex: 0 0 auto; }
+.action-feedback--uncertain > svg { color: #92400e; flex: 0 0 auto; }
 .action-feedback--saving > svg { color: #154789; flex: 0 0 auto; }
 .action-feedback-copy { display: grid; gap: 3px; min-width: 0; overflow-wrap: anywhere; line-height: 1.4; }
 .action-feedback-copy strong { color: #000000; font-size: .92rem; }
