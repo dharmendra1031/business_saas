@@ -222,7 +222,10 @@ export default function CashCheckout({ userId, dashboard, onExit }: {
       setReceipt(await post<Receipt>(base, request))
     } catch (cause) {
       setError(cause instanceof Error ? cause.message : 'Unable to confirm sale.')
-      if (!pending && cause instanceof ApiResponseError && [400, 403].includes(cause.status)) {
+      // A verified basket rejection after recovery must let the cashier correct the
+      // original cart. Keep other ambiguous/authorization failures pending for lookup.
+      if (cause instanceof ApiResponseError && [400, 403].includes(cause.status) &&
+        (!pending || (cause.status === 400 && cause.code === 'CASH_SALE_BASKET_CHANGED'))) {
         try { sessionStorage.removeItem(key) } catch { /* Storage may be unavailable. */ }
         setPending(null)
         if (cause.code === 'CASH_SALE_BASKET_CHANGED') {
