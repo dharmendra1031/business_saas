@@ -13,6 +13,7 @@ public static class RetailModule
         app.MapRetailMasterEndpoints();
         app.MapRetailProductEndpoints();
         app.MapRetailContactEndpoints();
+        app.MapRetailBillingSettings();
         app.MapRetailStockEndpoints();
         app.MapRetailAdjustmentEndpoints();
         app.MapRetailPurchaseEndpoints();
