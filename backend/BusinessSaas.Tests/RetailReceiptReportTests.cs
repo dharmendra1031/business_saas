@@ -51,7 +51,8 @@ public sealed class RetailReceiptReportTests
         Assert.Contains(expressions, x => x.Contains("Parameters!ShowUnitPrice.Value"));
         foreach (var optional in new[] { "ShowCashReceived", "ShowChange", "ShowFooter" })
             Assert.Contains(expressions, x => x == $"=Not(Parameters!{optional}.Value)");
-        Assert.DoesNotContain("TAX INVOICE", r.ToString(), StringComparison.OrdinalIgnoreCase);
+        Assert.False(expressions.Any(x => x.Contains("TAX INVOICE",
+            StringComparison.OrdinalIgnoreCase)), "Unapproved legal invoice text must not render.");
         var page = Assert.Single(r.Descendants(rdl + "Page"));
         Assert.Equal(pageWidth, decimal.Parse(page.Element(rdl + "PageWidth")!.Value
             .Replace("in", ""), System.Globalization.CultureInfo.InvariantCulture));
