@@ -182,8 +182,14 @@ public static class RetailProductEndpoints
                 x.Id != productId && (x.Sku == sku || barcode != null && x.Barcode == barcode)))
                 return Results.Conflict(new { message = "SKU or barcode is already used in this business." });
 
+            // Existing active products may retain inactive historical masters when editing.
+            // Newly selected masters (or reactivating a product) must still be active.
+            var retainExisting = product.IsActive && request.IsActive.Value;
             if (!await ValidReferences(db, businessId, request.CategoryId, request.UnitId,
-                request.BrandId, request.IsActive.Value))
+                request.BrandId, request.IsActive.Value,
+                retainExisting ? product.CategoryId : null,
+                retainExisting ? product.UnitId : null,
+                retainExisting ? product.BrandId : null))
                 return Results.BadRequest(new { message = "Select a valid category and unit from this business. Active products need active masters." });
 
             if (product.UnitId != request.UnitId &&
@@ -236,19 +242,24 @@ public static class RetailProductEndpoints
                 brand.BusinessId == businessId).Select(brand => brand.Name).FirstOrDefault());
 
     private static async Task<bool> ValidReferences(AppDbContext db, long businessId,
-        long categoryId, long unitId, long? brandId, bool requireActive)
+        long categoryId, long unitId, long? brandId, bool requireActive,
+        long? retainedCategoryId = null, long? retainedUnitId = null,
+        long? retainedBrandId = null)
     {
         if (categoryId <= 0 || unitId <= 0) return false;
 
         var category = await db.RetailCategories.AnyAsync(x =>
-            x.Id == categoryId && x.BusinessId == businessId && (!requireActive || x.IsActive));
+            x.Id == categoryId && x.BusinessId == businessId &&
+            (!requireActive || x.IsActive || x.Id == retainedCategoryId));
         if (!category) return false;
 
         if (!await db.RetailUnits.AnyAsync(x =>
-            x.Id == unitId && x.BusinessId == businessId && (!requireActive || x.IsActive)))
+            x.Id == unitId && x.BusinessId == businessId &&
+            (!requireActive || x.IsActive || x.Id == retainedUnitId)))
             return false;
         return brandId is null || brandId > 0 && await db.RetailBrands.AnyAsync(x =>
-            x.Id == brandId.Value && x.BusinessId == businessId && (!requireActive || x.IsActive));
+            x.Id == brandId.Value && x.BusinessId == businessId &&
+            (!requireActive || x.IsActive || x.Id == retainedBrandId));
     }
 
     private static string? Validate(ProductRequest request, bool allowAutoSku = false)
