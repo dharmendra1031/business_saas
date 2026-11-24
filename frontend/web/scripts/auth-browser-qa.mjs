@@ -812,6 +812,64 @@ try {
     console.log('PASS BUS-01 fresh API totals, POS return, outage fallback and access loss')
   }
 
+  {
+    const t = await scenario('owner-billing-methods', {
+      role: 'Owner', hasProducts: true, ownerPos: true
+    })
+    let cashOn = true
+    let revision = 0
+    let saves = 0
+    await t.page.route('**/api/businesses/1/dashboard', route => response(route, 200, {
+      ...dashboard('Owner', true, 0, 1, 1, false, false, true),
+      cashPaymentEnabled: cashOn
+    }))
+    await t.page.route('**/api/businesses/1/billing-settings', route => {
+      if (route.request().method() === 'GET') return response(route, 200, {
+        cashSalesEnabled: cashOn, creditSalesEnabled: false, creditAvailable: false,
+        revision, salesPaused: !cashOn
+      })
+      assert.equal(route.request().method(), 'PUT')
+      const input = route.request().postDataJSON()
+      assert.equal(input.expectedRevision, revision)
+      assert.equal(input.creditSalesEnabled, false)
+      assert.ok(input.reason.length >= 10)
+      cashOn = input.cashSalesEnabled
+      revision++
+      saves++
+      return response(route, 200, {
+        settings: { cashSalesEnabled: cashOn, creditSalesEnabled: false,
+          creditAvailable: false, revision, salesPaused: !cashOn },
+        unchanged: false
+      })
+    })
+    await t.page.route('**/api/businesses/1/cash-sales/products*', route => response(route, 200, [{
+      id: 11, name: 'Preview Receipt Item', sku: 'PRE-11', barcode: null,
+      salePrice: 10, available: 5, unitCode: 'PCS'
+    }]))
+    await t.login()
+    await t.page.locator('.business-preview-nav').filter({ hasText: 'Business Settings' }).click()
+    await t.page.getByRole('tab', { name: 'Billing & Payments' }).click()
+    await t.page.getByRole('form', { name: 'Billing & Payments settings' }).waitFor()
+    const cashToggle = t.page.locator('#billing-cash-toggle')
+    const creditToggle = t.page.locator('#billing-credit-toggle')
+    assert.equal(await cashToggle.isChecked(), true)
+    assert.equal(await creditToggle.isDisabled(), true, 'Unreleased credit cannot be enabled')
+    await cashToggle.uncheck()
+    await t.page.getByLabel('Reason for changing payment options')
+      .fill('Owner paused the store cash register')
+    await t.page.getByRole('button', { name: 'Save payment settings' }).click()
+    await t.page.getByText('Billing preferences saved.', { exact: false }).waitFor()
+    assert.equal(saves, 1)
+    assert.equal(cashOn, false)
+    await t.page.locator('.app-sidebar .nav-entry').filter({ hasText: 'Open POS Checkout' }).click()
+    await t.page.getByText(/Cash checkout is disabled in Business Settings/).waitFor()
+    assert.equal(await t.page.getByRole('button', { name: /Add Preview Receipt Item/ }).isDisabled(), true)
+    assert.equal(await t.page.getByRole('button', { name: 'Receipt history' }).isDisabled(), false)
+    await t.check()
+    await t.context.close()
+    console.log('PASS BUS-54 Owner persists Cash OFF and POS stays history-accessible; Credit locked')
+  }
+
   for (const mode of ['checkout', 'recover', 'review', 'out-of-stock', 'recover-review']) {
     const recover = mode === 'recover'
     const recoveringReview = mode === 'recover-review'
