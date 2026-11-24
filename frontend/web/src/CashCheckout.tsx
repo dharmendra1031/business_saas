@@ -248,6 +248,10 @@ export default function CashCheckout({ userId, dashboard, onExit }: {
     setPrintNotice('')
     // Open during the cashier's click, before the async POST can lose user activation.
     let printTab: Window | null = null
+    const closePrintTab = () => {
+      try { printTab?.close() } catch { /* The sale outcome is independent of the PDF tab. */ }
+      printTab = null
+    }
     if (openPrint) {
       try {
         printTab = window.open('about:blank', '_blank')
@@ -256,27 +260,15 @@ export default function CashCheckout({ userId, dashboard, onExit }: {
           printTab.document.title = 'Preparing receipt'
           printTab.document.body.textContent = 'Saving sale and preparing receipt…'
         }
-      } catch { printTab?.close(); printTab = null }
+      } catch { closePrintTab() }
     }
+    let posted: Receipt
     try {
       try { sessionStorage.setItem(key, JSON.stringify(request)) } catch { /* Keep the request key in memory. */ }
       setPending(request)
-      const posted = await post<Receipt>(base, request)
-      setReceipt(posted)
-      if (openPrint) {
-        // Printing is a read-only action; it must never trigger another sale POST.
-        if (!posted.printAvailable) {
-          printTab?.close()
-          setPrintNotice('Sale saved. RDLC printing is unavailable on this host.')
-        } else if (!printTab || printTab.closed) {
-          setPrintNotice('Sale saved. Use Print receipt to open the PDF.')
-        } else {
-          try { printTab.location.replace(`/api${base}/receipts/${posted.id}/pdf?locationId=${request.locationId}`) }
-          catch { printTab.close(); setPrintNotice('Sale saved. Use Print receipt to open the PDF.') }
-        }
-      }
+      posted = await post<Receipt>(base, request)
     } catch (cause) {
-      printTab?.close()
+      closePrintTab()
       setError(cause instanceof Error ? cause.message : 'Unable to confirm sale.')
       // Verified basket errors can be corrected after recovery; ambiguous outcomes
       // and access failures keep the original key available for receipt lookup.
@@ -302,7 +294,24 @@ export default function CashCheckout({ userId, dashboard, onExit }: {
           setCash('')
         }
       }
+      return
     } finally { lock.current = false; setBusy(false) }
+
+    // The sale is committed. No print/window error may enter sale recovery.
+    setReceipt(posted)
+    if (!openPrint) return
+    if (!posted.printAvailable) {
+      closePrintTab()
+      setPrintNotice('Sale saved. RDLC printing is unavailable on this host.')
+      return
+    }
+    try {
+      if (!printTab || printTab.closed) throw new Error('Print tab unavailable')
+      printTab.location.replace(`/api${base}/receipts/${posted.id}/pdf?locationId=${request.locationId}`)
+    } catch {
+      closePrintTab()
+      setPrintNotice('Sale saved. Use Print receipt to open the PDF.')
+    }
   }
 
   async function lookupReceipt(receiptId?: string) {

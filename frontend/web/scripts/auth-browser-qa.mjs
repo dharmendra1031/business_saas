@@ -1031,13 +1031,13 @@ try {
     console.log('PASS BUS-54 failed settings load stops spinner and has working retry')
   }
 
-  for (const mode of ['checkout', 'recover', 'review', 'out-of-stock', 'recover-review']) {
+  for (const mode of ['checkout', 'blocked-print', 'save-only', 'recover', 'review', 'out-of-stock', 'recover-review']) {
     const recover = mode === 'recover'
     const recoveringReview = mode === 'recover-review'
     const t = await scenario('pos-fractional-' + mode, {
       role: 'Cashier', hasProducts: true
     })
-    if (mode === 'checkout') await t.page.route('**/api/businesses/1/dashboard', route => response(route, 200, {
+    if (['checkout', 'blocked-print', 'save-only'].includes(mode)) await t.page.route('**/api/businesses/1/dashboard', route => response(route, 200, {
       ...dashboard('Cashier', true), receiptAutoOpen: true
     }))
     let posted = null
@@ -1149,7 +1149,13 @@ try {
       const popup = await popupPromise
       await popup.waitForURL('**/cash-sales/receipts/501/pdf?locationId=1')
       await popup.close()
-    } else await t.page.getByRole('button', { name: 'Save Only' }).click()
+    } else if (mode === 'blocked-print') {
+      await t.page.evaluate(() => { window.open = () => null })
+      await t.page.getByRole('button', { name: 'Save & Print' }).click()
+      await t.page.getByText('Sale saved. Use Print receipt to open the PDF.').waitFor()
+    } else {
+      await t.page.getByRole('button', { name: 'Save Only' }).click()
+    }
     if (mode === 'out-of-stock') {
       await t.page.getByRole('alert').getByText(/Insufficient stock for Loose Rice/).waitFor()
       await t.page.getByText('Review required. Remove this item and select it again.').waitFor()
@@ -1216,6 +1222,11 @@ try {
     if (recover) await t.page.getByRole('button', { name: 'Record original request' }).click()
     await t.page.getByRole('heading', { name: 'Cash receipt #501' }).waitFor()
     assert.equal(posts, recover ? 2 : 1)
+    if (mode === 'blocked-print' || mode === 'save-only') {
+      assert.equal(t.context.pages().length, 1)
+      assert.equal(await t.page.getByText('Sale saved. Use Print receipt to open the PDF.').count(),
+        mode === 'blocked-print' ? 1 : 0)
+    }
     assert.equal(posted.lines.length, 1)
     assert.equal(posted.lines[0].productId, 91)
     assert.equal(posted.lines[0].quantity, 0.125)

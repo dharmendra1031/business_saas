@@ -221,7 +221,7 @@ export default function BusinessReceiptSettings({ businessId, canOperate, onSave
           <option value="manual">Save only — print manually</option>
           <option value="auto">Save &amp; Print — open RDLC PDF automatically</option>
         </select>
-        <p className="small text-body-secondary">Automatic mode opens the receipt PDF after a successful sale. The browser print dialog still requires confirmation.</p>
+        <p className="small text-body-secondary">Automatic mode opens the RDLC PDF after payment. It does not send a job directly to a printer.</p>
         <label htmlFor="receipt-copies" className="form-label">Print copies</label>
         <select id="receipt-copies" className="form-select mb-2" value={draft.printCopies}
           onChange={event => change('printCopies', Number(event.target.value))}>

@@ -96,6 +96,7 @@ export default function PosCashPaymentDialog({
             Insufficient payment cannot be confirmed.</p>
           <div className="pos-dialog-change"><span>Change to return</span><strong>{money(change)}</strong></div>
           <p className="pos-dialog-security"><LockKeyhole size={15} /> Final price and stock are checked by the server before posting.</p>
+          {autoOpen && <p className="pos-dialog-hint">Save &amp; Print opens the RDLC receipt. Confirm printing in the PDF viewer.</p>}
         </div>
         <div className="pos-dialog-footer">
           <button type="button" className="btn btn-outline-secondary" disabled={busy} onClick={onCancel}>Back to Cart</button>
