@@ -84,6 +84,22 @@ The Windows CI job publishes actual synthetic A4 (1, 10, 50, 100 items) and Ther
 
 Owner Invoice & Print Settings stores `autoOpen` per business (existing tenants default to manual). The dashboard supplies the effective setting when a Windows development report host is available. In automatic mode the payment primary action is Save & Print; Save Only remains available. The PDF opens only after a successful POST; blocked or closed tabs fall back to the existing read-only receipt link. Recovery never auto-prints, so uncertain writes cannot produce surprise copies. Existing cashier sessions receive changed settings on dashboard reload; the owner refreshes dashboard after saving. Browser confirmation and printer copies still require the native PDF dialog. No silent printing or HTML receipt path is added.
 
-### Direct printing boundary
+### Direct printing boundary and approved behavior
 
-The browser auto-open preference is not silent printing. A hosted server's installed printers are not the cashier's USB printers. Do not add a server printer endpoint for arbitrary client printers or run shell print commands. For a local Windows installation, first verify the host/printer topology and supported driver; for hosted SaaS, a separately authorized workstation print integration would be necessary. Keep one RDLC rendering contract and no second receipt layout. Until that deployment is approved and tested, PDF preview remains the only print transport. After a committed sale, PDF window failures are handled independently and never enter the sale retry path. Browser QA checks blocked popup and Save Only with automatic mode enabled.
+Single-click silent printing is an optional third mode, controlled by the Business Owner in Invoice & Print Settings. The final modes are mutually exclusive:
+
+| Mode | Payment action | Receipt transport |
+| --- | --- | --- |
+| Manual | Save Only | Existing authorized RDLC PDF link on demand |
+| Preview | Save & Print (or Save Only) | Open existing RDLC PDF after confirmed posting |
+| Silent | Save & Print (or Save Only) | Configured workstation printer; no preview or confirmation |
+
+Manual remains the default for existing businesses. The paper format, optional fields and requested copies use the existing receipt settings and the same static RDLC datasets. A printer is a workstation-specific resource, not a SaaS tenant-wide Windows default. Silent mode must only become selectable after the workstation's authorized printer integration is configured and a test job succeeds. Do not expose a nonfunctional setting or persist a second pair of mode booleans; introduce a single three-value mode when the actual silent transport is ready, migrating the existing AutoOpen preference. No new receipt template, reporting engine, generic plugin framework or speculative print-job database is needed.
+
+A hosted server's installed printers are not the cashier's USB printers. Microsoft documents that System.Drawing.Printing and System.Printing are unsupported inside ASP.NET applications and Windows services. Do not add an arbitrary printer endpoint, shell print commands or a fake silent mode. Use a supported, explicitly authorized workstation print mechanism for the actual installation; keep printer selection local to that workstation and never accept arbitrary printer paths from a hosted API. A local Windows on-premise deployment and a hosted deployment must both keep the same RDLC output.
+
+After a committed sale, printing failures are independent of sale recovery. Do not auto-retry a print with an ambiguous submission result. Display whether the job was submitted (not that paper physically printed), retain the receipt ID and let an operator reprint intentionally. Never repost a sale for printing. A reprint must use the original posted amounts and the same authorization checks. Recovery of an uncertain sale does not auto-print. The Save Only action must never submit a print job.
+
+Release gates: physical test using the selected 80mm driver, correct paper width/variable length and cutter behavior; exact configured copy count; preview and manual modes unchanged; no popup or confirmation in supported silent mode; offline/disconnected printer and ambiguous submission; unauthorized or cross-business receipt blocked; one sale on repeated payment clicks. Silent transport is not implemented or released yet. Existing PDF preview and manual behavior remain available. Browser QA checks blocked popup and Save Only with automatic preview enabled.
+
+Reference: [Microsoft System.Drawing.Printing support boundary](https://learn.microsoft.com/en-us/dotnet/api/system.drawing.printing).
