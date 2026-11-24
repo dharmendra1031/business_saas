@@ -86,6 +86,7 @@ public static class BusinessEndpoints
                                      business.CurrencyCode,
                                      business.CountryCode,
                                      business.TimeZoneId,
+                                     business.CashSalesEnabled,
                                      TypeCode = type.Code,
                                      TypeName = type.Name
                                  }).SingleAsync();
@@ -179,7 +180,8 @@ public static class BusinessEndpoints
 
             return Results.Ok(new { hasProducts, hasInitializedStock, pendingApprovals, cashSalesToday, stockAlerts,
                 business = details, roleCode, locations, subscription, accessStatus,
-                canOperate, cashSaleEnabled = environment.IsDevelopment() });
+                canOperate, cashSaleEnabled = environment.IsDevelopment(),
+                cashPaymentEnabled = details.CashSalesEnabled });
         });
     }
 
