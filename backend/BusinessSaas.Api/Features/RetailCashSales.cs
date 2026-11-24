@@ -214,8 +214,12 @@ public static class RetailCashSales
                 if (previous.LocationId != request.LocationId || previous.Tendered != request.Tendered ||
                     !recorded.SequenceEqual(items.OrderBy(x => x.ProductId)))
                     return Results.Conflict(new { message = "This receipt key belongs to a different sale." });
+                // Never hide a committed receipt or double-post when settings changed mid-retry.
                 return Results.Ok(Receipt(previous));
             }
+            if (!shop.CashSalesEnabled)
+                return Results.Conflict(new { code = "CASH_SALES_DISABLED",
+                    message = "Cash sales are disabled by the business owner." });
 
             var sub = await db.BusinessSubscriptions.AsNoTracking().SingleOrDefaultAsync(x => x.BusinessId == businessId);
             if (sub is null || !SubscriptionAccess.CanOperate(sub, DateTime.UtcNow))
