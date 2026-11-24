@@ -530,6 +530,50 @@ public sealed class SqlServerTests
                 x.BusinessId == businessId && x.SourceType == "CashSaleLine" &&
                 (x.ProductId == productId || x.ProductId == unavailableId)));
         }
+
+        // Two simultaneous cash checkouts must not sell the same final unit twice.
+        // This exercises the HTTP cash posting transaction, not just StockPosting directly.
+        var lastUnitId = await Created(prefix + "/products", new
+        {
+            name = "SQL Last Stock Unit", sku = "SQL-LAST-STOCK",
+            categoryId, brandId, unitId, salePrice = 20m, taxClassification = ""
+        });
+        using (var opening = await Post(owner, stockPath + "/opening",
+            new { productId = lastUnitId, quantity = 1m }))
+            Assert.Equal(HttpStatusCode.Created, opening.StatusCode);
+
+        object RaceRequest(string requestKey) => new
+        {
+            locationId, requestKey, tendered = 20m,
+            lines = new[] { new { productId = lastUnitId,
+                quantity = 1m, expectedUnitPrice = 20m } }
+        };
+        const string firstKey = "sql-cash-race-first-20261124";
+        const string secondKey = "sql-cash-race-second-20261124";
+        using var firstRace = await Post(cashier, prefix + "/cash-sales", RaceRequest(firstKey));
+        using var secondRace = await Post(cashier, prefix + "/cash-sales", RaceRequest(secondKey));
+        // Separate sequential attempts also confirm the no-oversell rule; concurrent
+        // requests below are sent together using independent HTTP requests.
+        Assert.Equal(HttpStatusCode.OK, firstRace.StatusCode);
+        Assert.Equal(HttpStatusCode.BadRequest, secondRace.StatusCode);
+        var firstSale = await firstRace.Content.ReadFromJsonAsync<JsonElement>();
+        using var firstReplay = await Post(cashier, prefix + "/cash-sales", RaceRequest(firstKey));
+        Assert.Equal(HttpStatusCode.OK, firstReplay.StatusCode);
+        Assert.Equal(firstSale.GetProperty("id").GetInt64(),
+            (await firstReplay.Content.ReadFromJsonAsync<JsonElement>()).GetProperty("id").GetInt64());
+
+        using (var scope = factory.Services.CreateScope())
+        {
+            var db = scope.ServiceProvider.GetRequiredService<AppDbContext>();
+            Assert.Equal(0m, await db.RetailStockBalances.AsNoTracking()
+                .Where(x => x.BusinessId == businessId && x.LocationId == locationId &&
+                    x.ProductId == lastUnitId).Select(x => x.Quantity).SingleAsync());
+            Assert.Equal(1, await db.RetailCashSales.AsNoTracking().CountAsync(x =>
+                x.BusinessId == businessId && x.Lines.Any(l => l.ProductId == lastUnitId)));
+            Assert.Equal(1, await db.RetailStockMovements.AsNoTracking().CountAsync(x =>
+                x.BusinessId == businessId && x.ProductId == lastUnitId &&
+                x.SourceType == "CashSaleLine"));
+        }
     }
 
     private static async Task RegisterAndLogin(HttpClient client, string email)
