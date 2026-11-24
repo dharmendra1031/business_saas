@@ -1,6 +1,7 @@
 import { useEffect, useRef, useState, type FormEvent } from 'react'
 import { api, post, SessionExpiredError } from './api'
 import { classificationPath, classificationTrail } from './retailClassification'
+import { ActionButton, useActionFeedback } from './ActionFeedback'
 
 type MasterType = 'groups' | 'subgroups' | 'categories' | 'brands' | 'units'
 
@@ -23,6 +24,7 @@ export default function RetailMasters({ businessId, canOperate }: {
   businessId: number
   canOperate: boolean
 }) {
+  const { run } = useActionFeedback()
   const [type, setType] = useState<MasterType>('groups')
   const classification = type === 'groups' || type === 'subgroups' || type === 'categories'
   const level = type === 'groups' ? 1 : type === 'subgroups' ? 2 : type === 'categories' ? 3 : 0
@@ -44,7 +46,6 @@ export default function RetailMasters({ businessId, canOperate }: {
   const [saving, setSaving] = useState(false)
   const [error, setError] = useState('')
   const [loadError, setLoadError] = useState('')
-  const [notice, setNotice] = useState('')
   const firstInput = useRef<HTMLInputElement>(null)
 
   useEffect(() => {
@@ -94,7 +95,6 @@ export default function RetailMasters({ businessId, canOperate }: {
     setQuery('')
     setSearch('')
     setError('')
-    setNotice('')
     clearForm()
   }
 
@@ -105,7 +105,6 @@ export default function RetailMasters({ businessId, canOperate }: {
     setParentId(item.parentId ?? 0)
     setActive(item.isActive)
     setError('')
-    setNotice('')
     firstInput.current?.focus()
   }
 
@@ -115,7 +114,6 @@ export default function RetailMasters({ businessId, canOperate }: {
 
     setSaving(true)
     setError('')
-    setNotice('')
     const basePath = `/businesses/${businessId}/${endpoint}`
     if ((type === 'subgroups' || type === 'categories') && !parentId) {
       setError(`Choose a ${type === 'subgroups' ? 'group' : 'subgroup'} first.`)
@@ -127,12 +125,13 @@ export default function RetailMasters({ businessId, canOperate }: {
       ...(editingId !== null ? { isActive: active } : {}) }
 
     try {
-      if (editingId === null)
-        await post(basePath, body)
-      else
-        await api(`${basePath}/${editingId}`, { method: 'PUT', body: JSON.stringify(body) })
-
-      setNotice(`${label} ${editingId === null ? 'created' : 'updated'}.`)
+      await run(`Saving ${label.toLowerCase()}…`,
+        `${label} ${editingId === null ? 'created' : 'updated'}.`, async () => {
+          if (editingId === null)
+            await post(basePath, body)
+          else
+            await api(`${basePath}/${editingId}`, { method: 'PUT', body: JSON.stringify(body) })
+        })
       clearForm()
       setReload(value => value + 1)
       firstInput.current?.focus()
@@ -172,10 +171,9 @@ export default function RetailMasters({ businessId, canOperate }: {
         {loadError} <button type="button" className="btn btn-sm btn-outline-secondary ms-2"
           onClick={() => setReload(value => value + 1)}>Retry</button>
       </div>}
-      {notice && <div className="alert alert-success" role="status">{notice}</div>}
 
       {canOperate && (
-        <form className="masters-form" onSubmit={event => void save(event)}>
+        <form className="masters-form" aria-busy={saving} onSubmit={event => void save(event)}>
           <div>
             <label className="form-label" htmlFor="master-name">{label} name *</label>
             <input ref={firstInput} id="master-name" className="form-control" autoComplete="off"
@@ -209,11 +207,11 @@ export default function RetailMasters({ businessId, canOperate }: {
               <option value="inactive">Inactive</option>
             </select>
           </div>}
-          <button className="btn btn-primary" disabled={saving} type="submit">
-            {saving ? 'Saving…' : editingId === null ? `Add ${label.toLowerCase()}` : 'Save changes'}
-          </button>
+          <ActionButton busy={saving}>
+            {editingId === null ? `Add ${label.toLowerCase()}` : 'Save changes'}
+          </ActionButton>
           {editingId !== null && <button className="btn btn-outline-secondary" type="button"
-            onClick={() => { clearForm(); firstInput.current?.focus() }}>Cancel edit</button>}
+            disabled={saving} onClick={() => { clearForm(); firstInput.current?.focus() }}>Cancel edit</button>}
         </form>
       )}
 
