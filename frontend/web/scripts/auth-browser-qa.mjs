@@ -969,12 +969,18 @@ try {
         return response(route, 200, receipt)
       })
       await t.page.getByRole('button', { name: /Add Loose Rice/ }).click()
+      assert.equal(await t.page.getByLabel('Receipt number').count(), 0,
+        'Receipt lookup stays inside the compact history view')
+      await t.page.getByRole('button', { name: 'Receipt history' }).click()
       await t.page.getByLabel('Receipt number').fill('501')
       await t.page.getByRole('button', { name: 'Find receipt' }).click()
       await t.page.getByRole('heading', { name: 'Cash receipt #501' }).waitFor()
       await printReceipt.click()
       await t.page.getByRole('button', { name: 'Back to checkout' }).click()
       assert.equal(await kgQuantity.inputValue(), '0.625')
+      await t.page.getByRole('button', { name: 'Back to products' }).click()
+      assert.equal(await t.page.getByLabel('Receipt number').count(), 0,
+        'Closing history restores the product catalogue')
       await t.page.route('**/api/businesses/1/cash-sales/receipts?*', route => {
         const params = new URL(route.request().url()).searchParams
         assert.equal(params.get('locationId'), '1')
