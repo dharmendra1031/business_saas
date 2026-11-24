@@ -207,13 +207,6 @@ button:focus-visible, a:focus-visible, input:focus-visible, select:focus-visible
   .platform-plan-legend { flex-basis: 100%; }
 }
 
-@media print {
-  body:has(.cash-receipt) * { visibility: hidden; }
-  .cash-receipt, .cash-receipt * { visibility: visible !important; }
-  .cash-receipt { position: absolute; inset: 0 auto auto 0; border: 0; box-shadow: none; }
-  .cash-receipt button { display: none; }
-}
-
 /* Role-based workspace identity: shared components, distinct operational context. */
 .workspace-identity {
   display: grid; gap: 5px; min-width: 0; margin: 16px 4px 0;

@@ -52,7 +52,7 @@ The selection `paperSize = Thermal80 | A4` determines which **fixed** `.rdlc` th
 - GET/PUT `/api/businesses/{businessId}/receipt-settings`. Only a Retail Business Owner may read/change them; unauthorized/cross-tenant resources return 404.
 - The database saves paper selection, 1–5 print copies, 16 display flags, optional merchant details and logo, footer text (maximum 120 characters) and a separate monotonic `ReceiptSettingsRevision`. These settings cannot change monetary values or historical sale records.
 - A PUT requires the expected revision and 10–200 character audit reason, and is blocked for inactive subscriptions. Server conflict (409) or ambiguous write response requires a fresh GET before another save.
-- UI clearly says that **these preferences are persisted but not yet connected to the current browser `window.print()` flow**. No pretending that RDLC print is live.
+- UI clearly says that **these preferences are persisted but printing is unavailable until the RDLC adapter is verified**. The former HTML print implementation has been removed.
 
 ## Real printing — separate release gate
 
@@ -68,7 +68,7 @@ Tax/GST invoice registration, statutory numbering, verified statutory merchant r
 
 A4 uses seven fixed columns (number, product, SKU, quantity, unit, rate, amount), with optional columns controlled by tablix-member visibility. Thermal uses two compact columns with optional inline SKU, unit and rate. Missing or hidden header/footer rows collapse through static visibility. Black text and borders on white paper; item headings are marked to repeat on new pages. Actual render, Designer compatibility and printer feed remain release gates.
 
-Walk-in remains the default. Optional active customers are selected through a location-authorized, tenant-scoped search. Customer ID is preserved in pending checkout and compared on replay. New sales retain historical customer name, phone and address. No invented data is backfilled into older sales. The current browser receipt uses stored business name and timezone when available, and remains the existing print fallback until RDLC rendering is verified.
+Walk-in remains the default. Optional active customers are selected through a location-authorized, tenant-scoped search. Customer ID is preserved in pending checkout and compared on replay. New sales retain historical customer name, phone and address. No invented data is backfilled into older sales. The on-screen receipt uses stored business name and timezone when available. It is a read-only view, not a print fallback.
 
 Logo uploads are resized in the browser to PNG (maximum 384 × 192 pixels, 32 KiB). The server bounds and checks the PNG envelope; actual decoder validation is still required before rendering. Omitted logo preserves existing data; an empty byte array removes it. New sales snapshot logo bytes. Print copies and template choice are saved preferences, not active RDLC printing.
 

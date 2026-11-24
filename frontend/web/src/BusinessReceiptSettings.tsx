@@ -195,8 +195,8 @@ export default function BusinessReceiptSettings({ businessId, canOperate }: {
         No RDLC markup is generated or edited by users.
       </p>
       {!draft.rendererAvailable && <div className="alert alert-warning" role="status">
-        RDLC render/print adapter is not connected yet. Saving preferences does not change
-        the existing browser-printed receipt.
+        RDLC render/print adapter is not connected yet. Preferences are saved, but
+        printing is unavailable until RDLC integration is verified.
       </div>}
       {needsRefresh && <div className="alert alert-warning" role="alert">
         The save may have completed or settings changed elsewhere. Reload before another update.

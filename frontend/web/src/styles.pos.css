@@ -244,10 +244,6 @@
   .pos-product-card { transition: none; }
   .pos-product-card:hover:not(:disabled) { transform: none; }
 }
-@media print {
-  .pos-shell { background: white; }
-  .pos-shell .cash-receipt { width: 76mm; max-width: 76mm; padding: 0; font-size: 10pt; }
-}
 
 /* Equal product tile row height and readable labels; approved POS proportions unchanged. */
 .pos-products-grid > .pos-product-card { height: 100%; min-width: 0; }
