@@ -34,6 +34,13 @@ jobs:
         env:
           RDLC_TEST_OUTPUT: ${{ github.workspace }}/rdlc-samples
         run: dotnet test backend/BusinessSaas.Tests/BusinessSaas.Tests.csproj --configuration Release --filter "Renderer=Windows"
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+      - name: Check PDF geometry and posted receipt content
+        run: |
+          python -m pip install pymupdf==1.26.7
+          python scripts/check-rdlc-samples.py rdlc-samples
       - name: Upload synthetic receipt PDFs and render timings
         uses: actions/upload-artifact@v4
         with:

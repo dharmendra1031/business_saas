@@ -110,6 +110,7 @@ public sealed class RetailReceiptReportTests
     [InlineData("Thermal80", 10, false)]
     [InlineData("Thermal80", 50, true)]
     [InlineData("Thermal80", 100, false)]
+    [InlineData("Thermal80", 5, true)]
     [InlineData("A4", 1, true)]
     [InlineData("A4", 10, true)]
     [InlineData("A4", 50, false)]
@@ -128,6 +129,17 @@ public sealed class RetailReceiptReportTests
                 Id = i, ProductName = "Example product " + i, Quantity = 1m,
                 UnitPrice = 10m, LineTotal = 10m, ProductSku = "SKU-" + i, UnitCode = "PCS"
             }).ToList() };
+        if (paper == "Thermal80" && count == 5)
+        {
+            sale.MerchantAddress = string.Join(" ", Enumerable.Repeat("Long business address", 10));
+            sale.CustomerName = "Sample Customer";
+            sale.CustomerAddress = string.Join(" ", Enumerable.Repeat("Long customer address", 10));
+            sale.MerchantLogo = Convert.FromBase64String("iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mP8/x8AAwMCAO+j2ZsAAAAASUVORK5CYII=");
+            // Existing PNG validation is tested independently; keep the sizing sample deterministic.
+            business.ReceiptShowLogo = false;
+            foreach (var line in sale.Lines)
+                line.ProductName += " " + string.Join(" ", Enumerable.Repeat("Long product description", 6));
+        }
         var data = RetailReceiptReportData.FromCashSale(sale, business, TimeZoneInfo.Utc);
         var stopwatch = System.Diagnostics.Stopwatch.StartNew();
         var bytes = RetailReceiptRenderer.Render(data, paper);

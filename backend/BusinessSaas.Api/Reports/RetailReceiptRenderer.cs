@@ -1,5 +1,6 @@
 using System.Data;
 using System.Drawing;
+using System.Globalization;
 using System.Runtime.Versioning;
 using System.Text;
 using Microsoft.Reporting.NETCore;
@@ -56,7 +57,68 @@ public static class RetailReceiptRenderer
             Flag(nameof(p.ShowCustomerName), p.ShowCustomerName), Flag(nameof(p.ShowCustomerPhone), p.ShowCustomerPhone),
             Flag(nameof(p.ShowCustomerAddress), p.ShowCustomerAddress), Flag(nameof(p.ShowLogo), p.ShowLogo)
         });
-        return report.Render("PDF");
+        // DeviceInfo changes only the physical output page size, never the RDLC.
+        return paperSize == "Thermal80"
+            ? report.Render("PDF", ThermalDeviceInfo(data))
+            : report.Render("PDF");
+    }
+
+    [SupportedOSPlatform("windows")]
+    private static string ThermalDeviceInfo(RetailReceiptReportData data)
+    {
+        // Dimensions follow RetailCashReceiptThermal80.rdlc (inches).
+        // Use measured wrapping plus a small safety allowance; RDLC remains
+        // responsible for pagination when content exceeds the selected size.
+        using var bitmap = new Bitmap(1, 1);
+        using var graphics = Graphics.FromImage(bitmap);
+        graphics.PageUnit = GraphicsUnit.Point;
+        using var regular = new Font("Arial", 8.5f);
+        using var title = new Font("Arial", 12f, FontStyle.Bold);
+        using var total = new Font("Arial", 10f, FontStyle.Bold);
+        var h = data.Header;
+        var p = data.Parameters;
+        double Row(string text, Font font, double width, double minimum) =>
+            Math.Max(minimum, (graphics.MeasureString(text, font,
+                new SizeF((float)(width * 72 - 5), 10000)).Height + 3) / 72d);
+        double Optional(bool show, string text) =>
+            show && !string.IsNullOrEmpty(text) ? Row(text, regular, 2.86, .18) : 0;
+        string Amount(decimal amount) => h.CurrencyCode + " " +
+            amount.ToString("0.00", CultureInfo.InvariantCulture);
+
+        // Top/bottom margins, body allowance, receipt title, ID/date and item headings.
+        var height = .24 + .05 + .10 + .19 + .18 + .18 + .19 + .20;
+        height += Row(h.BusinessName, title, 2.86, .25);
+        if (p.ShowLogo && h.MerchantLogo is not null) height += .48;
+        height += Optional(p.ShowLegalName, h.MerchantLegalName)
+            + Optional(p.ShowAddress, h.MerchantAddress)
+            + Optional(p.ShowPhone, h.MerchantPhone)
+            + Optional(p.ShowEmail, h.MerchantEmail)
+            + Optional(p.ShowBranch, h.LocationName)
+            + Optional(p.ShowCustomerName && h.CustomerName.Length > 0, "Customer name: " + h.CustomerName)
+            + Optional(p.ShowCustomerPhone && h.CustomerPhone.Length > 0, "Customer phone: " + h.CustomerPhone)
+            + Optional(p.ShowCustomerAddress && h.CustomerAddress.Length > 0, "Customer address: " + h.CustomerAddress);
+
+        foreach (var line in data.Lines)
+        {
+            var description = line.LineNumber + ". " + line.ProductName;
+            if (p.ShowSku && line.ProductSku.Length > 0) description += "\nSKU: " + line.ProductSku;
+            description += "\n" + line.Quantity.ToString("0.###", CultureInfo.InvariantCulture);
+            if (p.ShowUnit && line.UnitCode.Length > 0) description += " " + line.UnitCode;
+            if (p.ShowUnitPrice) description += " @ " + line.UnitPrice.ToString("0.00", CultureInfo.InvariantCulture);
+            height += Math.Max(Row(description, regular, 1.95, .31),
+                Row(Amount(line.LineTotal), regular, .91, .31));
+        }
+
+        height += Row(Amount(h.TotalAmount), total, .91, .25);
+        if (p.ShowCashReceived) height += Row(Amount(h.CashReceived), regular, .91, .18);
+        if (p.ShowChange) height += Row(Amount(h.ChangeAmount), regular, .91, .18);
+        if (p.ShowFooter) height += Row(h.FooterText, regular, 2.86, .18);
+
+        // Cap long documents at 40 inches; allow normal RDLC page breaks.
+        // Round up to a tenth of an inch rather than risk a clipped last row.
+        var inches = Math.Clamp(Math.Ceiling(height * 10) / 10, 3, 40);
+        return "<DeviceInfo><PageHeight>" + inches.ToString("0.0", CultureInfo.InvariantCulture)
+            + "in</PageHeight></DeviceInfo>";
     }
 
     private static ReportParameter Flag(string name, bool value) =>
