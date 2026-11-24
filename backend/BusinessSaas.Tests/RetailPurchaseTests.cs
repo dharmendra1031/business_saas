@@ -543,6 +543,72 @@ public sealed class RetailPurchaseTests
                     x.SourceType == "CashSaleLine"));
         }
 
+        // Owner-only persisted payment settings: no false credit enablement, no
+        // new cash sale while disabled, and historical/idempotent receipt preserved.
+        var settingsPath = $"/api/businesses/{businessId}/billing-settings";
+        Assert.Equal(HttpStatusCode.NotFound, (await manager.GetAsync(settingsPath)).StatusCode);
+        Assert.Equal(HttpStatusCode.NotFound, (await cashier.GetAsync(settingsPath)).StatusCode);
+        Assert.Equal(HttpStatusCode.NotFound, (await other.GetAsync(settingsPath)).StatusCode);
+        var originalSettings = await owner.GetFromJsonAsync<JsonElement>(settingsPath);
+        Assert.True(originalSettings.GetProperty("cashSalesEnabled").GetBoolean());
+        Assert.False(originalSettings.GetProperty("creditSalesEnabled").GetBoolean());
+        Assert.False(originalSettings.GetProperty("creditAvailable").GetBoolean());
+        Assert.Equal(0, originalSettings.GetProperty("revision").GetInt32());
+        Assert.Equal(HttpStatusCode.NotFound, (await Put(manager, settingsPath,
+            new { cashSalesEnabled = false, creditSalesEnabled = false,
+                expectedRevision = 0, reason = "Manager may not change billing" })).StatusCode);
+        Assert.Equal(HttpStatusCode.NotFound, (await Put(other, settingsPath,
+            new { cashSalesEnabled = false, creditSalesEnabled = false,
+                expectedRevision = 0, reason = "Cross business change blocked" })).StatusCode);
+
+        var prematureCredit = await Put(owner, settingsPath, new {
+            cashSalesEnabled = true, creditSalesEnabled = true, expectedRevision = 0,
+            reason = "Customer credit needs ledger first"
+        });
+        Assert.Equal(HttpStatusCode.Conflict, prematureCredit.StatusCode);
+        Assert.Equal("CREDIT_NOT_RELEASED",
+            (await prematureCredit.Content.ReadFromJsonAsync<JsonElement>())
+                .GetProperty("code").GetString());
+        var cashOff = await Put(owner, settingsPath, new {
+            cashSalesEnabled = false, creditSalesEnabled = false, expectedRevision = 0,
+            reason = "Pause new cash sales until register review"
+        });
+        Assert.Equal(HttpStatusCode.OK, cashOff.StatusCode);
+        Assert.Equal(1, (await cashOff.Content.ReadFromJsonAsync<JsonElement>())
+            .GetProperty("settings").GetProperty("revision").GetInt32());
+        Assert.Equal(HttpStatusCode.Conflict, (await Put(owner, settingsPath,
+            new { cashSalesEnabled = true, creditSalesEnabled = false,
+                expectedRevision = 0, reason = "Old settings edit must not overwrite" })).StatusCode);
+        var disabledDashboard = await cashier.GetFromJsonAsync<JsonElement>(
+            $"/api/businesses/{businessId}/dashboard");
+        Assert.False(disabledDashboard.GetProperty("cashPaymentEnabled").GetBoolean());
+        var deniedSale = await Send(cashier, sales,
+            cashSale with { requestKey = "cash-disabled-by-owner-20261124" });
+        Assert.Equal(HttpStatusCode.Conflict, deniedSale.StatusCode);
+        Assert.Equal("CASH_SALES_DISABLED",
+            (await deniedSale.Content.ReadFromJsonAsync<JsonElement>())
+                .GetProperty("code").GetString());
+        Assert.Equal(HttpStatusCode.OK, (await Send(cashier, sales, cashSale)).StatusCode);
+        Assert.Equal(HttpStatusCode.OK,
+            (await cashier.GetAsync($"{sales}/receipt?locationId={locationId}&requestKey={cashSale.requestKey}")).StatusCode);
+        using (var scope = factory.Services.CreateScope())
+        {
+            var db = scope.ServiceProvider.GetRequiredService<AppDbContext>();
+            Assert.False(await db.RetailCashSales.AsNoTracking().AnyAsync(x =>
+                x.BusinessId == businessId && x.RequestKey == "cash-disabled-by-owner-20261124"));
+            Assert.Equal(1, await db.PlatformAuditEvents.AsNoTracking().CountAsync(x =>
+                x.TargetType == "Business" && x.TargetId == businessId &&
+                x.Action == "Business.BillingSettingsChanged"));
+        }
+        var cashOn = await Put(owner, settingsPath, new {
+            cashSalesEnabled = true, creditSalesEnabled = false, expectedRevision = 1,
+            reason = "Resume cash payment at the cashier register"
+        });
+        Assert.Equal(HttpStatusCode.OK, cashOn.StatusCode);
+        Assert.True((await cashier.GetFromJsonAsync<JsonElement>(
+            $"/api/businesses/{businessId}/dashboard"))
+            .GetProperty("cashPaymentEnabled").GetBoolean());
+
         using (var scope = factory.Services.CreateScope())
         {
             var db = scope.ServiceProvider.GetRequiredService<AppDbContext>();
@@ -576,6 +642,18 @@ public sealed class RetailPurchaseTests
         Assert.Equal(HttpStatusCode.Created, response.StatusCode);
         var result = await response.Content.ReadFromJsonAsync<JsonElement>();
         return result.GetProperty("id").GetInt64();
+    }
+
+    private static async Task<HttpResponseMessage> Put(HttpClient client,
+        string path, object body)
+    {
+        var token = await client.GetFromJsonAsync<JsonElement>("/api/auth/csrf");
+        using var request = new HttpRequestMessage(HttpMethod.Put, path)
+        {
+            Content = JsonContent.Create(body)
+        };
+        request.Headers.Add("X-CSRF-TOKEN", token.GetProperty("token").GetString()!);
+        return await client.SendAsync(request);
     }
 
     private static async Task<HttpResponseMessage> Send(HttpClient client,
