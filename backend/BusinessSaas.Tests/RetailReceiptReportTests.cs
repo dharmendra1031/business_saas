@@ -42,7 +42,7 @@ public sealed class RetailReceiptReportTests
         var parameters = r.Descendants(rdl + "ReportParameter")
             .Select(x => (string)x.Attribute("Name")!).ToArray();
         Assert.Equal(new[] { "ShowTime", "ShowUnitPrice", "ShowCashReceived",
-            "ShowChange", "ShowFooter" }, parameters);
+            "ShowChange", "ShowFooter", "ShowBranch", "ShowSku", "ShowUnit" }, parameters);
         var expressions = r.Descendants(rdl + "Value").Select(x => x.Value)
             .Concat(r.Descendants(rdl + "Hidden").Select(x => x.Value)).ToArray();
         Assert.Contains(expressions, x => x.Contains("Fields!TotalAmount.Value"));
@@ -51,6 +51,17 @@ public sealed class RetailReceiptReportTests
         Assert.Contains(expressions, x => x.Contains("Parameters!ShowUnitPrice.Value"));
         foreach (var optional in new[] { "ShowCashReceived", "ShowChange", "ShowFooter" })
             Assert.Contains(expressions, x => x == $"=Not(Parameters!{optional}.Value)");
+        foreach (var optional in new[] { "ShowBranch", "ShowSku", "ShowUnit" })
+            Assert.Contains(expressions, x => x.Contains($"Parameters!{optional}.Value"));
+        foreach (var field in new[] { "LocationName", "ProductSku", "UnitCode" })
+            Assert.Contains(expressions, x => x.Contains($"Fields!{field}.Value"));
+        var tablix = Assert.Single(r.Descendants(rdl + "Tablix"));
+        var columnCount = tablix.Descendants(rdl + "TablixColumn").Count();
+        Assert.Equal(template.Contains("A4") ? 7 : 2, columnCount);
+        Assert.All(tablix.Descendants(rdl + "TablixRow"), row =>
+            Assert.Equal(columnCount, row.Element(rdl + "TablixCells")!.Elements(rdl + "TablixCell").Count()));
+        Assert.Contains(tablix.Descendants(rdl + "RepeatOnNewPage"), x => x.Value == "true");
+        Assert.All(r.Descendants(rdl + "Color"), x => Assert.Equal("#000000", x.Value));
         Assert.False(expressions.Any(x => x.Contains("TAX INVOICE",
             StringComparison.OrdinalIgnoreCase)), "Unapproved legal invoice text must not render.");
         var page = Assert.Single(r.Descendants(rdl + "Page"));
@@ -96,6 +107,7 @@ public sealed class RetailReceiptReportTests
             Id = 42, Name = "Retail Demo", ReceiptShowTime = false,
             ReceiptShowUnitPrice = false, ReceiptShowCashReceived = false,
             ReceiptShowChange = true, ReceiptShowFooter = false,
+            ReceiptShowBranch = false, ReceiptShowSku = false, ReceiptShowUnit = false,
             ReceiptFooterText = "Come back soon"
         };
         var sale = new RetailCashSale {
@@ -118,6 +130,9 @@ public sealed class RetailReceiptReportTests
         Assert.Equal(new[] { 10m, 70m }, report.Lines.Select(x => x.LineTotal));
         Assert.False(report.Parameters.ShowTime);
         Assert.False(report.Parameters.ShowUnitPrice);
+        Assert.False(report.Parameters.ShowBranch);
+        Assert.False(report.Parameters.ShowSku);
+        Assert.False(report.Parameters.ShowUnit);
 
         Assert.Equal("", report.Header.LocationName);
         Assert.All(report.Lines, line => {

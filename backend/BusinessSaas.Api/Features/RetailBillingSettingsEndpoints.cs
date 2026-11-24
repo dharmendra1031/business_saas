@@ -118,6 +118,9 @@ public static class RetailBillingSettingsEndpoints
                 business.ReceiptShowUnitPrice == request.ShowUnitPrice &&
                 business.ReceiptShowCashReceived == request.ShowCashReceived &&
                 business.ReceiptShowChange == request.ShowChange &&
+                business.ReceiptShowBranch == (request.ShowBranch ?? business.ReceiptShowBranch) &&
+                business.ReceiptShowSku == (request.ShowSku ?? business.ReceiptShowSku) &&
+                business.ReceiptShowUnit == (request.ShowUnit ?? business.ReceiptShowUnit) &&
                 business.ReceiptShowFooter == request.ShowFooter &&
                 business.ReceiptFooterText == footer)
                 return Results.Ok(new { settings = ReceiptView(business), unchanged = true });
@@ -131,6 +134,9 @@ public static class RetailBillingSettingsEndpoints
                     .SetProperty(x => x.ReceiptShowUnitPrice, request.ShowUnitPrice)
                     .SetProperty(x => x.ReceiptShowCashReceived, request.ShowCashReceived)
                     .SetProperty(x => x.ReceiptShowChange, request.ShowChange)
+                    .SetProperty(x => x.ReceiptShowBranch, request.ShowBranch ?? business.ReceiptShowBranch)
+                    .SetProperty(x => x.ReceiptShowSku, request.ShowSku ?? business.ReceiptShowSku)
+                    .SetProperty(x => x.ReceiptShowUnit, request.ShowUnit ?? business.ReceiptShowUnit)
                     .SetProperty(x => x.ReceiptShowFooter, request.ShowFooter)
                     .SetProperty(x => x.ReceiptFooterText, footer)
                     .SetProperty(x => x.ReceiptSettingsRevision, newRevision));
@@ -147,7 +153,8 @@ public static class RetailBillingSettingsEndpoints
                 PreviousValue = $"revision={business.ReceiptSettingsRevision};paper={business.ReceiptPaperSize}",
                 NewValue = $"v={newRevision};paper={request.PaperSize};" +
                     $"t={request.ShowTime};u={request.ShowUnitPrice};" +
-                    $"c={request.ShowCashReceived};h={request.ShowChange};f={request.ShowFooter}",
+                    $"c={request.ShowCashReceived};h={request.ShowChange};f={request.ShowFooter};" +
+                    $"branch={request.ShowBranch ?? business.ReceiptShowBranch};sku={request.ShowSku ?? business.ReceiptShowSku};unit={request.ShowUnit ?? business.ReceiptShowUnit}",
                 Reason = request.Reason.Trim()
             });
             await db.SaveChangesAsync();
@@ -158,6 +165,9 @@ public static class RetailBillingSettingsEndpoints
             business.ReceiptShowUnitPrice = request.ShowUnitPrice;
             business.ReceiptShowCashReceived = request.ShowCashReceived;
             business.ReceiptShowChange = request.ShowChange;
+            business.ReceiptShowBranch = request.ShowBranch ?? business.ReceiptShowBranch;
+            business.ReceiptShowSku = request.ShowSku ?? business.ReceiptShowSku;
+            business.ReceiptShowUnit = request.ShowUnit ?? business.ReceiptShowUnit;
             business.ReceiptShowFooter = request.ShowFooter;
             business.ReceiptFooterText = footer;
             business.ReceiptSettingsRevision = newRevision;
@@ -171,6 +181,9 @@ public static class RetailBillingSettingsEndpoints
         showUnitPrice = business.ReceiptShowUnitPrice,
         showCashReceived = business.ReceiptShowCashReceived,
         showChange = business.ReceiptShowChange,
+        showBranch = business.ReceiptShowBranch,
+        showSku = business.ReceiptShowSku,
+        showUnit = business.ReceiptShowUnit,
         showFooter = business.ReceiptShowFooter,
         footerText = business.ReceiptFooterText,
         revision = business.ReceiptSettingsRevision,
@@ -184,7 +197,8 @@ public static class RetailBillingSettingsEndpoints
     private sealed record ReceiptSettingsRequest(
         string PaperSize, bool ShowTime, bool ShowUnitPrice,
         bool ShowCashReceived, bool ShowChange, bool ShowFooter,
-        string FooterText, int ExpectedRevision, string? Reason);
+        string FooterText, int ExpectedRevision, string? Reason,
+        bool? ShowBranch = null, bool? ShowSku = null, bool? ShowUnit = null);
 
     private static object View(Business business) => new {
         cashSalesEnabled = business.CashSalesEnabled,

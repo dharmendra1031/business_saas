@@ -104,6 +104,9 @@ public sealed class Business
     public bool ReceiptShowUnitPrice { get; set; } = true;
     public bool ReceiptShowCashReceived { get; set; } = true;
     public bool ReceiptShowChange { get; set; } = true;
+    public bool ReceiptShowBranch { get; set; } = true;
+    public bool ReceiptShowSku { get; set; } = true;
+    public bool ReceiptShowUnit { get; set; } = true;
     public bool ReceiptShowFooter { get; set; } = true;
     public string ReceiptFooterText { get; set; } = "Thank you for shopping!";
     public int ReceiptSettingsRevision { get; set; }

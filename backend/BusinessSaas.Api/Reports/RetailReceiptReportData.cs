@@ -16,7 +16,7 @@ public sealed record RetailReceiptLine(
 
 public sealed record RetailReceiptParameters(
     bool ShowTime, bool ShowUnitPrice, bool ShowCashReceived,
-    bool ShowChange, bool ShowFooter);
+    bool ShowChange, bool ShowFooter, bool ShowBranch, bool ShowSku, bool ShowUnit);
 
 public sealed record RetailReceiptReportData(
     RetailReceiptHeader Header,
@@ -60,6 +60,7 @@ public sealed record RetailReceiptReportData(
             new RetailReceiptParameters(
                 business.ReceiptShowTime, business.ReceiptShowUnitPrice,
                 business.ReceiptShowCashReceived, business.ReceiptShowChange,
-                business.ReceiptShowFooter));
+                business.ReceiptShowFooter, business.ReceiptShowBranch,
+                business.ReceiptShowSku, business.ReceiptShowUnit));
     }
 }

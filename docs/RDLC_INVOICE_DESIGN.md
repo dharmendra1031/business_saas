@@ -22,15 +22,18 @@
 
 `InvoiceLines`: **one or more** rows with `LineNumber`, `ProductName`, `Quantity`, `UnitPrice`, `LineTotal`. `LineTotal` uses the same two-decimal midpoint-away-from-zero rule as POS posting. The backend verifies that the stored line totals sum exactly to the posted sale total before creating the report data. Printed monetary fields are never recomputed from the current Product table.
 
-A future, explicitly reviewed rendering adapter needs only to bind these **exact DataSet names** and pass these five strongly named **Boolean report parameters**:
+A future, explicitly reviewed rendering adapter needs only to bind these **exact DataSet names** and pass these eight strongly named **Boolean report parameters**:
 
 | RDLC parameter | Owner setting | Behavior |
 | --- | --- | --- |
 | `ShowTime` | `showTime` | Add local time after the **mandatory** date |
-| `ShowUnitPrice` | `showUnitPrice` | Show each item's rate within its description; no unused column gap |
+| `ShowUnitPrice` | `showUnitPrice` | Show rate column on A4, or rate within description on 80mm |
 | `ShowCashReceived` | `showCashReceived` | Show tender amount row |
 | `ShowChange` | `showChange` | Show change row |
 | `ShowFooter` | `showFooter` | Show configured footer row |
+| `ShowBranch` | `showBranch` | Show historical location row when available |
+| `ShowSku` | `showSku` | Show SKU column on A4 or SKU line on 80mm |
+| `ShowUnit` | `showUnit` | Show unit column on A4 or inline unit on 80mm |
 
 The selection `paperSize = Thermal80 | A4` determines which **fixed** `.rdlc` the adapter loads. Mandatory fields are **always visible**: business name, receipt/reference number, date, item descriptions/quantities, line amounts and total payable. The Owner may not hide these or alter RDLC expressions via an API.
 
@@ -55,4 +58,8 @@ Tax/GST invoice registration, statutory numbering, store legal address/GSTIN, di
 
 ## Receipt snapshot dataset extension
 
-`InvoiceHeader` additionally contains `LocationName`; `InvoiceLines` additionally contains `ProductSku` and `UnitCode`. Both RDLC definitions and the XSD expose these fields with string types; legacy absent values are empty. New line totals are persisted at posting; legacy line totals are derived from stored quantity and price. Layout visibility controls for the new fields are not released yet. No renderer or statutory invoice activation is part of this change.
+`InvoiceHeader` additionally contains `LocationName`; `InvoiceLines` additionally contains `ProductSku` and `UnitCode`. Both RDLC definitions and the XSD expose these fields with string types; legacy absent values are empty. New line totals are persisted at posting; legacy line totals are derived from stored quantity and price. Owner layout settings now include `ShowBranch`, `ShowSku` and `ShowUnit`; all three are persisted and consumed by static RDLC parameters. No renderer or statutory invoice activation is part of this change.
+
+## Phase 2 layout
+
+A4 has seven fixed design-time columns (number, product, SKU, quantity, unit, rate, amount). Optional columns use static tablix-member visibility; thermal uses two compact columns and inline optional fields. Branch row collapses when hidden or absent. All text and table borders are black, paper background white. Item headings are marked to repeat on new pages. The fixed thermal page height is unchanged until actual driver/renderer validation. Actual visual rendering, Designer compatibility and printer feed remain release gates.

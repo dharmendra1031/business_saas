@@ -265,6 +265,9 @@ namespace BusinessSaas.Api.Data.Migrations
                     b.Property<bool>("ReceiptShowUnitPrice").HasColumnType("bit");
                     b.Property<bool>("ReceiptShowCashReceived").HasColumnType("bit");
                     b.Property<bool>("ReceiptShowChange").HasColumnType("bit");
+                    b.Property<bool>("ReceiptShowBranch").HasColumnType("bit");
+                    b.Property<bool>("ReceiptShowSku").HasColumnType("bit");
+                    b.Property<bool>("ReceiptShowUnit").HasColumnType("bit");
                     b.Property<bool>("ReceiptShowFooter").HasColumnType("bit");
 
                     b.Property<string>("ReceiptFooterText")

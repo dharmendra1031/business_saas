@@ -8,6 +8,9 @@ interface ReceiptSettings {
   showUnitPrice: boolean
   showCashReceived: boolean
   showChange: boolean
+  showBranch: boolean
+  showSku: boolean
+  showUnit: boolean
   showFooter: boolean
   footerText: string
   revision: number
@@ -20,6 +23,9 @@ const options = [
   { key: 'showUnitPrice', label: 'Price per unit', help: 'Line quantities and amounts always remain visible.' },
   { key: 'showCashReceived', label: 'Cash received', help: 'Only for settled cash receipts.' },
   { key: 'showChange', label: 'Change returned', help: 'Total payable always remains visible.' },
+  { key: 'showBranch', label: 'Branch / location', help: 'Shows the location recorded at checkout.' },
+  { key: 'showSku', label: 'Product SKU', help: 'Shows the SKU recorded at checkout.' },
+  { key: 'showUnit', label: 'Unit of measure', help: 'Shows the unit recorded at checkout.' },
   { key: 'showFooter', label: 'Footer message', help: 'Show your approved receipt footer.' }
 ] as const
 
@@ -77,6 +83,9 @@ export default function BusinessReceiptSettings({ businessId, canOperate }: {
             showUnitPrice: draft.showUnitPrice,
             showCashReceived: draft.showCashReceived,
             showChange: draft.showChange,
+            showBranch: draft.showBranch,
+            showSku: draft.showSku,
+            showUnit: draft.showUnit,
             showFooter: draft.showFooter,
             footerText: draft.footerText,
             expectedRevision: saved.revision,
