@@ -2,11 +2,11 @@
 
 > **Scope notice:** The generic usability and accessible UI criteria apply to every Business SaaS app. Salon-specific screen matrices remain **vertical examples**, not menus that Retail and Repair must inherit. The first retail workflow is in [Retail V1 SRS](./RETAIL_V1_SRS.md). CBK is [read-only design reference](./CBK_UI_REFERENCE.md); reimplement in React without copying private assets.
 
-**Status:** Mandatory design and implementation standard; UX implementation not started  
-**Date:** 2026-11-07  
+**Status:** Mandatory design and implementation standard; shared feedback component implemented, individual screens still migrating and require acceptance.  
+**Date:** 2026-11-24  
 **Repository:** `dharmendra1031/business_saas` ONLY  
-**Scope:** Platform Admin, Salon Admin, POS and future customer/owner applications  
-**Product aim:** A new salon owner, manager or cashier can complete common work quickly and confidently without intensive training.
+**Scope:** Platform Super Admin, Retail Business Owner/Manager/Cashier, POS, Salon, Repair and future supported applications  
+**Product aim:** Every authorized user can complete daily business tasks quickly, confidently and consistently without intensive training.
 
 ## 1. Guiding rule: workflow first
 
@@ -67,6 +67,24 @@ Do not force every role through the same feature-rich navigation. **Modules gran
 18. **Drafts:** sensitive or lengthy edits receive unsaved-change protection or explicit save-as-draft where appropriate.
 19. **Authorization:** UI hiding is never the only security control. Verify active module, user permission and branch tenant access on API.
 20. **Performance:** do not block checkout on nonessential dashboard/report requests.
+
+## 4A. Enterprise-level shared Save / Update feedback contract (approved 24 November 2026)
+
+All form mutations (Create / Update / Save / Approve / Remove) must use one **consistent visual language**, not copy-pasted popup code in each feature. The shared implementation starts at `frontend/web/src/ActionFeedback.tsx`; it is mounted **once** in `main.tsx` for Platform, Business Owner and Cashier workspaces. New CRUD forms should call `useActionFeedback().run(savingLabel, successLabel, asyncRequest)` and use the shared `ActionButton` for accessible processing/disabled states. Migrate existing forms incrementally with browser QA; do not assert every form is already converted.
+
+| State | UX / safety requirement |
+| --- | --- |
+| Idle | Explicit verb/action label, only valid and authorized actions enabled; no surprise auto-submit |
+| Saving | Immediate visible button spinner and processing label; disable repeated submit, cancel or navigation that could discard transaction context; global non-blocking saving popup; `aria-busy` where applicable |
+| Success | Show shared success popup **only after confirmed server response**, readable record/result name and next action; no second redundant success alert; routine successes dismiss automatically after 5 seconds with a manual accessible close |
+| Failure / validation | Persistent shared error popup, human-readable server message, manual dismiss, preserve all entered values and selected options; field errors remain next to their fields; no success feedback on failure |
+| Network unknown | For purchases, payments, POS/credit posting, refunds and other non-idempotent effects: never say "failed" or "saved" from a lost response alone; retain operation key, check recorded status and reconcile before reattempt |
+| Permission / suspended plan | Server denies write; UI disables appropriately, existing history remains read-only where authorized; never rely on hidden button for security |
+| Destructive action | Explicit context/confirmation, no silent delete; cancel safely; actor and audit trail where required |
+
+**Interaction quality:** Buttons retain shape/width between idle and saving; focus rings visible; status and error announcements use appropriate ARIA; dismissal is keyboard-accessible. One popup surface per action, no full-screen modal for routine fast CRUD saves. Long-running financial decisions may require an explicit modal with its own progress and outcome states. Mobile 360px layout must not horizontally overflow. Respect `prefers-reduced-motion`, near-black text on white surfaces and high-contrast primary actions. New forms should reuse these primitives rather than adding a second toast library, notification context or spinner component.
+
+**Acceptance tests per migrated screen:** delayed API response (saving state persists), repeated click (one request), success after commit, validation/409 failure (values preserved), lost response without false success, Escape/focus and mobile width, and correct disabled/readonly behavior by role. The parent screen must not disappear unexpectedly after save. Browser fixture QA is separate from authenticated hosted and real-user acceptance.
 
 ## 5. Platform Admin — screen-by-screen goals
 
