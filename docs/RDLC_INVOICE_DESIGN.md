@@ -34,7 +34,7 @@ A future, explicitly reviewed rendering adapter needs only to bind these **exact
 
 The selection `paperSize = Thermal80 | A4` determines which **fixed** `.rdlc` the adapter loads. Mandatory fields are **always visible**: business name, receipt/reference number, date, item descriptions/quantities, line amounts and total payable. The Owner may not hide these or alter RDLC expressions via an API.
 
-**Snapshot rule:** `ReceiptNumber` is currently the internal cash receipt ID, **not** a registered statutory invoice number. `BusinessName` is currently the present-day business display name; proper historical merchant identity/tax/customer/address snapshots must be added before tax-invoice issuance. The templates intentionally contain no GST/CGST/SGST/HSN claims, discounts, customer credit balance or fake QR codes because these business fields are not yet posted on RetailCashSale.
+**Snapshot rule:** `ReceiptNumber` is currently the internal cash receipt ID, **not** a registered statutory invoice number. New cash sales snapshot business display name, location, timezone, SKU, unit and line total in the posting transaction. Legacy rows remain nullable (no fabricated master-data backfill); they retain the legacy display-name and timezone fallback. Legal merchant identity/address, tax and customer snapshots remain pending. The templates intentionally contain no GST/CGST/SGST/HSN claims, discounts, customer credit balance or fake QR codes because these business fields are not yet posted on RetailCashSale.
 
 ## Owner settings and access
 
@@ -52,3 +52,7 @@ The thermal adapter must handle **continuous paper length correctly**: RDLC page
 ## Future capabilities (not silently enabled)
 
 Tax/GST invoice registration, statutory numbering, store legal address/GSTIN, discount snapshots, customer identity, Credit/Refund, logo/QR, tax breakup and historical settings snapshot require separate SRS/design approval and end-to-end posting. Compliance-required fields are never controlled by a cosmetic visibility switch. Follow the existing `docs/UX_STANDARDS.md` shared Save/Success/Failure/Unknown states; no duplicate popup or second printing framework.
+
+## Receipt snapshot dataset extension
+
+`InvoiceHeader` additionally contains `LocationName`; `InvoiceLines` additionally contains `ProductSku` and `UnitCode`. Both RDLC definitions and the XSD expose these fields with string types; legacy absent values are empty. New line totals are persisted at posting; legacy line totals are derived from stored quantity and price. Layout visibility controls for the new fields are not released yet. No renderer or statutory invoice activation is part of this change.

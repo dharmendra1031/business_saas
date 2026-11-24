@@ -8,6 +8,9 @@ public sealed class RetailCashSale
     public long LocationId { get; set; }
     public long CashierId { get; set; }
     public string RequestKey { get; set; } = "";
+    public string? BusinessName { get; set; }
+    public string? LocationName { get; set; }
+    public string? TimeZoneId { get; set; }
     public string CurrencyCode { get; set; } = "";
     public decimal Total { get; set; }
     public decimal Tendered { get; set; }
@@ -21,6 +24,9 @@ public sealed class RetailCashSaleLine
     public long SaleId { get; set; }
     public long ProductId { get; set; }
     public string ProductName { get; set; } = "";
+    public string? ProductSku { get; set; }
+    public string? UnitCode { get; set; }
+    public decimal? LineTotal { get; set; }
     public decimal UnitPrice { get; set; }
     public decimal Quantity { get; set; }
 }

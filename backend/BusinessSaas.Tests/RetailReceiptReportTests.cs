@@ -33,9 +33,9 @@ public sealed class RetailReceiptReportTests
         Assert.Equal(2, sets.Count);
         Assert.Equal(new[] { "BusinessName", "ReceiptNumber", "DateText", "TimeText",
             "CurrencyCode", "PaymentMethod", "TotalAmount", "CashReceived",
-            "ChangeAmount", "FooterText" }, sets["InvoiceHeader"]);
+            "ChangeAmount", "FooterText", "LocationName" }, sets["InvoiceHeader"]);
         Assert.Equal(new[] { "LineNumber", "ProductName", "Quantity", "UnitPrice",
-            "LineTotal" }, sets["InvoiceLines"]);
+            "LineTotal", "ProductSku", "UnitCode" }, sets["InvoiceLines"]);
         Assert.Equal("InvoiceLines", Assert.Single(r.Descendants(rdl + "Tablix"))
             .Element(rdl + "DataSetName")!.Value);
 
@@ -84,9 +84,9 @@ public sealed class RetailReceiptReportTests
                 .Descendants(xs + "element").Select(f => (string)f.Attribute("name")!).ToArray());
         Assert.Equal(new[] { "BusinessName", "ReceiptNumber", "DateText", "TimeText",
             "CurrencyCode", "PaymentMethod", "TotalAmount", "CashReceived",
-            "ChangeAmount", "FooterText" }, fields["InvoiceHeader"]);
+            "ChangeAmount", "FooterText", "LocationName" }, fields["InvoiceHeader"]);
         Assert.Equal(new[] { "LineNumber", "ProductName", "Quantity", "UnitPrice",
-            "LineTotal" }, fields["InvoiceLines"]);
+            "LineTotal", "ProductSku", "UnitCode" }, fields["InvoiceLines"]);
     }
 
     [Fact]
@@ -118,6 +118,26 @@ public sealed class RetailReceiptReportTests
         Assert.Equal(new[] { 10m, 70m }, report.Lines.Select(x => x.LineTotal));
         Assert.False(report.Parameters.ShowTime);
         Assert.False(report.Parameters.ShowUnitPrice);
+
+        Assert.Equal("", report.Header.LocationName);
+        Assert.All(report.Lines, line => {
+            Assert.Equal("", line.ProductSku);
+            Assert.Equal("", line.UnitCode);
+        });
+        sale.BusinessName = "Original Store";
+        sale.LocationName = "Original Branch";
+        sale.TimeZoneId = "Asia/Kolkata";
+        sale.Lines[0].ProductSku = "SOAP-01";
+        sale.Lines[0].UnitCode = "PCS";
+        sale.Lines[0].LineTotal = 70m;
+        business.Name = "Renamed Store";
+        var reprint = RetailReceiptReportData.FromCashSale(sale, business, TimeZoneInfo.Utc);
+        Assert.Equal("Original Store", reprint.Header.BusinessName);
+        Assert.Equal("Original Branch", reprint.Header.LocationName);
+        Assert.Equal(report.Header.TimeText, reprint.Header.TimeText);
+        Assert.Equal("SOAP-01", reprint.Lines[1].ProductSku);
+        Assert.Equal("PCS", reprint.Lines[1].UnitCode);
+        Assert.Equal(70m, reprint.Lines[1].LineTotal);
 
         sale.BusinessId = 89;
         Assert.Throws<InvalidOperationException>(() =>

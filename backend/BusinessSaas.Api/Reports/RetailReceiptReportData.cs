@@ -8,11 +8,11 @@ namespace BusinessSaas.Api.Reports;
 public sealed record RetailReceiptHeader(
     string BusinessName, string ReceiptNumber, string DateText, string TimeText,
     string CurrencyCode, string PaymentMethod, decimal TotalAmount,
-    decimal CashReceived, decimal ChangeAmount, string FooterText);
+    decimal CashReceived, decimal ChangeAmount, string FooterText, string LocationName);
 
 public sealed record RetailReceiptLine(
     int LineNumber, string ProductName, decimal Quantity,
-    decimal UnitPrice, decimal LineTotal);
+    decimal UnitPrice, decimal LineTotal, string ProductSku, string UnitCode);
 
 public sealed record RetailReceiptParameters(
     bool ShowTime, bool ShowUnitPrice, bool ShowCashReceived,
@@ -24,7 +24,7 @@ public sealed record RetailReceiptReportData(
     RetailReceiptParameters Parameters)
 {
     // Only historical transaction values feed the financial rows.
-    // BusinessName is current display identity until legal invoice snapshots are implemented.
+    // Legacy receipts retain the existing merchant-name fallback; missing SKU/unit/location remain blank.
     public static RetailReceiptReportData FromCashSale(
         RetailCashSale sale, Business business, TimeZoneInfo timeZone)
     {
@@ -39,20 +39,23 @@ public sealed record RetailReceiptReportData(
         var lines = sale.Lines.OrderBy(x => x.Id)
             .Select((line, index) => new RetailReceiptLine(
                 index + 1, line.ProductName, line.Quantity, line.UnitPrice,
-                decimal.Round(line.Quantity * line.UnitPrice, 2, MidpointRounding.AwayFromZero)))
+                line.LineTotal ?? decimal.Round(line.Quantity * line.UnitPrice, 2, MidpointRounding.AwayFromZero),
+                line.ProductSku ?? "", line.UnitCode ?? ""))
             .ToArray();
         if (lines.Sum(x => x.LineTotal) != sale.Total ||
             sale.Tendered < sale.Total)
             throw new InvalidOperationException("Posted receipt amounts require reconciliation.");
 
+        var receiptZone = sale.TimeZoneId is null
+            ? timeZone : TimeZoneInfo.FindSystemTimeZoneById(sale.TimeZoneId);
         var local = TimeZoneInfo.ConvertTimeFromUtc(
-            DateTime.SpecifyKind(sale.PostedAtUtc, DateTimeKind.Utc), timeZone);
+            DateTime.SpecifyKind(sale.PostedAtUtc, DateTimeKind.Utc), receiptZone);
         var header = new RetailReceiptHeader(
-            business.Name, sale.Id.ToString(CultureInfo.InvariantCulture),
+            sale.BusinessName ?? business.Name, sale.Id.ToString(CultureInfo.InvariantCulture),
             local.ToString("dd MMM yyyy", CultureInfo.InvariantCulture),
             local.ToString("hh:mm tt", CultureInfo.InvariantCulture),
             sale.CurrencyCode, "Cash", sale.Total, sale.Tendered,
-            sale.Tendered - sale.Total, business.ReceiptFooterText);
+            sale.Tendered - sale.Total, business.ReceiptFooterText, sale.LocationName ?? "");
         return new RetailReceiptReportData(header, lines,
             new RetailReceiptParameters(
                 business.ReceiptShowTime, business.ReceiptShowUnitPrice,

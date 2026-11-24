@@ -790,6 +790,9 @@ public sealed class AppDbContext(DbContextOptions<AppDbContext> options)
 
         builder.Entity<RetailCashSale>(entity =>
         {
+            entity.Property(x => x.BusinessName).HasMaxLength(150);
+            entity.Property(x => x.LocationName).HasMaxLength(120);
+            entity.Property(x => x.TimeZoneId).HasMaxLength(80);
             entity.Property(x => x.RequestKey).HasMaxLength(80);
             entity.Property(x => x.CurrencyCode).HasMaxLength(3);
             entity.Property(x => x.Total).HasPrecision(18, 2);
@@ -802,6 +805,9 @@ public sealed class AppDbContext(DbContextOptions<AppDbContext> options)
 
         builder.Entity<RetailCashSaleLine>(entity =>
         {
+            entity.Property(x => x.ProductSku).HasMaxLength(50);
+            entity.Property(x => x.UnitCode).HasMaxLength(12);
+            entity.Property(x => x.LineTotal).HasPrecision(18, 2);
             // SQL Server stores decimals numerically. SQLite test storage uses TEXT affinity,
             // where comparing decimal text to numeric literals would reject valid sales.
             // The API validates three-decimal quantities on both providers.

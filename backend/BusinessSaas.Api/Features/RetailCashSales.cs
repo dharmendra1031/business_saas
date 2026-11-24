@@ -228,15 +228,24 @@ public static class RetailCashSales
             var products = await db.RetailProducts.AsNoTracking()
                 .Where(x => x.BusinessId == businessId && x.IsActive && ids.Contains(x.Id))
                 .ToDictionaryAsync(x => x.Id);
+            var locationName = await db.BusinessLocations.AsNoTracking()
+                .Where(x => x.BusinessId == businessId && x.Id == request.LocationId)
+                .Select(x => x.Name).SingleAsync();
+            var unitIds = products.Values.Select(x => x.UnitId).Distinct().ToArray();
+            var units = await db.RetailUnits.AsNoTracking()
+                .Where(x => x.BusinessId == businessId && unitIds.Contains(x.Id))
+                .ToDictionaryAsync(x => x.Id, x => x.Code);
             var sale = new RetailCashSale {
                 BusinessId = businessId, CashierId = actor, LocationId = request.LocationId,
                 Tendered = request.Tendered, CurrencyCode = shop.CurrencyCode,
+                BusinessName = shop.Name, LocationName = locationName, TimeZoneId = shop.TimeZoneId,
                 PostedAtUtc = DateTime.UtcNow, RequestKey = request.RequestKey
             };
             foreach (var item in items)
             {
                 if (!products.TryGetValue(item.ProductId, out var product) || product.TaxClassification != "" ||
-                    product.SalePrice <= 0 || product.SalePrice != item.ExpectedUnitPrice)
+                    product.SalePrice <= 0 || product.SalePrice != item.ExpectedUnitPrice ||
+                    !units.TryGetValue(product.UnitId, out var unitCode))
                     return Results.BadRequest(new { code = "CASH_SALE_BASKET_CHANGED", item.ProductId,
                         message = "Product or price changed. Remove and select the affected item again." });
                 var lineTotal = decimal.Round(product.SalePrice * item.Quantity, 2,
@@ -246,7 +255,8 @@ public static class RetailCashSales
                     return Results.BadRequest(new { code = "CASH_SALE_ZERO_VALUE_LINE", item.ProductId,
                         message = "This line rounds to zero. Increase quantity or remove the product." });
                 sale.Lines.Add(new RetailCashSaleLine { ProductId = product.Id, ProductName = product.Name,
-                    Quantity = item.Quantity, UnitPrice = product.SalePrice });
+                    Quantity = item.Quantity, UnitPrice = product.SalePrice,
+                    ProductSku = product.Sku, UnitCode = unitCode, LineTotal = lineTotal });
                 sale.Total += lineTotal;
             }
             if (request.Tendered < sale.Total)

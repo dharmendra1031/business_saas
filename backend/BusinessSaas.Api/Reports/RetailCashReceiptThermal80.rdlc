@@ -24,6 +24,7 @@
         <Field Name="CashReceived"><DataField>CashReceived</DataField><rd:TypeName>System.Decimal</rd:TypeName></Field>
         <Field Name="ChangeAmount"><DataField>ChangeAmount</DataField><rd:TypeName>System.Decimal</rd:TypeName></Field>
         <Field Name="FooterText"><DataField>FooterText</DataField><rd:TypeName>System.String</rd:TypeName></Field>
+        <Field Name="LocationName"><DataField>LocationName</DataField><rd:TypeName>System.String</rd:TypeName></Field>
       </Fields>
     </DataSet>
     <DataSet Name="InvoiceLines">
@@ -34,6 +35,8 @@
         <Field Name="Quantity"><DataField>Quantity</DataField><rd:TypeName>System.Decimal</rd:TypeName></Field>
         <Field Name="UnitPrice"><DataField>UnitPrice</DataField><rd:TypeName>System.Decimal</rd:TypeName></Field>
         <Field Name="LineTotal"><DataField>LineTotal</DataField><rd:TypeName>System.Decimal</rd:TypeName></Field>
+        <Field Name="ProductSku"><DataField>ProductSku</DataField><rd:TypeName>System.String</rd:TypeName></Field>
+        <Field Name="UnitCode"><DataField>UnitCode</DataField><rd:TypeName>System.String</rd:TypeName></Field>
       </Fields>
     </DataSet>
   </DataSets>
