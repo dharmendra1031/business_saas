@@ -210,10 +210,10 @@ export default function PlatformPlans({ business, onChooseBusiness }: { business
         onClick={() => setReload(value => value + 1)}>Retry</button>}
     </div>}
     <div className="platform-preview-tabs platform-plan-tabs" role="tablist" aria-label="Plans and billing">
-      <button type="button" role="tab" aria-selected={activeTab === 'catalog'}
+      <button type="button" role="tab" disabled={busy} aria-selected={activeTab === 'catalog'}
         className={activeTab === 'catalog' ? 'is-active' : ''}
         onClick={() => { setEditing(null); setPublishing(null); setActiveTab('catalog') }}><BadgeCheck size={17} /> Plan Catalog</button>
-      <button type="button" role="tab" aria-selected={activeTab === 'billing'}
+      <button type="button" role="tab" disabled={busy} aria-selected={activeTab === 'billing'}
         className={activeTab === 'billing' ? 'is-active' : ''}
         onClick={() => { setEditing(null); setPublishing(null); setActiveTab('billing') }}>
         <CreditCard size={17} /> Billing Drafts
@@ -310,7 +310,7 @@ export default function PlatformPlans({ business, onChooseBusiness }: { business
       </dl>
       <form onSubmit={event => void publishPlan(event)} className="mt-3">
         <label className="form-label" htmlFor="publish-reason">Approval reason</label>
-        <textarea id="publish-reason" className="form-control" rows={3}
+        <textarea id="publish-reason" className="form-control" rows={3} disabled={busy}
           minLength={10} maxLength={200} required value={publishReason}
           onChange={event => setPublishReason(event.target.value)}
           placeholder="Confirm the commercial approval for these published terms" />
@@ -347,7 +347,7 @@ export default function PlatformPlans({ business, onChooseBusiness }: { business
       <form onSubmit={event => void saveDraft(event)}>
         <div className="form-grid">
           <div><label className="form-label" htmlFor="draft-currency">Currency (ISO code)</label>
-            <input id="draft-currency" className="form-control" maxLength={3}
+            <input id="draft-currency" className="form-control" maxLength={3} disabled={busy}
               value={form.currencyCode} onChange={event =>
                 update('currencyCode', event.target.value.toUpperCase())}
               placeholder="INR" /></div>
@@ -357,7 +357,7 @@ export default function PlatformPlans({ business, onChooseBusiness }: { business
             ['yearlyPrice', 'Yearly price']
           ] as const).map(([field, label]) => <div key={field}>
             <label className="form-label" htmlFor={field}>{label}</label>
-            <input id={field} className="form-control" type="number" min={0}
+            <input id={field} className="form-control" type="number" min={0} disabled={busy}
               max={99999999} step="0.01" value={form[field]}
               onChange={event => update(field, event.target.value)}
               placeholder="Not set" />
@@ -368,7 +368,7 @@ export default function PlatformPlans({ business, onChooseBusiness }: { business
             ['maxProducts', 'Max products']
           ] as const).map(([field, label]) => <div key={field}>
             <label className="form-label" htmlFor={field}>{label}</label>
-            <input id={field} className="form-control" type="number" min={1}
+            <input id={field} className="form-control" type="number" min={1} disabled={busy}
               max={field === 'maxLocations' ? 1000 : field === 'maxUsers' ? 10000 : 1000000}
               step={1} value={form[field]}
               onChange={event => update(field, event.target.value)}
@@ -376,7 +376,7 @@ export default function PlatformPlans({ business, onChooseBusiness }: { business
           </div>)}
           <div className="form-wide">
             <label className="form-label" htmlFor="draft-reason">Reason for change</label>
-            <textarea id="draft-reason" className="form-control" rows={3}
+            <textarea id="draft-reason" className="form-control" rows={3} disabled={busy}
               minLength={10} maxLength={200} required value={form.reason}
               onChange={event => update('reason', event.target.value)}
               placeholder="Explain the reason for this draft revision" />
