@@ -581,6 +581,62 @@ public sealed class SqlServerTests
                 x.BusinessId == businessId && x.ProductId == lastUnitId &&
                 x.SourceType == "CashSaleLine"));
         }
+
+        // Two identical requests racing must have one durable outcome. A concurrent
+        // HTTP response may be OK or a retriable conflict, but never a second sale.
+        var retriedId = await Created(prefix + "/products", new
+        {
+            name = "SQL Idempotent Checkout", sku = "SQL-RETRY-UNIT",
+            categoryId, brandId, unitId, salePrice = 15m, taxClassification = ""
+        });
+        using (var opening = await Post(owner, stockPath + "/opening",
+            new { productId = retriedId, quantity = 2m }))
+            Assert.Equal(HttpStatusCode.Created, opening.StatusCode);
+
+        const string sharedKey = "sql-same-key-concurrent-20261124";
+        var identicalCheckout = new
+        {
+            locationId, requestKey = sharedKey, tendered = 15m,
+            lines = new[] { new { productId = retriedId,
+                quantity = 1m, expectedUnitPrice = 15m } }
+        };
+        var duplicateRequests = await Task.WhenAll(
+            Post(cashier, prefix + "/cash-sales", identicalCheckout),
+            Post(cashier, prefix + "/cash-sales", identicalCheckout));
+        using var duplicateA = duplicateRequests[0];
+        using var duplicateB = duplicateRequests[1];
+        Assert.Contains(duplicateRequests, response => response.StatusCode == HttpStatusCode.OK);
+        foreach (var response in duplicateRequests)
+            Assert.True(response.StatusCode is HttpStatusCode.OK or HttpStatusCode.Conflict,
+                $"Same-key checkout returned {(int)response.StatusCode}: " +
+                await response.Content.ReadAsStringAsync());
+
+        var outcome = await cashier.GetFromJsonAsync<JsonElement>(
+            prefix + "/cash-sales/receipt?locationId=" + locationId +
+            "&requestKey=" + sharedKey);
+        var saleId = outcome.GetProperty("id").GetInt64();
+        Assert.Equal(15m, outcome.GetProperty("total").GetDecimal());
+        foreach (var response in duplicateRequests.Where(x => x.StatusCode == HttpStatusCode.OK))
+            Assert.Equal(saleId, (await response.Content.ReadFromJsonAsync<JsonElement>())
+                .GetProperty("id").GetInt64());
+        using var finalReplay = await Post(cashier, prefix + "/cash-sales", identicalCheckout);
+        Assert.Equal(HttpStatusCode.OK, finalReplay.StatusCode);
+        Assert.Equal(saleId, (await finalReplay.Content.ReadFromJsonAsync<JsonElement>())
+            .GetProperty("id").GetInt64());
+
+        using (var scope = factory.Services.CreateScope())
+        {
+            var db = scope.ServiceProvider.GetRequiredService<AppDbContext>();
+            Assert.Equal(1m, await db.RetailStockBalances.AsNoTracking()
+                .Where(x => x.BusinessId == businessId && x.LocationId == locationId &&
+                    x.ProductId == retriedId).Select(x => x.Quantity).SingleAsync());
+            Assert.Equal(1, await db.RetailCashSales.AsNoTracking().CountAsync(x =>
+                x.BusinessId == businessId && x.CashierId != 0 &&
+                x.RequestKey == sharedKey));
+            Assert.Equal(1, await db.RetailStockMovements.AsNoTracking().CountAsync(x =>
+                x.BusinessId == businessId && x.ProductId == retriedId &&
+                x.SourceType == "CashSaleLine"));
+        }
     }
 
     private static async Task RegisterAndLogin(HttpClient client, string email)
