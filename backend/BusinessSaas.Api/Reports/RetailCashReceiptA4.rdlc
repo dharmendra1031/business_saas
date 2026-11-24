@@ -28,6 +28,9 @@
         <Field Name="MerchantAddress"><DataField>MerchantAddress</DataField><rd:TypeName>System.String</rd:TypeName></Field>
         <Field Name="MerchantPhone"><DataField>MerchantPhone</DataField><rd:TypeName>System.String</rd:TypeName></Field>
         <Field Name="MerchantEmail"><DataField>MerchantEmail</DataField><rd:TypeName>System.String</rd:TypeName></Field>
+        <Field Name="CustomerName"><DataField>CustomerName</DataField><rd:TypeName>System.String</rd:TypeName></Field>
+        <Field Name="CustomerPhone"><DataField>CustomerPhone</DataField><rd:TypeName>System.String</rd:TypeName></Field>
+        <Field Name="CustomerAddress"><DataField>CustomerAddress</DataField><rd:TypeName>System.String</rd:TypeName></Field>
         <Field Name="LocationName"><DataField>LocationName</DataField><rd:TypeName>System.String</rd:TypeName></Field>
       </Fields>
     </DataSet>
@@ -131,6 +134,33 @@
             <TablixCell />
             <TablixCell />
           </TablixCells></TablixRow>
+          <TablixRow><Height>0.24in</Height><TablixCells>
+            <TablixCell><CellContents><Textbox Name="CustomerName"><CanGrow>true</CanGrow><KeepTogether>true</KeepTogether><Paragraphs><Paragraph><TextRuns><TextRun><Value>=&quot;Customer name: &quot; &amp; First(Fields!CustomerName.Value, &quot;InvoiceHeader&quot;)</Value><Style><FontFamily>Arial</FontFamily><FontSize>10pt</FontSize><Color>#000000</Color></Style></TextRun></TextRuns><Style><TextAlign>Left</TextAlign></Style></Paragraph></Paragraphs><rd:DefaultName>CustomerName</rd:DefaultName><Style><PaddingLeft>2pt</PaddingLeft><PaddingRight>2pt</PaddingRight><PaddingTop>1pt</PaddingTop><PaddingBottom>1pt</PaddingBottom></Style></Textbox><ColSpan>7</ColSpan></CellContents></TablixCell>
+            <TablixCell />
+            <TablixCell />
+            <TablixCell />
+            <TablixCell />
+            <TablixCell />
+            <TablixCell />
+          </TablixCells></TablixRow>
+          <TablixRow><Height>0.24in</Height><TablixCells>
+            <TablixCell><CellContents><Textbox Name="CustomerPhone"><CanGrow>true</CanGrow><KeepTogether>true</KeepTogether><Paragraphs><Paragraph><TextRuns><TextRun><Value>=&quot;Customer phone: &quot; &amp; First(Fields!CustomerPhone.Value, &quot;InvoiceHeader&quot;)</Value><Style><FontFamily>Arial</FontFamily><FontSize>10pt</FontSize><Color>#000000</Color></Style></TextRun></TextRuns><Style><TextAlign>Left</TextAlign></Style></Paragraph></Paragraphs><rd:DefaultName>CustomerPhone</rd:DefaultName><Style><PaddingLeft>2pt</PaddingLeft><PaddingRight>2pt</PaddingRight><PaddingTop>1pt</PaddingTop><PaddingBottom>1pt</PaddingBottom></Style></Textbox><ColSpan>7</ColSpan></CellContents></TablixCell>
+            <TablixCell />
+            <TablixCell />
+            <TablixCell />
+            <TablixCell />
+            <TablixCell />
+            <TablixCell />
+          </TablixCells></TablixRow>
+          <TablixRow><Height>0.24in</Height><TablixCells>
+            <TablixCell><CellContents><Textbox Name="CustomerAddress"><CanGrow>true</CanGrow><KeepTogether>true</KeepTogether><Paragraphs><Paragraph><TextRuns><TextRun><Value>=&quot;Customer address: &quot; &amp; First(Fields!CustomerAddress.Value, &quot;InvoiceHeader&quot;)</Value><Style><FontFamily>Arial</FontFamily><FontSize>10pt</FontSize><Color>#000000</Color></Style></TextRun></TextRuns><Style><TextAlign>Left</TextAlign></Style></Paragraph></Paragraphs><rd:DefaultName>CustomerAddress</rd:DefaultName><Style><PaddingLeft>2pt</PaddingLeft><PaddingRight>2pt</PaddingRight><PaddingTop>1pt</PaddingTop><PaddingBottom>1pt</PaddingBottom></Style></Textbox><ColSpan>7</ColSpan></CellContents></TablixCell>
+            <TablixCell />
+            <TablixCell />
+            <TablixCell />
+            <TablixCell />
+            <TablixCell />
+            <TablixCell />
+          </TablixCells></TablixRow>
           <TablixRow><Height>0.28in</Height><TablixCells>
             <TablixCell><CellContents><Textbox Name="SerialHeading"><CanGrow>true</CanGrow><KeepTogether>true</KeepTogether><Paragraphs><Paragraph><TextRuns><TextRun><Value>No.</Value><Style><FontFamily>Arial</FontFamily><FontSize>9pt</FontSize><FontWeight>Bold</FontWeight><Color>#000000</Color></Style></TextRun></TextRuns><Style><TextAlign>Left</TextAlign></Style></Paragraph></Paragraphs><rd:DefaultName>SerialHeading</rd:DefaultName><Style><BottomBorder><Style>Solid</Style><Color>#000000</Color></BottomBorder><PaddingLeft>2pt</PaddingLeft><PaddingRight>2pt</PaddingRight><PaddingTop>1pt</PaddingTop><PaddingBottom>1pt</PaddingBottom></Style></Textbox></CellContents></TablixCell>
             <TablixCell><CellContents><Textbox Name="ProductHeading"><CanGrow>true</CanGrow><KeepTogether>true</KeepTogether><Paragraphs><Paragraph><TextRuns><TextRun><Value>Product</Value><Style><FontFamily>Arial</FontFamily><FontSize>9pt</FontSize><FontWeight>Bold</FontWeight><Color>#000000</Color></Style></TextRun></TextRuns><Style><TextAlign>Left</TextAlign></Style></Paragraph></Paragraphs><rd:DefaultName>ProductHeading</rd:DefaultName><Style><BottomBorder><Style>Solid</Style><Color>#000000</Color></BottomBorder><PaddingLeft>2pt</PaddingLeft><PaddingRight>2pt</PaddingRight><PaddingTop>1pt</PaddingTop><PaddingBottom>1pt</PaddingBottom></Style></Textbox></CellContents></TablixCell>
@@ -198,6 +228,9 @@
 <TablixMember><KeepWithGroup>After</KeepWithGroup></TablixMember>
 <TablixMember><KeepWithGroup>After</KeepWithGroup></TablixMember>
 <TablixMember><KeepWithGroup>After</KeepWithGroup></TablixMember>
+<TablixMember><Visibility><Hidden>=Not(Parameters!ShowCustomerName.Value) Or Len(First(Fields!CustomerName.Value, &quot;InvoiceHeader&quot;)) = 0</Hidden></Visibility><KeepWithGroup>After</KeepWithGroup></TablixMember>
+<TablixMember><Visibility><Hidden>=Not(Parameters!ShowCustomerPhone.Value) Or Len(First(Fields!CustomerPhone.Value, &quot;InvoiceHeader&quot;)) = 0</Hidden></Visibility><KeepWithGroup>After</KeepWithGroup></TablixMember>
+<TablixMember><Visibility><Hidden>=Not(Parameters!ShowCustomerAddress.Value) Or Len(First(Fields!CustomerAddress.Value, &quot;InvoiceHeader&quot;)) = 0</Hidden></Visibility><KeepWithGroup>After</KeepWithGroup></TablixMember>
 <TablixMember><KeepWithGroup>After</KeepWithGroup><RepeatOnNewPage>true</RepeatOnNewPage></TablixMember>
 <TablixMember><Group Name="ReceiptLineDetailGroup" /></TablixMember>
 <TablixMember><KeepWithGroup>Before</KeepWithGroup></TablixMember>
@@ -206,11 +239,11 @@
 <TablixMember><Visibility><Hidden>=Not(Parameters!ShowFooter.Value)</Hidden></Visibility><KeepWithGroup>Before</KeepWithGroup></TablixMember>
         </TablixMembers></TablixRowHierarchy>
         <DataSetName>InvoiceLines</DataSetName>
-        <Top>0.05in</Top><Left>0in</Left><Height>4.08in</Height><Width>7.16in</Width>
+        <Top>0.05in</Top><Left>0in</Left><Height>4.80in</Height><Width>7.16in</Width>
         <Style><Border><Style>None</Style></Border></Style>
       </Tablix>
     </ReportItems>
-    <Height>4.18in</Height><Style />
+    <Height>4.90in</Height><Style />
   </Body>
   <Width>7.16in</Width>
   <Page>
@@ -233,6 +266,9 @@
     <ReportParameter Name="ShowAddress"><DataType>Boolean</DataType><DefaultValue><Values><Value>true</Value></Values></DefaultValue><Prompt>ShowAddress</Prompt></ReportParameter>
     <ReportParameter Name="ShowPhone"><DataType>Boolean</DataType><DefaultValue><Values><Value>true</Value></Values></DefaultValue><Prompt>ShowPhone</Prompt></ReportParameter>
     <ReportParameter Name="ShowEmail"><DataType>Boolean</DataType><DefaultValue><Values><Value>true</Value></Values></DefaultValue><Prompt>ShowEmail</Prompt></ReportParameter>
+    <ReportParameter Name="ShowCustomerName"><DataType>Boolean</DataType><DefaultValue><Values><Value>true</Value></Values></DefaultValue><Prompt>ShowCustomerName</Prompt></ReportParameter>
+    <ReportParameter Name="ShowCustomerPhone"><DataType>Boolean</DataType><DefaultValue><Values><Value>true</Value></Values></DefaultValue><Prompt>ShowCustomerPhone</Prompt></ReportParameter>
+    <ReportParameter Name="ShowCustomerAddress"><DataType>Boolean</DataType><DefaultValue><Values><Value>true</Value></Values></DefaultValue><Prompt>ShowCustomerAddress</Prompt></ReportParameter>
   </ReportParameters>
   <rd:ReportUnitType>Inch</rd:ReportUnitType>
   <rd:ReportID>c35e8b8f-9ead-41b2-acdb-0d6e9041a3ca</rd:ReportID>

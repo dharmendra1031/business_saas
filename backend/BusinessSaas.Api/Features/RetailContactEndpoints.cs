@@ -116,7 +116,7 @@ public static class RetailContactEndpoints
             var total = await query.CountAsync();
             var items = await query.OrderBy(x => x.NameKey).ThenBy(x => x.Id)
                 .Skip((currentPage - 1) * PageSize).Take(PageSize)
-                .Select(x => new { x.Id, x.Name, x.Phone, x.Email, x.IsActive })
+                .Select(x => new { x.Id, x.Name, x.Phone, x.Email, x.Address, x.IsActive })
                 .ToListAsync();
             return Results.Ok(new { items, total, page = currentPage, pageSize = PageSize });
         });
@@ -135,12 +135,13 @@ public static class RetailContactEndpoints
                 Name = request.Name!.Trim(),
                 NameKey = request.Name!.Trim().ToUpperInvariant(),
                 Phone = Clean(request.Phone),
-                Email = Clean(request.Email)
+                Email = Clean(request.Email),
+                Address = Clean(request.Address)
             };
             db.RetailCustomers.Add(customer);
             await db.SaveChangesAsync();
             return Results.Created($"/api/businesses/{businessId}/customers/{customer.Id}",
-                new { customer.Id, customer.Name, customer.Phone, customer.Email, customer.IsActive });
+                new { customer.Id, customer.Name, customer.Phone, customer.Email, customer.Address, customer.IsActive });
         });
 
         customers.MapPut("/{customerId:long}", async (long businessId, long customerId,
@@ -160,9 +161,10 @@ public static class RetailContactEndpoints
             customer.NameKey = customer.Name.ToUpperInvariant();
             customer.Phone = Clean(request.Phone);
             customer.Email = Clean(request.Email);
+            if (request.Address is not null) customer.Address = Clean(request.Address);
             customer.IsActive = request.IsActive.Value;
             await db.SaveChangesAsync();
-            return Results.Ok(new { customer.Id, customer.Name, customer.Phone, customer.Email, customer.IsActive });
+            return Results.Ok(new { customer.Id, customer.Name, customer.Phone, customer.Email, customer.Address, customer.IsActive });
         });
     }
 
@@ -177,6 +179,9 @@ public static class RetailContactEndpoints
             return "Phone must contain at most 25 digits or phone punctuation.";
         if (email.Length > 160 || (email.Length > 0 && !new EmailAddressAttribute().IsValid(email)))
             return "Enter a valid email address.";
+        if (!supplier && request.Address is not null &&
+            (request.Address.Length > 300 || request.Address.Any(char.IsControl)))
+            return "Address must be at most 300 characters and contain no control characters.";
         if (supplier && phone.Length == 0 && email.Length == 0)
             return "Enter at least a phone number or email for this supplier.";
         return null;
@@ -184,5 +189,5 @@ public static class RetailContactEndpoints
 
     private static string Clean(string? text) => text?.Trim() ?? "";
 
-    private sealed record ContactRequest(string? Name, string? Phone, string? Email, bool? IsActive);
+    private sealed record ContactRequest(string? Name, string? Phone, string? Email, bool? IsActive, string? Address = null);
 }

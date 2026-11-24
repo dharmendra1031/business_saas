@@ -115,6 +115,9 @@ public sealed class Business
     public bool ReceiptShowBranch { get; set; } = true;
     public bool ReceiptShowSku { get; set; } = true;
     public bool ReceiptShowUnit { get; set; } = true;
+    public bool ReceiptShowCustomerName { get; set; } = true;
+    public bool ReceiptShowCustomerPhone { get; set; } = true;
+    public bool ReceiptShowCustomerAddress { get; set; } = true;
     public bool ReceiptShowFooter { get; set; } = true;
     public string ReceiptFooterText { get; set; } = "Thank you for shopping!";
     public int ReceiptSettingsRevision { get; set; }
@@ -304,6 +307,7 @@ public sealed class RetailSupplier
 
 public sealed class RetailCustomer
 {
+    public string? Address { get; set; }
     public long Id { get; set; }
     public long BusinessId { get; set; }
     public string Name { get; set; } = "";
@@ -782,6 +786,7 @@ public sealed class AppDbContext(DbContextOptions<AppDbContext> options)
 
         builder.Entity<RetailCustomer>(entity =>
         {
+            entity.Property(x => x.Address).HasMaxLength(300);
             entity.Property(x => x.Name).HasMaxLength(120).IsRequired();
             entity.Property(x => x.NameKey).HasMaxLength(120).IsRequired();
             entity.Property(x => x.Phone).HasMaxLength(25).IsRequired();
@@ -809,6 +814,9 @@ public sealed class AppDbContext(DbContextOptions<AppDbContext> options)
             entity.Property(x => x.MerchantAddress).HasMaxLength(300);
             entity.Property(x => x.MerchantPhone).HasMaxLength(25);
             entity.Property(x => x.MerchantEmail).HasMaxLength(254);
+            entity.Property(x => x.CustomerName).HasMaxLength(120);
+            entity.Property(x => x.CustomerPhone).HasMaxLength(25);
+            entity.Property(x => x.CustomerAddress).HasMaxLength(300);
             entity.Property(x => x.BusinessName).HasMaxLength(150);
             entity.Property(x => x.LocationName).HasMaxLength(120);
             entity.Property(x => x.TimeZoneId).HasMaxLength(80);

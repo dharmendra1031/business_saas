@@ -7,6 +7,10 @@ public sealed class RetailCashSale
     public long BusinessId { get; set; }
     public long LocationId { get; set; }
     public long CashierId { get; set; }
+    public long? CustomerId { get; set; }
+    public string? CustomerName { get; set; }
+    public string? CustomerPhone { get; set; }
+    public string? CustomerAddress { get; set; }
     public string RequestKey { get; set; } = "";
     public string? MerchantLegalName { get; set; }
     public string? MerchantAddress { get; set; }

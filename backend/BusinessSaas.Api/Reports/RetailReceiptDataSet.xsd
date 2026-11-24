@@ -23,6 +23,9 @@
               <xs:element name="MerchantAddress" type="xs:string" minOccurs="0" />
               <xs:element name="MerchantPhone" type="xs:string" minOccurs="0" />
               <xs:element name="MerchantEmail" type="xs:string" minOccurs="0" />
+              <xs:element name="CustomerName" type="xs:string" minOccurs="0" />
+              <xs:element name="CustomerPhone" type="xs:string" minOccurs="0" />
+              <xs:element name="CustomerAddress" type="xs:string" minOccurs="0" />
               <xs:element name="LocationName" type="xs:string" minOccurs="0" />
             </xs:sequence>
           </xs:complexType>

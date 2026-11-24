@@ -67,3 +67,7 @@ A4 has seven fixed design-time columns (number, product, SKU, quantity, unit, ra
 ## Phase 3A merchant details
 
 The existing Owner receipt-settings endpoint saves optional legal display name, address, phone and email with independent visibility flags, bounded lengths and email validation. New cash sales snapshot these four text fields in the same transaction; legacy receipts never substitute the current merchant details. Both RDLC files and XSD expose the fields and collapse empty/hidden rows. Existing clients may omit the new settings without resetting them. Audit summaries remain below 100 characters and omit raw contact details. These are optional cash-receipt identity fields, not verified statutory tax details. Logo upload, customer selection and customer snapshots are still pending. No renderer is installed.
+
+## Phase 3B customer details
+
+Walk-in cash checkout remains the default. An optional active customer is selected through a location-authorized, tenant-scoped POS search. The same customer ID is retained in the pending request and checked on idempotent replay. New sales snapshot customer name, phone and address; old receipts have no fabricated customer details. Customer Master now supports an optional address. The static XSD/RDLC definitions and Owner settings expose three independent customer visibility flags. No credit, tax or renderer is activated. Logo upload is a separate milestone.

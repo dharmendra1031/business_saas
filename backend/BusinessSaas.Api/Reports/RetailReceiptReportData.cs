@@ -9,7 +9,7 @@ public sealed record RetailReceiptHeader(
     string BusinessName, string ReceiptNumber, string DateText, string TimeText,
     string CurrencyCode, string PaymentMethod, decimal TotalAmount,
     decimal CashReceived, decimal ChangeAmount, string FooterText, string MerchantLegalName, string MerchantAddress, string MerchantPhone, string MerchantEmail,
-    string LocationName);
+    string CustomerName, string CustomerPhone, string CustomerAddress, string LocationName);
 
 public sealed record RetailReceiptLine(
     int LineNumber, string ProductName, decimal Quantity,
@@ -18,7 +18,8 @@ public sealed record RetailReceiptLine(
 public sealed record RetailReceiptParameters(
     bool ShowTime, bool ShowUnitPrice, bool ShowCashReceived,
     bool ShowChange, bool ShowFooter, bool ShowBranch, bool ShowSku, bool ShowUnit,
-    bool ShowLegalName, bool ShowAddress, bool ShowPhone, bool ShowEmail);
+    bool ShowLegalName, bool ShowAddress, bool ShowPhone, bool ShowEmail,
+    bool ShowCustomerName, bool ShowCustomerPhone, bool ShowCustomerAddress);
 
 public sealed record RetailReceiptReportData(
     RetailReceiptHeader Header,
@@ -59,13 +60,14 @@ public sealed record RetailReceiptReportData(
             sale.CurrencyCode, "Cash", sale.Total, sale.Tendered,
             sale.Tendered - sale.Total, business.ReceiptFooterText,
             sale.MerchantLegalName ?? "", sale.MerchantAddress ?? "", sale.MerchantPhone ?? "", sale.MerchantEmail ?? "",
-            sale.LocationName ?? "");
+            sale.CustomerName ?? "", sale.CustomerPhone ?? "", sale.CustomerAddress ?? "", sale.LocationName ?? "");
         return new RetailReceiptReportData(header, lines,
             new RetailReceiptParameters(
                 business.ReceiptShowTime, business.ReceiptShowUnitPrice,
                 business.ReceiptShowCashReceived, business.ReceiptShowChange,
                 business.ReceiptShowFooter, business.ReceiptShowBranch,
                 business.ReceiptShowSku, business.ReceiptShowUnit,
-                business.ReceiptShowLegalName, business.ReceiptShowAddress, business.ReceiptShowPhone, business.ReceiptShowEmail));
+                business.ReceiptShowLegalName, business.ReceiptShowAddress, business.ReceiptShowPhone, business.ReceiptShowEmail,
+                business.ReceiptShowCustomerName, business.ReceiptShowCustomerPhone, business.ReceiptShowCustomerAddress));
     }
 }

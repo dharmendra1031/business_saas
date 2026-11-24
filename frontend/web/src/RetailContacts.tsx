@@ -9,6 +9,7 @@ interface Contact {
   name: string
   phone: string
   email: string
+  address?: string | null
   isActive: boolean
 }
 
@@ -19,7 +20,7 @@ interface ContactPage {
   pageSize: number
 }
 
-const emptyForm = { name: '', phone: '', email: '', isActive: true }
+const emptyForm = { name: '', phone: '', email: '', address: '', isActive: true }
 
 export default function RetailContacts({ businessId, canOperate, type }: {
   businessId: number
@@ -71,7 +72,7 @@ export default function RetailContacts({ businessId, canOperate, type }: {
 
   function edit(item: Contact) {
     setEditingId(item.id)
-    setForm({ name: item.name, phone: item.phone, email: item.email, isActive: item.isActive })
+    setForm({ name: item.name, phone: item.phone, email: item.email, address: item.address ?? '', isActive: item.isActive })
     nameInput.current?.focus()
   }
 
@@ -84,6 +85,7 @@ export default function RetailContacts({ businessId, canOperate, type }: {
       name: form.name.trim(),
       phone: form.phone.trim(),
       email: form.email.trim(),
+      ...(!supplier ? { address: form.address.trim() } : {}),
       ...(editingId === null ? {} : { isActive: form.isActive })
     }
 
@@ -139,6 +141,11 @@ export default function RetailContacts({ businessId, canOperate, type }: {
             value={form.email} onChange={event =>
               setForm(current => ({ ...current, email: event.target.value }))} />
         </div>
+        {!supplier && <div>
+          <label className="form-label" htmlFor="contact-address">Address (optional)</label>
+          <input id="contact-address" className="form-control" maxLength={300} disabled={saving}
+            value={form.address} onChange={event => setForm(current => ({ ...current, address: event.target.value }))} />
+        </div>}
         {editingId !== null && <div>
           <label className="form-label" htmlFor="contact-status">Status</label>
           <select id="contact-status" className="form-select" value={form.isActive ? 'active' : 'inactive'} disabled={saving}

@@ -125,6 +125,9 @@ public static class RetailBillingSettingsEndpoints
             var showPhone = request.ShowPhone ?? business.ReceiptShowPhone;
             var email = request.Email is null ? business.ReceiptEmail : request.Email.Trim();
             var showEmail = request.ShowEmail ?? business.ReceiptShowEmail;
+            var showCustomerName = request.ShowCustomerName ?? business.ReceiptShowCustomerName;
+            var showCustomerPhone = request.ShowCustomerPhone ?? business.ReceiptShowCustomerPhone;
+            var showCustomerAddress = request.ShowCustomerAddress ?? business.ReceiptShowCustomerAddress;
             var footer = request.FooterText.Trim();
             if (business.ReceiptPaperSize == request.PaperSize &&
                 business.ReceiptShowTime == request.ShowTime &&
@@ -139,6 +142,9 @@ public static class RetailBillingSettingsEndpoints
                 business.ReceiptAddress == address && business.ReceiptShowAddress == showAddress &&
                 business.ReceiptPhone == phone && business.ReceiptShowPhone == showPhone &&
                 business.ReceiptEmail == email && business.ReceiptShowEmail == showEmail &&
+                business.ReceiptShowCustomerName == showCustomerName &&
+                business.ReceiptShowCustomerPhone == showCustomerPhone &&
+                business.ReceiptShowCustomerAddress == showCustomerAddress &&
                 business.ReceiptFooterText == footer)
                 return Results.Ok(new { settings = ReceiptView(business), unchanged = true });
 
@@ -163,6 +169,9 @@ public static class RetailBillingSettingsEndpoints
                     .SetProperty(x => x.ReceiptShowPhone, showPhone)
                     .SetProperty(x => x.ReceiptEmail, email)
                     .SetProperty(x => x.ReceiptShowEmail, showEmail)
+                    .SetProperty(x => x.ReceiptShowCustomerName, showCustomerName)
+                    .SetProperty(x => x.ReceiptShowCustomerPhone, showCustomerPhone)
+                    .SetProperty(x => x.ReceiptShowCustomerAddress, showCustomerAddress)
                     .SetProperty(x => x.ReceiptFooterText, footer)
                     .SetProperty(x => x.ReceiptSettingsRevision, newRevision));
             if (changed != 1)
@@ -181,7 +190,7 @@ public static class RetailBillingSettingsEndpoints
                     string.Concat(new[] { request.ShowTime, request.ShowUnitPrice, request.ShowCashReceived,
                         request.ShowChange, request.ShowFooter, request.ShowBranch ?? business.ReceiptShowBranch,
                         request.ShowSku ?? business.ReceiptShowSku, request.ShowUnit ?? business.ReceiptShowUnit,
-                        showLegalName, showAddress, showPhone, showEmail }.Select(value => value ? "1" : "0")) +
+                        showLegalName, showAddress, showPhone, showEmail, showCustomerName, showCustomerPhone, showCustomerAddress }.Select(value => value ? "1" : "0")) +
                     $";merchantChanged={business.ReceiptLegalName != legalName || business.ReceiptAddress != address || business.ReceiptPhone != phone || business.ReceiptEmail != email}",
                 Reason = request.Reason.Trim()
             });
@@ -205,6 +214,9 @@ public static class RetailBillingSettingsEndpoints
             business.ReceiptShowPhone = showPhone;
             business.ReceiptEmail = email;
             business.ReceiptShowEmail = showEmail;
+            business.ReceiptShowCustomerName = showCustomerName;
+            business.ReceiptShowCustomerPhone = showCustomerPhone;
+            business.ReceiptShowCustomerAddress = showCustomerAddress;
             business.ReceiptFooterText = footer;
             business.ReceiptSettingsRevision = newRevision;
             return Results.Ok(new { settings = ReceiptView(business), unchanged = false });
@@ -229,6 +241,9 @@ public static class RetailBillingSettingsEndpoints
         showPhone = business.ReceiptShowPhone,
         email = business.ReceiptEmail ?? "",
         showEmail = business.ReceiptShowEmail,
+        showCustomerName = business.ReceiptShowCustomerName,
+        showCustomerPhone = business.ReceiptShowCustomerPhone,
+        showCustomerAddress = business.ReceiptShowCustomerAddress,
         footerText = business.ReceiptFooterText,
         revision = business.ReceiptSettingsRevision,
         // Business name, receipt ID, date, product/qty, line total, payable total
@@ -246,7 +261,8 @@ public static class RetailBillingSettingsEndpoints
         string? LegalName = null, bool? ShowLegalName = null,
         string? Address = null, bool? ShowAddress = null,
         string? Phone = null, bool? ShowPhone = null,
-        string? Email = null, bool? ShowEmail = null);
+        string? Email = null, bool? ShowEmail = null,
+        bool? ShowCustomerName = null, bool? ShowCustomerPhone = null, bool? ShowCustomerAddress = null);
 
     private static bool ValidOptionalText(string? value, int maxLength) =>
         value is null || (value.Length <= maxLength && !value.Any(char.IsControl));

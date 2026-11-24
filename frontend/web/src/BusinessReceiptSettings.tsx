@@ -20,6 +20,9 @@ interface ReceiptSettings {
   showPhone: boolean
   email: string
   showEmail: boolean
+  showCustomerName: boolean
+  showCustomerPhone: boolean
+  showCustomerAddress: boolean
   footerText: string
   revision: number
   mandatoryFields: string[]
@@ -38,6 +41,9 @@ const options = [
   { key: 'showAddress', label: 'Business address', help: 'Shows the value saved when the sale was posted.' },
   { key: 'showPhone', label: 'Business phone', help: 'Shows the value saved when the sale was posted.' },
   { key: 'showEmail', label: 'Business email', help: 'Shows the value saved when the sale was posted.' },
+  { key: 'showCustomerName', label: 'Customer name', help: 'Shown only when saved on the selected customer receipt.' },
+  { key: 'showCustomerPhone', label: 'Customer phone', help: 'Shown only when saved on the selected customer receipt.' },
+  { key: 'showCustomerAddress', label: 'Customer address', help: 'Shown only when saved on the selected customer receipt.' },
   { key: 'showFooter', label: 'Footer message', help: 'Show your approved receipt footer.' }
 ] as const
 
@@ -111,6 +117,9 @@ export default function BusinessReceiptSettings({ businessId, canOperate }: {
             showPhone: draft.showPhone,
             email: draft.email,
             showEmail: draft.showEmail,
+            showCustomerName: draft.showCustomerName,
+            showCustomerPhone: draft.showCustomerPhone,
+            showCustomerAddress: draft.showCustomerAddress,
             footerText: draft.footerText,
             expectedRevision: saved.revision,
             reason: reason.trim()

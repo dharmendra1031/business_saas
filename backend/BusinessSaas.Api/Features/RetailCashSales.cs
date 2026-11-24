@@ -11,6 +11,7 @@ public static class RetailCashSales
     {
         var group = app.MapGroup("/api/businesses/{businessId:long}/cash-sales").RequireAuthorization();
         group.MapGet("/products", Search);
+        group.MapGet("/customers", SearchCustomers);
         group.MapGet("/receipt", FindReceipt);
         group.MapGet("/latest", Latest);
         group.MapGet("/receipts/{receiptId:long}", ReceiptById);
@@ -72,7 +73,7 @@ public static class RetailCashSales
         // Older single-item checkout clients read these four fields from the receipt header.
         var first = lines.First();
         return new { sale.Id, sale.BusinessId, sale.LocationId, sale.CashierId, sale.RequestKey,
-            sale.Tendered, sale.Total, sale.CurrencyCode,
+            sale.Tendered, sale.Total, sale.CurrencyCode, sale.CustomerId, sale.CustomerName,
             PostedAtUtc = DateTime.SpecifyKind(sale.PostedAtUtc, DateTimeKind.Utc),
             first.ProductId, first.ProductName, first.UnitPrice, first.Quantity, Lines = lines };
     }
@@ -182,8 +183,22 @@ public static class RetailCashSales
         return Results.Ok(products);
     }
 
+    private static async Task<IResult> SearchCustomers(long businessId, long locationId, string? search,
+        ClaimsPrincipal user, AppDbContext db)
+    {
+        if (!long.TryParse(user.FindFirstValue(ClaimTypes.NameIdentifier), out var actor) ||
+            await Shop(db, businessId, actor, locationId) is null) return Results.NotFound();
+        var term = search?.Trim().ToUpperInvariant() ?? "";
+        if (term.Length is < 2 or > 100) return Results.BadRequest();
+        return Results.Ok(await db.RetailCustomers.AsNoTracking()
+            .Where(x => x.BusinessId == businessId && x.IsActive &&
+                (x.NameKey.Contains(term) || x.Phone.Contains(term)))
+            .OrderBy(x => x.NameKey).ThenBy(x => x.Id).Take(20)
+            .Select(x => new { x.Id, x.Name, x.Phone }).ToListAsync());
+    }
+
     public sealed record CashRequest(long LocationId, decimal Tendered, string RequestKey,
-        List<Item>? Lines = null, long ProductId = 0, decimal Quantity = 0, decimal ExpectedUnitPrice = 0);
+        List<Item>? Lines = null, long ProductId = 0, decimal Quantity = 0, decimal ExpectedUnitPrice = 0, long? CustomerId = null);
 
     public sealed record Item(long ProductId, decimal Quantity, decimal ExpectedUnitPrice);
 
@@ -193,7 +208,7 @@ public static class RetailCashSales
         if (!long.TryParse(user.FindFirstValue(ClaimTypes.NameIdentifier), out var actor))
             return Results.NotFound();
         var items = request.Lines ?? [new Item(request.ProductId, request.Quantity, request.ExpectedUnitPrice)];
-        if (items.Count is < 1 or > 100 || items.Any(x => x is null || x.ProductId <= 0 || x.Quantity is < 0.001m or > 1000000m ||
+        if (request.CustomerId is <= 0 || items.Count is < 1 or > 100 || items.Any(x => x is null || x.ProductId <= 0 || x.Quantity is < 0.001m or > 1000000m ||
             decimal.Round(x.Quantity, 3) != x.Quantity) ||
             items.Select(x => x.ProductId).Distinct().Count() != items.Count || string.IsNullOrWhiteSpace(request.RequestKey) || request.RequestKey.Length is < 12 or > 80 ||
             request.Tendered is <= 0 or > 9999999999999999.99m ||
@@ -212,6 +227,7 @@ public static class RetailCashSales
                 var recorded = previous.Lines.OrderBy(x => x.ProductId)
                     .Select(x => new Item(x.ProductId, x.Quantity, x.UnitPrice));
                 if (previous.LocationId != request.LocationId || previous.Tendered != request.Tendered ||
+                    previous.CustomerId != request.CustomerId ||
                     !recorded.SequenceEqual(items.OrderBy(x => x.ProductId)))
                     return Results.Conflict(new { message = "This receipt key belongs to a different sale." });
                 // Never hide a committed receipt or double-post when settings changed mid-retry.
@@ -224,6 +240,15 @@ public static class RetailCashSales
             var sub = await db.BusinessSubscriptions.AsNoTracking().SingleOrDefaultAsync(x => x.BusinessId == businessId);
             if (sub is null || !SubscriptionAccess.CanOperate(sub, DateTime.UtcNow))
                 return Results.StatusCode(StatusCodes.Status403Forbidden);
+            RetailCustomer? customer = null;
+            if (request.CustomerId is long customerId)
+            {
+                customer = await db.RetailCustomers.AsNoTracking().SingleOrDefaultAsync(x =>
+                    x.Id == customerId && x.BusinessId == businessId && x.IsActive);
+                if (customer is null)
+                    return Results.BadRequest(new { code = "CASH_SALE_CUSTOMER_CHANGED",
+                        message = "Customer is unavailable. Select an active customer or continue as walk-in." });
+            }
             var ids = items.Select(x => x.ProductId).ToArray();
             var products = await db.RetailProducts.AsNoTracking()
                 .Where(x => x.BusinessId == businessId && x.IsActive && ids.Contains(x.Id))
@@ -237,6 +262,8 @@ public static class RetailCashSales
                 .ToDictionaryAsync(x => x.Id, x => x.Code);
             var sale = new RetailCashSale {
                 BusinessId = businessId, CashierId = actor, LocationId = request.LocationId,
+                CustomerId = customer?.Id, CustomerName = customer?.Name,
+                CustomerPhone = customer?.Phone, CustomerAddress = customer?.Address,
                 Tendered = request.Tendered, CurrencyCode = shop.CurrencyCode,
                 MerchantLegalName = shop.ReceiptLegalName,
                 MerchantAddress = shop.ReceiptAddress,

@@ -10,7 +10,8 @@ interface Product {
 }
 interface Line { productId: number; name: string; quantity: number; expectedUnitPrice: number;
   unitCode?: string | null; available?: number }
-interface SaleRequest { locationId: number; requestKey: string; tendered: number; lines: Line[] }
+interface SaleRequest { locationId: number; requestKey: string; tendered: number; lines: Line[]; customerId?: number | null }
+interface SaleCustomer { id: number; name: string; phone: string }
 interface ReceiptHistory {
   items: Pick<Receipt, 'id' | 'total' | 'currencyCode' | 'postedAtUtc'>[]
   hasMore: boolean
@@ -42,7 +43,8 @@ function restore(key: string): SaleRequest | null {
       Math.round(line.expectedUnitPrice * 100) !== line.expectedUnitPrice * 100 &&
       Math.abs(Math.round(line.expectedUnitPrice * 100) - line.expectedUnitPrice * 100) > 0.000001))
       throw new Error('Invalid checkout lines')
-    return { locationId: saved.locationId, requestKey: saved.requestKey, tendered: saved.tendered, lines }
+    if (saved.customerId != null && (!Number.isSafeInteger(saved.customerId) || saved.customerId < 1)) throw new Error('Invalid checkout customer')
+    return { locationId: saved.locationId, requestKey: saved.requestKey, tendered: saved.tendered, lines, customerId: saved.customerId ?? null }
   } catch {
     try { sessionStorage.removeItem(key) } catch { /* Storage may be unavailable. */ }
     return null
@@ -61,6 +63,11 @@ export default function CashCheckout({ userId, dashboard, onExit }: {
   const [refresh, setRefresh] = useState(0)
   const [receipt, setReceipt] = useState<Receipt | null>(null)
   const [locationId, setLocation] = useState(pending?.locationId ?? locations[0]?.id ?? 0)
+  const [customer, setCustomer] = useState<SaleCustomer | null>(null)
+  const [customerOpen, setCustomerOpen] = useState(false)
+  const [customerSearch, setCustomerSearch] = useState('')
+  const [customerResults, setCustomerResults] = useState<SaleCustomer[]>([])
+  const [customerStatus, setCustomerStatus] = useState('')
   const [basket, setBasket] = useState<Line[]>(pending?.lines ?? [])
   const [reviewProductId, setReviewProductId] = useState<number | null>(null)
   const [receiptNumber, setReceiptNumber] = useState('')
@@ -132,6 +139,22 @@ export default function CashCheckout({ userId, dashboard, onExit }: {
     }, 200)
     return () => { active = false; clearTimeout(timer) }
   }, [base, search, locationId, dashboard.canOperate, pending, receipt])
+
+  useEffect(() => {
+    if (!customerOpen || pending || receipt || !locationId || !dashboard.canOperate) return
+    let active = true
+    setCustomerResults([])
+    const term = customerSearch.trim()
+    if (term.length < 2) { setCustomerStatus('Enter at least two characters.'); return }
+    setCustomerStatus('Searching customers…')
+    const timer = setTimeout(() => {
+      api<SaleCustomer[]>(base + '/customers?' + new URLSearchParams({ locationId: String(locationId), search: term }))
+        .then(result => {
+          if (active) { setCustomerResults(result); setCustomerStatus(result.length ? '' : 'No matching active customer.') }
+        }).catch(() => { if (active) setCustomerStatus('Unable to search customers. Edit the search to retry.') })
+    }, 200)
+    return () => { active = false; clearTimeout(timer) }
+  }, [base, customerOpen, customerSearch, locationId, pending, receipt, dashboard.canOperate])
 
   function addProduct(item: Product) {
     if (!dashboard.canOperate || !cashAvailable || busy || pending || receipt) return
@@ -215,7 +238,7 @@ export default function CashCheckout({ userId, dashboard, onExit }: {
       setError('Check basket quantities and enter enough cash before recording the sale.')
       return
     }
-    const request = pending ?? { locationId, lines: basket, tendered: received, requestKey: operationKey() }
+    const request = pending ?? { locationId, lines: basket, tendered: received, requestKey: operationKey(), customerId: customer?.id ?? null }
     lock.current = true
     setBusy(true)
     setLookupState('checking')
@@ -230,7 +253,7 @@ export default function CashCheckout({ userId, dashboard, onExit }: {
       // and access failures keep the original key available for receipt lookup.
       const editableRejection = cause instanceof ApiResponseError && (
         (cause.status === 400 &&
-          (cause.code === 'CASH_SALE_BASKET_CHANGED' || cause.code === 'CASH_SALE_ZERO_VALUE_LINE')) ||
+          (cause.code === 'CASH_SALE_BASKET_CHANGED' || cause.code === 'CASH_SALE_ZERO_VALUE_LINE' || cause.code === 'CASH_SALE_CUSTOMER_CHANGED')) ||
         (cause.status === 409 && cause.code === 'CASH_SALES_DISABLED'))
       if (cause instanceof ApiResponseError && [400, 403].includes(cause.status) &&
         (!pending || editableRejection) || editableRejection) {
@@ -241,6 +264,9 @@ export default function CashCheckout({ userId, dashboard, onExit }: {
             setReviewProductId(cause.productId ?? null)
             setProducts([])
             setSearch('')
+          }
+          if (cause.code === 'CASH_SALE_CUSTOMER_CHANGED') {
+            setCustomer(null); setCustomerOpen(true); setCustomerSearch('')
           }
           setShowPayment(false)
           setCash('')
@@ -268,6 +294,7 @@ export default function CashCheckout({ userId, dashboard, onExit }: {
         try { sessionStorage.removeItem(key) } catch { /* Storage may be unavailable. */ }
         setPending(null)
         setBasket([])
+        setCustomer(null); setCustomerOpen(false); setCustomerSearch('')
         setCash('')
       }
       setReceipt(null)
@@ -301,6 +328,7 @@ export default function CashCheckout({ userId, dashboard, onExit }: {
     {pending ? <section className="content-section pos-pending" aria-label="Pending sale recovery">
       <div className="pos-panel-heading"><h2>Pending cash sale</h2><span>Reference held for safe retry</span></div>
       <ul>{pending.lines.map(line => <li key={line.productId}>{line.name} · {line.quantity} × {money(line.expectedUnitPrice)}</li>)}</ul>
+      <p>Customer: {pending.customerId ? `#${pending.customerId}` : 'Walk-in'}</p>
       <p><strong>Total {money(total)}</strong> · Cash received {money(pending.tendered)}</p>
       <p role="status">{busy ? 'Recording sale…' : lookupState === 'missing' ? 'No posted receipt found for this sale.'
         : lookupState === 'unknown' ? 'Receipt status could not be verified. Do not create another sale.' : 'Checking for the posted receipt…'}</p>
@@ -420,11 +448,33 @@ export default function CashCheckout({ userId, dashboard, onExit }: {
           {clearArmed && <div className="pos-clear-confirm">
             <span>Clear this basket?</span>
             <button type="button" disabled={busy} onClick={() => {
-              setBasket([]); setReviewProductId(null); setClearArmed(false); setCash('')
+              setBasket([]); setCustomer(null); setCustomerOpen(false); setCustomerSearch(''); setReviewProductId(null); setClearArmed(false); setCash('')
             }}>Yes, clear</button>
             <button type="button" onClick={() => setClearArmed(false)}>Cancel</button>
           </div>}
         </div>
+        <div className="d-flex align-items-center justify-content-between gap-2 px-2 py-1">
+          <span className="small text-truncate">Customer: <strong>{customer?.name ?? 'Walk-in'}</strong></span>
+          <button type="button" className="btn btn-outline-secondary btn-sm" disabled={busy || !dashboard.canOperate || !cashAvailable}
+            aria-expanded={customerOpen} onClick={() => { setCustomerOpen(v => !v); setCustomerSearch(''); setCustomerResults([]) }}>
+            {customerOpen ? 'Close' : 'Select customer'}
+          </button>
+          {customer && <button type="button" className="btn btn-outline-secondary btn-sm" disabled={busy}
+            onClick={() => { setCustomer(null); setCustomerOpen(false); setCustomerSearch('') }}>Walk-in</button>}
+        </div>
+        {customerOpen && <div className="px-2 pb-2">
+          <label htmlFor="pos-customer-search" className="visually-hidden">Search customer by name or phone</label>
+          <input id="pos-customer-search" className="form-control form-control-sm" maxLength={100}
+            placeholder="Customer name or phone" value={customerSearch} disabled={busy}
+            onChange={event => { setCustomerSearch(event.target.value); setCustomerResults([]) }} />
+          {customerStatus && <p className="small mb-1" role="status">{customerStatus}</p>}
+          {customerResults.length > 0 && <div className="list-group overflow-auto" style={{ maxHeight: 150 }}>
+            {customerResults.map(item => <button key={item.id} type="button" className="list-group-item list-group-item-action"
+              disabled={busy} onClick={() => { setCustomer(item); setCustomerOpen(false); setCustomerSearch('') }}>
+              {item.name}{item.phone ? ' · ' + item.phone : ''}
+            </button>)}
+          </div>}
+        </div>}
         {!basket.length && <div className="pos-basket-empty">
           <ShoppingBag size={34} /><strong>Your basket is empty</strong>
           <p>Select a product from the catalogue to start this sale.</p>
