@@ -1,7 +1,7 @@
 # Business SaaS — General Retail V1 Requirements
 
 **Status:** Retail specification; catalog masters under review, transactional modules pending  
-**Updated:** 2026-11-23  
+**Updated:** 2026-11-24  
 **Repository:** `dharmendra1031/business_saas` ONLY  
 **Reference UI:** CBK `development` read-only. New React + TypeScript + Bootstrap UI.  
 **Related:** [Master Screen Register](./MASTER_SCREEN_REGISTER.md) · [Master SRS](./BUSINESS_SAAS_MASTER_SRS.md) · [Database](./DATABASE_ARCHITECTURE.md) · [UX Standards](./UX_STANDARDS.md) · [Appointment & Financial Rules (Salon reference)](./APPOINTMENT_FINANCIAL_RULES.md)
@@ -16,13 +16,13 @@
 - Product Masters: Group, Subgroup, Category, Brand and Unit; Supplier is separate. Customer is optional for an ordinary walk-in sale.
 - Opening Stock with one-time/reversal rules and complete audit.
 - Purchase Order -> Partial/Full Goods Receipt -> balance/ledger.
-- Fast POS with barcode or product search, cart, quantity, approved price/discount, cash and supported card/external payment record, split tender when configured, printed receipt.
+- Fast POS with barcode or product search, cart, quantity, approved price/discount, **Owner-controlled Cash and Customer Credit (Udhar)** sale methods, supported card/external payment record and split tender only when implemented and configured, printed receipt.
 - Draft/Held Bill, posted invoice list, authorized full/partial Sales Return, Refund or Exchange policy, reason and stock reversal.
 - Cash Register Open -> Sales -> Count/Close with variance record and approval threshold.
 - Stock View, Stock Adjustment, Low Stock and basic sales/purchase/stock/cash summaries.
 - Language switch and role/location context; platform-owned entitlements/usage limits.
 
-**Not automatically part of first release:** complex general ledger, wholesale B2B, serial/IMEI and warranty, batch/expiry, multi-tier variants, credit/udhar, discount campaigns, multi-currency POS, tax e-invoice integrations, offline payment capture or retail e-commerce website. The domain should remain extensible but no speculative tables/abstractions for these features.
+**Not automatically part of first release:** complex general ledger, wholesale B2B, serial/IMEI and warranty, batch/expiry, multi-tier variants, discount campaigns, multi-currency POS, tax e-invoice integrations, offline payment capture or retail e-commerce website. **Customer Credit/Udhar is explicitly requested for Retail V1**, but must not be presented as available until customer balances, collection posting, authorization and audit are implemented and accepted. The domain should remain extensible but no speculative tables/abstractions for these features.
 
 ## 2. Personas and menus
 
@@ -73,17 +73,29 @@ Product:
 
 ## 6. Fast POS
 
-**Normal sale:** Cashier opens assigned register -> focuses search/barcode -> adds product(s) -> optional customer/walk-in -> reviews clear amount -> cash/card -> posts invoice once -> prints -> ready for next sale.
+**Normal sale:** Cashier opens assigned register -> focuses search/barcode -> adds product(s) -> optional customer for cash, **mandatory customer for credit** -> reviews clear amount -> selects an Owner-enabled, released sale method -> posts invoice once -> prints -> ready for next sale.
 
 UI:
 - CBK-inspired compact enterprise theme, but **cashier-first layout** with visible basket/total.
 - Search/scan keyboard entry; product name, unit, price and stock where relevant; cart supports change qty/removal.
-- Tax, discount and item/total policy are server-authoritative. Price overrides require appropriate permission.
-- Cash shows paid/tendered/change; card and split tender show remaining, no blind assumptions of provider success.
+- Tax, discount and item/total policy are server-authoritative. Price overrides require appropriate permission. Legally required tax must not be bypassed with a payment-settings toggle.
+- Cash shows paid/tendered/change; credit shows customer, limit, existing outstanding, new outstanding and due date without pretending payment has been collected. Card and split tender show remaining, no blind assumptions of provider success.
 - Payment failure, pending, unknown and success states are separate. Re-try checks original operation first.
 - Receipt printing is post-commit and retryable without a new invoice.
 - Held bills remain drafts and cannot deduct stock or count as sales unless a documented reservation policy is later adopted.
 - Keyboard shortcuts and barcode scanners should be tested with actual hardware; touch POS screens must remain operable.
+
+## 6A. Owner-controlled Billing & Payments settings — confirmed 24 November 2026
+
+- **Business Settings → Billing & Payments** is an **Owner-only write** screen. Manager/Cashier may read the effective options but cannot alter them. Super Admin can control platform-wide feature release/plan entitlement; the Owner may enable only the methods supported and released for their business.
+- Per-business options: **Cash Sales ON/OFF**, **Customer Credit/Udhar ON/OFF**, and approved discount, return/refund and external payment capabilities as those features are implemented. Defaults: Cash ON for the Development cash-POS slice; Credit OFF until its end-to-end ledger workflow is accepted. Do not expose a working-looking toggle for unimplemented credit/card/UPI.
+- Changing settings is a tenant-scoped, auditable write requiring Owner authorization and a valid active subscription. The effective setting must be enforced in server sale-posting endpoints, not just through a hidden POS button. Disable affects **new** sales only, never already-posted invoices, collection/settlement, receipt lookups or outstanding recovery.
+- Prevent disabling the last operationally supported sale method when doing so would leave an otherwise active POS without a valid checkout path. Platform pause and subscription expiry take precedence over Owner switches. Configuration has a revision/concurrency check; a stale update is rejected.
+- **Cash** is an immediately settled tender; **Credit/Udhar** is an *unpaid or partially settled customer receivable*, not a cash tender. Every credit sale requires an active customer belonging to the same BusinessId and an authorized credit policy. Walk-in/anonymous credit is forbidden.
+- Before credit posting: validate configured credit limit, current outstanding, requested amount and due date on the server; persist posted invoice, stock issue, receivable movement and due date **atomically** with an idempotency key. Define permitted partial payments and overdue blocking before release. Financial balances are derived from immutable movements, not overwritten by editing a customer's total.
+- Collections can be posted against prior credit invoices and must reduce outstanding exactly once, with method, actor, location, timestamp and receipt reference. Cash collection impacts a cash register; an unpaid credit sale does **not** increase cash takings. Returns, refunds, reports and day closing reconcile invoice totals separately from receipts and receivables.
+- Turning Credit OFF blocks **new** credit invoices only. Existing customer dues remain visible, collectible and reportable; disabling must not erase or silently settle them. Changes to discount or refund policy must not rewrite historical bills.
+- **Implementation status:** Settings UI is currently a preview, POS is Development-only cash posting, and credit sales/ledger are not implemented. These acceptance rules must be implemented and verified before Credit can be enabled.
 
 ## 7. Sales return, refund and exchange
 
@@ -120,7 +132,7 @@ UI:
 | Return/Refund | Return eligible item | No over-refund or unapproved action |
 | Cash Register | Open/count/close | Variance approval and reconciliation |
 | Reports | Filter/export | Accurate totals, business date, tenant access |
-| Users / Settings | Manage access / tax/receipt | Business membership and plan limits |
+| Users / Settings | Manage access / billing methods / tax / receipt | Owner-only server-enforced Cash/Credit availability, customer ledger and compliance guards |
 
 ## 10. Business and technical acceptance tests
 
@@ -134,6 +146,10 @@ UI:
 | Receiving 101 against remaining 100 | Rejected; stock unchanged |
 | Two sales compete for last 5 units | No negative quantity or duplicate stock posting |
 | Two taps on Pay | One invoice, one accepted charge attempt |
+| Owner disables Cash and enables released Credit | New POS checkout methods follow persisted business setting; historical receipts remain accessible; roles and platform gate checked by API |
+| Credit is off or not released, or customer not selected | Credit posting blocked by server even with a crafted request; no invoice, stock or receivable movements |
+| Credit sale is posted then Credit is disabled | Existing outstanding, due dates and collections remain accessible; only new credit checkout is blocked |
+| Two credit collections race | No overcollection, duplicate ledger movement or cash entry; one accounting result per request key |
 | Payment timeout after provider success | Same logical transaction reconciled; no second charge |
 | Full and partial refund | Total returned/refunded <= sold/eligible; ledger preserved |
 | Receipt printer fails | Sale remains posted; reprint does not repeat posting |
@@ -149,7 +165,7 @@ UI:
 2. Stock valuation method, expected cost/margin calculation and rounding.
 3. Payment gateway(s) and whether POS card payments are integrated or manually recorded.
 4. Is direct receiving required in first retail release or subsequent iteration?
-5. Are multi-location stock transfers and Customer Credit/Udhar required in launch?
+5. Are multi-location stock transfers required in launch? **Customer Credit/Udhar confirmed for Retail V1 (24 Nov 2026);** exact credit-limit/overdue/approval rules require final decision before enabling.
 6. Exact cash register shared-drawer policy and approved refund thresholds.
 7. Product barcode scanner/label printers supported hardware.
 
