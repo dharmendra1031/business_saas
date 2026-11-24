@@ -819,11 +819,15 @@ try {
     let cashOn = true
     let revision = 0
     let saves = 0
+    let allowFirstSave
+    let firstSaveStarted
+    const firstSaveStartedPromise = new Promise(resolve => { firstSaveStarted = resolve })
+    const firstSaveHold = new Promise(resolve => { allowFirstSave = resolve })
     await t.page.route('**/api/businesses/1/dashboard', route => response(route, 200, {
       ...dashboard('Owner', true, 0, 1, 1, false, false, true),
       cashPaymentEnabled: cashOn
     }))
-    await t.page.route('**/api/businesses/1/billing-settings', route => {
+    await t.page.route('**/api/businesses/1/billing-settings', async route => {
       if (route.request().method() === 'GET') return response(route, 200, {
         cashSalesEnabled: cashOn, creditSalesEnabled: false, creditAvailable: false,
         revision, salesPaused: !cashOn
@@ -833,9 +837,13 @@ try {
       assert.equal(input.expectedRevision, revision)
       assert.equal(input.creditSalesEnabled, false)
       assert.ok(input.reason.length >= 10)
+      saves++
+      if (saves === 1) {
+        firstSaveStarted()
+        await firstSaveHold
+      }
       cashOn = input.cashSalesEnabled
       revision++
-      saves++
       return response(route, 200, {
         settings: { cashSalesEnabled: cashOn, creditSalesEnabled: false,
           creditAvailable: false, revision, salesPaused: !cashOn },
@@ -858,6 +866,13 @@ try {
     await t.page.getByLabel('Reason for changing payment options')
       .fill('Owner paused the store cash register')
     await t.page.getByRole('button', { name: 'Save payment settings' }).click()
+    await firstSaveStartedPromise
+    await t.page.locator('.action-feedback--saving').waitFor()
+    assert.equal(await t.page.getByRole('button', { name: 'Saving…' }).isDisabled(), true,
+      'Shared action button blocks repeat submit while request is pending')
+    assert.equal(saves, 1)
+    allowFirstSave()
+    await t.page.locator('.action-feedback--success').waitFor()
     await t.page.getByText('Billing preferences saved.', { exact: false }).waitFor()
     assert.equal(saves, 1)
     assert.equal(cashOn, false)
@@ -868,6 +883,44 @@ try {
     await t.check()
     await t.context.close()
     console.log('PASS BUS-54 Owner persists Cash OFF and POS stays history-accessible; Credit locked')
+  }
+
+  {
+    const t = await scenario('owner-save-failure-retains-input', {
+      role: 'Owner', hasProducts: true, ownerPos: true, width: 360, height: 780
+    })
+    let attempts = 0
+    await t.page.route('**/api/businesses/1/billing-settings', route => {
+      if (route.request().method() === 'GET') return response(route, 200, {
+        cashSalesEnabled: true, creditSalesEnabled: false, creditAvailable: false,
+        revision: 0, salesPaused: false
+      })
+      attempts++
+      return response(route, 409, { message: 'Payment settings changed. Reload and retry.' })
+    })
+    await t.login()
+    await t.page.getByRole('button', { name: 'Open navigation' }).click()
+    await t.page.locator('.business-preview-nav').filter({ hasText: 'Business Settings' }).click()
+    await t.page.getByRole('tab', { name: 'Billing & Payments' }).click()
+    await t.page.locator('#billing-cash-toggle').uncheck()
+    await t.page.getByLabel('Reason for changing payment options')
+      .fill('Close register during store reconciliation')
+    await t.page.getByRole('button', { name: 'Save payment settings' }).click()
+    await t.page.locator('.action-feedback--error').waitFor()
+    assert.ok((await t.page.locator('.action-feedback--error').innerText())
+      .includes('Payment settings changed. Reload and retry.'))
+    assert.equal(await t.page.locator('#billing-cash-toggle').isChecked(), false)
+    assert.equal(await t.page.getByLabel('Reason for changing payment options').inputValue(),
+      'Close register during store reconciliation', 'Failed write must preserve form inputs')
+    assert.equal(await t.page.getByRole('button', { name: 'Save payment settings' }).isDisabled(), false)
+    assert.equal(attempts, 1, 'No automatic retry for failed write')
+    assert.ok(await t.page.evaluate(() => document.documentElement.scrollWidth <= 361),
+      'Global save popup must not add horizontal overflow at 360px')
+    await t.page.getByRole('button', { name: 'Dismiss notification' }).click()
+    assert.equal(await t.page.locator('.action-feedback').count(), 0)
+    await t.check()
+    await t.context.close()
+    console.log('PASS shared save failure popup, input preservation, dismiss and mobile layout')
   }
 
   for (const mode of ['checkout', 'recover', 'review', 'out-of-stock', 'recover-review']) {
