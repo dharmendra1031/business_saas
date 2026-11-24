@@ -235,10 +235,15 @@ public static class RetailCashSales
                     product.SalePrice <= 0 || product.SalePrice != item.ExpectedUnitPrice)
                     return Results.BadRequest(new { code = "CASH_SALE_BASKET_CHANGED", item.ProductId,
                         message = "Product or price changed. Remove and select the affected item again." });
+                var lineTotal = decimal.Round(product.SalePrice * item.Quantity, 2,
+                    MidpointRounding.AwayFromZero);
+                // Never post stock for a line whose billable amount rounds to zero.
+                if (lineTotal == 0m)
+                    return Results.BadRequest(new { code = "CASH_SALE_ZERO_VALUE_LINE", item.ProductId,
+                        message = "This line rounds to zero. Increase quantity or remove the product." });
                 sale.Lines.Add(new RetailCashSaleLine { ProductId = product.Id, ProductName = product.Name,
                     Quantity = item.Quantity, UnitPrice = product.SalePrice });
-                sale.Total += decimal.Round(product.SalePrice * item.Quantity, 2,
-                    MidpointRounding.AwayFromZero);
+                sale.Total += lineTotal;
             }
             if (request.Tendered < sale.Total)
                 return Results.BadRequest(new { message = "Cash received is less than the basket total." });
