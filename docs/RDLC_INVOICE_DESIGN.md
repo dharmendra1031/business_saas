@@ -103,3 +103,26 @@ After a committed sale, printing failures are independent of sale recovery. Do n
 Release gates: physical test using the selected 80mm driver, correct paper width/variable length and cutter behavior; exact configured copy count; preview and manual modes unchanged; no popup or confirmation in supported silent mode; offline/disconnected printer and ambiguous submission; unauthorized or cross-business receipt blocked; one sale on repeated payment clicks. Silent transport is not implemented or released yet. Existing PDF preview and manual behavior remain available. Browser QA checks blocked popup and Save Only with automatic preview enabled.
 
 Reference: [Microsoft System.Drawing.Printing support boundary](https://learn.microsoft.com/en-us/dotnet/api/system.drawing.printing).
+
+### Preferred implementation: managed Chrome silent printing (24 November 2026)
+
+User-approved direction: first test the browser's built-in silent printing policy on a dedicated Windows POS workstation with the existing connected printer. Do not introduce a local print agent, browser extension, separate print service, printer master, new reporting engine or duplicate HTML invoice. Edge is an alternative, not a separate application architecture.
+
+Chrome 144 or later supports SilentPrintingEnabled. Set the connected thermal printer as the Windows default and turn off automatic Windows default-printer management. Set its driver paper size, scale and cutter options correctly. An authorized workstation administrator can set the following policies in an elevated PowerShell session:
+
+```powershell
+reg add "HKLM\SOFTWARE\Policies\Google\Chrome" /v SilentPrintingEnabled /t REG_DWORD /d 1 /f
+reg add "HKLM\SOFTWARE\Policies\Google\Chrome" /v PrintPreviewUseSystemDefaultPrinter /t REG_DWORD /d 1 /f
+````
+
+Restart Chrome and inspect chrome://policy for both enabled policies and successful policy status. The policy applies to the browser, not just this SaaS origin; use a dedicated trusted POS workstation and do not overwrite existing organization-managed policy without approval. To undo a locally added policy, restore the prior values (or delete only the values added by this setup if no prior values existed).
+
+Target flow: Save & Print -> committed sale -> existing authorized RDLC PDF -> automatic PDF print trigger -> browser silent printing -> configured Windows default printer. Browser policy alone does not trigger printing. Test the actual PDF viewer/trigger with Chrome before choosing an implementation; do not assume iframe load or window.print reliably prints a PDF rather than the surrounding web page. No old HTML printing fallback. A standard web application cannot reliably read these workstation policy values or confirm physical print completion. Keep Manual, Preview and Silent modes as owner-controlled business preferences; validate workstation setup before enabling silent mode. If the policy is enabled, printing a preview may also be silent when the operator invokes Print; changing application mode cannot turn off machine policy. Existing copies settings must be verified with default driver settings; arbitrary per-job copy control is not guaranteed by the browser policy. Validate both paper types, print count, popup behavior, cancellation, disconnection and intentional reprint without reposting the sale.
+
+Status: preferred approach documented, not implemented or physically verified. No registry settings have been changed by this repository update.
+
+Official references:
+- https://chromeenterprise.google/policies/silent-printing-enabled/
+- https://chromeenterprise.google/policies/print-preview-use-system-default-printer/
+- https://support.google.com/chrome/a/answer/2657289?hl=en
+- https://learn.microsoft.com/en-us/deployedge/microsoft-edge-browser-policies/silentprintingenabled
