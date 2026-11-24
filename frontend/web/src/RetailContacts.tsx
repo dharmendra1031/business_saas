@@ -1,5 +1,6 @@
 import { useEffect, useRef, useState, type FormEvent } from 'react'
 import { api, post, SessionExpiredError } from './api'
+import { ActionButton, useActionFeedback } from './ActionFeedback'
 
 type ContactType = 'suppliers' | 'customers'
 
@@ -25,6 +26,7 @@ export default function RetailContacts({ businessId, canOperate, type }: {
   canOperate: boolean
   type: ContactType
 }) {
+  const { run } = useActionFeedback()
   const [items, setItems] = useState<Contact[]>([])
   const [total, setTotal] = useState(0)
   const [page, setPage] = useState(1)
@@ -37,7 +39,6 @@ export default function RetailContacts({ businessId, canOperate, type }: {
   const [saving, setSaving] = useState(false)
   const [error, setError] = useState('')
   const [loadError, setLoadError] = useState('')
-  const [notice, setNotice] = useState('')
   const nameInput = useRef<HTMLInputElement>(null)
   const basePath = `/businesses/${businessId}/${type}`
   const supplier = type === 'suppliers'
@@ -73,7 +74,6 @@ export default function RetailContacts({ businessId, canOperate, type }: {
     setEditingId(item.id)
     setForm({ name: item.name, phone: item.phone, email: item.email, isActive: item.isActive })
     setError('')
-    setNotice('')
     nameInput.current?.focus()
   }
 
@@ -83,7 +83,6 @@ export default function RetailContacts({ businessId, canOperate, type }: {
 
     setSaving(true)
     setError('')
-    setNotice('')
     const body = {
       name: form.name.trim(),
       phone: form.phone.trim(),
@@ -92,12 +91,13 @@ export default function RetailContacts({ businessId, canOperate, type }: {
     }
 
     try {
-      if (editingId === null)
-        await post(basePath, body)
-      else
-        await api(`${basePath}/${editingId}`, { method: 'PUT', body: JSON.stringify(body) })
-
-      setNotice(`${label} ${editingId === null ? 'created' : 'updated'}.`)
+      await run(`Saving ${label.toLowerCase()}…`,
+        `${label} ${editingId === null ? 'created' : 'updated'}.`, async () => {
+          if (editingId === null)
+            await post(basePath, body)
+          else
+            await api(`${basePath}/${editingId}`, { method: 'PUT', body: JSON.stringify(body) })
+        })
       clearForm()
       setPage(1)
       setReload(value => value + 1)
@@ -124,9 +124,8 @@ export default function RetailContacts({ businessId, canOperate, type }: {
           onClick={() => setReload(value => value + 1)}>Retry</button>
       </div>}
       {error && <div className="alert alert-danger" role="alert">{error}</div>}
-      {notice && <div className="alert alert-success" role="status">{notice}</div>}
 
-      {canOperate && <form className="masters-form" onSubmit={event => void save(event)}>
+      {canOperate && <form className="masters-form" aria-busy={saving} onSubmit={event => void save(event)}>
         <div>
           <label className="form-label" htmlFor="contact-name">{label} name *</label>
           <input ref={nameInput} id="contact-name" className="form-control" required
@@ -153,12 +152,11 @@ export default function RetailContacts({ businessId, canOperate, type }: {
             <option value="inactive">Inactive</option>
           </select>
         </div>}
-        <button className="btn btn-primary" type="submit" disabled={saving ||
-          (supplier && !form.phone.trim() && !form.email.trim())}>
-          {saving ? 'Saving…' : editingId === null ? `Add ${label.toLowerCase()}` : 'Save changes'}
-        </button>
+        <ActionButton busy={saving} disabled={supplier && !form.phone.trim() && !form.email.trim()}>
+          {editingId === null ? `Add ${label.toLowerCase()}` : 'Save changes'}
+        </ActionButton>
         {editingId !== null && <button className="btn btn-outline-secondary" type="button"
-          onClick={() => { clearForm(); nameInput.current?.focus() }}>Cancel edit</button>}
+          disabled={saving} onClick={() => { clearForm(); nameInput.current?.focus() }}>Cancel edit</button>}
       </form>}
 
       <form className="masters-search" onSubmit={event => {
