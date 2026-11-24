@@ -896,7 +896,9 @@ try {
         revision: 0, salesPaused: false
       })
       attempts++
-      return response(route, 409, { message: 'Payment settings changed. Reload and retry.' })
+      if (attempts === 1)
+        return response(route, 409, { message: 'Payment settings changed. Reload and retry.' })
+      return route.abort('connectionreset')
     })
     await t.login()
     await t.page.getByRole('button', { name: 'Open navigation' }).click()
@@ -918,9 +920,17 @@ try {
       'Global save popup must not add horizontal overflow at 360px')
     await t.page.getByRole('button', { name: 'Dismiss notification' }).click()
     assert.equal(await t.page.locator('.action-feedback').count(), 0)
+    await t.page.getByRole('button', { name: 'Save payment settings' }).click()
+    await t.page.locator('.action-feedback--uncertain').waitFor()
+    assert.ok((await t.page.locator('.action-feedback--uncertain').innerText())
+      .includes('The action may have completed. Check the record before retrying.'))
+    assert.equal(attempts, 2, 'Lost response must not trigger automatic repeated mutation')
+    assert.equal(await t.page.locator('#billing-cash-toggle').isChecked(), false)
+    assert.equal(await t.page.getByLabel('Reason for changing payment options').inputValue(),
+      'Close register during store reconciliation')
     await t.check()
     await t.context.close()
-    console.log('PASS shared save failure popup, input preservation, dismiss and mobile layout')
+    console.log('PASS shared save failure/unknown popups, input preservation and mobile layout')
   }
 
   for (const mode of ['checkout', 'recover', 'review', 'out-of-stock', 'recover-review']) {
