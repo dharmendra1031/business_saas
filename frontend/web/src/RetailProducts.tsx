@@ -249,7 +249,7 @@ export default function RetailProducts({ businessId, canOperate, currencyCode }:
         ...(inlineType === 'units' ? { code: inlineCode.trim().toUpperCase() } : {}),
         ...(inlineType === 'categories' ? { parentId: inlineParent || null } : {})
       })
-      const updated = await api<CatalogOptions>(basePath + '/options')
+      const updated = await api<CatalogOptions>(basePath + '/options?includeInactiveCategories=true')
       setOptions({ ...updated, brands: updated.brands ?? [] })
       const field = inlineType === 'categories' ? 'categoryId' : inlineType === 'units' ? 'unitId' : 'brandId'
       setForm(value => ({ ...value, [field]: added.id }))
