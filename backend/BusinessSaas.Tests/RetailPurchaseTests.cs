@@ -609,6 +609,56 @@ public sealed class RetailPurchaseTests
             $"/api/businesses/{businessId}/dashboard"))
             .GetProperty("cashPaymentEnabled").GetBoolean());
 
+        // Static RDLC layout settings are owner-only, tenant-scoped and audited.
+        // No report is rendered by these routes.
+        var printPath = $"/api/businesses/{businessId}/receipt-settings";
+        Assert.Equal(HttpStatusCode.NotFound, (await manager.GetAsync(printPath)).StatusCode);
+        Assert.Equal(HttpStatusCode.NotFound, (await cashier.GetAsync(printPath)).StatusCode);
+        Assert.Equal(HttpStatusCode.NotFound, (await other.GetAsync(printPath)).StatusCode);
+        var defaults = await owner.GetFromJsonAsync<JsonElement>(printPath);
+        Assert.Equal("Thermal80", defaults.GetProperty("paperSize").GetString());
+        Assert.True(defaults.GetProperty("showUnitPrice").GetBoolean());
+        Assert.Equal(0, defaults.GetProperty("revision").GetInt32());
+        Assert.False(defaults.GetProperty("rendererAvailable").GetBoolean());
+        Assert.Contains(defaults.GetProperty("mandatoryFields").EnumerateArray(),
+            element => element.GetString() == "Total payable");
+
+        var desired = new {
+            paperSize = "A4", showTime = false, showUnitPrice = false,
+            showCashReceived = false, showChange = false, showFooter = true,
+            footerText = "Thank you for visiting.", expectedRevision = 0,
+            reason = "Owner selected a simplified printed receipt"
+        };
+        Assert.Equal(HttpStatusCode.NotFound, (await Put(manager, printPath, desired)).StatusCode);
+        Assert.Equal(HttpStatusCode.NotFound, (await Put(other, printPath, desired)).StatusCode);
+        Assert.Equal(HttpStatusCode.BadRequest, (await Put(owner, printPath, new {
+            paperSize = "Unknown", desired.showTime, desired.showUnitPrice,
+            desired.showCashReceived, desired.showChange, desired.showFooter,
+            desired.footerText, desired.expectedRevision, desired.reason
+        })).StatusCode);
+        var savedPrint = await Put(owner, printPath, desired);
+        Assert.Equal(HttpStatusCode.OK, savedPrint.StatusCode);
+        var currentPrint = await owner.GetFromJsonAsync<JsonElement>(printPath);
+        Assert.Equal("A4", currentPrint.GetProperty("paperSize").GetString());
+        Assert.Equal(1, currentPrint.GetProperty("revision").GetInt32());
+        Assert.False(currentPrint.GetProperty("showUnitPrice").GetBoolean());
+        Assert.Equal(HttpStatusCode.Conflict, (await Put(owner, printPath, desired)).StatusCode);
+        var samePrint = await Put(owner, printPath, new {
+            desired.paperSize, desired.showTime, desired.showUnitPrice,
+            desired.showCashReceived, desired.showChange, desired.showFooter,
+            desired.footerText, expectedRevision = 1, desired.reason
+        });
+        Assert.Equal(HttpStatusCode.OK, samePrint.StatusCode);
+        Assert.True((await samePrint.Content.ReadFromJsonAsync<JsonElement>())
+            .GetProperty("unchanged").GetBoolean());
+        using (var scope = factory.Services.CreateScope())
+        {
+            var db = scope.ServiceProvider.GetRequiredService<AppDbContext>();
+            Assert.Equal(1, await db.PlatformAuditEvents.AsNoTracking().CountAsync(x =>
+                x.TargetType == "Business" && x.TargetId == businessId &&
+                x.Action == "Business.ReceiptSettingsChanged"));
+        }
+
         using (var scope = factory.Services.CreateScope())
         {
             var db = scope.ServiceProvider.GetRequiredService<AppDbContext>();
@@ -616,6 +666,13 @@ public sealed class RetailPurchaseTests
             subscription.TrialEndsAtUtc = DateTime.UtcNow.AddMinutes(-2);
             await db.SaveChangesAsync();
         }
+        Assert.Equal(HttpStatusCode.Forbidden,
+            (await Put(owner, printPath, new {
+                desired.paperSize, desired.showTime, desired.showUnitPrice,
+                desired.showCashReceived, desired.showChange, desired.showFooter,
+                desired.footerText, expectedRevision = 1, desired.reason
+            })).StatusCode);
+        Assert.Equal(HttpStatusCode.OK, (await owner.GetAsync(printPath)).StatusCode);
         Assert.Equal(HttpStatusCode.Forbidden,
             (await Send(owner, orders, valid)).StatusCode);
         Assert.Equal(HttpStatusCode.OK, (await owner.GetAsync(orders)).StatusCode);
