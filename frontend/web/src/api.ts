@@ -107,6 +107,14 @@ export class SessionExpiredError extends Error {
   }
 }
 
+// A dropped response to a write does not prove the write failed.
+// Callers must check the record or retry with their original operation key.
+export class UncertainWriteError extends Error {
+  constructor() {
+    super('Connection lost. The action may have completed. Check the record before retrying.')
+  }
+}
+
 export function setSessionExpiredHandler(handler: (() => void) | null): void {
   sessionExpiredHandler = handler
 }
@@ -167,9 +175,9 @@ export async function api<T>(path: string, options: RequestInit = {}): Promise<T
     })
   } catch {
     if (requestGeneration !== authGeneration) throw new SessionExpiredError()
-    throw new Error(method === 'GET' || method === 'HEAD'
-      ? 'Connection lost. Check your internet connection and try again.'
-      : 'Connection lost. The action may have completed. Check the record before retrying.')
+    if (method === 'GET' || method === 'HEAD')
+      throw new Error('Connection lost. Check your internet connection and try again.')
+    throw new UncertainWriteError()
   }
 
   // Never deliver an earlier account's response after a login or logout.
