@@ -890,11 +890,16 @@ try {
       role: 'Owner', hasProducts: true, ownerPos: true, width: 360, height: 780
     })
     let attempts = 0
-    await t.page.route('**/api/businesses/1/billing-settings', route => {
-      if (route.request().method() === 'GET') return response(route, 200, {
-        cashSalesEnabled: true, creditSalesEnabled: false, creditAvailable: false,
-        revision: 0, salesPaused: false
-      })
+    await t.page.route('**/api/businesses/1/billing-settings', async route => {
+      if (route.request().method() === 'GET') {
+        // Keep the reload in flight long enough to prove the input was restored
+        // from the fresh response, not an old form DOM node.
+        if (attempts > 0) await new Promise(resolve => setTimeout(resolve, 350))
+        return response(route, 200, {
+          cashSalesEnabled: true, creditSalesEnabled: false, creditAvailable: false,
+          revision: 0, salesPaused: false
+        })
+      }
       attempts++
       if (attempts === 1)
         return response(route, 409, { message: 'Payment settings changed. Reload and retry.' })
@@ -922,6 +927,7 @@ try {
     await t.page.getByRole('button', { name: 'Dismiss notification' }).click()
     assert.equal(await t.page.locator('.action-feedback').count(), 0)
     await t.page.getByRole('button', { name: 'Reload settings (reset selection)' }).click()
+    await t.page.getByText('Loading saved payment preferences…').waitFor()
     await t.page.locator('#billing-cash-toggle').waitFor()
     await t.page.locator('#billing-cash-toggle').uncheck()
     await t.page.getByRole('button', { name: 'Save payment settings' }).click()
