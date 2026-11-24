@@ -93,6 +93,8 @@ export default function CashCheckout({ userId, dashboard, onExit }: {
   const lock = useRef(false)
   const scanLock = useRef(false)
   const searchInput = useRef<HTMLInputElement>(null)
+  const customerInput = useRef<HTMLInputElement>(null)
+  const checkoutButton = useRef<HTMLButtonElement>(null)
   const total = basket.reduce((sum, line) =>
     sum + Math.round(Math.round(line.expectedUnitPrice * 100) * line.quantity), 0) / 100
   const hasZeroValueLine = basket.some(line =>
@@ -158,6 +160,47 @@ export default function CashCheckout({ userId, dashboard, onExit }: {
     }, 200)
     return () => { active = false; clearTimeout(timer) }
   }, [base, customerOpen, customerSearch, locationId, pending, receipt, dashboard.canOperate])
+
+  useEffect(() => {
+    if (customerOpen && !showPayment && !pending && !receipt)
+      customerInput.current?.focus()
+  }, [customerOpen, showPayment, pending, receipt])
+
+  useEffect(() => {
+    if (!dashboard.canOperate || !cashAvailable || busy || scanBusy || pending ||
+      receipt || showPayment || clearArmed || exitArmed) return
+    function onKeyDown(event: KeyboardEvent) {
+      if (event.defaultPrevented || event.repeat || event.isComposing ||
+        event.ctrlKey || event.altKey || event.metaKey || event.shiftKey ||
+        lock.current || scanLock.current) return
+      if (event.key === 'F2') {
+        event.preventDefault()
+        if (historyPage) setHistoryPage(0)
+        else {
+          searchInput.current?.focus()
+          searchInput.current?.select()
+        }
+      } else if (event.key === 'F4') {
+        event.preventDefault()
+        if (customerOpen) customerInput.current?.focus()
+        else {
+          setCustomerSearch('')
+          setCustomerResults([])
+          setCustomerOpen(true)
+        }
+      } else if (event.key === 'F9') {
+        const button = checkoutButton.current
+        if (!button || button.disabled) return
+        event.preventDefault()
+        // Reuse the normal checkout action, including its validation and focus return.
+        button.focus()
+        button.click()
+      }
+    }
+    document.addEventListener('keydown', onKeyDown)
+    return () => document.removeEventListener('keydown', onKeyDown)
+  }, [dashboard.canOperate, cashAvailable, busy, scanBusy, pending, receipt,
+    showPayment, clearArmed, exitArmed, historyPage, customerOpen])
 
   function addProduct(item: Product, fromScan = false) {
     if (!dashboard.canOperate || !cashAvailable || lock.current || busy || pending || receipt ||
@@ -362,6 +405,7 @@ export default function CashCheckout({ userId, dashboard, onExit }: {
         {pending && <p>Check the previous transaction before recording it again.</p>}
       </div>
       <div className="pos-header-actions">
+        {!pending && dashboard.canOperate && cashAvailable && <span className="small text-dark">F2 Search · F4 Customer · F9 Checkout</span>}
         <span className="pos-mode"><Check size={15} /> Cash checkout · {business.currencyCode}</span>
         <button type="button" className="btn btn-outline-secondary btn-sm pos-exit-button"
           disabled={busy || scanBusy || !!pending} onClick={() => basket.length ? setExitArmed(true) : onExit()}>
@@ -414,7 +458,7 @@ export default function CashCheckout({ userId, dashboard, onExit }: {
         {!historyPage && <form className="pos-search" role="search" onSubmit={event => void submitBarcode(event)}>
           <label className="visually-hidden" htmlFor="pos-product-search">Search product or scan barcode</label>
           <Search size={19} aria-hidden="true" />
-          <input ref={searchInput} id="pos-product-search" autoFocus className="form-control" type="search"
+          <input ref={searchInput} id="pos-product-search" aria-keyshortcuts="F2" autoFocus className="form-control" type="search"
             placeholder="Search product, SKU or scan barcode…" maxLength={150} value={search}
             disabled={!dashboard.canOperate || busy} readOnly={scanBusy} onChange={event => setSearch(event.target.value)} />
           <button type="submit" className="btn btn-outline-primary btn-sm"
@@ -509,7 +553,7 @@ export default function CashCheckout({ userId, dashboard, onExit }: {
         <div className="d-flex align-items-center justify-content-between gap-2 px-2 py-1">
           <span className="small text-truncate">Customer: <strong>{customer?.name ?? 'Walk-in'}</strong></span>
           <button type="button" className="btn btn-outline-secondary btn-sm" disabled={busy || scanBusy || !dashboard.canOperate || !cashAvailable}
-            aria-expanded={customerOpen} onClick={() => { setCustomerOpen(v => !v); setCustomerSearch(''); setCustomerResults([]) }}>
+            aria-expanded={customerOpen} aria-keyshortcuts="F4" onClick={() => { setCustomerOpen(v => !v); setCustomerSearch(''); setCustomerResults([]) }}>
             {customerOpen ? 'Close' : 'Select customer'}
           </button>
           {customer && <button type="button" className="btn btn-outline-secondary btn-sm" disabled={busy || scanBusy}
@@ -517,7 +561,7 @@ export default function CashCheckout({ userId, dashboard, onExit }: {
         </div>
         {customerOpen && <div className="px-2 pb-2">
           <label htmlFor="pos-customer-search" className="visually-hidden">Search customer by name or phone</label>
-          <input id="pos-customer-search" className="form-control form-control-sm" maxLength={100}
+          <input ref={customerInput} id="pos-customer-search" className="form-control form-control-sm" maxLength={100}
             placeholder="Customer name or phone" value={customerSearch} disabled={busy || scanBusy}
             onChange={event => { setCustomerSearch(event.target.value); setCustomerResults([]) }} />
           {customerStatus && <p className="small mb-1" role="status">{customerStatus}</p>}
@@ -568,7 +612,7 @@ export default function CashCheckout({ userId, dashboard, onExit }: {
           </p>}
           <div className="pos-subtotal-row"><span>Subtotal</span><strong>{money(total)}</strong></div>
           <div className="pos-total-row"><span>Total Payable</span><strong>{money(total)}</strong></div>
-          <button type="button" className="btn btn-primary pos-record-button"
+          <button ref={checkoutButton} type="button" aria-keyshortcuts="F9" className="btn btn-primary pos-record-button"
             disabled={!dashboard.canOperate || !cashAvailable || busy || scanBusy || needsReview || hasZeroValueLine ||
               !basket.length || !Number.isFinite(total) || total <= 0 ||
               basket.some(line => !validQuantity(line.quantity))}

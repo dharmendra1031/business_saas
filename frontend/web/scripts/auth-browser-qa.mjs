@@ -1080,6 +1080,53 @@ try {
     console.log('PASS POS barcode verifies current location and refuses ambiguous product codes')
   }
 
+  {
+    const t = await scenario('pos-keyboard-shortcuts', { role: 'Cashier', hasProducts: true })
+    const item = { id: 451, name: 'Keyboard Item', sku: 'KEY-451', barcode: '451001',
+      salePrice: 25, available: 5, unitCode: 'PCS' }
+    let posts = 0
+    await t.page.route('**/api/businesses/1/cash-sales/products*', route => response(route, 200, [item]))
+    await t.page.route('**/api/businesses/1/cash-sales', route => {
+      posts++
+      return response(route, 500, { message: 'Unexpected sale posting' })
+    })
+    await t.login()
+    const product = t.page.getByRole('button', { name: /Add Keyboard Item/ })
+    await product.waitFor()
+    const search = t.page.locator('#pos-product-search')
+    const pay = t.page.getByRole('button', { name: /Pay \/ Checkout/ })
+    await t.page.keyboard.press('F9')
+    assert.equal(await pay.isDisabled(), true)
+    assert.equal(await t.page.getByRole('dialog').count(), 0)
+    await product.focus()
+    await t.page.keyboard.press('F2')
+    assert.equal(await search.evaluate(el => el === document.activeElement), true)
+    await t.page.keyboard.press('F4')
+    const customerSearch = t.page.locator('#pos-customer-search')
+    await customerSearch.waitFor()
+    assert.equal(await customerSearch.evaluate(el => el === document.activeElement), true)
+    await t.page.getByRole('button', { name: 'Close', exact: true }).click()
+    await product.click()
+    await t.page.keyboard.press('F9')
+    const dialog = t.page.getByRole('dialog', { name: 'Complete Payment' })
+    await dialog.waitFor()
+    const cash = t.page.getByLabel('Cash received')
+    assert.equal(await cash.evaluate(el => el === document.activeElement), true)
+    await t.page.keyboard.press('F2')
+    await t.page.keyboard.press('F4')
+    await t.page.keyboard.press('F9')
+    assert.equal(await cash.evaluate(el => el === document.activeElement), true)
+    assert.equal(posts, 0)
+    await t.page.keyboard.press('Escape')
+    await dialog.waitFor({ state: 'hidden' })
+    assert.equal(await pay.evaluate(el => el === document.activeElement), true)
+    assert.equal(await t.page.getByRole('spinbutton', { name: 'Quantity of Keyboard Item' }).inputValue(), '1')
+    assert.equal(posts, 0)
+    await t.check()
+    await t.context.close()
+    console.log('PASS POS keyboard shortcuts preserve checkout validation and modal focus')
+  }
+
   for (const mode of ['checkout', 'blocked-print', 'save-only', 'recover', 'review', 'out-of-stock', 'recover-review']) {
     const recover = mode === 'recover'
     const recoveringReview = mode === 'recover-review'
