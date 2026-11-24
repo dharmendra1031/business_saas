@@ -242,7 +242,7 @@ export default function RetailProducts({ businessId, canOperate, currencyCode }:
     setInlineSaving(true)
     setError('')
     try {
-      const added = await run(`Adding ${inlineType.slice(0, -1)}…`,
+      const added = await run(`Adding ${inlineType === 'categories' ? 'category' : inlineType === 'units' ? 'unit' : 'brand'}…`,
         `${inlineType === 'categories' ? 'Category' : inlineType === 'units' ? 'Unit' : 'Brand'} added to this product.`,
         () => post<{ id: number }>(`/businesses/${businessId}/${inlineType}`, {
           name: inlineName.trim(),
