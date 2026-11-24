@@ -12,11 +12,12 @@ public sealed class RetailReceiptReportTests
         Path.Combine(AppContext.BaseDirectory, "ReportFixtures", name);
 
     [Theory]
-    [InlineData("RetailCashReceiptThermal80.rdlc", 3.15m)]
-    [InlineData("RetailCashReceiptA4.rdlc", 8.27m)]
+    [InlineData("RetailCashReceiptThermal80.rdlc", "3.15")]
+    [InlineData("RetailCashReceiptA4.rdlc", "8.27")]
     public void Static_rdlc_has_the_exact_typed_dataset_fields_and_safe_visibility(
-        string template, decimal pageWidth)
+        string template, string pageWidthText)
     {
+        var pageWidth = decimal.Parse(pageWidthText, System.Globalization.CultureInfo.InvariantCulture);
         XNamespace rdl = "http://schemas.microsoft.com/sqlserver/reporting/2016/01/reportdefinition";
         var r = XDocument.Load(Fixture(template));
         Assert.Equal(rdl + "Report", r.Root!.Name);
