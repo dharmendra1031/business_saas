@@ -71,7 +71,116 @@ public static class RetailBillingSettingsEndpoints
             business.BillingSettingsRevision = nextRevision;
             return Results.Ok(new { settings = View(business), unchanged = false });
         });
+
+        // A static, source-controlled RDLC consumes these parameters; never edit
+        // report XML at runtime and never allow required financial fields to hide.
+        var receipt = app.MapGroup("/api/businesses/{businessId:long}/receipt-settings")
+            .RequireAuthorization();
+
+        receipt.MapGet("", async (long businessId, ClaimsPrincipal user, AppDbContext db) =>
+        {
+            if (await OwnerId(db, businessId, user) is null) return Results.NotFound();
+            var business = await db.Businesses.AsNoTracking().SingleAsync(x => x.Id == businessId);
+            return Results.Ok(ReceiptView(business));
+        });
+
+        receipt.MapPut("", async (long businessId, ReceiptSettingsRequest request,
+            ClaimsPrincipal user, AppDbContext db) =>
+        {
+            var actor = await OwnerId(db, businessId, user);
+            if (actor is null) return Results.NotFound();
+            if (request.ExpectedRevision < 0 ||
+                request.PaperSize is not ("Thermal80" or "A4") ||
+                request.FooterText is null || request.FooterText.Length > 120 ||
+                request.FooterText.Any(char.IsControl) ||
+                request.Reason?.Trim().Length is not (>= 10 and <= 200))
+                return Results.BadRequest(new {
+                    message = "Choose 80mm or A4 paper, a footer of up to 120 characters, and a 10–200 character reason."
+                });
+
+            await using var tx = await db.Database.BeginTransactionAsync(IsolationLevel.Serializable);
+            var business = await db.Businesses.AsNoTracking()
+                .SingleOrDefaultAsync(x => x.Id == businessId);
+            if (business is null) return Results.NotFound();
+            if (business.ReceiptSettingsRevision != request.ExpectedRevision)
+                return Results.Conflict(new {
+                    code = "RECEIPT_SETTINGS_CHANGED",
+                    message = "Invoice print settings changed. Reload before saving."
+                });
+
+            var footer = request.FooterText.Trim();
+            if (business.ReceiptPaperSize == request.PaperSize &&
+                business.ReceiptShowTime == request.ShowTime &&
+                business.ReceiptShowUnitPrice == request.ShowUnitPrice &&
+                business.ReceiptShowCashReceived == request.ShowCashReceived &&
+                business.ReceiptShowChange == request.ShowChange &&
+                business.ReceiptShowFooter == request.ShowFooter &&
+                business.ReceiptFooterText == footer)
+                return Results.Ok(new { settings = ReceiptView(business), unchanged = true });
+
+            var newRevision = business.ReceiptSettingsRevision + 1;
+            var changed = await db.Businesses.Where(x => x.Id == businessId &&
+                x.ReceiptSettingsRevision == request.ExpectedRevision)
+                .ExecuteUpdateAsync(update => update
+                    .SetProperty(x => x.ReceiptPaperSize, request.PaperSize)
+                    .SetProperty(x => x.ReceiptShowTime, request.ShowTime)
+                    .SetProperty(x => x.ReceiptShowUnitPrice, request.ShowUnitPrice)
+                    .SetProperty(x => x.ReceiptShowCashReceived, request.ShowCashReceived)
+                    .SetProperty(x => x.ReceiptShowChange, request.ShowChange)
+                    .SetProperty(x => x.ReceiptShowFooter, request.ShowFooter)
+                    .SetProperty(x => x.ReceiptFooterText, footer)
+                    .SetProperty(x => x.ReceiptSettingsRevision, newRevision));
+            if (changed != 1)
+                return Results.Conflict(new {
+                    code = "RECEIPT_SETTINGS_CHANGED",
+                    message = "Invoice print settings changed. Reload before saving."
+                });
+
+            db.PlatformAuditEvents.Add(new PlatformAuditEvent {
+                ActorUserId = actor.Value,
+                Action = "Business.ReceiptSettingsChanged",
+                TargetType = "Business", TargetId = businessId,
+                PreviousValue = $"revision={business.ReceiptSettingsRevision};paper={business.ReceiptPaperSize}",
+                NewValue = $"revision={newRevision};paper={request.PaperSize};" +
+                    $"time={request.ShowTime};rate={request.ShowUnitPrice};" +
+                    $"tender={request.ShowCashReceived};change={request.ShowChange};footer={request.ShowFooter}",
+                Reason = request.Reason.Trim()
+            });
+            await db.SaveChangesAsync();
+            await tx.CommitAsync();
+
+            business.ReceiptPaperSize = request.PaperSize;
+            business.ReceiptShowTime = request.ShowTime;
+            business.ReceiptShowUnitPrice = request.ShowUnitPrice;
+            business.ReceiptShowCashReceived = request.ShowCashReceived;
+            business.ReceiptShowChange = request.ShowChange;
+            business.ReceiptShowFooter = request.ShowFooter;
+            business.ReceiptFooterText = footer;
+            business.ReceiptSettingsRevision = newRevision;
+            return Results.Ok(new { settings = ReceiptView(business), unchanged = false });
+        });
     }
+
+    private static object ReceiptView(Business business) => new {
+        paperSize = business.ReceiptPaperSize,
+        showTime = business.ReceiptShowTime,
+        showUnitPrice = business.ReceiptShowUnitPrice,
+        showCashReceived = business.ReceiptShowCashReceived,
+        showChange = business.ReceiptShowChange,
+        showFooter = business.ReceiptShowFooter,
+        footerText = business.ReceiptFooterText,
+        revision = business.ReceiptSettingsRevision,
+        // Business name, receipt ID, date, product/qty, line total, payable total
+        // are statutory/transaction-critical and NOT configurable.
+        mandatoryFields = new[] { "Business name", "Receipt number", "Date",
+            "Items and quantities", "Line totals", "Total payable" },
+        rendererAvailable = false
+    };
+
+    private sealed record ReceiptSettingsRequest(
+        string PaperSize, bool ShowTime, bool ShowUnitPrice,
+        bool ShowCashReceived, bool ShowChange, bool ShowFooter,
+        string FooterText, int ExpectedRevision, string? Reason);
 
     private static object View(Business business) => new {
         cashSalesEnabled = business.CashSalesEnabled,
