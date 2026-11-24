@@ -77,13 +77,13 @@ export default function TeamMembers({ businessId, canOperate, cashSaleEnabled }:
       <form onSubmit={event => void add(event)} className="team-form mb-4" aria-busy={busy}>
         <div>
           <label className="form-label" htmlFor="staff-email">Account email</label>
-          <input id="staff-email" className="form-control" type="email" autoComplete="off"
+          <input id="staff-email" className="form-control" type="email" autoComplete="off" disabled={busy}
             value={email} onChange={event => setEmail(event.target.value)}
             placeholder="person@example.com" maxLength={256} required />
         </div>
         <div>
           <label className="form-label" htmlFor="staff-role">Access level</label>
-          <select id="staff-role" className="form-select" value={role}
+          <select id="staff-role" className="form-select" value={role} disabled={busy}
             onChange={event => setRole(event.target.value as 'Manager' | 'Cashier')}>
             <option value="Manager">Manager</option>
             <option value="Cashier">Cashier</option>
