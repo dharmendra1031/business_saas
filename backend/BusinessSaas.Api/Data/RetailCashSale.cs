@@ -16,6 +16,7 @@ public sealed class RetailCashSale
     public string? MerchantAddress { get; set; }
     public string? MerchantPhone { get; set; }
     public string? MerchantEmail { get; set; }
+    public byte[]? MerchantLogo { get; set; }
     public string? BusinessName { get; set; }
     public string? LocationName { get; set; }
     public string? TimeZoneId { get; set; }

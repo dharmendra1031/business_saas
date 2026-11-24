@@ -435,6 +435,25 @@ public sealed class SqlServerTests
         var cashierCatalog = await cashier.GetFromJsonAsync<JsonElement>(
             prefix + "/cash-sales/products?locationId=" + locationId + "&search=SQL-BLUE-SHIRT");
         Assert.Equal(productId, cashierCatalog[0].GetProperty("id").GetInt64());
+        var receiptSettingsPath = prefix + "/receipt-settings";
+        var initialReceiptSettings = await owner.GetFromJsonAsync<JsonElement>(receiptSettingsPath);
+        var logo = Convert.FromBase64String("iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mP8/x8AAwMCAO+j2ZsAAAAASUVORK5CYII=");
+        var receiptSettings = new {
+            paperSize = "A4", showTime = true, showUnitPrice = true,
+            showCashReceived = true, showChange = true, showFooter = true,
+            footerText = "Thank you", expectedRevision = initialReceiptSettings.GetProperty("revision").GetInt32(),
+            reason = "Verify receipt logo preferences", logo, showLogo = true, printCopies = 2
+        };
+        Assert.Equal(HttpStatusCode.NotFound, (await cashier.GetAsync(receiptSettingsPath)).StatusCode);
+        Assert.Equal(HttpStatusCode.NotFound, (await Put(stranger, receiptSettingsPath, receiptSettings)).StatusCode);
+        Assert.Equal(HttpStatusCode.BadRequest, (await Put(owner, receiptSettingsPath, receiptSettings with { printCopies = 6 })).StatusCode);
+        Assert.Equal(HttpStatusCode.BadRequest, (await Put(owner, receiptSettingsPath, receiptSettings with { logo = new byte[50] })).StatusCode);
+        Assert.Equal(HttpStatusCode.OK, (await Put(owner, receiptSettingsPath, receiptSettings)).StatusCode);
+        Assert.Equal(HttpStatusCode.Conflict, (await Put(owner, receiptSettingsPath, receiptSettings)).StatusCode);
+        var savedReceiptSettings = await owner.GetFromJsonAsync<JsonElement>(receiptSettingsPath);
+        Assert.Equal(2, savedReceiptSettings.GetProperty("printCopies").GetInt32());
+        Assert.Equal(Convert.ToBase64String(logo), savedReceiptSettings.GetProperty("logo").GetString());
+
         var saleRequest = new
         {
             locationId, requestKey = "sql-flow-cash-sale-20261124", tendered = 35m,
@@ -463,6 +482,19 @@ public sealed class SqlServerTests
                     x.ProductId == productId)
                 .OrderBy(x => x.Id).Select(x => x.QuantityChange).ToListAsync();
             Assert.Equal(new[] { 1.250m, -0.375m }, movements);
+        }
+
+        Assert.Equal(HttpStatusCode.OK, (await Put(owner, receiptSettingsPath, receiptSettings with {
+            expectedRevision = savedReceiptSettings.GetProperty("revision").GetInt32(),
+            logo = Array.Empty<byte>(), showLogo = false
+        })).StatusCode);
+        using (var scope = factory.Services.CreateScope())
+        {
+            var db = scope.ServiceProvider.GetRequiredService<AppDbContext>();
+            var historical = await db.RetailCashSales.AsNoTracking().SingleAsync(x =>
+                x.Id == sale.GetProperty("id").GetInt64() && x.BusinessId == businessId);
+            Assert.Equal(logo, historical.MerchantLogo);
+            Assert.Null(await db.Businesses.Where(x => x.Id == businessId).Select(x => x.ReceiptLogo).SingleAsync());
         }
 
         // SQL Server rollback: a later out-of-stock line must not commit an earlier

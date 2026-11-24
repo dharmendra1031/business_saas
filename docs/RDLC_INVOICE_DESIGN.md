@@ -71,3 +71,7 @@ The existing Owner receipt-settings endpoint saves optional legal display name, 
 ## Phase 3B customer details
 
 Walk-in cash checkout remains the default. An optional active customer is selected through a location-authorized, tenant-scoped POS search. The same customer ID is retained in the pending request and checked on idempotent replay. New sales snapshot customer name, phone and address; old receipts have no fabricated customer details. Customer Master now supports an optional address. The static XSD/RDLC definitions and Owner settings expose three independent customer visibility flags. No credit, tax or renderer is activated. Logo upload is a separate milestone.
+
+## Phase 4A: logo and print preferences
+
+Owner receipt settings support an optional PNG logo (maximum 384 × 192 pixels, 32 KiB) and 1–5 print copies. The browser resizes PNG/JPEG inputs and exports PNG. The server bounds and checks the PNG envelope; this does not replace actual decoder validation before enabling a renderer. Null request logo preserves the saved value; an empty byte array removes it. New sales snapshot the bounded image bytes; older receipts remain unchanged. Static RDLC database images bind to `MerchantLogo` (XSD `base64Binary`), with `ShowLogo` and missing-image visibility. Paper size and copies remain preferences only until printer integration. No runtime report generation, external image URL, or renderer is added.

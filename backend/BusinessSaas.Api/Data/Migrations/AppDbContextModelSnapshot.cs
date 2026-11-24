@@ -279,6 +279,9 @@ namespace BusinessSaas.Api.Data.Migrations
                     b.Property<bool>("ReceiptShowCustomerName").HasColumnType("bit");
                     b.Property<bool>("ReceiptShowCustomerPhone").HasColumnType("bit");
                     b.Property<bool>("ReceiptShowCustomerAddress").HasColumnType("bit");
+                    b.Property<byte[]>("ReceiptLogo").HasMaxLength(32768).HasColumnType("varbinary(max)");
+                    b.Property<bool>("ReceiptShowLogo").HasColumnType("bit");
+                    b.Property<int>("ReceiptPrintCopies").HasColumnType("int");
                     b.Property<bool>("ReceiptShowFooter").HasColumnType("bit");
 
                     b.Property<string>("ReceiptFooterText")
@@ -1743,6 +1746,7 @@ namespace BusinessSaas.Api.Data.Migrations
 
             modelBuilder.Entity("BusinessSaas.Api.Data.RetailCashSale", b =>
                 {
+                    b.Property<byte[]>("MerchantLogo").HasMaxLength(32768).HasColumnType("varbinary(max)");
                     b.Property<string>("CustomerAddress").HasMaxLength(300).HasColumnType("nvarchar(300)");
                     b.Property<string>("CustomerPhone").HasMaxLength(25).HasColumnType("nvarchar(25)");
                     b.Property<string>("CustomerName").HasMaxLength(120).HasColumnType("nvarchar(120)");

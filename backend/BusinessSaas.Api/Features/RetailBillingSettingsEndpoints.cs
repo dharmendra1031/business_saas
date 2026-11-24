@@ -102,9 +102,11 @@ public static class RetailBillingSettingsEndpoints
                 !ValidOptionalText(request.Phone, 25) ||
                 !ValidOptionalText(request.Email, 254) ||
                 !ValidEmail(request.Email) ||
+                request.PrintCopies is < 1 or > 5 ||
+                (request.Logo is { Length: > 0 } && !BusinessSaas.Api.Reports.ReceiptLogo.IsValid(request.Logo)) ||
                 request.Reason?.Trim().Length is not (>= 10 and <= 200))
                 return Results.BadRequest(new {
-                    message = "Check paper size, merchant details, email, footer and the 10–200 character change reason."
+                    message = "Check paper size, merchant details, email, PNG logo (32 KB, 384 × 192 maximum), print copies (1–5), footer and the change reason."
                 });
 
             await using var tx = await db.Database.BeginTransactionAsync(IsolationLevel.Serializable);
@@ -128,6 +130,11 @@ public static class RetailBillingSettingsEndpoints
             var showCustomerName = request.ShowCustomerName ?? business.ReceiptShowCustomerName;
             var showCustomerPhone = request.ShowCustomerPhone ?? business.ReceiptShowCustomerPhone;
             var showCustomerAddress = request.ShowCustomerAddress ?? business.ReceiptShowCustomerAddress;
+            var logo = request.Logo is null ? business.ReceiptLogo :
+                request.Logo.Length == 0 ? null : request.Logo;
+            var showLogo = request.ShowLogo ?? business.ReceiptShowLogo;
+            var printCopies = request.PrintCopies ?? business.ReceiptPrintCopies;
+            var logoChanged = !(business.ReceiptLogo ?? []).AsSpan().SequenceEqual(logo ?? []);
             var footer = request.FooterText.Trim();
             if (business.ReceiptPaperSize == request.PaperSize &&
                 business.ReceiptShowTime == request.ShowTime &&
@@ -145,6 +152,8 @@ public static class RetailBillingSettingsEndpoints
                 business.ReceiptShowCustomerName == showCustomerName &&
                 business.ReceiptShowCustomerPhone == showCustomerPhone &&
                 business.ReceiptShowCustomerAddress == showCustomerAddress &&
+                !logoChanged && business.ReceiptShowLogo == showLogo &&
+                business.ReceiptPrintCopies == printCopies &&
                 business.ReceiptFooterText == footer)
                 return Results.Ok(new { settings = ReceiptView(business), unchanged = true });
 
@@ -172,6 +181,9 @@ public static class RetailBillingSettingsEndpoints
                     .SetProperty(x => x.ReceiptShowCustomerName, showCustomerName)
                     .SetProperty(x => x.ReceiptShowCustomerPhone, showCustomerPhone)
                     .SetProperty(x => x.ReceiptShowCustomerAddress, showCustomerAddress)
+                    .SetProperty(x => x.ReceiptLogo, logo)
+                    .SetProperty(x => x.ReceiptShowLogo, showLogo)
+                    .SetProperty(x => x.ReceiptPrintCopies, printCopies)
                     .SetProperty(x => x.ReceiptFooterText, footer)
                     .SetProperty(x => x.ReceiptSettingsRevision, newRevision));
             if (changed != 1)
@@ -190,8 +202,8 @@ public static class RetailBillingSettingsEndpoints
                     string.Concat(new[] { request.ShowTime, request.ShowUnitPrice, request.ShowCashReceived,
                         request.ShowChange, request.ShowFooter, request.ShowBranch ?? business.ReceiptShowBranch,
                         request.ShowSku ?? business.ReceiptShowSku, request.ShowUnit ?? business.ReceiptShowUnit,
-                        showLegalName, showAddress, showPhone, showEmail, showCustomerName, showCustomerPhone, showCustomerAddress }.Select(value => value ? "1" : "0")) +
-                    $";merchantChanged={business.ReceiptLegalName != legalName || business.ReceiptAddress != address || business.ReceiptPhone != phone || business.ReceiptEmail != email}",
+                        showLegalName, showAddress, showPhone, showEmail, showCustomerName, showCustomerPhone, showCustomerAddress, showLogo }.Select(value => value ? "1" : "0")) +
+                    $";copies={printCopies};logoChanged={(logoChanged ? 1 : 0)};m={business.ReceiptLegalName != legalName || business.ReceiptAddress != address || business.ReceiptPhone != phone || business.ReceiptEmail != email}",
                 Reason = request.Reason.Trim()
             });
             await db.SaveChangesAsync();
@@ -217,6 +229,9 @@ public static class RetailBillingSettingsEndpoints
             business.ReceiptShowCustomerName = showCustomerName;
             business.ReceiptShowCustomerPhone = showCustomerPhone;
             business.ReceiptShowCustomerAddress = showCustomerAddress;
+            business.ReceiptLogo = logo;
+            business.ReceiptShowLogo = showLogo;
+            business.ReceiptPrintCopies = printCopies;
             business.ReceiptFooterText = footer;
             business.ReceiptSettingsRevision = newRevision;
             return Results.Ok(new { settings = ReceiptView(business), unchanged = false });
@@ -244,6 +259,9 @@ public static class RetailBillingSettingsEndpoints
         showCustomerName = business.ReceiptShowCustomerName,
         showCustomerPhone = business.ReceiptShowCustomerPhone,
         showCustomerAddress = business.ReceiptShowCustomerAddress,
+        logo = business.ReceiptLogo is null ? "" : Convert.ToBase64String(business.ReceiptLogo),
+        showLogo = business.ReceiptShowLogo,
+        printCopies = business.ReceiptPrintCopies,
         footerText = business.ReceiptFooterText,
         revision = business.ReceiptSettingsRevision,
         // Business name, receipt ID, date, product/qty, line total, payable total
@@ -262,7 +280,8 @@ public static class RetailBillingSettingsEndpoints
         string? Address = null, bool? ShowAddress = null,
         string? Phone = null, bool? ShowPhone = null,
         string? Email = null, bool? ShowEmail = null,
-        bool? ShowCustomerName = null, bool? ShowCustomerPhone = null, bool? ShowCustomerAddress = null);
+        bool? ShowCustomerName = null, bool? ShowCustomerPhone = null, bool? ShowCustomerAddress = null,
+        byte[]? Logo = null, bool? ShowLogo = null, int? PrintCopies = null);
 
     private static bool ValidOptionalText(string? value, int maxLength) =>
         value is null || (value.Length <= maxLength && !value.Any(char.IsControl));

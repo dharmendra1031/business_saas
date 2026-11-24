@@ -107,6 +107,9 @@ public sealed class Business
     public bool ReceiptShowPhone { get; set; } = true;
     public string? ReceiptEmail { get; set; }
     public bool ReceiptShowEmail { get; set; } = true;
+    public byte[]? ReceiptLogo { get; set; }
+    public bool ReceiptShowLogo { get; set; } = true;
+    public int ReceiptPrintCopies { get; set; } = 1;
     public string ReceiptPaperSize { get; set; } = "Thermal80";
     public bool ReceiptShowTime { get; set; } = true;
     public bool ReceiptShowUnitPrice { get; set; } = true;
@@ -522,6 +525,7 @@ public sealed class AppDbContext(DbContextOptions<AppDbContext> options)
             entity.Property(x => x.ReceiptAddress).HasMaxLength(300);
             entity.Property(x => x.ReceiptPhone).HasMaxLength(25);
             entity.Property(x => x.ReceiptEmail).HasMaxLength(254);
+            entity.Property(x => x.ReceiptLogo).HasMaxLength(32768);
             entity.Property(x => x.ReceiptPaperSize).HasMaxLength(12).IsRequired();
             entity.Property(x => x.ReceiptFooterText).HasMaxLength(120).IsRequired();
             entity.HasIndex(x => new { x.CreatedByUserId, x.CreationKey }).IsUnique();
@@ -817,6 +821,7 @@ public sealed class AppDbContext(DbContextOptions<AppDbContext> options)
             entity.Property(x => x.CustomerName).HasMaxLength(120);
             entity.Property(x => x.CustomerPhone).HasMaxLength(25);
             entity.Property(x => x.CustomerAddress).HasMaxLength(300);
+            entity.Property(x => x.MerchantLogo).HasMaxLength(32768);
             entity.Property(x => x.BusinessName).HasMaxLength(150);
             entity.Property(x => x.LocationName).HasMaxLength(120);
             entity.Property(x => x.TimeZoneId).HasMaxLength(80);

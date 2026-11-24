@@ -33,7 +33,7 @@ public sealed class RetailReceiptReportTests
         Assert.Equal(2, sets.Count);
         Assert.Equal(new[] { "BusinessName", "ReceiptNumber", "DateText", "TimeText",
             "CurrencyCode", "PaymentMethod", "TotalAmount", "CashReceived",
-            "ChangeAmount", "FooterText", "MerchantLegalName", "MerchantAddress", "MerchantPhone", "MerchantEmail", "CustomerName", "CustomerPhone", "CustomerAddress", "LocationName" }, sets["InvoiceHeader"]);
+            "ChangeAmount", "FooterText", "MerchantLegalName", "MerchantAddress", "MerchantPhone", "MerchantEmail", "CustomerName", "CustomerPhone", "CustomerAddress", "LocationName", "MerchantLogo" }, sets["InvoiceHeader"]);
         Assert.Equal(new[] { "LineNumber", "ProductName", "Quantity", "UnitPrice",
             "LineTotal", "ProductSku", "UnitCode" }, sets["InvoiceLines"]);
         Assert.Equal("InvoiceLines", Assert.Single(r.Descendants(rdl + "Tablix"))
@@ -42,7 +42,7 @@ public sealed class RetailReceiptReportTests
         var parameters = r.Descendants(rdl + "ReportParameter")
             .Select(x => (string)x.Attribute("Name")!).ToArray();
         Assert.Equal(new[] { "ShowTime", "ShowUnitPrice", "ShowCashReceived",
-            "ShowChange", "ShowFooter", "ShowBranch", "ShowSku", "ShowUnit", "ShowLegalName", "ShowAddress", "ShowPhone", "ShowEmail", "ShowCustomerName", "ShowCustomerPhone", "ShowCustomerAddress" }, parameters);
+            "ShowChange", "ShowFooter", "ShowBranch", "ShowSku", "ShowUnit", "ShowLegalName", "ShowAddress", "ShowPhone", "ShowEmail", "ShowCustomerName", "ShowCustomerPhone", "ShowCustomerAddress", "ShowLogo" }, parameters);
         var expressions = r.Descendants(rdl + "Value").Select(x => x.Value)
             .Concat(r.Descendants(rdl + "Hidden").Select(x => x.Value)).ToArray();
         Assert.Contains(expressions, x => x.Contains("Fields!TotalAmount.Value"));
@@ -51,10 +51,14 @@ public sealed class RetailReceiptReportTests
         Assert.Contains(expressions, x => x.Contains("Parameters!ShowUnitPrice.Value"));
         foreach (var optional in new[] { "ShowCashReceived", "ShowChange", "ShowFooter" })
             Assert.Contains(expressions, x => x == $"=Not(Parameters!{optional}.Value)");
-        foreach (var optional in new[] { "ShowBranch", "ShowSku", "ShowUnit", "ShowLegalName", "ShowAddress", "ShowPhone", "ShowEmail", "ShowCustomerName", "ShowCustomerPhone", "ShowCustomerAddress" })
+        foreach (var optional in new[] { "ShowBranch", "ShowSku", "ShowUnit", "ShowLegalName", "ShowAddress", "ShowPhone", "ShowEmail", "ShowCustomerName", "ShowCustomerPhone", "ShowCustomerAddress", "ShowLogo" })
             Assert.Contains(expressions, x => x.Contains($"Parameters!{optional}.Value"));
-        foreach (var field in new[] { "LocationName", "ProductSku", "UnitCode", "MerchantLegalName", "MerchantAddress", "MerchantPhone", "MerchantEmail", "CustomerName", "CustomerPhone", "CustomerAddress" })
+        foreach (var field in new[] { "LocationName", "ProductSku", "UnitCode", "MerchantLegalName", "MerchantAddress", "MerchantPhone", "MerchantEmail", "CustomerName", "CustomerPhone", "CustomerAddress", "MerchantLogo" })
             Assert.Contains(expressions, x => x.Contains($"Fields!{field}.Value"));
+        var image = Assert.Single(r.Descendants(rdl + "Image"));
+        Assert.Equal("Database", image.Element(rdl + "Source")!.Value);
+        Assert.Equal("image/png", image.Element(rdl + "MIMEType")!.Value);
+        Assert.Equal("FitProportional", image.Element(rdl + "Sizing")!.Value);
         var tablix = Assert.Single(r.Descendants(rdl + "Tablix"));
         var columnCount = tablix.Descendants(rdl + "TablixColumn").Count();
         Assert.Equal(template.Contains("A4") ? 7 : 2, columnCount);
@@ -95,7 +99,7 @@ public sealed class RetailReceiptReportTests
                 .Descendants(xs + "element").Select(f => (string)f.Attribute("name")!).ToArray());
         Assert.Equal(new[] { "BusinessName", "ReceiptNumber", "DateText", "TimeText",
             "CurrencyCode", "PaymentMethod", "TotalAmount", "CashReceived",
-            "ChangeAmount", "FooterText", "MerchantLegalName", "MerchantAddress", "MerchantPhone", "MerchantEmail", "CustomerName", "CustomerPhone", "CustomerAddress", "LocationName" }, fields["InvoiceHeader"]);
+            "ChangeAmount", "FooterText", "MerchantLegalName", "MerchantAddress", "MerchantPhone", "MerchantEmail", "CustomerName", "CustomerPhone", "CustomerAddress", "LocationName", "MerchantLogo" }, fields["InvoiceHeader"]);
         Assert.Equal(new[] { "LineNumber", "ProductName", "Quantity", "UnitPrice",
             "LineTotal", "ProductSku", "UnitCode" }, fields["InvoiceLines"]);
     }
@@ -152,6 +156,14 @@ public sealed class RetailReceiptReportTests
         sale.CustomerPhone = "1234567890";
         sale.CustomerAddress = "Original Customer Address";
         business.ReceiptShowCustomerPhone = false;
+        Assert.Null(report.Header.MerchantLogo);
+        var oldLogo = Convert.FromBase64String("iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mP8/x8AAwMCAO+j2ZsAAAAASUVORK5CYII=");
+        Assert.True(ReceiptLogo.IsValid(oldLogo));
+        Assert.False(ReceiptLogo.IsValid(new byte[32769]));
+        Assert.False(ReceiptLogo.IsValid(new byte[50]));
+        sale.MerchantLogo = oldLogo;
+        business.ReceiptLogo = [1, 2, 3];
+        business.ReceiptShowLogo = false;
         sale.BusinessName = "Original Store";
         sale.LocationName = "Original Branch";
         sale.TimeZoneId = "Asia/Kolkata";
@@ -164,6 +176,8 @@ public sealed class RetailReceiptReportTests
         Assert.Equal("1234567890", reprint.Header.CustomerPhone);
         Assert.Equal("Original Customer Address", reprint.Header.CustomerAddress);
         Assert.False(reprint.Parameters.ShowCustomerPhone);
+        Assert.Equal(oldLogo, reprint.Header.MerchantLogo);
+        Assert.False(reprint.Parameters.ShowLogo);
         Assert.Equal("Original Store", reprint.Header.BusinessName);
         Assert.Equal("Original Legal Name", reprint.Header.MerchantLegalName);
         Assert.Equal("Original Address", reprint.Header.MerchantAddress);

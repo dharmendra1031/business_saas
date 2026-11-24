@@ -265,6 +265,7 @@ public static class RetailCashSales
                 CustomerId = customer?.Id, CustomerName = customer?.Name,
                 CustomerPhone = customer?.Phone, CustomerAddress = customer?.Address,
                 Tendered = request.Tendered, CurrencyCode = shop.CurrencyCode,
+                MerchantLogo = shop.ReceiptLogo,
                 MerchantLegalName = shop.ReceiptLegalName,
                 MerchantAddress = shop.ReceiptAddress,
                 MerchantPhone = shop.ReceiptPhone,
