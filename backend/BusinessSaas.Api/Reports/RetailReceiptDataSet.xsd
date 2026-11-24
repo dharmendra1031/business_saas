@@ -1,0 +1,39 @@
+<?xml version="1.0" encoding="utf-8"?>
+<xs:schema id="RetailReceiptDataSet" xmlns="" xmlns:xs="http://www.w3.org/2001/XMLSchema"
+  xmlns:msdata="urn:schemas-microsoft-com:xml-msdata">
+  <!-- Design-time DataSet schema. Data is supplied from posted RetailCashSale snapshots,
+       never queried inside an RDLC and never generated from live Product prices. -->
+  <xs:element name="RetailReceiptDataSet" msdata:IsDataSet="true" msdata:UseCurrentLocale="false">
+    <xs:complexType>
+      <xs:choice minOccurs="0" maxOccurs="unbounded">
+        <xs:element name="InvoiceHeader">
+          <xs:complexType>
+            <xs:sequence>
+              <xs:element name="BusinessName" type="xs:string" minOccurs="0" />
+              <xs:element name="ReceiptNumber" type="xs:string" minOccurs="0" />
+              <xs:element name="DateText" type="xs:string" minOccurs="0" />
+              <xs:element name="TimeText" type="xs:string" minOccurs="0" />
+              <xs:element name="CurrencyCode" type="xs:string" minOccurs="0" />
+              <xs:element name="PaymentMethod" type="xs:string" minOccurs="0" />
+              <xs:element name="TotalAmount" type="xs:decimal" minOccurs="0" />
+              <xs:element name="CashReceived" type="xs:decimal" minOccurs="0" />
+              <xs:element name="ChangeAmount" type="xs:decimal" minOccurs="0" />
+              <xs:element name="FooterText" type="xs:string" minOccurs="0" />
+            </xs:sequence>
+          </xs:complexType>
+        </xs:element>
+        <xs:element name="InvoiceLines">
+          <xs:complexType>
+            <xs:sequence>
+              <xs:element name="LineNumber" type="xs:int" minOccurs="0" />
+              <xs:element name="ProductName" type="xs:string" minOccurs="0" />
+              <xs:element name="Quantity" type="xs:decimal" minOccurs="0" />
+              <xs:element name="UnitPrice" type="xs:decimal" minOccurs="0" />
+              <xs:element name="LineTotal" type="xs:decimal" minOccurs="0" />
+            </xs:sequence>
+          </xs:complexType>
+        </xs:element>
+      </xs:choice>
+    </xs:complexType>
+  </xs:element>
+</xs:schema>
