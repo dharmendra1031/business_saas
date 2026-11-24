@@ -950,9 +950,12 @@ try {
       role: 'Owner', hasProducts: true, ownerPos: true
     })
     let loads = 0
+    let loadRecovered = false
     await t.page.route('**/api/businesses/1/billing-settings', route => {
       loads++
-      if (loads === 1) return response(route, 503, { message: 'Billing preferences are unavailable.' })
+      // React StrictMode may issue an initial GET twice. Keep both failed
+      // until the user deliberately retries; only then return healthy data.
+      if (!loadRecovered) return response(route, 503, { message: 'Billing preferences are unavailable.' })
       return response(route, 200, {
         cashSalesEnabled: true, creditSalesEnabled: false, creditAvailable: false,
         revision: 0, salesPaused: false
@@ -964,10 +967,11 @@ try {
     await t.page.getByText('Billing preferences are unavailable.').waitFor()
     assert.equal(await t.page.getByText('Loading saved payment preferences…').count(), 0,
       'A failed GET must not show an infinite loading status')
+    loadRecovered = true
     await t.page.getByRole('button', { name: 'Reload settings' }).click()
     await t.page.locator('#billing-cash-toggle').waitFor()
     assert.equal(await t.page.locator('#billing-cash-toggle').isChecked(), true)
-    assert.equal(loads, 2)
+    assert.ok(loads >= 2, 'The failed read was retried after the user requested it')
     await t.check()
     await t.context.close()
     console.log('PASS BUS-54 failed settings load stops spinner and has working retry')
