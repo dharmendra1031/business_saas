@@ -1039,13 +1039,16 @@ try {
       salePrice: 50, available: 5, unitCode: 'PCS' }
     let releaseLookup
     const lookupGate = new Promise(resolve => { releaseLookup = resolve })
+    let releaseAmbiguous
+    const ambiguousGate = new Promise(resolve => { releaseAmbiguous = resolve })
     await t.page.route('**/api/businesses/1/cash-sales/products*', async route => {
       const term = new URL(route.request().url()).searchParams.get('search') ?? ''
       if (term === 'SCAN-401') {
         await lookupGate
         return response(route, 200, [first])
       }
-      return response(route, 200, term === '900001' ? [first, other] : [first, other])
+      if (term === '900001') await ambiguousGate
+      return response(route, 200, [first, other])
     })
     await t.login()
     await t.page.getByRole('button', { name: /Add Scan Item/ }).waitFor()
@@ -1053,7 +1056,7 @@ try {
     await search.fill('SCAN-401')
     await search.press('Enter')
     try {
-      await t.page.getByRole('button', { name: 'Add exact barcode or SKU' }).getByText('Checking…').waitFor()
+      await t.page.getByText('Checking…', { exact: true }).waitFor()
       assert.equal(await t.page.locator('#pos-location').isDisabled(), true)
       assert.equal(await t.page.getByRole('button', { name: 'Exit POS' }).isDisabled(), true)
       assert.equal(await t.page.getByRole('button', { name: /Pay \/ Checkout/ }).isDisabled(), true)
@@ -1063,6 +1066,12 @@ try {
     assert.equal(await qty.inputValue(), '1')
     await search.fill('900001')
     await search.press('Enter')
+    try {
+      await t.page.getByText('Checking…', { exact: true }).waitFor()
+      assert.equal(await qty.isDisabled(), true)
+      assert.equal(await t.page.getByRole('button', { name: 'Remove Scan Item' }).isDisabled(), true)
+      assert.equal(await t.page.getByRole('button', { name: /Pay \/ Checkout/ }).isDisabled(), true)
+    } finally { releaseAmbiguous() }
     await t.page.getByRole('alert').getByText('This code matches multiple products. Select the correct product card.').waitFor()
     assert.equal(await qty.inputValue(), '1')
     assert.equal(await t.page.getByRole('spinbutton', { name: 'Quantity of Other Item' }).count(), 0)
