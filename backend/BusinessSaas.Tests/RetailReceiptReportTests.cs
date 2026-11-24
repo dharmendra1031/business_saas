@@ -116,7 +116,23 @@ public sealed class RetailReceiptReportTests
     [InlineData("A4", 50, false)]
     [InlineData("A4", 100, false)]
     [Trait("Renderer", "Windows")]
-    public void Static_templates_render_real_pdf_on_windows(string paper, int count, bool show)
+    public void Static_templates_render_real_pdf_on_windows(string paper, int count, bool show) =>
+        RenderSample(paper, count, show);
+
+    // CI invokes each of these methods in a separate test-host process.
+    [Fact]
+    [Trait("Renderer", "ColdWindows")]
+    public void Cold_start_A4() => RenderSample("A4", 1, true);
+
+    [Fact]
+    [Trait("Renderer", "ColdWindows")]
+    public void Cold_start_Thermal80_short() => RenderSample("Thermal80", 3, true);
+
+    [Fact]
+    [Trait("Renderer", "ColdWindows")]
+    public void Cold_start_Thermal80_long() => RenderSample("Thermal80", 5, true);
+
+    private static void RenderSample(string paper, int count, bool show)
     {
         if (!OperatingSystem.IsWindows()) return;
         var business = new Business { Id = 42, Name = "Demo Retail Store",
@@ -162,6 +178,7 @@ public sealed class RetailReceiptReportTests
             File.WriteAllText(Path.Combine(output, name + ".json"),
                 System.Text.Json.JsonSerializer.Serialize(new {
                     paper, count, optionalColumnsShown = show, firstMs, repeatMs,
+                    processId = Environment.ProcessId,
                     bytes = bytes.Length, repeatBytes = repeat.Length
                 }));
         }

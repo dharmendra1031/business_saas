@@ -10,7 +10,11 @@ import pymupdf
 root = Path(sys.argv[1])
 samples = sorted(root.glob("*.pdf"))
 assert len(samples) == 10, f"Expected 10 PDF cases, found {len(samples)}"
-for path in samples:
+cold = sorted((root / "cold").glob("*.pdf"))
+assert {path.name for path in cold} == {
+    "A4-001-items.pdf", "Thermal80-003-items.pdf", "Thermal80-005-items.pdf"
+}, "Missing independent cold-render cases"
+for path in samples + cold:
     metadata = json.loads(path.with_suffix(".json").read_text(encoding="utf-8"))
     count, paper = metadata["count"], metadata["paper"]
     with pymupdf.open(path) as pdf:
@@ -39,6 +43,6 @@ for path in samples:
         metadata["pages"] = page_mm
         path.with_suffix(".json").write_text(json.dumps(metadata, indent=2), encoding="utf-8")
         assert metadata["firstMs"] >= 0 and metadata["repeatMs"] >= 0, path.name
-        print(path.name, page_mm,
+        print(str(path.relative_to(root)), page_mm,
               f"initial render {metadata['firstMs']:.1f}ms",
               f"repeat render {metadata['repeatMs']:.1f}ms")

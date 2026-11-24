@@ -34,6 +34,15 @@ jobs:
         env:
           RDLC_TEST_OUTPUT: ${{ github.workspace }}/rdlc-samples
         run: dotnet test backend/BusinessSaas.Tests/BusinessSaas.Tests.csproj --configuration Release --filter "Renderer=Windows"
+      - name: Measure independent cold and warm renderer processes
+        env:
+          RDLC_TEST_OUTPUT: ${{ github.workspace }}/rdlc-samples/cold
+        shell: pwsh
+        run: |
+          foreach ($case in @("Cold_start_A4", "Cold_start_Thermal80_short", "Cold_start_Thermal80_long")) {
+            dotnet test backend/BusinessSaas.Tests/BusinessSaas.Tests.csproj --configuration Release --no-build --filter "FullyQualifiedName~$case"
+            if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+          }
       - uses: actions/setup-python@v5
         with:
           python-version: "3.12"
