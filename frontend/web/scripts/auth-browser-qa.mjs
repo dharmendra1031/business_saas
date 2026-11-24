@@ -812,8 +812,9 @@ try {
     console.log('PASS BUS-01 fresh API totals, POS return, outage fallback and access loss')
   }
 
-  for (const mode of ['checkout', 'recover', 'review', 'out-of-stock']) {
+  for (const mode of ['checkout', 'recover', 'review', 'out-of-stock', 'recover-review']) {
     const recover = mode === 'recover'
+    const recoveringReview = mode === 'recover-review'
     const t = await scenario('pos-fractional-' + mode, {
       role: 'Cashier', hasProducts: true
     })
@@ -835,8 +836,8 @@ try {
       return response(route, 200, term && !'Loose Rice'.toLowerCase().includes(term.toLowerCase())
         ? [] : [{
           id: 91, name: 'Loose Rice', sku: 'RICE-KG', barcode: null,
-          salePrice: mode === 'review' && posts > 0 ? 96 : 80,
-          available: mode === 'review' && posts > 0 ? 0.25 : 0.625, unitCode: 'KG'
+          salePrice: (mode === 'review' || recoveringReview) && posts > 0 ? 96 : 80,
+          available: (mode === 'review' || recoveringReview) && posts > 0 ? 0.25 : 0.625, unitCode: 'KG'
         }])
     })
     await t.page.route('**/api/businesses/1/cash-sales', route => {
@@ -854,6 +855,23 @@ try {
           return response(route, 400, {
             code: 'CASH_SALE_BASKET_CHANGED',
             productId: 91,
+            message: 'Product or price changed. Remove and select the affected item again.'
+          })
+        }
+        return response(route, 200, {
+          ...receipt, total: 24, tendered: 30,
+          lines: [{ id: 502, productName: 'Loose Rice', unitPrice: 96, quantity: 0.25 }]
+        })
+      }
+      if (recoveringReview) {
+        if (posts === 1) {
+          originalRequest = posted
+          return route.abort('connectionreset')
+        }
+        if (posts === 2) {
+          assert.deepEqual(posted, originalRequest)
+          return response(route, 400, {
+            code: 'CASH_SALE_BASKET_CHANGED', productId: 91,
             message: 'Product or price changed. Remove and select the affected item again.'
           })
         }
@@ -942,6 +960,26 @@ try {
       await t.check()
       await t.context.close()
       console.log('PASS POS-17 changed price returns to the preserved basket for review')
+      continue
+    }
+    if (recoveringReview) {
+      await t.page.getByRole('button', { name: 'Record original request' }).click()
+      await t.page.getByRole('alert').getByText(/Product or price changed/).waitFor()
+      await t.page.getByText('Review required. Remove this item and select it again.').waitFor()
+      assert.equal(await t.page.getByRole('button', { name: /Pay \/ Checkout/ }).isDisabled(), true)
+      await t.page.getByRole('button', { name: 'Remove Loose Rice' }).click()
+      await t.page.getByRole('button', { name: /Add Loose Rice/ }).click()
+      assert.equal(await kgQuantity.inputValue(), '0.25')
+      await t.page.getByRole('button', { name: /Pay \/ Checkout/ }).click()
+      await t.page.getByLabel('Cash received').fill('30')
+      await t.page.getByRole('button', { name: 'Confirm Cash Payment' }).click()
+      await t.page.getByRole('heading', { name: 'Cash receipt #501' }).waitFor()
+      assert.equal(posts, 3)
+      assert.notEqual(posted.requestKey, originalRequest.requestKey)
+      assert.equal(posted.lines[0].expectedUnitPrice, 96)
+      await t.check()
+      await t.context.close()
+      console.log('PASS POS-07 rejected recovery returns to editable basket with a new key')
       continue
     }
     if (recover) await t.page.getByRole('button', { name: 'Record original request' }).click()
