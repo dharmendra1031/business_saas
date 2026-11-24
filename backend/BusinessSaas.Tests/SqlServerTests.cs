@@ -637,6 +637,62 @@ public sealed class SqlServerTests
                 x.BusinessId == businessId && x.ProductId == retriedId &&
                 x.SourceType == "CashSaleLine"));
         }
+
+        // SQL Server migration + Owner policy + idempotent historical retry.
+        var billingSettingsPath = prefix + "/billing-settings";
+        var defaultSettings = await owner.GetFromJsonAsync<JsonElement>(billingSettingsPath);
+        Assert.True(defaultSettings.GetProperty("cashSalesEnabled").GetBoolean());
+        Assert.False(defaultSettings.GetProperty("creditAvailable").GetBoolean());
+        Assert.Equal(HttpStatusCode.Conflict, (await Put(owner, billingSettingsPath,
+            new { cashSalesEnabled = true, creditSalesEnabled = true,
+                expectedRevision = 0, reason = "Do not release credit without verified ledger" })).StatusCode);
+        using var disabledSettings = await Put(owner, billingSettingsPath, new {
+            cashSalesEnabled = false, creditSalesEnabled = false, expectedRevision = 0,
+            reason = "Pause cash checkout during register verification"
+        });
+        Assert.Equal(HttpStatusCode.OK, disabledSettings.StatusCode);
+        var deniedKey = new {
+            locationId, requestKey = "sql-business-cash-paused-20261124", tendered = 15m,
+            lines = new[] { new { productId = retriedId,
+                quantity = 1m, expectedUnitPrice = 15m } }
+        };
+        using var deniedCheckout = await Post(cashier, prefix + "/cash-sales", deniedKey);
+        Assert.Equal(HttpStatusCode.Conflict, deniedCheckout.StatusCode);
+        Assert.Equal("CASH_SALES_DISABLED", (await deniedCheckout.Content.ReadFromJsonAsync<JsonElement>())
+            .GetProperty("code").GetString());
+        using var originalReplayAfterDisable = await Post(cashier, prefix + "/cash-sales", identicalCheckout);
+        Assert.Equal(HttpStatusCode.OK, originalReplayAfterDisable.StatusCode);
+        Assert.Equal(saleId, (await originalReplayAfterDisable.Content.ReadFromJsonAsync<JsonElement>())
+            .GetProperty("id").GetInt64());
+        using (var scope = factory.Services.CreateScope())
+        {
+            var db = scope.ServiceProvider.GetRequiredService<AppDbContext>();
+            Assert.Equal(1m, await db.RetailStockBalances.AsNoTracking()
+                .Where(x => x.BusinessId == businessId && x.LocationId == locationId &&
+                    x.ProductId == retriedId).Select(x => x.Quantity).SingleAsync());
+            Assert.False(await db.RetailCashSales.AsNoTracking().AnyAsync(x =>
+                x.BusinessId == businessId && x.RequestKey == deniedKey.requestKey));
+            Assert.Single(await db.PlatformAuditEvents.AsNoTracking()
+                .Where(x => x.TargetType == "Business" && x.TargetId == businessId &&
+                    x.Action == "Business.BillingSettingsChanged").ToListAsync());
+        }
+        using var enabledSettings = await Put(owner, billingSettingsPath, new {
+            cashSalesEnabled = true, creditSalesEnabled = false, expectedRevision = 1,
+            reason = "Resume verified cash checkout after store check"
+        });
+        Assert.Equal(HttpStatusCode.OK, enabledSettings.StatusCode);
+        using var resumedCheckout = await Post(cashier, prefix + "/cash-sales", deniedKey);
+        Assert.Equal(HttpStatusCode.OK, resumedCheckout.StatusCode);
+        using (var scope = factory.Services.CreateScope())
+        {
+            var db = scope.ServiceProvider.GetRequiredService<AppDbContext>();
+            Assert.Equal(0m, await db.RetailStockBalances.AsNoTracking()
+                .Where(x => x.BusinessId == businessId && x.LocationId == locationId &&
+                    x.ProductId == retriedId).Select(x => x.Quantity).SingleAsync());
+            Assert.Equal(2, await db.PlatformAuditEvents.AsNoTracking().CountAsync(x =>
+                x.TargetType == "Business" && x.TargetId == businessId &&
+                x.Action == "Business.BillingSettingsChanged"));
+        }
     }
 
     private static async Task RegisterAndLogin(HttpClient client, string email)
@@ -645,6 +701,17 @@ public sealed class SqlServerTests
             new { email, password = "TestPassword123!" })).StatusCode);
         Assert.Equal(HttpStatusCode.NoContent, (await Post(client, "/api/auth/login",
             new { email, password = "TestPassword123!" })).StatusCode);
+    }
+
+    private static async Task<HttpResponseMessage> Put(HttpClient client, string path, object body)
+    {
+        var tokenResponse = await client.GetFromJsonAsync<JsonElement>("/api/auth/csrf");
+        using var request = new HttpRequestMessage(HttpMethod.Put, path)
+        {
+            Content = JsonContent.Create(body)
+        };
+        request.Headers.Add("X-CSRF-TOKEN", tokenResponse.GetProperty("token").GetString()!);
+        return await client.SendAsync(request);
     }
 
     private static async Task<HttpResponseMessage> Post(HttpClient client, string path, object body)
