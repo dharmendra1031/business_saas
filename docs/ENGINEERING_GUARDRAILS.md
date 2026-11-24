@@ -19,6 +19,41 @@
 - Implement the current screen workflow and the server checks, persistence and tests it needs. Reuse existing code and remove unused paths after checking their callers. Add abstractions when current workflows benefit from them.
 - **Real workflows first:** UX completion is a release requirement, not a cosmetic task. Follow [UX Standards](./UX_STANDARDS.md).
 
+## 1A. Long-term maintainability contract (24 November 2026)
+
+These are change-review requirements, not a promise that software can run unattended for 20 years.
+Maintainability means upgrades, developers, modules and deployment environments can change
+**without silently breaking customer data or proven workflows**.
+
+- **Protect existing contracts:** Before changing a public API, persisted enum/status, role
+  permission, currency/quantity rule or file format, identify current callers and historical
+  records. Prefer additive changes; document a deliberate transition for breaking changes.
+- **Protect customer data:** Never rewrite an already-applied migration or rely on a
+  destructive production reset. Review migration impact, backfill and index operations;
+  test upgrades against representative existing data and verify rollback/restore plans.
+- **Keep ownership obvious:** Each business operation has one clear implementation path;
+  do not duplicate pricing, quantity, entitlement or authorization decisions between
+  screens and endpoints. Reuse existing feature boundaries before creating abstractions.
+- **Refactor with evidence:** Remove unused code only after checking imports, routes,
+  consumers and migrations. Split a growing component or endpoint when it has multiple
+  unrelated responsibilities or is hard to test, not merely to satisfy a line-count target.
+- **Upgrade continually:** Check supported runtimes, libraries, browser behavior and
+  database versions at least quarterly. Schedule small compatible upgrades before
+  end-of-support; retain locked dependency versions and run the full regression suite.
+- **Prevent recurring regressions:** A production bug fix needs a failing regression
+  scenario followed by a passing test where practicable. Financial, stock, tenancy,
+  permissions and retry fixes require server-side tests, not only mocked browser fixtures.
+- **Keep deployment reversible:** Every release needs a known previous build, schema
+  compatibility assessment, monitoring and a tested recovery path. Never advertise a
+  successful release from a passing build when deployment or restore has not been checked.
+- **Leave a handover trail:** For significant changes record the problem, why the chosen
+  design is the simplest correct one, affected contracts, tests, unresolved risks and
+  the associated commit. Keep this in existing docs/PRs instead of creating a new process
+  document for every small edit.
+- **Stay branch-disciplined:** Implement and verify on `development`. Promote to `main`
+  only after the relevant release gates and explicit approval; do not bypass failing CI
+  to deliver faster.
+
 ## 2. Critical risk register
 
 | ID | Priority | Failure | Required mitigation |
