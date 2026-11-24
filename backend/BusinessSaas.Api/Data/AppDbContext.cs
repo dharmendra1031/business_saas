@@ -94,6 +94,10 @@ public sealed class Business
     public string CountryCode { get; set; } = "";
     public string CurrencyCode { get; set; } = "";
     public string TimeZoneId { get; set; } = "";
+    // Owner-managed Retail payment methods. Credit stays off until its ledger is released.
+    public bool CashSalesEnabled { get; set; } = true;
+    public bool CreditSalesEnabled { get; set; }
+    public int BillingSettingsRevision { get; set; }
     public DateTime CreatedAtUtc { get; set; } = DateTime.UtcNow;
 }
 
