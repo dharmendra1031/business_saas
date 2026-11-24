@@ -84,6 +84,8 @@ export default function CashCheckout({ userId, dashboard, onExit }: {
   const searchInput = useRef<HTMLInputElement>(null)
   const total = basket.reduce((sum, line) =>
     sum + Math.round(Math.round(line.expectedUnitPrice * 100) * line.quantity), 0) / 100
+  const hasZeroValueLine = basket.some(line =>
+    Math.round(Math.round(line.expectedUnitPrice * 100) * line.quantity) === 0)
   const money = (amount: number) => (business.currencyCode === 'INR' ? '₹' : business.currencyCode + ' ') + amount.toFixed(2)
 
   useEffect(() => {
@@ -206,7 +208,7 @@ export default function CashCheckout({ userId, dashboard, onExit }: {
     if (!pending && (!locationId || !basket.length || basket.some(line =>
       !validQuantity(line.quantity) ||
       !Number.isFinite(line.expectedUnitPrice) || line.expectedUnitPrice < 0) ||
-      !Number.isFinite(total) || total <= 0 || !Number.isFinite(received) ||
+      hasZeroValueLine || !Number.isFinite(total) || total <= 0 || !Number.isFinite(received) ||
       Math.abs(Math.round(received * 100) - received * 100) > 0.000001 || received < total)) {
       setError('Check basket quantities and enter enough cash before recording the sale.')
       return
@@ -222,16 +224,20 @@ export default function CashCheckout({ userId, dashboard, onExit }: {
       setReceipt(await post<Receipt>(base, request))
     } catch (cause) {
       setError(cause instanceof Error ? cause.message : 'Unable to confirm sale.')
-      // A verified basket rejection after recovery must let the cashier correct the
-      // original cart. Keep other ambiguous/authorization failures pending for lookup.
+      // Verified basket errors can be corrected after recovery; ambiguous outcomes
+      // and access failures keep the original key available for receipt lookup.
+      const editableRejection = cause instanceof ApiResponseError && cause.status === 400 &&
+        (cause.code === 'CASH_SALE_BASKET_CHANGED' || cause.code === 'CASH_SALE_ZERO_VALUE_LINE')
       if (cause instanceof ApiResponseError && [400, 403].includes(cause.status) &&
-        (!pending || (cause.status === 400 && cause.code === 'CASH_SALE_BASKET_CHANGED'))) {
+        (!pending || editableRejection)) {
         try { sessionStorage.removeItem(key) } catch { /* Storage may be unavailable. */ }
         setPending(null)
-        if (cause.code === 'CASH_SALE_BASKET_CHANGED') {
-          setReviewProductId(cause.productId ?? null)
-          setProducts([])
-          setSearch('')
+        if (editableRejection) {
+          if (cause.code === 'CASH_SALE_BASKET_CHANGED') {
+            setReviewProductId(cause.productId ?? null)
+            setProducts([])
+            setSearch('')
+          }
           setShowPayment(false)
           setCash('')
         }
@@ -447,10 +453,14 @@ export default function CashCheckout({ userId, dashboard, onExit }: {
               }}><Trash2 size={16} /></button>
           </li>)}</ul>}
         <div className="pos-basket-checkout">
+          {hasZeroValueLine && <p role="status" className="pos-field-status">
+            A product line rounds to {money(0)}. Increase its quantity or remove it.
+          </p>}
           <div className="pos-subtotal-row"><span>Subtotal</span><strong>{money(total)}</strong></div>
           <div className="pos-total-row"><span>Total Payable</span><strong>{money(total)}</strong></div>
           <button type="button" className="btn btn-primary pos-record-button"
-            disabled={!dashboard.canOperate || busy || needsReview || !basket.length || !Number.isFinite(total) || total <= 0 ||
+            disabled={!dashboard.canOperate || busy || needsReview || hasZeroValueLine ||
+              !basket.length || !Number.isFinite(total) || total <= 0 ||
               basket.some(line => !validQuantity(line.quantity))}
             onClick={() => { setError(''); setShowPayment(true) }}>
             <Banknote size={19} /> Pay / Checkout <ArrowRight size={18} />
