@@ -333,6 +333,139 @@ public sealed class SqlServerTests
         }
     }
 
+
+    [Fact]
+    [Trait("Database", "SqlServer")]
+    public async Task Classified_product_flows_from_purchase_to_stock_and_cash_sale()
+    {
+        var connectionString = Environment.GetEnvironmentVariable("SQLSERVER_TEST_CONNECTION");
+        if (string.IsNullOrWhiteSpace(connectionString)) return;
+
+        using var factory = new WebApplicationFactory<Program>().WithWebHostBuilder(builder =>
+        {
+            builder.UseEnvironment("Development"); // Cash posting is not released outside Development yet.
+            builder.ConfigureServices(services =>
+            {
+                services.RemoveAll<DbContextOptions<AppDbContext>>();
+                services.RemoveAll<IDbContextOptionsConfiguration<AppDbContext>>();
+                services.AddDbContext<AppDbContext>(options => options.UseSqlServer(connectionString));
+            });
+        });
+        using var owner = factory.CreateClient();
+        using var cashier = factory.CreateClient();
+        using var stranger = factory.CreateClient();
+        await RegisterAndLogin(owner, "sql-retail-flow-owner@example.test");
+        await RegisterAndLogin(cashier, "sql-retail-flow-cashier@example.test");
+        await RegisterAndLogin(stranger, "sql-retail-flow-stranger@example.test");
+
+        var businessId = await BusinessFixtures.SeedAsync(factory.Services, owner,
+            "SQL Retail Flow", "sql-retail-flow-20261124");
+        long locationId;
+        using (var scope = factory.Services.CreateScope())
+        {
+            var db = scope.ServiceProvider.GetRequiredService<AppDbContext>();
+            locationId = await db.BusinessLocations.Where(x => x.BusinessId == businessId)
+                .Select(x => x.Id).SingleAsync();
+            var cashierId = await db.Users.Where(x => x.Email == "sql-retail-flow-cashier@example.test")
+                .Select(x => x.Id).SingleAsync();
+            db.BusinessUsers.Add(new BusinessUser
+            {
+                BusinessId = businessId, UserId = cashierId, RoleCode = "Cashier"
+            });
+            await db.SaveChangesAsync();
+        }
+
+        async Task<long> Created(string path, object body)
+        {
+            using var response = await Post(owner, path, body);
+            Assert.Equal(HttpStatusCode.Created, response.StatusCode);
+            return (await response.Content.ReadFromJsonAsync<JsonElement>()).GetProperty("id").GetInt64();
+        }
+
+        var prefix = $"/api/businesses/{businessId}";
+        var groupId = await Created(prefix + "/categories", new { name = "SQL Garments" });
+        var subgroupId = await Created(prefix + "/categories",
+            new { name = "SQL Menswear", parentId = groupId });
+        var categoryId = await Created(prefix + "/categories",
+            new { name = "SQL Shirts", parentId = subgroupId });
+        var brandId = await Created(prefix + "/brands", new { name = "SQL Test Brand" });
+        var unitId = await Created(prefix + "/units",
+            new { name = "Test Pieces", code = "SQPCS" });
+        var productId = await Created(prefix + "/products", new
+        {
+            name = "SQL Blue Shirt", sku = "SQL-BLUE-SHIRT", categoryId, brandId, unitId,
+            salePrice = 80m, taxClassification = ""
+        });
+
+        var byGroup = await owner.GetFromJsonAsync<JsonElement>(
+            prefix + "/products?categoryId=" + groupId);
+        Assert.Contains(byGroup.GetProperty("items").EnumerateArray(),
+            x => x.GetProperty("id").GetInt64() == productId);
+        var product = await owner.GetFromJsonAsync<JsonElement>(prefix + "/products/" + productId);
+        Assert.Equal(brandId, product.GetProperty("brandId").GetInt64());
+        Assert.Equal(categoryId, product.GetProperty("categoryId").GetInt64());
+
+        var supplierId = await Created(prefix + "/suppliers",
+            new { name = "SQL Retail Supplier", phone = "9999999981", email = "" });
+        var orderId = await Created(prefix + "/purchase-orders", new
+        {
+            locationId, supplierId, requestKey = "sql-flow-purchase-20261124",
+            lines = new[] { new { productId, quantity = 1.250m, unitCost = 40m } }
+        });
+        var orderPath = prefix + "/purchase-orders/" + orderId;
+        Assert.Equal(HttpStatusCode.OK,
+            (await Post(owner, orderPath + "/approve", new { })).StatusCode);
+        var order = await owner.GetFromJsonAsync<JsonElement>(orderPath);
+        var orderLineId = order.GetProperty("lines")[0].GetProperty("id").GetInt64();
+        var receivingId = await Created(orderPath + "/receivings", new
+        {
+            requestKey = "sql-flow-receiving-20261124",
+            lines = new[] { new { purchaseOrderLineId = orderLineId, quantity = 1.250m } }
+        });
+        var postPath = orderPath + "/receivings/" + receivingId + "/post";
+        Assert.Equal(HttpStatusCode.OK, (await Post(owner, postPath, new { })).StatusCode);
+        Assert.Equal(HttpStatusCode.OK, (await Post(owner, postPath, new { })).StatusCode);
+
+        var stockPath = prefix + "/stock/locations/" + locationId;
+        var stock = await owner.GetFromJsonAsync<JsonElement>(stockPath + "?search=SQL-BLUE-SHIRT");
+        Assert.Equal(1.250m, stock.GetProperty("items")[0].GetProperty("quantity").GetDecimal());
+        Assert.Equal("SQPCS", stock.GetProperty("items")[0].GetProperty("unitCode").GetString());
+        Assert.Equal(HttpStatusCode.NotFound, (await stranger.GetAsync(stockPath)).StatusCode);
+
+        var cashierCatalog = await cashier.GetFromJsonAsync<JsonElement>(
+            prefix + "/cash-sales/products?locationId=" + locationId + "&search=SQL-BLUE-SHIRT");
+        Assert.Equal(productId, cashierCatalog[0].GetProperty("id").GetInt64());
+        var saleRequest = new
+        {
+            locationId, requestKey = "sql-flow-cash-sale-20261124", tendered = 35m,
+            lines = new[] { new { productId, quantity = 0.375m, expectedUnitPrice = 80m } }
+        };
+        var saleResponse = await Post(cashier, prefix + "/cash-sales", saleRequest);
+        Assert.Equal(HttpStatusCode.OK, saleResponse.StatusCode);
+        var sale = await saleResponse.Content.ReadFromJsonAsync<JsonElement>();
+        Assert.Equal(30m, sale.GetProperty("total").GetDecimal());
+        var saleRetry = await Post(cashier, prefix + "/cash-sales", saleRequest);
+        Assert.Equal(HttpStatusCode.OK, saleRetry.StatusCode);
+        Assert.Equal(sale.GetProperty("id").GetInt64(),
+            (await saleRetry.Content.ReadFromJsonAsync<JsonElement>()).GetProperty("id").GetInt64());
+        Assert.Equal(HttpStatusCode.NotFound,
+            (await stranger.GetAsync(prefix + "/cash-sales/receipts?locationId=" + locationId)).StatusCode);
+
+        using (var scope = factory.Services.CreateScope())
+        {
+            var db = scope.ServiceProvider.GetRequiredService<AppDbContext>();
+            Assert.Equal(0.875m, await db.RetailStockBalances.AsNoTracking()
+                .Where(x => x.BusinessId == businessId && x.LocationId == locationId &&
+                    x.ProductId == productId)
+                .Select(x => x.Quantity).SingleAsync());
+            var movements = await db.RetailStockMovements.AsNoTracking()
+                .Where(x => x.BusinessId == businessId && x.LocationId == locationId &&
+                    x.ProductId == productId)
+                .OrderBy(x => x.Id).Select(x => x.QuantityChange).ToListAsync();
+            Assert.Equal(new[] { 1.250m, -0.375m }, movements);
+        }
+    }
+
     private static async Task RegisterAndLogin(HttpClient client, string email)
     {
         Assert.Equal(HttpStatusCode.OK, (await Post(client, "/api/auth/register",
