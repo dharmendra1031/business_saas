@@ -557,10 +557,10 @@ public sealed class SqlServerTests
         using var secondRace = raceResponses[1];
         var successes = raceResponses.Where(r => r.StatusCode == HttpStatusCode.OK).ToArray();
         Assert.Single(successes);
-        var rejected = raceResponses.Single(r => r.StatusCode != HttpStatusCode.OK);
-        Assert.True(rejected.StatusCode is HttpStatusCode.BadRequest or HttpStatusCode.Conflict,
-            $"Concurrent checkout must reject the oversell; status {(int)rejected.StatusCode}: " +
-            await rejected.Content.ReadAsStringAsync());
+        var raceRejected = raceResponses.Single(r => r.StatusCode != HttpStatusCode.OK);
+        Assert.True(raceRejected.StatusCode is HttpStatusCode.BadRequest or HttpStatusCode.Conflict,
+            $"Concurrent checkout must reject the oversell; status {(int)raceRejected.StatusCode}: " +
+            await raceRejected.Content.ReadAsStringAsync());
 
         var winningKey = firstRace.StatusCode == HttpStatusCode.OK ? firstKey : secondKey;
         var successfulSale = await successes[0].Content.ReadFromJsonAsync<JsonElement>();
