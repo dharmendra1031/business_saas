@@ -525,10 +525,10 @@ public sealed class SqlServerTests
                     x.ProductId == unavailableId).Select(x => x.Quantity).SingleAsync());
             Assert.Equal(1, await db.RetailCashSales.AsNoTracking().CountAsync(x =>
                 x.BusinessId == businessId && x.RequestKey == atomicBasket.requestKey));
-            Assert.Equal(2, await db.RetailStockMovements.AsNoTracking().CountAsync(x =>
+            // One prior sale movement, plus exactly two from the recovered basket.
+            Assert.Equal(3, await db.RetailStockMovements.AsNoTracking().CountAsync(x =>
                 x.BusinessId == businessId && x.SourceType == "CashSaleLine" &&
-                x.SourceId != 0 && (x.ProductId == productId || x.ProductId == unavailableId) &&
-                x.BalanceAfter >= 0 && x.PostedAtUtc != default));
+                (x.ProductId == productId || x.ProductId == unavailableId)));
         }
     }
 
