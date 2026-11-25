@@ -1103,6 +1103,17 @@ public sealed class SqlServerTests
         Assert.Equal("Credit", recoveredCredit.GetProperty("paymentMethod").GetString());
         Assert.Equal(HttpStatusCode.NotFound, (await cashier.GetAsync(creditLookup)).StatusCode);
         Assert.Equal(HttpStatusCode.NotFound, (await stranger.GetAsync(creditLookup)).StatusCode);
+        var registerPath = packSalePath + "/business-receipts?locationId=0&payment=All&search=" + creditId;
+        var register = await owner.GetFromJsonAsync<JsonElement>(registerPath);
+        Assert.Equal(1, register.GetProperty("total").GetInt32());
+        Assert.Equal("Credit", register.GetProperty("items")[0].GetProperty("paymentMethod").GetString());
+        Assert.Equal("Posted", register.GetProperty("items")[0].GetProperty("status").GetString());
+        Assert.Equal(20m, register.GetProperty("totals")[0].GetProperty("credit").GetDecimal());
+        Assert.Equal(HttpStatusCode.NotFound, (await cashier.GetAsync(registerPath)).StatusCode);
+        Assert.Equal(HttpStatusCode.NotFound, (await stranger.GetAsync(registerPath)).StatusCode);
+        var creditDetailPath = creditPath + "/business-invoices/" + creditId + "?locationId=" + locationId;
+        Assert.Equal(creditId, (await owner.GetFromJsonAsync<JsonElement>(creditDetailPath)).GetProperty("id").GetInt64());
+        Assert.Equal(HttpStatusCode.NotFound, (await cashier.GetAsync(creditDetailPath)).StatusCode);
         var creditCashPath = packSalePath + "/business-receipts/" + creditId;
         Assert.Equal(HttpStatusCode.NotFound, (await owner.GetAsync(creditCashPath + "?locationId=" + locationId)).StatusCode);
         Assert.Equal(HttpStatusCode.NotFound, (await owner.GetAsync(creditCashPath + "/pdf?locationId=" + locationId)).StatusCode);

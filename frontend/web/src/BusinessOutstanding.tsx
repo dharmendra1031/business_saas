@@ -34,7 +34,7 @@ export default function BusinessOutstanding({ businessId }: { businessId: number
     <form className="platform-search mb-2" onSubmit={event => { event.preventDefault(); setPage(1); setTerm(search.trim()); setReload(x => x + 1) }}>
       <label>Customer search<input type="search" className="form-control" maxLength={100}
         value={search} onChange={event => setSearch(event.target.value)} placeholder="Name or phone" /></label>
-      <label>Show<select className="form-select" value={overdueOnly ? 'overdue' : 'all'}
+      <label>Show<select aria-label="Show" className="form-select" value={overdueOnly ? 'overdue' : 'all'}
         onChange={event => { setOverdueOnly(event.target.value === 'overdue'); setPage(1) }}>
         <option value="all">All unpaid invoices</option><option value="overdue">Overdue only</option>
       </select></label>

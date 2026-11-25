@@ -31,6 +31,7 @@ public static class RetailCashSales
         var credit = app.MapGroup("/api/businesses/{businessId:long}/credit-sales").RequireAuthorization();
         credit.MapPost("", PostCredit);
         credit.MapGet("/receipt", FindCreditReceipt);
+        credit.MapGet("/business-invoices/{receiptId:long}", BusinessCreditInvoice);
     }
 
     private static async Task<Business?> Shop(AppDbContext db, long businessId, long actor, long locationId,
@@ -72,6 +73,17 @@ public static class RetailCashSales
         if (sale is null) return Results.NotFound();
         var paid = await CreditCollections.PaidAsync(db, businessId, sale.Id) ?? 0m;
         return Results.Ok(Receipt(sale, creditPaid: paid));
+    }
+
+    private static async Task<IResult> BusinessCreditInvoice(long businessId, long receiptId, long locationId,
+        ClaimsPrincipal user, AppDbContext db)
+    {
+        if (await RetailBillingSettingsEndpoints.OwnerId(db, businessId, user) is null)
+            return Results.NotFound();
+        var sale = await db.RetailCashSales.AsNoTracking().Include(x => x.Lines).SingleOrDefaultAsync(x =>
+            x.BusinessId == businessId && x.Id == receiptId && x.LocationId == locationId && x.CreditDueDate != null);
+        if (sale is null) return Results.NotFound();
+        return Results.Ok(Receipt(sale, creditPaid: await CreditCollections.PaidAsync(db, businessId, sale.Id) ?? 0m));
     }
 
     private static async Task<IResult> Latest(long businessId, long locationId, ClaimsPrincipal user, AppDbContext db)
@@ -356,16 +368,94 @@ public static class RetailCashSales
     }
 
     private static async Task<IResult> BusinessReceiptHistory(long businessId, long locationId,
-        ClaimsPrincipal user, AppDbContext db, int page = 1, long? receiptId = null, DateOnly? postedDate = null)
+        ClaimsPrincipal user, AppDbContext db, int page = 1, long? receiptId = null, DateOnly? postedDate = null,
+        DateOnly? fromDate = null, DateOnly? toDate = null, string? search = null,
+        string payment = "Cash", string status = "All")
     {
-        if (!long.TryParse(user.FindFirstValue(ClaimTypes.NameIdentifier), out var actor) ||
-            await Shop(db, businessId, actor, locationId, ownerOnly: true) is not { } business) return Results.NotFound();
-        if (postedDate is null) return await ReadHistory(db, businessId, locationId, page, null, receiptId);
-        if (postedDate.Value.Year is < 1900 or > 9998)
-            return Results.BadRequest(new { message = "Choose a valid receipt date." });
-        var zone = TimeZoneInfo.FindSystemTimeZoneById(business.TimeZoneId);
-        return await ReadHistory(db, businessId, locationId, page, null, receiptId,
-            LocalDateStart(postedDate.Value, zone), LocalDateStart(postedDate.Value.AddDays(1), zone));
+        if (await RetailBillingSettingsEndpoints.OwnerId(db, businessId, user) is null)
+            return Results.NotFound();
+        if (locationId < 0 || locationId > 0 && !await db.BusinessLocations.AnyAsync(x =>
+            x.BusinessId == businessId && x.Id == locationId)) return Results.NotFound();
+        var term = search?.Trim() ?? "";
+        fromDate ??= postedDate;
+        toDate ??= postedDate;
+        if (page is < 1 or > 100000 || receiptId is <= 0 || term.Length > 100 ||
+            fromDate?.Year is < 1900 or > 9998 || toDate?.Year is < 1900 or > 9998 ||
+            fromDate > toDate || payment is not ("All" or "Cash" or "Credit") ||
+            status is not ("All" or "Posted" or "Partial return" or "Returned"))
+            return Results.BadRequest(new { message = "Invalid invoice filters." });
+
+        var zoneId = await db.Businesses.Where(x => x.Id == businessId).Select(x => x.TimeZoneId).SingleAsync();
+        var zone = TimeZoneInfo.FindSystemTimeZoneById(zoneId);
+        var sales = db.RetailCashSales.AsNoTracking().Where(x => x.BusinessId == businessId);
+        if (locationId > 0) sales = sales.Where(x => x.LocationId == locationId);
+        if (receiptId.HasValue) sales = sales.Where(x => x.Id == receiptId.Value);
+        if (fromDate.HasValue)
+        {
+            var start = LocalDateStart(fromDate.Value, zone);
+            sales = sales.Where(x => x.PostedAtUtc >= start);
+        }
+        if (toDate.HasValue)
+        {
+            var end = LocalDateStart(toDate.Value.AddDays(1), zone);
+            sales = sales.Where(x => x.PostedAtUtc < end);
+        }
+        if (payment == "Cash") sales = sales.Where(x => x.CreditDueDate == null);
+        if (payment == "Credit") sales = sales.Where(x => x.CreditDueDate != null);
+        if (term.Length > 0)
+        {
+            var name = term.ToUpperInvariant();
+            if (long.TryParse(term.TrimStart('#'), out var number) && number > 0)
+                sales = sales.Where(x => x.Id == number || (x.CustomerPhone != null && x.CustomerPhone.Contains(term)));
+            else sales = sales.Where(x => (x.CustomerName != null && x.CustomerName.ToUpper().Contains(name)) ||
+                (x.CustomerPhone != null && x.CustomerPhone.Contains(term)));
+        }
+
+        // Quantity comparison is only a completeness test. Each posted return line is
+        // already bounded by its original sale line; never use these sums as stock totals.
+        var sold = db.RetailCashSales.AsNoTracking().Where(x => x.BusinessId == businessId)
+            .SelectMany(x => x.Lines).GroupBy(x => x.SaleId)
+            .Select(g => new { SaleId = g.Key, Quantity = g.Sum(x => x.Quantity) });
+        var returned = db.RetailCashReturns.AsNoTracking().Where(x => x.BusinessId == businessId)
+            .SelectMany(x => x.Lines, (header, line) => new { header.SaleId, line.Quantity })
+            .GroupBy(x => x.SaleId).Select(g => new { SaleId = g.Key, Quantity = (decimal?)g.Sum(x => x.Quantity) });
+
+        var query = from sale in sales
+                    join original in sold on sale.Id equals original.SaleId
+                    join refund in returned on sale.Id equals refund.SaleId into refunds
+                    from refund in refunds.DefaultIfEmpty()
+                    let returnedQuantity = refund.Quantity ?? 0m
+                    let returnStatus = returnedQuantity == 0 ? "Posted" :
+                        returnedQuantity >= original.Quantity ? "Returned" : "Partial return"
+                    where status == "All" || returnStatus == status
+                    select new { sale.Id, sale.LocationId, sale.LocationName, sale.CustomerId, sale.CustomerName,
+                        sale.CurrencyCode, sale.Total, sale.PostedAtUtc, sale.CreditDueDate,
+                        Status = returnStatus };
+
+        await using var tx = await db.Database.BeginTransactionAsync(IsolationLevel.Serializable);
+        try
+        {
+            var total = await query.CountAsync();
+            var totals = await query.GroupBy(x => x.CurrencyCode).Select(g => new {
+                CurrencyCode = g.Key, Total = g.Sum(x => x.Total),
+                Cash = g.Sum(x => x.CreditDueDate == null ? x.Total : 0m),
+                Credit = g.Sum(x => x.CreditDueDate != null ? x.Total : 0m)
+            }).OrderBy(x => x.CurrencyCode).ToListAsync();
+            const int pageSize = 10;
+            var items = await query.OrderByDescending(x => x.Id).Skip((page - 1) * pageSize)
+                .Take(pageSize).ToListAsync();
+            await tx.CommitAsync();
+            return Results.Ok(new { total, page, pageSize, totals,
+                items = items.Select(x => new { x.Id, x.LocationId, x.LocationName, x.CustomerId, x.CustomerName,
+                    x.CurrencyCode, x.Total, PostedAtUtc = DateTime.SpecifyKind(x.PostedAtUtc, DateTimeKind.Utc),
+                    x.Status, PaymentMethod = x.CreditDueDate == null ? "Cash" : "Credit",
+                    PrintAvailable = x.CreditDueDate == null && OperatingSystem.IsWindows() }),
+                hasMore = (long)page * pageSize < total });
+        }
+        catch (Exception error) when (StockPosting.IsSqlConflict(error))
+        {
+            return Results.Conflict(new { message = "Invoices are being updated. Refresh the register." });
+        }
     }
 
     private static DateTime LocalDateStart(DateOnly date, TimeZoneInfo zone)

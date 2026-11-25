@@ -269,8 +269,9 @@ export default function CashReceipt({ receipt, businessName, timeZone, pdfPath, 
 }) {
   const [showEstimate, setShowEstimate] = useState(() => !!returnEstimate && !!readPending(returnEstimate).request)
   const money = (amount: number) => receipt.currencyCode + ' ' + amount.toFixed(2)
-  return <section className="content-section" aria-label="Cash receipt">
-    <h2>Cash receipt #{receipt.id}</h2>
+  const credit = receipt.paymentMethod === 'Credit'
+  return <section className="content-section" aria-label={credit ? 'Credit invoice' : 'Cash receipt'}>
+    <h2>{credit ? 'Credit invoice' : 'Cash receipt'} #{receipt.id}</h2>
     <p>{receipt.businessName ?? businessName} · {new Date(receipt.postedAtUtc).toLocaleString(undefined, { timeZone: receipt.timeZoneId ?? timeZone })}</p>
     <p className="small mb-2">
       {receipt.locationName && <>Location: <strong>{receipt.locationName}</strong> · </>}
@@ -293,10 +294,12 @@ export default function CashReceipt({ receipt, businessName, timeZone, pdfPath, 
         </tr>)}</tbody>
       </table>
     </div>
-    <p><strong>Total {money(receipt.total)}</strong><br />Cash received {money(receipt.tendered)}<br />
-      Change {money(receipt.tendered - receipt.total)}</p>
+    {credit ? <p><strong>Total {money(receipt.total)}</strong><br />
+      Outstanding {money(receipt.outstanding ?? receipt.total)}<br />Due date: {receipt.creditDueDate}</p> :
+      <p><strong>Total {money(receipt.total)}</strong><br />Cash received {money(receipt.tendered)}<br />
+      Change {money(receipt.tendered - receipt.total)}</p>}
     {printNotice && <p role="status" className="small text-body-secondary">{printNotice}</p>}
-    {receipt.printAvailable
+    {credit ? <p className="small" role="status">Credit invoice printing is not released yet.</p> : receipt.printAvailable
       ? <a className="btn btn-outline-secondary me-2" href={pdfPath} target="_blank" rel="noopener noreferrer">Print receipt</a>
       : <p className="small text-body-secondary" role="status">RDLC printing requires a Windows report host.</p>}
     {returnEstimate && returnEstimate.canOperate && <button type="button" className="btn btn-outline-secondary me-2" aria-expanded={showEstimate}

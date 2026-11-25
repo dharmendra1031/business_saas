@@ -86,7 +86,7 @@ export default function BusinessPreview({ module, dashboard, userId, onBillingUp
 
     <section className="content-section business-preview-content" role="tabpanel">
       <h3>{selected.title}</h3>
-      <p className="business-preview-description">{dailySales ? 'Gross cash sales, refunds and net cash sales.' : selected.description}</p>
+      {!postedSales && <p className="business-preview-description">{dailySales ? 'Gross cash sales, refunds and net cash sales.' : selected.description}</p>}
       {postedSales ? <BusinessPostedSales dashboard={dashboard} userId={userId} /> :
         dailySales ? <BusinessDailySales dashboard={dashboard} /> :
         outstanding ? <BusinessOutstanding businessId={dashboard.business.id} /> : receiptSettings ?

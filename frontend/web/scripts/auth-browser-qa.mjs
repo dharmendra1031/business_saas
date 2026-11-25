@@ -2046,13 +2046,17 @@ try {
       if (label === 'Sales & Returns') {
         await t.page.route('**/api/businesses/1/cash-sales/business-receipts?*', route => {
           const params = new URL(route.request().url()).searchParams
-          assert.equal(params.get('locationId'), '1')
-          return response(route, 200, { items: params.get('receiptId') === '42' && params.get('postedDate') === '2026-11-23'
-            ? [{ id: 42, total: 24, currencyCode: 'INR', postedAtUtc: '2026-11-23T06:00:00Z' }]
-            : [], hasMore: false })
+          assert.equal(params.get('locationId'), '0')
+          const matched = params.get('search') === '42' && params.get('fromDate') === '2026-11-23' && params.get('toDate') === '2026-11-23'
+          return response(route, 200, { items: matched
+            ? [{ id: 42, locationId: 1, locationName: 'Main Shop', customerName: 'Sample Customer',
+                paymentMethod: 'Cash', status: 'Partial return', printAvailable: true,
+                total: 24, currencyCode: 'INR', postedAtUtc: '2026-11-23T06:00:00Z' }]
+            : [], total: matched ? 1 : 0, pageSize: 10, totals: matched ? [{ currencyCode: 'INR', total: 24, cash: 24, credit: 0 }] : [], hasMore: false })
         })
-        await t.page.getByLabel('Receipt number').fill('42')
-        await t.page.getByLabel('Posted date').fill('2026-11-23')
+        await t.page.getByLabel('Invoice / customer').fill('42')
+        await t.page.getByLabel('From date').fill('2026-11-23')
+        await t.page.getByLabel('To date').fill('2026-11-23')
         await t.page.getByRole('button', { name: 'Search', exact: true }).click()
         await t.page.getByRole('row').filter({ hasText: '#42' }).getByText('INR 24.00').waitFor()
         let postedReturn = null
@@ -2155,8 +2159,9 @@ try {
         await receipt.getByRole('button', { name: 'Estimate return' }).click()
         await receipt.getByText('Sold: 0.25 · Returned: 0.175 · Remaining: 0.075 KG', { exact: true }).waitFor()
         await receipt.getByRole('button', { name: 'Back to receipts' }).click()
-        assert.equal(await t.page.getByLabel('Receipt number').inputValue(), '42')
-        assert.equal(await t.page.getByLabel('Posted date').inputValue(), '2026-11-23')
+        assert.equal(await t.page.getByLabel('Invoice / customer').inputValue(), '42')
+        assert.equal(await t.page.getByLabel('From date').inputValue(), '2026-11-23')
+        assert.equal(await t.page.getByLabel('To date').inputValue(), '2026-11-23')
       }
       if (label === 'Reports') {
         await t.page.route('**/api/businesses/1/cash-sales/daily-report?*', route => {
