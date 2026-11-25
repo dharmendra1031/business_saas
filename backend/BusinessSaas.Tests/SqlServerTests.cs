@@ -1097,6 +1097,12 @@ public sealed class SqlServerTests
         Assert.Equal(creditId, ledger.GetProperty("items")[0].GetProperty("id").GetInt64());
         Assert.Equal(HttpStatusCode.NotFound, (await cashier.GetAsync(creditLedgerPath)).StatusCode);
         Assert.Equal(HttpStatusCode.NotFound, (await stranger.GetAsync(creditLedgerPath)).StatusCode);
+        var creditLookup = creditPath + "/receipt?locationId=" + locationId + "&requestKey=" + creditRequest.requestKey;
+        var recoveredCredit = await owner.GetFromJsonAsync<JsonElement>(creditLookup);
+        Assert.Equal(creditId, recoveredCredit.GetProperty("id").GetInt64());
+        Assert.Equal("Credit", recoveredCredit.GetProperty("paymentMethod").GetString());
+        Assert.Equal(HttpStatusCode.NotFound, (await cashier.GetAsync(creditLookup)).StatusCode);
+        Assert.Equal(HttpStatusCode.NotFound, (await stranger.GetAsync(creditLookup)).StatusCode);
         var creditCashPath = packSalePath + "/business-receipts/" + creditId;
         Assert.Equal(HttpStatusCode.NotFound, (await owner.GetAsync(creditCashPath + "?locationId=" + locationId)).StatusCode);
         Assert.Equal(HttpStatusCode.NotFound, (await owner.GetAsync(creditCashPath + "/pdf?locationId=" + locationId)).StatusCode);

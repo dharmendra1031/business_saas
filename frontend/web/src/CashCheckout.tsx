@@ -129,6 +129,9 @@ export default function CashCheckout({ userId, dashboard, onExit }: {
   const hasUnsupportedAmount = !Number.isSafeInteger(totalCents) || totalCents > maxExactCents
   const total = hasUnsupportedAmount ? NaN : totalCents / 100
   const hasZeroValueLine = lineAmounts.some(amount => amount === 0)
+
+  // Confirmation applies to the currently selected customer, basket and location.
+  useEffect(() => { setCreditConfirmed(false) }, [basket, customer, locationId])
   const money = (amount: number) => Number.isFinite(amount)
     ? (business.currencyCode === 'INR' ? '₹' : business.currencyCode + ' ') + amount.toFixed(2) : '—'
 
@@ -401,6 +404,7 @@ export default function CashCheckout({ userId, dashboard, onExit }: {
       const initialRejection = !pending && cause instanceof ApiResponseError &&
         [400, 403].includes(cause.status)
       if (initialRejection || editableRejection) {
+        if (isCredit) setCreditConfirmed(false)
         try { sessionStorage.removeItem(key) } catch { /* Storage may be unavailable. */ }
         setPending(null)
         if (editableRejection) {
