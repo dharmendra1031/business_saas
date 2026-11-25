@@ -52,6 +52,10 @@ Counts: {"Partial":101,"Pending":53,"Deferred":36}.
 - BS-183: dependency review baseline; full security audit pending.
 - BS-187: SQL concurrency regression baseline; target workload benchmark pending.
 
+### Phase 1 — reconciliation regression
+
+- BS-090 / BS-116 / BS-129: extended the existing SQL Server purchase-to-sale integration scenario to reconcile all product/location stock balances against signed stock movements after cash sales, credit sales, returns and retries. CI and full acceptance pending; no production logic changed.
+
 ## Non-negotiable rule — UI/UX review **after EVERY task**
 
 > **No task is DONE until its code and tests pass AND the resulting user flow is checked for clarity, usability and regressions.** A successful build alone is not task completion.

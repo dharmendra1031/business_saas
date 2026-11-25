@@ -1363,6 +1363,22 @@ public sealed class SqlServerTests(Xunit.Abstractions.ITestOutputHelper output)
                 x.LocationId == locationId && x.ProductId == reportRaceProduct).Select(x => x.Quantity).SingleAsync());
             Assert.Equal(1, await db.RetailStockMovements.CountAsync(x => x.BusinessId == businessId &&
                 x.ProductId == reportRaceProduct && x.SourceType == "CashSaleLine"));
+
+            // Reconcile every product/location in this isolated business, not just
+            // the individual sale and return examples above.
+            var balances = await db.RetailStockBalances.AsNoTracking()
+                .Where(x => x.BusinessId == businessId)
+                .Select(x => new { x.LocationId, x.ProductId, x.Quantity })
+                .ToListAsync();
+            var movements = await db.RetailStockMovements.AsNoTracking()
+                .Where(x => x.BusinessId == businessId)
+                .GroupBy(x => new { x.LocationId, x.ProductId })
+                .Select(g => new { g.Key.LocationId, g.Key.ProductId, Quantity = g.Sum(x => x.QuantityChange) })
+                .ToListAsync();
+            Assert.NotEmpty(balances);
+            Assert.Equal(balances.OrderBy(x => x.LocationId).ThenBy(x => x.ProductId).ToArray(),
+                movements.OrderBy(x => x.LocationId).ThenBy(x => x.ProductId).ToArray());
+            Assert.All(balances, x => Assert.True(x.Quantity >= 0m));
         }
     }
 
