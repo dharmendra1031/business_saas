@@ -2,7 +2,7 @@ import { useEffect, useRef, useState, type FormEvent } from 'react'
 import { api, post, SessionExpiredError } from './api'
 import PlatformBilling from './PlatformBilling'
 import { ActionButton, useActionFeedback } from './ActionFeedback'
-import { BadgeCheck, Building2, CheckCircle2, CreditCard, RefreshCw, Store, Users } from 'lucide-react'
+import { BadgeCheck, CreditCard, RefreshCw } from 'lucide-react'
 
 interface PlanDraft {
   id: number
@@ -210,17 +210,17 @@ export default function PlatformPlans({ business, onChooseBusiness }: { business
         onClick={() => setReload(value => value + 1)}>Retry</button>}
     </div>}
     <div className="platform-preview-tabs platform-plan-tabs" role="tablist" aria-label="Plans and billing">
-      <button type="button" role="tab" disabled={busy} aria-selected={activeTab === 'catalog'}
+      <button type="button" role="tab" disabled={busy || !!editing || !!publishing} aria-selected={activeTab === 'catalog'}
         className={activeTab === 'catalog' ? 'is-active' : ''}
         onClick={() => { setEditing(null); setPublishing(null); setActiveTab('catalog') }}><BadgeCheck size={17} /> Plan Catalog</button>
-      <button type="button" role="tab" disabled={busy} aria-selected={activeTab === 'billing'}
+      <button type="button" role="tab" disabled={busy || !!editing || !!publishing} aria-selected={activeTab === 'billing'}
         className={activeTab === 'billing' ? 'is-active' : ''}
         onClick={() => { setEditing(null); setPublishing(null); setActiveTab('billing') }}>
         <CreditCard size={17} /> Billing Drafts
       </button>
     </div>
     {activeTab === 'billing' ? <PlatformBilling business={business} onChooseBusiness={onChooseBusiness} /> : <>
-    <section className="content-section platform-plans-section">
+    {!editing && !publishing && <section className="content-section platform-plans-section">
       <div className="platform-plans-intro">
         <div><h2>Subscription Plans</h2>
           <p>Published prices, actual assigned-business counts and version history.</p></div>
@@ -229,46 +229,18 @@ export default function PlatformPlans({ business, onChooseBusiness }: { business
       {loading ? <div className="platform-directory-loading" role="status">
         <span className="spinner-border spinner-border-sm" aria-hidden="true" /> Loading subscription plans…
       </div> : data && <>
-        <div className="platform-plan-cards" aria-label="Subscription plan summary">
-          {data.items.map(plan => {
-            const published = plan.published
-            return <article className="platform-plan-card" key={plan.code}>
-              <div className="platform-plan-card-top">
-                <span className="platform-plan-card-icon"><BadgeCheck size={20} /></span>
-                <span className={`platform-state-pill ${published ? 'is-active' : 'is-muted'}`}>
-                  {published ? `Published v${published.version}` : 'Not published'}
-                </span>
-              </div>
-              <h3>{plan.name}</h3>
-              <p>{plan.isPublic ? 'Public subscription plan' : 'Custom / contracted offering'}</p>
-              <div className="platform-plan-card-price">
-                <strong>{planMoney(published?.monthlyPrice ?? null, published?.currencyCode ?? null)}</strong>
-                {published && <small>/ month</small>}
-              </div>
-              <div className="platform-plan-card-details">
-                <div><Building2 size={15} /><span>Businesses</span><strong>{plan.assignedBusinesses.toLocaleString()}</strong></div>
-                <div><Store size={15} /><span>Locations</span><strong>{published?.maxLocations ?? 'Not set'}</strong></div>
-                <div><Users size={15} /><span>Users</span><strong>{published?.maxUsers ?? 'Not set'}</strong></div>
-                <div><CheckCircle2 size={15} /><span>Draft</span><strong>{plan.draft ? `v${plan.draft.revision}` : 'None'}</strong></div>
-              </div>
-              <button type="button" className="btn btn-outline-secondary btn-sm w-100"
-                disabled={busy} onClick={() => openDraft(plan)}>Configure Draft</button>
-            </article>
-          })}
-        </div>
-        <div className="platform-plan-table-heading">
-          <h3>Plan Catalog & Versions</h3>
-          <p>Draft edits and publishing use existing audited platform operations.</p>
-        </div>
         <div className="table-responsive">
           <table className="table platform-table align-middle">
-            <thead><tr><th>Plan</th><th>Visibility</th><th>Assigned Businesses</th>
+            <thead><tr><th>Plan</th><th>Visibility</th><th>Businesses</th>
+              <th>Monthly price</th><th>Limits (locations / users)</th>
               <th>Draft</th><th>Published Catalog</th><th className="text-end">Actions</th></tr></thead>
             <tbody>{data.items.map(plan => <tr key={plan.code}>
               <td><strong>{plan.name}</strong>
                 <small className="d-block text-secondary">{plan.code}</small></td>
               <td>{plan.isPublic ? 'Public plan' : 'Custom / Contact Sales'}</td>
               <td>{plan.assignedBusinesses.toLocaleString()}</td>
+              <td className="text-nowrap">{planMoney(plan.published?.monthlyPrice ?? null, plan.published?.currencyCode ?? null)}</td>
+              <td>{plan.published?.maxLocations ?? '—'} / {plan.published?.maxUsers ?? '—'}</td>
               <td>{plan.draft ? `Draft v${plan.draft.revision}` : 'Not created'}</td>
               <td>{plan.published ? `Version ${plan.published.version}` : 'Not published'}</td>
               <td className="text-end">
@@ -289,7 +261,7 @@ export default function PlatformPlans({ business, onChooseBusiness }: { business
           {data.unknownPlanAssignments} businesses have plan codes outside this catalog.
         </div>}
       </>}
-    </section>
+    </section>}
 
     {publishing?.draft && <section ref={actionSection} className="content-section mt-3 platform-plan-action-panel" aria-label="Publish plan">
       <h2>Publish {publishing.name} — Version {(publishing.published?.version ?? 0) + 1}</h2>
@@ -328,15 +300,7 @@ export default function PlatformPlans({ business, onChooseBusiness }: { business
       </form>
     </section>}
 
-    <section className="content-section mt-3" aria-label="Subscription billing">
-      <h2>Subscription Billing</h2>
-      <p className="text-secondary mb-0">
-        Captured gateway payments, processed refunds and subscription access changes are tracked
-        in the billing reconciliation workflow. Invoice and credit-note drafts are internal
-        documents only; statutory invoice issuance is not enabled. Publishing a plan
-        alone does not charge a customer or activate access.
-      </p>
-    </section>
+
 
     {editing && <section ref={actionSection} className="content-section mt-3 platform-plan-action-panel" aria-label="Edit plan draft">
       <h2>{editing.name} — Draft Configuration</h2>

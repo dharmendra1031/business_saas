@@ -3268,6 +3268,7 @@ try {
       await verification.selectOption('true')
       await t.page.getByRole('button', { name: 'View customer owner@example.test' }).click()
       await t.page.getByRole('heading', { name: 'Customer Details' }).waitFor()
+      assert.equal(await t.page.locator('.platform-customer-summary').count(), 0)
       const ownedBusiness = t.page.getByRole('row').filter({ hasText: 'Matching Retail' })
       await ownedBusiness.getByRole('cell', { name: 'Inactive', exact: true }).waitFor()
       assert.equal(await ownedBusiness.getByRole('cell', { name: 'Active', exact: true }).count(), 0)
@@ -3284,7 +3285,17 @@ try {
     eligible = true
     await t.page.getByRole('button', { name: 'Retry', exact: true }).click()
     await t.page.getByLabel('Business Name').fill('QA Retail Shop')
-    await t.page.getByLabel('Business Type').selectOption('1')
+    const provisionLayout = () => t.page.locator('.provision-form').evaluate(form => {
+      const bounds = form.getBoundingClientRect()
+      return { width: bounds.width, height: bounds.height, scrollHeight: document.documentElement.scrollHeight }
+    })
+    const beforeLookup = await provisionLayout()
+    await t.page.locator('#provision-type').click()
+    const typeDialog = t.page.getByRole('dialog', { name: 'Select business type' })
+    await typeDialog.waitFor()
+    assert.deepEqual(await provisionLayout(), beforeLookup, 'Business type lookup must not resize the creation form')
+    await t.page.locator('#provision-type-search-option-1').click()
+    await typeDialog.waitFor({ state: 'hidden' })
     await t.page.getByLabel('Country').selectOption('IN')
     assert.equal(await t.page.getByLabel('Currency').inputValue(), 'INR')
     assert.equal(await t.page.getByLabel('Timezone').inputValue(), 'Asia/Kolkata')

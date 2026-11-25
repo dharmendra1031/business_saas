@@ -1,5 +1,5 @@
 import { useEffect, useState, type FormEvent } from 'react'
-import { ArrowLeft, ArrowRight, Building2, CheckCircle2, Mail, RefreshCw, Search, ShieldCheck, UserRound, Users, XCircle } from 'lucide-react'
+import { ArrowLeft, ArrowRight, Building2, CheckCircle2, RefreshCw, Search, ShieldCheck, UserRound, Users, XCircle } from 'lucide-react'
 import { api, SessionExpiredError } from './api'
 
 interface Customer {
@@ -110,25 +110,11 @@ export default function PlatformCustomers({ onViewBusiness }: { onViewBusiness: 
       <span className="platform-customer-avatar is-large" aria-hidden="true"><UserRound size={29} /></span>
       <div className="platform-customer-profile-info">
         <h2>{details.email}</h2>
-        <p>Customer ID #{details.id}</p>
+        <p>{details.businesses.length} linked {details.businesses.length === 1 ? 'business' : 'businesses'}</p>
         <VerificationBadge confirmed={details.emailConfirmed} />
       </div>
       <span className="platform-customer-account-state"><ShieldCheck size={16} /> Read-only access</span>
     </section>
-    <div className="platform-customer-summary">
-      <section className="content-section">
-        <span className="platform-kicker">REGISTERED ACCOUNT</span>
-        <div className="platform-customer-summary-value"><Mail size={21} /> Verified email</div>
-        <strong>{details.emailConfirmed ? 'Yes' : 'No'}</strong>
-        <small>Server-reported contact verification</small>
-      </section>
-      <section className="content-section">
-        <span className="platform-kicker">BUSINESS OWNERSHIP</span>
-        <div className="platform-customer-summary-value"><Building2 size={21} /> Linked businesses</div>
-        <strong>{details.businesses.length.toLocaleString()}</strong>
-        <small>Businesses linked to this account by the platform</small>
-      </section>
-    </div>
     <section className="content-section platform-directory-card" aria-label="Owned businesses">
       <div className="platform-directory-heading">
         <div><h2>Associated Businesses</h2><p>Subscription and ownership metadata only</p></div>
@@ -229,13 +215,13 @@ export default function PlatformCustomers({ onViewBusiness }: { onViewBusiness: 
           <p>{list.items.length ?
             `Showing ${(page - 1) * list.pageSize + 1}–${(page - 1) * list.pageSize + list.items.length} of ${list.total}` :
             `No customer accounts on page ${page}`}</p>
-          <div className="platform-directory-pages">
+          {(page > 1 || page * list.pageSize < list.total) && <div className="platform-directory-pages">
             <button type="button" className="btn btn-outline-secondary btn-sm"
               disabled={page <= 1} onClick={() => setPage(value => value - 1)}>Previous</button>
             <span>Page {page}</span>
             <button type="button" className="btn btn-outline-secondary btn-sm"
               disabled={page * list.pageSize >= list.total} onClick={() => setPage(value => value + 1)}>Next</button>
-          </div>
+          </div>}
         </div>
       </>}
     </section>

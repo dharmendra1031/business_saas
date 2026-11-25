@@ -406,13 +406,13 @@ export default function PlatformBilling({ business, onChooseBusiness }: { busine
             </div>
             <div className="d-flex justify-content-between align-items-center mt-3 gap-2">
               <span className="small text-secondary">{records.total} drafts · Page {page}</span>
-              <div className="d-flex gap-2">
+              {(page > 1 || page * records.pageSize < records.total) && <div className="d-flex gap-2">
                 <button className="btn btn-outline-secondary btn-sm" type="button"
                   disabled={page === 1} onClick={() => setPage(p => p - 1)}>Previous</button>
                 <button className="btn btn-outline-secondary btn-sm" type="button"
                   disabled={page * records.pageSize >= records.total}
                   onClick={() => setPage(p => p + 1)}>Next</button>
-              </div>
+              </div>}
             </div>
           </>}
     </section>
@@ -451,7 +451,7 @@ export default function PlatformBilling({ business, onChooseBusiness }: { busine
             </tr>)}</tbody>
           </table>
         </div>}
-      {payments && payments.total > 0 && <div className="d-flex justify-content-between align-items-center gap-2 mt-3">
+      {payments && (paymentPage > 1 || paymentPage * payments.pageSize < payments.total) && <div className="d-flex justify-content-between align-items-center gap-2 mt-3">
         <span className="small text-secondary">{payments.total} payment requests · Page {paymentPage}</span>
         <div className="d-flex gap-2">
           <button className="btn btn-outline-secondary btn-sm" type="button"
@@ -492,7 +492,7 @@ export default function PlatformBilling({ business, onChooseBusiness }: { busine
       {reconciliation && <p className="small text-secondary">
         Showing {reconciliation.items.length} of {reconciliation.total} captured payments · Page {reconciliationPage}.
       </p>}
-      {reconciliation && reconciliation.total > 0 && <div className="d-flex gap-2 mt-2">
+      {reconciliation && (reconciliationPage > 1 || reconciliationPage * reconciliation.pageSize < reconciliation.total) && <div className="d-flex gap-2 mt-2">
         <button className="btn btn-outline-secondary btn-sm" type="button"
           disabled={busy || reconciliationPage === 1}
           onClick={() => setReconciliationPage(n => n - 1)}>Previous captures</button>

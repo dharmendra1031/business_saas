@@ -1,4 +1,5 @@
 import { useEffect, useState, type FormEvent } from 'react'
+import { MasterLookup } from './LookupDialog'
 import { ArrowLeft, ArrowRight, Building2, CheckCircle2, ShieldCheck, Store, UserRound } from 'lucide-react'
 import { api, ApiResponseError, operationKey, post, SessionExpiredError, type BusinessMarket, type BusinessType } from './api'
 
@@ -177,7 +178,7 @@ export default function PlatformCreateBusiness({ onCancel, onCreated }: {
       </div>)}
     </nav>
 
-    <div className="provision-grid">
+    <div>
       <section className="content-section provision-form" aria-labelledby="provision-title">
         {error && <div role="alert" className="alert alert-danger">{error}</div>}
         {loadError && <div role="alert" className="alert alert-danger">{loadError}
@@ -202,11 +203,8 @@ export default function PlatformCreateBusiness({ onCancel, onCreated }: {
               </div>
               <div>
                 <label className="form-label" htmlFor="provision-type">Business Type *</label>
-                <select id="provision-type" className="form-select" required value={typeId}
-                  onChange={event => setTypeId(Number(event.target.value))}>
-                  <option value={0}>Select a supported type</option>
-                  {types.map(type => <option key={type.id} value={type.id}>{type.name}</option>)}
-                </select>
+                <MasterLookup id="provision-type" title="Select business type" value={typeId}
+                  options={types} emptyLabel="Select business type" onChange={setTypeId} />
               </div>
               <div>
                 <label className="form-label" htmlFor="provision-country">Country *</label>
@@ -251,7 +249,7 @@ export default function PlatformCreateBusiness({ onCancel, onCreated }: {
           <form onSubmit={event => void verifyOwner(event)}>
             <label className="form-label" htmlFor="provision-owner">Owner Email Address *</label>
             <input id="provision-owner" type="email" className="form-control" required autoFocus
-              maxLength={254} value={ownerEmail}
+              maxLength={254} value={ownerEmail} disabled={busy}
               placeholder="owner@company.com"
               onChange={event => {
                 setOwnerEmail(event.target.value)
@@ -260,7 +258,7 @@ export default function PlatformCreateBusiness({ onCancel, onCreated }: {
                 setInvitedEmail('')
                 setError('')
               }} />
-            <p className="field-help">The Owner must accept the email invitation and set a password before you can assign the business. Accounts are not automatically created.</p>
+            <p className="field-help">Only an email-verified Owner can be assigned.</p>
             {invitedEmail && <div className="alert alert-success" role="status">
               Invitation emailed to {invitedEmail}. Ask the Owner to complete setup, then select Verify Owner.
             </div>}
@@ -269,7 +267,7 @@ export default function PlatformCreateBusiness({ onCancel, onCreated }: {
               <p className="field-help">An invitation email will be sent only if secure mail delivery is configured. The link expires after 48 hours.</p>
               <label className="form-label" htmlFor="owner-invite-reason">Reason (audit log)</label>
               <textarea id="owner-invite-reason" className="form-control" rows={2}
-                minLength={10} maxLength={200} value={invitationReason}
+                minLength={10} maxLength={200} value={invitationReason} disabled={busy}
                 placeholder="Reason for inviting this Owner"
                 onChange={event => setInvitationReason(event.target.value)} />
               <button type="button" className="btn btn-outline-primary mt-2"
@@ -346,16 +344,7 @@ export default function PlatformCreateBusiness({ onCancel, onCreated }: {
         </>}
       </section>
 
-      <aside className="content-section provision-aside" aria-label="Business creation guidance">
-        <span className="provision-side-kicker">PLATFORM SETUP</span>
-        <h2>One business. One secure workspace.</h2>
-        <p>The new business will be independent from other platform customers. Its Owner only gets their own permitted operations.</p>
-        <div className="provision-side-row"><CheckCircle2 size={17} /> Separate Business ID</div>
-        <div className="provision-side-row"><CheckCircle2 size={17} /> Owner membership</div>
-        <div className="provision-side-row"><CheckCircle2 size={17} /> First shop location</div>
-        <div className="provision-side-row"><CheckCircle2 size={17} /> Trial & audit record</div>
-        <div className="provision-side-warning">Existing verified owners only. Pending owner invitations and paid plan selection will be added with their secure backend flows.</div>
-      </aside>
+
     </div>
   </div>
 }
