@@ -1,7 +1,7 @@
 import { useEffect, useLayoutEffect, useRef, useState, type FormEvent } from 'react'
 import { ArrowLeft, ArrowRight, Banknote, Check, Minus, Package, Plus, ReceiptText, Search, ShoppingBag, Trash2 } from 'lucide-react'
 import PosCashPaymentDialog from './PosCashPaymentDialog'
-import LookupDialog from './LookupDialog'
+import LookupDialog, { MasterLookup } from './LookupDialog'
 import { maxExactCents, moneyCents } from './posMoney'
 import { baseQuantity } from './stockQuantity'
 import CashReceipt, { type Receipt } from './CashReceipt'
@@ -218,7 +218,7 @@ export default function CashCheckout({ userId, dashboard, onExit }: {
       if (event.defaultPrevented || event.repeat || event.isComposing ||
         event.ctrlKey || event.altKey || event.metaKey || event.shiftKey ||
         lock.current || scanLock.current) return
-      if (customerOpen || productOpen || newCustomerOpen) { if (['F2', 'F4', 'F9'].includes(event.key)) event.preventDefault(); return }
+      if (customerOpen || productOpen || newCustomerOpen || document.querySelector('dialog[open]')) { if (['F2', 'F4', 'F9'].includes(event.key)) event.preventDefault(); return }
       if (event.key === 'F2') {
         event.preventDefault()
         if (historyPage) setHistoryPage(0)
@@ -565,15 +565,14 @@ export default function CashCheckout({ userId, dashboard, onExit }: {
           <span className="pos-count-pill">{productsLoading ? 'Loading…' : `${products.length} shown`}</span>
         </div>
         <div className="pos-location-row">
-          <label className="form-label" htmlFor="pos-location">Store location
-            <select id="pos-location" className="form-select" value={locationId}
-              disabled={busy || scanBusy || basket.length > 0} onChange={event => {
-                setHistoryPage(0)
-                setLocation(Number(event.target.value))
-              }}>
-              {locations.map(location => <option key={location.id} value={location.id}>{location.name}</option>)}
-            </select>
-          </label>
+          <div className="pos-location-field">
+            <label className="form-label mb-0" htmlFor={locations.length > 1 ? 'pos-location' : undefined}>Store location</label>
+            {locations.length === 1 ? <strong>{locations[0].name}</strong> :
+              <MasterLookup id="pos-location" title="Select store location" value={locationId}
+                emptyLabel="Select location" options={locations}
+                disabled={busy || scanBusy || basket.length > 0 || !locations.length}
+                onChange={id => { setHistoryPage(0); setLocation(id); setCustomer(null) }} />}
+          </div>
           <button type="button" className="btn btn-outline-secondary btn-sm" disabled={busy || scanBusy || !locationId}
             aria-expanded={historyPage > 0} aria-controls="pos-receipt-history"
             onClick={() => setHistoryPage(page => page ? 0 : 1)}>

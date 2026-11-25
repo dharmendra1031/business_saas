@@ -1,4 +1,5 @@
 import { Fragment, useEffect, useState } from 'react'
+import { MasterLookup } from './LookupDialog'
 import { api, SessionExpiredError, type RetailDashboard } from './api'
 import CashReceipt, { type Receipt } from './CashReceipt'
 
@@ -77,11 +78,9 @@ export default function BusinessReturns({ dashboard }: { dashboard: RetailDashbo
       event.preventDefault()
       if (!invalidDate) { setApplied({ ...filters }); setPage(1); setReload(x => x + 1) }
     }}>
-      <label>Location<select aria-label="Location" className="form-select form-select-sm" value={filters.locationId}
-        onChange={event => change('locationId', Number(event.target.value))}>
-        <option value={0}>All locations</option>
-        {locations.map(location => <option key={location.id} value={location.id}>{location.name}</option>)}
-      </select></label>
+      <div><label className="form-label" htmlFor="returns-location">Location</label>
+        <MasterLookup id="returns-location" title="Select location" value={filters.locationId} emptyLabel="All locations"
+          options={[{ id: 0, name: 'All locations' }, ...locations]} onChange={id => change('locationId', id)} /></div>
       <label>Return / invoice / customer<input className="form-control form-control-sm" type="search" maxLength={100}
         placeholder="Number, name or phone" value={filters.search} onChange={event => change('search', event.target.value)} /></label>
       <label>From date<input className="form-control form-control-sm" type="date" min="1900-01-01" max="9998-12-31"

@@ -1,4 +1,5 @@
 import { useEffect, useState } from 'react'
+import { MasterLookup } from './LookupDialog'
 import { api, SessionExpiredError, type RetailDashboard } from './api'
 
 interface Report {
@@ -39,10 +40,10 @@ export default function BusinessDailySales({ dashboard }: { dashboard: RetailDas
 
   return <>
     <div className="platform-search mb-3">
-      <label>Location<select className="form-select" value={locationId}
-        onChange={event => setLocationId(Number(event.target.value))}>
-        {locations.map(location => <option key={location.id} value={location.id}>{location.name}</option>)}
-      </select></label>
+      <div><label className="form-label" htmlFor={locations.length > 1 ? 'daily-sales-location' : undefined}>Location</label>
+        {locations.length === 1 ? <div className="fw-semibold">{locations[0].name}</div> :
+          <MasterLookup id="daily-sales-location" title="Select report location" value={locationId}
+            emptyLabel="Select location" options={locations} onChange={setLocationId} />}</div>
       <label>Business date<input className="form-control" type="date" value={date}
         min="1900-01-01" max="9998-12-31" onChange={event => setDate(event.target.value)} /></label>
     </div>

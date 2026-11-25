@@ -1,4 +1,5 @@
 import { useEffect, useRef, useState, type FormEvent } from 'react'
+import { MasterLookup } from './LookupDialog'
 import { api, post, SessionExpiredError } from './api'
 import RetailStockAdjustments from './RetailStockAdjustments'
 import { Boxes, MapPin, Search } from 'lucide-react'
@@ -197,13 +198,9 @@ export default function RetailStock({ businessId, locations, canOperate, isOwner
             ? <span className="business-location-name"><MapPin size={16} aria-hidden="true" /> {locations[0].name}</span>
             : <>
               <label className="form-label" htmlFor="stock-location"><MapPin size={16} /> Stock location</label>
-              <select id="stock-location" className="form-select" value={locationId}
-                disabled={saving || opening !== null || adjustmentsOpen}
-                onChange={event => setLocationId(Number(event.target.value))}>
-                {locations.map(location => <option key={location.id} value={location.id}>
-                  {location.name} ({location.code})
-                </option>)}
-              </select>
+              <MasterLookup id="stock-location" title="Select stock location" value={locationId}
+                emptyLabel="Select location" options={locations}
+                disabled={saving || opening !== null || adjustmentsOpen} onChange={setLocationId} />
             </>}
         </div>
       </div>

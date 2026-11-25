@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState, type FormEvent } from 'react'
+import { useEffect, useLayoutEffect, useRef, useState, type FormEvent } from 'react'
 import { api, post, SessionExpiredError } from './api'
 import { ActionButton, useActionFeedback } from './ActionFeedback'
 import { moneyCents } from './posMoney'
@@ -129,6 +129,10 @@ export default function RetailContacts({ businessId, canOperate, type, isOwner, 
   const [originalLimit, setOriginalLimit] = useState<number | null>(null)
   const [creditLimit, setCreditLimit] = useState('')
   const [creditReason, setCreditReason] = useState('')
+  const [creditOpen, setCreditOpen] = useState(false)
+  const [creditError, setCreditError] = useState('')
+  const creditDialog = useRef<HTMLDialogElement>(null)
+  const creditSaving = useRef(false)
   const [loading, setLoading] = useState(true)
   const [saving, setSaving] = useState(false)
   const [loadError, setLoadError] = useState('')
@@ -162,7 +166,25 @@ export default function RetailContacts({ businessId, canOperate, type, isOwner, 
     if (formOpen) nameInput.current?.focus()
   }, [formOpen, editingId])
 
+  useLayoutEffect(() => {
+    if (!creditOpen) return
+    const dialog = creditDialog.current
+    if (!dialog) return
+    dialog.showModal()
+    dialog.querySelector<HTMLInputElement>('input')?.focus()
+    return () => { dialog.close() }
+  }, [creditOpen])
+
+  function closeCredit() {
+    creditDialog.current?.close()
+    setCreditOpen(false)
+    setCreditError('')
+    setCreditLimit(originalLimit == null ? '' : String(originalLimit))
+    setCreditReason('')
+  }
+
   function clearForm() {
+    setCreditOpen(false)
     setFormOpen(false)
     setEditingId(null)
     setForm(emptyForm)
@@ -186,20 +208,24 @@ export default function RetailContacts({ businessId, canOperate, type, isOwner, 
 
   async function saveCredit(event: FormEvent) {
     event.preventDefault()
-    if (!isOwner || supplier || !canOperate || saving || editingId === null || !validCredit) return
+    if (!isOwner || supplier || !canOperate || saving || creditSaving.current || !creditOpen || editingId === null || !validCredit) return
+    creditSaving.current = true
     setSaving(true)
+    setCreditError('')
     try {
-      await run('Saving credit limit…', 'Credit limit updated.', async () => {
-        const result = await api<{ id: number; creditLimit: number }>(basePath + '/' + editingId + '/credit-limit', {
-          method: 'PUT', body: JSON.stringify({ limit: limitCents / 100, expectedLimit: originalLimit, reason: creditReason.trim() })
-        })
-        setOriginalLimit(result.creditLimit)
-        setCreditLimit(String(result.creditLimit))
-        setCreditReason('')
+      const result = await api<{ id: number; creditLimit: number }>(basePath + '/' + editingId + '/credit-limit', {
+        method: 'PUT', body: JSON.stringify({ limit: limitCents / 100, expectedLimit: originalLimit, reason: creditReason.trim() })
       })
+      creditDialog.current?.close()
+      setCreditOpen(false)
+      setOriginalLimit(result.creditLimit)
+      setCreditLimit(String(result.creditLimit))
+      setCreditReason('')
       setReload(value => value + 1)
-    } catch { /* Shared write feedback preserves the input. */ }
-    finally { setSaving(false) }
+    } catch (cause) {
+      if (!(cause instanceof SessionExpiredError))
+        setCreditError(cause instanceof Error ? cause.message : 'Unable to update credit limit.')
+    } finally { creditSaving.current = false; setSaving(false) }
   }
 
   async function save(event: FormEvent) {
@@ -290,27 +316,36 @@ export default function RetailContacts({ businessId, canOperate, type, isOwner, 
       </form>}
 
       {!supplier && isOwner && canOperate && formOpen && editingId !== null && originalLimit !== null &&
-        <details className="border rounded p-2 mb-3" key={editingId}>
-          <summary>Credit limit</summary>
-          <form className="mt-2" onSubmit={event => void saveCredit(event)}>
-          <p className="small mb-2">Maximum allowed customer credit. Set to zero to prevent new credit sales.</p>
-          <div className="row g-2 align-items-end">
-            <div className="col-12 col-md-4">
+        <div className="d-flex align-items-center justify-content-between gap-2 mb-3">
+          <span>Credit limit: <strong>{currencyCode} {originalLimit.toFixed(2)}</strong></span>
+          <button type="button" className="btn btn-outline-secondary btn-sm" disabled={saving}
+            aria-haspopup="dialog" onClick={() => setCreditOpen(true)}>Change credit limit</button>
+        </div>}
+      {creditOpen && <dialog ref={creditDialog} className="entry-dialog" aria-labelledby="credit-dialog-heading"
+        onCancel={event => { event.preventDefault(); if (!creditSaving.current) closeCredit() }}
+        onKeyDownCapture={event => {
+          if (event.key === 'Escape') { event.preventDefault(); event.stopPropagation(); if (!creditSaving.current) closeCredit() }
+        }}>
+        <h3 className="h5 mb-3" id="credit-dialog-heading">Change credit limit</h3>
+        <p className="small">Current limit: {currencyCode} {originalLimit?.toFixed(2)}. Zero prevents new credit sales.</p>
+        <form aria-busy={saving} onSubmit={event => void saveCredit(event)}>
+          <fieldset disabled={saving}>
+            <div className="mb-3">
               <label className="form-label" htmlFor="customer-credit-limit">Credit limit ({currencyCode})</label>
               <input className="form-control" id="customer-credit-limit" type="number" min="0" max="9999999999.99"
-                step="0.01" required disabled={saving} value={creditLimit} onChange={event => setCreditLimit(event.target.value)} />
+                step="0.01" required value={creditLimit} onChange={event => setCreditLimit(event.target.value)} />
             </div>
-            <div className="col-12 col-md">
-              <label className="form-label" htmlFor="customer-credit-reason">Change reason</label>
-              <input className="form-control" id="customer-credit-reason" required minLength={10} maxLength={200}
-                disabled={saving} value={creditReason} onChange={event => setCreditReason(event.target.value)} />
-            </div>
-            <div className="col-12 col-md-auto">
-              <ActionButton busy={saving} disabled={!validCredit}>Save credit limit</ActionButton>
-            </div>
+            <label className="form-label" htmlFor="customer-credit-reason">Change reason</label>
+            <input className="form-control" id="customer-credit-reason" required minLength={10} maxLength={200}
+              value={creditReason} onChange={event => setCreditReason(event.target.value)} />
+          </fieldset>
+          {creditError && <p className="text-danger small mt-2" role="alert">{creditError}</p>}
+          <div className="d-flex justify-content-end gap-2 mt-3">
+            <button type="button" className="btn btn-outline-secondary" disabled={saving} onClick={closeCredit}>Cancel</button>
+            <ActionButton busy={saving} disabled={!validCredit}>Save credit limit</ActionButton>
           </div>
-          </form>
-        </details>}
+        </form>
+      </dialog>}
 
       {!supplier && isOwner && ledgerCustomer !== null &&
         <CustomerCreditLedger key={basePath + '/' + ledgerCustomer}

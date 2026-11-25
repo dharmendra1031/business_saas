@@ -2,7 +2,7 @@ import { Plus, Search } from 'lucide-react'
 import { useEffect, useLayoutEffect, useRef, useState, type FormEvent } from 'react'
 import { api, post, operationKey, SessionExpiredError } from './api'
 import { baseQuantity } from './stockQuantity'
-import LookupDialog from './LookupDialog'
+import LookupDialog, { MasterLookup } from './LookupDialog'
 import { ActionButton } from './ActionFeedback'
 
 interface Supplier {
@@ -512,10 +512,9 @@ export default function RetailPurchases({ businessId, canOperate, locations, rol
           <div>
             <label className="form-label" htmlFor={locations.length !== 1 ? 'purchase-location' : undefined}>Location *</label>
             {locations.length === 1 ? <div className="fw-semibold">{locations[0].name}</div> :
-              <select className="form-select" id="purchase-location" value={locationId}
-                disabled={busy} onChange={event => setLocationId(Number(event.target.value))} required>
-                {locations.map(x => <option key={x.id} value={x.id}>{x.name}</option>)}
-              </select>}
+              <MasterLookup id="purchase-location" title="Select purchase location" value={locationId}
+                emptyLabel="Select location" options={locations} disabled={busy || resolving || addingSupplier}
+                onChange={setLocationId} />}
           </div>
           <div>
             <label className="form-label" htmlFor="purchase-supplier">Supplier *</label>

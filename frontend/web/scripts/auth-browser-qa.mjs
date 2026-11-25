@@ -1197,7 +1197,7 @@ try {
     await search.press('Enter')
     try {
       await t.page.getByText('Checking…', { exact: true }).waitFor()
-      assert.equal(await t.page.locator('#pos-location').isDisabled(), true)
+      assert.equal(await t.page.locator('#pos-location').count(), 0, 'A single assigned store cannot change during scan')
       assert.equal(await t.page.getByRole('button', { name: 'Exit POS' }).isDisabled(), true)
       assert.equal(await t.page.getByRole('button', { name: /Pay \/ Checkout/ }).isDisabled(), true)
     } finally { releaseLookup() }
@@ -1701,7 +1701,7 @@ try {
     await t.screenshot('BUS-01-verified-stock-alerts-mobile-360')
     await t.page.getByRole('button', { name: 'View stock alerts in Inventory' }).click()
     await t.page.getByRole('heading', { name: 'Inventory', exact: true, level: 2 }).waitFor()
-    assert.equal(await t.page.locator('#stock-location').inputValue(), '1',
+    assert.equal(await t.page.locator('#stock-location').getAttribute('data-selected-id'), '1',
       'Dashboard must select the location of the first real alert')
     const alertsToggle = t.page.getByRole('checkbox', { name: /Alerts only/ })
     assert.ok(await alertsToggle.isChecked(), 'Alerts Only should be active after dashboard navigation')
@@ -1714,7 +1714,8 @@ try {
     assert.ok(t.stockQueries.some(path => path.includes('/locations/1?') && path.includes('alertsOnly=true')),
       'Server must filter records at the selected location, not the entire business')
     await t.screenshot('BUS-27-stock-alerts-filter-mobile-360')
-    await t.page.locator('#stock-location').selectOption('2')
+    await t.page.locator('#stock-location').click()
+    await t.page.locator('#stock-location-search-option-2').click()
     await t.page.getByText('Red Bag', { exact: true }).waitFor()
     assert.ok(await alertsToggle.isChecked(), 'Location switching retains Alerts Only')
     assert.ok(t.stockQueries.some(path => path.includes('/locations/2?') && path.includes('alertsOnly=true')))
@@ -1729,7 +1730,8 @@ try {
     assert.ok(await adjustButton.evaluate(button =>
       button.getBoundingClientRect().right <= window.innerWidth - 15),
       'Adjust action must be visible without horizontal table scrolling')
-    await t.page.locator('#stock-location').selectOption('1')
+    await t.page.locator('#stock-location').click()
+    await t.page.locator('#stock-location-search-option-1').click()
     await t.page.getByText('Blue Shirt', { exact: true }).waitFor()
     await alertsToggle.uncheck()
     await t.page.getByText('Fine Notebook', { exact: true }).waitFor()
@@ -2595,8 +2597,10 @@ try {
     await t.page.getByRole('heading', { name: 'Inventory', level: 2 }).waitFor()
     assert.equal(await t.page.locator('.workspace-identity').getByText('2 locations').count(), 1,
       'Multi-branch role context must not claim the first branch is active')
-    await t.page.getByLabel('Stock location').selectOption('2')
-    await t.page.waitForFunction(() => document.querySelector('#stock-location')?.value === '2')
+    await t.page.locator('#stock-location').click()
+    await t.page.getByRole('dialog', { name: 'Select stock location' }).getByRole('columnheader', { name: 'Code' }).waitFor()
+    await t.page.locator('#stock-location-search-option-2').click()
+    await t.page.waitForFunction(() => document.querySelector('#stock-location')?.getAttribute('data-selected-id') === '2')
     assert.ok(t.stockPaths.some(path => path.endsWith('/locations/2')),
       'Stock fetch must use selected authorized location')
     assert.ok(await t.page.evaluate(() => document.documentElement.scrollWidth) <= 361,
