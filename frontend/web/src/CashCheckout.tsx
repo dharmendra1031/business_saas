@@ -1,11 +1,12 @@
-import { useEffect, useRef, useState, type FormEvent } from 'react'
+import { useEffect, useLayoutEffect, useRef, useState, type FormEvent } from 'react'
 import { ArrowLeft, ArrowRight, Banknote, Check, Minus, Package, Plus, ReceiptText, Search, ShoppingBag, Trash2 } from 'lucide-react'
 import PosCashPaymentDialog from './PosCashPaymentDialog'
 import LookupDialog from './LookupDialog'
 import { maxExactCents, moneyCents } from './posMoney'
 import { baseQuantity } from './stockQuantity'
 import CashReceipt, { type Receipt } from './CashReceipt'
-import { api, ApiResponseError, operationKey, post, type RetailDashboard } from './api'
+import { ActionButton } from './ActionFeedback'
+import { api, ApiResponseError, operationKey, post, SessionExpiredError, UncertainWriteError, type RetailDashboard } from './api'
 
 interface SaleUnit { unitId: number; unitCode: string; factor: number; salePrice: number }
 interface Product {
@@ -97,6 +98,14 @@ export default function CashCheckout({ userId, dashboard, onExit }: {
   const [customer, setCustomer] = useState<SaleCustomer | null>(() => pending?.customerId
     ? { id: pending.customerId, name: `Customer #${pending.customerId}`, phone: '' } : null)
   const [customerOpen, setCustomerOpen] = useState(false)
+  const [newCustomerOpen, setNewCustomerOpen] = useState(false)
+  const [newCustomer, setNewCustomer] = useState({ name: '', phone: '', email: '' })
+  const [customerSaving, setCustomerSaving] = useState(false)
+  const [customerError, setCustomerError] = useState('')
+  const [customerNeedsReview, setCustomerNeedsReview] = useState(false)
+  const customerDialog = useRef<HTMLDialogElement>(null)
+  const customerWrite = useRef(false)
+  const canCreateCustomer = dashboard.canOperate && ['Owner', 'Manager'].includes(dashboard.roleCode)
   const [productOpen, setProductOpen] = useState(false)
   const [customerSearch, setCustomerSearch] = useState('')
   const [customerResults, setCustomerResults] = useState<SaleCustomer[]>([])
@@ -209,7 +218,7 @@ export default function CashCheckout({ userId, dashboard, onExit }: {
       if (event.defaultPrevented || event.repeat || event.isComposing ||
         event.ctrlKey || event.altKey || event.metaKey || event.shiftKey ||
         lock.current || scanLock.current) return
-      if (customerOpen || productOpen) { if (['F2', 'F4', 'F9'].includes(event.key)) event.preventDefault(); return }
+      if (customerOpen || productOpen || newCustomerOpen) { if (['F2', 'F4', 'F9'].includes(event.key)) event.preventDefault(); return }
       if (event.key === 'F2') {
         event.preventDefault()
         if (historyPage) setHistoryPage(0)
@@ -234,7 +243,50 @@ export default function CashCheckout({ userId, dashboard, onExit }: {
     document.addEventListener('keydown', onKeyDown)
     return () => document.removeEventListener('keydown', onKeyDown)
   }, [dashboard.canOperate, saleAvailable, busy, scanBusy, pending, receipt,
-    showPayment, clearArmed, exitArmed, historyPage, customerOpen, productOpen])
+    showPayment, clearArmed, exitArmed, historyPage, customerOpen, productOpen, newCustomerOpen])
+
+  useLayoutEffect(() => {
+    if (!newCustomerOpen) return
+    const dialog = customerDialog.current
+    if (!dialog) return
+    dialog.showModal()
+    dialog.querySelector<HTMLInputElement>('input')?.focus()
+    return () => dialog.close()
+  }, [newCustomerOpen])
+
+  function closeNewCustomer() {
+    customerDialog.current?.close()
+    setNewCustomerOpen(false)
+    setNewCustomer({ name: '', phone: '', email: '' })
+    setCustomerError('')
+  }
+
+  async function saveNewCustomer(event: FormEvent<HTMLFormElement>) {
+    event.preventDefault()
+    if (!canCreateCustomer || !saleAvailable || !newCustomerOpen || customerWrite.current ||
+      customerNeedsReview || lock.current || scanLock.current || busy || pending || receipt ||
+      newCustomer.name.trim().length < 2) return
+    customerWrite.current = true
+    setCustomerSaving(true)
+    setCustomerError('')
+    try {
+      const created = await post<SaleCustomer>(`/businesses/${business.id}/customers`, {
+        name: newCustomer.name.trim(), phone: newCustomer.phone.trim(), email: newCustomer.email.trim()
+      })
+      setCustomer(created)
+      closeNewCustomer()
+    } catch (cause) {
+      if (cause instanceof UncertainWriteError) {
+        setCustomerNeedsReview(true)
+        setCustomerError('Creation status is unknown. Search existing customers before creating another record.')
+      } else if (!(cause instanceof SessionExpiredError)) {
+        setCustomerError(cause instanceof Error ? cause.message : 'Unable to save customer.')
+      }
+    } finally {
+      customerWrite.current = false
+      setCustomerSaving(false)
+    }
+  }
 
   function addProduct(item: Product, fromScan = false) {
     if (!dashboard.canOperate || !saleAvailable || lock.current || busy || pending || receipt ||
@@ -650,6 +702,10 @@ export default function CashCheckout({ userId, dashboard, onExit }: {
             aria-haspopup="dialog" aria-expanded={customerOpen} aria-keyshortcuts="F4" onClick={() => { setCustomerOpen(v => !v); setCustomerSearch(''); setCustomerResults([]) }}>
             {customerOpen ? 'Close' : 'Select customer'}
           </button>
+          {canCreateCustomer && <button type="button" className="btn btn-outline-secondary btn-sm"
+            aria-label="New customer" title="New customer" aria-haspopup="dialog"
+            disabled={busy || scanBusy || !saleAvailable || customerNeedsReview}
+            onClick={() => setNewCustomerOpen(true)}><Plus size={16} aria-hidden="true" /></button>}
           {customer && <button type="button" className="btn btn-outline-secondary btn-sm" disabled={busy || scanBusy}
             onClick={() => { setCustomer(null); setCustomerOpen(false); setCustomerSearch('') }}>Walk-in</button>}
         </div>
@@ -661,8 +717,37 @@ export default function CashCheckout({ userId, dashboard, onExit }: {
           onSearch={value => { setCustomerSearch(value); setCustomerResults([]) }}
           onSelect={id => {
             const item = customerResults.find(x => x.id === id)
-            if (item) { setCustomer(item); setCustomerOpen(false); setCustomerSearch('') }
+            if (item) { setCustomer(item); setCustomerOpen(false); setCustomerSearch(''); setCustomerNeedsReview(false) }
           }} onClose={() => { setCustomerOpen(false); setCustomerSearch('') }} />}
+        {newCustomerOpen && <dialog ref={customerDialog} className="entry-dialog" aria-labelledby="pos-new-customer-heading"
+          onCancel={event => { event.preventDefault(); if (!customerWrite.current) closeNewCustomer() }}
+          onKeyDownCapture={event => {
+            if (event.key === 'Escape') { event.preventDefault(); event.stopPropagation(); if (!customerWrite.current) closeNewCustomer() }
+          }}>
+          <h3 className="h5 mb-3" id="pos-new-customer-heading">New customer</h3>
+          <form aria-busy={customerSaving} onSubmit={event => void saveNewCustomer(event)}>
+            <fieldset disabled={customerSaving || customerNeedsReview}>
+              <div className="mb-3">
+                <label className="form-label" htmlFor="pos-new-customer-name">Customer name *</label>
+                <input id="pos-new-customer-name" className="form-control" required minLength={2} maxLength={120}
+                  value={newCustomer.name} onChange={event => setNewCustomer(value => ({ ...value, name: event.target.value }))} />
+              </div>
+              <div className="mb-3">
+                <label className="form-label" htmlFor="pos-new-customer-phone">Phone</label>
+                <input id="pos-new-customer-phone" className="form-control" type="tel" maxLength={25}
+                  value={newCustomer.phone} onChange={event => setNewCustomer(value => ({ ...value, phone: event.target.value }))} />
+              </div>
+              <label className="form-label" htmlFor="pos-new-customer-email">Email</label>
+              <input id="pos-new-customer-email" className="form-control" type="email" maxLength={160}
+                value={newCustomer.email} onChange={event => setNewCustomer(value => ({ ...value, email: event.target.value }))} />
+            </fieldset>
+            {customerError && <p className="small text-danger mt-2" role="alert">{customerError}</p>}
+            <div className="d-flex justify-content-end gap-2 mt-3">
+              <button type="button" className="btn btn-outline-secondary" disabled={customerSaving} onClick={closeNewCustomer}>Cancel</button>
+              <ActionButton busy={customerSaving} disabled={customerNeedsReview || newCustomer.name.trim().length < 2}>Save customer</ActionButton>
+            </div>
+          </form>
+        </dialog>}
         {!basket.length && <div className="pos-basket-empty">
           <ShoppingBag size={34} /><strong>Your basket is empty</strong>
           <p>Select a product from the catalogue to start this sale.</p>

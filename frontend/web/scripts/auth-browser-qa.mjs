@@ -1234,6 +1234,7 @@ try {
     await t.login()
     const product = t.page.getByRole('button', { name: /Add Keyboard Item/ })
     await product.waitFor()
+    assert.equal(await t.page.getByRole('button', { name: 'New customer', exact: true }).count(), 0)
     const search = t.page.locator('#pos-product-search')
     const pay = t.page.getByRole('button', { name: /Pay \/ Checkout/ })
     await t.page.keyboard.press('F9')
@@ -1939,10 +1940,12 @@ try {
     await t.page.route('**/api/businesses/1/categories', route => {
       if (route.request().method() !== 'POST') return route.fallback()
       const body = route.request().postDataJSON()
-      assert.equal(body.name, 'Shirts')
-      assert.equal(body.parentId, 21)
-      categories.push({ id: 31, name: body.name, parentId: body.parentId, isActive: true })
-      return response(route, 201, { id: 31, name: body.name, parentId: 2, isActive: true })
+      const fixture = { 'New Group': [71, null], 'New Subgroup': [72, 71], Shirts: [31, 21] }[body.name]
+      assert.ok(fixture)
+      assert.equal(body.parentId, fixture[1])
+      const created = { id: fixture[0], name: body.name, parentId: body.parentId, isActive: true }
+      categories.push(created)
+      return response(route, 201, created)
     })
     await t.page.route('**/api/businesses/1/units', route => {
       if (route.request().method() !== 'POST') return route.fallback()
@@ -1977,6 +1980,16 @@ try {
     await t.page.locator('#product-barcode').fill('8901234567890')
     await t.page.locator('#product-sku').fill('COTTON-01')
 
+    await t.page.getByRole('button', { name: '+ Add group', exact: true }).click()
+    const groupDialog = t.page.getByRole('dialog', { name: 'Add group', exact: true })
+    await groupDialog.locator('#inline-master-name').fill('New Group')
+    await groupDialog.getByRole('button', { name: 'Add & select' }).click()
+    await t.page.waitForFunction(() => document.querySelector('#product-group')?.getAttribute('data-selected-id') === '71')
+    await t.page.getByRole('button', { name: '+ Add subgroup', exact: true }).click()
+    const subgroupDialog = t.page.getByRole('dialog', { name: 'Add subgroup', exact: true })
+    await subgroupDialog.locator('#inline-master-name').fill('New Subgroup')
+    await subgroupDialog.getByRole('button', { name: 'Add & select' }).click()
+    await t.page.waitForFunction(() => document.querySelector('#product-subgroup')?.getAttribute('data-selected-id') === '72')
     await t.page.locator('#product-group').click()
     await t.page.locator('#product-group-search-option-2').click()
     await t.page.locator('#product-subgroup').click()

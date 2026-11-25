@@ -261,18 +261,22 @@ export default function RetailProducts({ businessId, canOperate, currencyCode }:
     setInlineError('')
   }
 
-  function beginInline(type: 'categories' | 'units' | 'brands') {
+  function beginInline(type: 'categories' | 'units' | 'brands', parent = 0) {
     setInlineType(type)
     setInlineError('')
     setInlineName('')
     setInlineCode('')
-    setInlineParent(type === 'categories' ? selectedSubgroup : 0)
+    setInlineParent(parent)
     setInlineNeedsReview(false)
   }
 
+  const masterLabel = inlineType === 'units' ? 'unit' : inlineType === 'brands' ? 'brand' :
+    inlineParent === 0 ? 'group' : classificationTrail(options.categories, inlineParent).length === 1 ? 'subgroup' : 'category'
   const inlineValid = inlineName.trim().length >= 2 &&
+    inlineName.trim().length <= (inlineType === 'units' ? 60 : 80) &&
     (inlineType !== 'units' || /^[A-Z0-9-]{1,12}$/.test(inlineCode.trim())) &&
-    (inlineType !== 'categories' || inlineParent > 0)
+    (inlineType !== 'categories' || inlineParent === 0 ||
+      options.categories.some(item => item.id === inlineParent && item.isActive))
 
   async function addInline(event: FormEvent<HTMLFormElement>) {
     event.preventDefault()
@@ -289,7 +293,7 @@ export default function RetailProducts({ businessId, canOperate, currencyCode }:
       added = await post<{ id: number }>(`/businesses/${businessId}/${type}`, {
         name,
         ...(type === 'units' ? { code } : {}),
-        ...(type === 'categories' ? { parentId } : {})
+        ...(type === 'categories' ? { parentId: parentId || null } : {})
       })
     } catch (cause) {
       if (cause instanceof UncertainWriteError) setInlineNeedsReview(true)
@@ -305,7 +309,7 @@ export default function RetailProducts({ businessId, canOperate, currencyCode }:
     const field = type === 'categories' ? 'categoryId' : type === 'units' ? 'unitId' : 'brandId'
     const option: CatalogOption = { id: added.id, name, isActive: true,
       ...(type === 'units' ? { code } : {}),
-      ...(type === 'categories' ? { parentId } : {}) }
+      ...(type === 'categories' ? { parentId: parentId || null } : {}) }
     setOptions(current => ({ ...current, [type]: [...current[type], option] }))
     setForm(current => ({ ...current, [field]: added.id }))
     closeInline()
@@ -389,14 +393,16 @@ export default function RetailProducts({ businessId, canOperate, currencyCode }:
                 ...(selectedGroup > 0 && !groups.some(item => item.id === selectedGroup)
                   ? [{ id: selectedGroup, name: 'Previous selection (inactive)' }] : [])]}
               disabled={saving || inlineSaving} onChange={id => changeForm('categoryId', id)} />
+            <button type="button" className="btn btn-sm btn-link" onClick={() => beginInline('categories')}>+ Add group</button>
           </div>
-          {selectedGroup > 0 && (subgroups.length > 0 || selectedSubgroup > 0) && <div>
+          {selectedGroup > 0 && <div>
             <label className="form-label" htmlFor="product-subgroup">Subgroup (optional)</label>
             <MasterLookup id="product-subgroup" title="Select subgroup" value={selectedSubgroup} emptyLabel="No subgroup"
               options={[{ id: 0, name: 'No subgroup' }, ...subgroups,
                 ...(selectedSubgroup > 0 && !subgroups.some(item => item.id === selectedSubgroup)
                   ? [{ id: selectedSubgroup, name: 'Previous selection (inactive)' }] : [])]}
               disabled={saving || inlineSaving} onChange={id => changeForm('categoryId', id || selectedGroup)} />
+            <button type="button" className="btn btn-sm btn-link" onClick={() => beginInline('categories', selectedGroup)}>+ Add subgroup</button>
           </div>}
           {selectedSubgroup > 0 && <div>
             <label className="form-label" htmlFor="product-category">Category (optional)</label>
@@ -406,7 +412,7 @@ export default function RetailProducts({ businessId, canOperate, currencyCode }:
                   ? [{ id: selectedCategory, name: 'Previous selection (inactive)' }] : [])]}
               disabled={saving || inlineSaving} onChange={id => changeForm('categoryId', id || selectedSubgroup)} />
             <button type="button" className="btn btn-sm btn-link"
-              onClick={() => beginInline('categories')}>+ Add category</button>
+              onClick={() => beginInline('categories', selectedSubgroup)}>+ Add category</button>
           </div>}
           <div>
             <label className="form-label" htmlFor="product-unit">Stock unit *</label>
@@ -512,12 +518,12 @@ export default function RetailProducts({ businessId, canOperate, currencyCode }:
             if (!masterSaving.current) closeInline()
           }
         }}>
-        <h3 id="master-dialog-heading" className="h5 mb-3">Add {inlineType === 'categories' ? 'category' : inlineType === 'units' ? 'unit' : 'brand'}</h3>
+        <h3 id="master-dialog-heading" className="h5 mb-3">Add {masterLabel}</h3>
         <form aria-busy={inlineSaving} onSubmit={event => void addInline(event)}>
           <fieldset disabled={inlineSaving || inlineNeedsReview}>
-            {inlineType === 'categories' && <p className="small mb-2">Subgroup: {classificationPath(options.categories, inlineParent)}</p>}
+            {inlineType === 'categories' && inlineParent > 0 && <p className="small mb-2">{masterLabel === 'subgroup' ? 'Group' : 'Subgroup'}: {classificationPath(options.categories, inlineParent)}</p>}
             <label className="form-label" htmlFor="inline-master-name">Name *</label>
-            <input id="inline-master-name" className="form-control" required minLength={2} maxLength={80}
+            <input id="inline-master-name" className="form-control" required minLength={2} maxLength={inlineType === 'units' ? 60 : 80}
               value={inlineName} onChange={event => setInlineName(event.target.value)} />
             {inlineType === 'units' && <div className="mt-3">
               <label className="form-label" htmlFor="inline-master-code">Unit code *</label>
