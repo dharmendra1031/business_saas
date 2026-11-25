@@ -19,7 +19,7 @@ public static class RetailContactEndpoints
         suppliers.MapGet("", async (long businessId, string? search, int? page, bool? activeOnly,
             ClaimsPrincipal user, AppDbContext db, CancellationToken cancellationToken) =>
         {
-            var denied = await RetailMasterEndpoints.CheckAccess(db, user, businessId, false);
+            var denied = await RetailMasterEndpoints.CheckAccess(db, user, businessId, false, cancellationToken);
             if (denied is not null) return denied;
             var currentPage = page ?? 1;
             var term = search?.Trim().ToUpperInvariant() ?? "";
@@ -105,14 +105,14 @@ public static class RetailContactEndpoints
         customers.MapGet("", async (long businessId, string? search, int? page,
             ClaimsPrincipal user, AppDbContext db, CancellationToken cancellationToken) =>
         {
-            var denied = await RetailMasterEndpoints.CheckAccess(db, user, businessId, false);
+            var denied = await RetailMasterEndpoints.CheckAccess(db, user, businessId, false, cancellationToken);
             if (denied is not null) return denied;
             var currentPage = page ?? 1;
             var term = search?.Trim().ToUpperInvariant() ?? "";
             if (currentPage is < 1 or > 100000 || term.Length > 100)
                 return Results.BadRequest(new { message = "Invalid search or page." });
 
-            var isOwner = await RetailBillingSettingsEndpoints.OwnerId(db, businessId, user) is not null;
+            var isOwner = await RetailBillingSettingsEndpoints.OwnerId(db, businessId, user, cancellationToken) is not null;
             var query = db.RetailCustomers.AsNoTracking().Where(x => x.BusinessId == businessId);
             if (term.Length > 0) query = query.Where(x =>
                 x.NameKey.Contains(term) || x.Phone.Contains(term) || x.Email.ToUpper().Contains(term));
@@ -173,36 +173,36 @@ public static class RetailContactEndpoints
         });
         CreditCollections.MapCreditCollections(customers);
         customers.MapGet("/{customerId:long}/credit-ledger", async (long businessId, long customerId,
-            ClaimsPrincipal user, AppDbContext db, IConfiguration config, IWebHostEnvironment environment, int page = 1) =>
+            ClaimsPrincipal user, AppDbContext db, IConfiguration config, IWebHostEnvironment environment, CancellationToken cancellationToken, int page = 1) =>
         {
-            if (await RetailBillingSettingsEndpoints.OwnerId(db, businessId, user) is null)
+            if (await RetailBillingSettingsEndpoints.OwnerId(db, businessId, user, cancellationToken) is null)
                 return Results.NotFound();
             if (page is < 1 or > 100000) return Results.BadRequest(new { message = "Choose a valid ledger page." });
             var customer = await db.RetailCustomers.AsNoTracking().SingleOrDefaultAsync(x =>
-                x.BusinessId == businessId && x.Id == customerId);
+                x.BusinessId == businessId && x.Id == customerId, cancellationToken);
             if (customer is null) return Results.NotFound();
 
             const int size = 20;
-            await using var tx = await db.Database.BeginTransactionAsync(IsolationLevel.Serializable);
+            await using var tx = await db.Database.BeginTransactionAsync(IsolationLevel.Serializable, cancellationToken);
             var invoices = CreditCollections.Invoices(db, businessId, customerId);
             var billed = await invoices.GroupBy(x => x.CurrencyCode).Select(x => new {
                 CurrencyCode = x.Key, Debit = x.Sum(s => s.Total), InvoiceCount = x.Count()
-            }).ToListAsync();
+            }).ToListAsync(cancellationToken);
             var collections = await (from payment in CreditCollections.CustomerPayments(db, businessId, customerId)
                                      join sale in invoices on payment.SaleId equals sale.Id
                                      group payment by sale.CurrencyCode into amounts
                                      select new { CurrencyCode = amounts.Key, Paid = amounts.Sum(p => p.Amount) })
-                .ToDictionaryAsync(x => x.CurrencyCode, x => x.Paid);
+                .ToDictionaryAsync(x => x.CurrencyCode, x => x.Paid, cancellationToken);
             var items = await invoices.OrderByDescending(x => x.Id).Skip((page - 1) * size)
                 .Take(size + 1).Select(x => new { x.Id, x.LocationId, x.LocationName, x.CurrencyCode,
                     Debit = x.Total, x.CreditDueDate, PostedAtUtc = DateTime.SpecifyKind(x.PostedAtUtc, DateTimeKind.Utc),
                     Paid = db.RetailCreditPayments.Where(p => p.BusinessId == businessId && p.SaleId == x.Id)
                         .Sum(p => (decimal?)p.Amount) ?? 0m
-                }).ToListAsync();
-            await tx.CommitAsync();
+                }).ToListAsync(cancellationToken);
+            await tx.CommitAsync(cancellationToken);
             return Results.Ok(new { customerId, customer.Name, customer.CreditLimit,
                 canCollect = environment.IsDevelopment() && config.GetValue<bool>("RetailCredit:CollectionsEnabled") &&
-                    await RetailMasterEndpoints.CheckAccess(db, user, businessId, true) is null,
+                    await RetailMasterEndpoints.CheckAccess(db, user, businessId, true, cancellationToken) is null,
                 totals = billed.Select(x => new { x.CurrencyCode, x.Debit, x.InvoiceCount,
                     Paid = collections.GetValueOrDefault(x.CurrencyCode),
                     Outstanding = x.Debit - collections.GetValueOrDefault(x.CurrencyCode) }),

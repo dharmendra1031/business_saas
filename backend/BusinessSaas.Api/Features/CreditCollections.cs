@@ -31,17 +31,17 @@ public static class CreditCollections
         customers.MapGet("/outstanding-report", OutstandingReport);
         customers.MapGet("/{customerId:long}/credit-invoices/{saleId:long}/payments", async (
             long businessId, long customerId, long saleId, ClaimsPrincipal user, AppDbContext db,
-            int page = 1, string? requestKey = null) =>
+            CancellationToken cancellationToken, int page = 1, string? requestKey = null) =>
         {
-            if (await RetailBillingSettingsEndpoints.OwnerId(db, businessId, user) is null)
+            if (await RetailBillingSettingsEndpoints.OwnerId(db, businessId, user, cancellationToken) is null)
                 return Results.NotFound();
             if (page is < 1 or > 100000 || requestKey is { Length: > 80 })
                 return Results.BadRequest(new { message = "Invalid payment history filter." });
-            if (!await Invoices(db, businessId, customerId).AnyAsync(x => x.Id == saleId))
+            if (!await Invoices(db, businessId, customerId).AnyAsync(x => x.Id == saleId, cancellationToken))
                 return Results.NotFound();
             var query = Payments(db, businessId, saleId);
             if (requestKey is not null) query = query.Where(x => x.RequestKey == requestKey);
-            var records = await query.OrderByDescending(x => x.Id).Skip((page - 1) * 20).Take(21).ToListAsync();
+            var records = await query.OrderByDescending(x => x.Id).Skip((page - 1) * 20).Take(21).ToListAsync(cancellationToken);
             return Results.Ok(new { items = records.Take(20).Select(View), hasMore = records.Count > 20 });
         });
 
@@ -96,23 +96,23 @@ public static class CreditCollections
     }
 
     private static async Task<IResult> OutstandingReport(long businessId, ClaimsPrincipal user,
-        AppDbContext db, string? search, int page = 1, bool overdueOnly = false)
+        AppDbContext db, string? search, CancellationToken cancellationToken, int page = 1, bool overdueOnly = false)
     {
-        if (await RetailBillingSettingsEndpoints.OwnerId(db, businessId, user) is null)
+        if (await RetailBillingSettingsEndpoints.OwnerId(db, businessId, user, cancellationToken) is null)
             return Results.NotFound();
         var term = search?.Trim().ToUpperInvariant() ?? "";
         if (page is < 1 or > 100000 || term.Length > 100)
             return Results.BadRequest(new { message = "Invalid search or page." });
 
         var timeZone = await db.Businesses.Where(x => x.Id == businessId)
-            .Select(x => x.TimeZoneId).SingleAsync();
+            .Select(x => x.TimeZoneId).SingleAsync(cancellationToken);
         var today = DateOnly.FromDateTime(TimeZoneInfo.ConvertTimeFromUtc(DateTime.UtcNow,
             TimeZoneInfo.FindSystemTimeZoneById(timeZone)));
         var cutoff30 = today.AddDays(-30);
         var cutoff60 = today.AddDays(-60);
         var cutoff90 = today.AddDays(-90);
 
-        await using var tx = await db.Database.BeginTransactionAsync(IsolationLevel.Serializable);
+        await using var tx = await db.Database.BeginTransactionAsync(IsolationLevel.Serializable, cancellationToken);
         try
         {
             var paidByInvoice = db.RetailCreditPayments.AsNoTracking()
@@ -141,7 +141,7 @@ public static class CreditCollections
                 Days61To90 = g.Sum(x => x.DueDate < cutoff60 && x.DueDate >= cutoff90 ? x.Outstanding : 0m),
                 DaysOver90 = g.Sum(x => x.DueDate < cutoff90 ? x.Outstanding : 0m),
                 InvoiceCount = g.Count()
-            }).OrderBy(x => x.CurrencyCode).ToListAsync();
+            }).OrderBy(x => x.CurrencyCode).ToListAsync(cancellationToken);
 
             var items = await balances.GroupBy(x => new { x.CustomerId, x.Name, x.IsActive, x.CurrencyCode })
                 .Select(g => new {
@@ -152,8 +152,8 @@ public static class CreditCollections
                     InvoiceCount = g.Count()
                 }).OrderByDescending(x => x.Overdue).ThenByDescending(x => x.Outstanding)
                 .ThenBy(x => x.CustomerId).ThenBy(x => x.CurrencyCode)
-                .Skip((page - 1) * 20).Take(21).ToListAsync();
-            await tx.CommitAsync();
+                .Skip((page - 1) * 20).Take(21).ToListAsync(cancellationToken);
+            await tx.CommitAsync(cancellationToken);
             return Results.Ok(new { businessDate = today, timeZoneId = timeZone, totals,
                 items = items.Take(20), page, hasMore = items.Count > 20 });
         }

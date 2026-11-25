@@ -17,13 +17,13 @@ public static class RetailProductEndpoints
         group.MapGet("", async (long businessId, string? search, string? status,
             long? categoryId, int? page, long? locationId, string? code, ClaimsPrincipal user, AppDbContext db, CancellationToken cancellationToken) =>
         {
-            var denied = await RetailMasterEndpoints.CheckAccess(db, user, businessId, false);
+            var denied = await RetailMasterEndpoints.CheckAccess(db, user, businessId, false, cancellationToken);
             if (denied is not null) return denied;
 
             if (locationId is not null)
             {
                 if (locationId <= 0) return Results.BadRequest(new { message = "Invalid location." });
-                var locationDenied = await RetailStockEndpoints.CheckLocation(db, user, businessId, locationId.Value, false);
+                var locationDenied = await RetailStockEndpoints.CheckLocation(db, user, businessId, locationId.Value, false, cancellationToken);
                 if (locationDenied is not null) return locationDenied;
             }
 
@@ -68,7 +68,7 @@ public static class RetailProductEndpoints
         group.MapGet("/options", async (long businessId, bool? includeInactiveCategories,
             ClaimsPrincipal user, AppDbContext db, CancellationToken cancellationToken) =>
         {
-            var denied = await RetailMasterEndpoints.CheckAccess(db, user, businessId, false);
+            var denied = await RetailMasterEndpoints.CheckAccess(db, user, businessId, false, cancellationToken);
             if (denied is not null) return denied;
 
             var categoryQuery = db.RetailCategories.AsNoTracking()
@@ -91,9 +91,9 @@ public static class RetailProductEndpoints
         });
 
         group.MapGet("/lookup", async (long businessId, string? barcode,
-            ClaimsPrincipal user, AppDbContext db) =>
+            ClaimsPrincipal user, AppDbContext db, CancellationToken cancellationToken) =>
         {
-            var denied = await RetailMasterEndpoints.CheckAccess(db, user, businessId, false);
+            var denied = await RetailMasterEndpoints.CheckAccess(db, user, businessId, false, cancellationToken);
             if (denied is not null) return denied;
 
             var code = barcode?.Trim().ToUpperInvariant() ?? "";
@@ -102,19 +102,19 @@ public static class RetailProductEndpoints
 
             var matches = db.RetailProducts.AsNoTracking()
                 .Where(x => x.BusinessId == businessId && x.Barcode == code && x.IsActive);
-            var product = await ProductDetails(db, matches, businessId).SingleOrDefaultAsync();
+            var product = await ProductDetails(db, matches, businessId).SingleOrDefaultAsync(cancellationToken);
             return product is null ? Results.NotFound() : Results.Ok(product);
         });
 
         group.MapGet("/{productId:long}", async (long businessId, long productId,
-            ClaimsPrincipal user, AppDbContext db) =>
+            ClaimsPrincipal user, AppDbContext db, CancellationToken cancellationToken) =>
         {
-            var denied = await RetailMasterEndpoints.CheckAccess(db, user, businessId, false);
+            var denied = await RetailMasterEndpoints.CheckAccess(db, user, businessId, false, cancellationToken);
             if (denied is not null) return denied;
 
             var matches = db.RetailProducts.AsNoTracking()
                 .Where(x => x.BusinessId == businessId && x.Id == productId);
-            var product = await ProductDetails(db, matches, businessId).SingleOrDefaultAsync();
+            var product = await ProductDetails(db, matches, businessId).SingleOrDefaultAsync(cancellationToken);
             return product is null ? Results.NotFound() : Results.Ok(product);
         });
 

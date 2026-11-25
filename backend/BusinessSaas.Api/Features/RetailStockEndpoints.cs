@@ -18,7 +18,7 @@ public static class RetailStockEndpoints
         group.MapGet("/locations/{locationId:long}", async (long businessId, long locationId,
             string? search, int? page, bool? alertsOnly, ClaimsPrincipal user, AppDbContext db, CancellationToken cancellationToken) =>
         {
-            var denied = await CheckLocation(db, user, businessId, locationId, false);
+            var denied = await CheckLocation(db, user, businessId, locationId, false, cancellationToken);
             if (denied is not null) return denied;
 
             var currentPage = page ?? 1;
@@ -69,7 +69,7 @@ public static class RetailStockEndpoints
         group.MapGet("/locations/{locationId:long}/movements", async (long businessId,
             long locationId, long? productId, int? page, ClaimsPrincipal user, AppDbContext db, CancellationToken cancellationToken) =>
         {
-            var denied = await CheckLocation(db, user, businessId, locationId, false);
+            var denied = await CheckLocation(db, user, businessId, locationId, false, cancellationToken);
             if (denied is not null) return denied;
             var currentPage = page ?? 1;
             if (currentPage is < 1 or > 100000 || productId is <= 0)
@@ -164,19 +164,19 @@ public static class RetailStockEndpoints
     }
 
     internal static async Task<IResult?> CheckLocation(AppDbContext db,
-        ClaimsPrincipal user, long businessId, long locationId, bool write)
+        ClaimsPrincipal user, long businessId, long locationId, bool write, CancellationToken cancellationToken = default)
     {
-        var denied = await RetailMasterEndpoints.CheckAccess(db, user, businessId, write);
+        var denied = await RetailMasterEndpoints.CheckAccess(db, user, businessId, write, cancellationToken);
         if (denied is not null) return denied;
 
         var userId = long.Parse(user.FindFirstValue(ClaimTypes.NameIdentifier)!);
         var role = await db.BusinessUsers.AsNoTracking()
             .Where(x => x.BusinessId == businessId && x.UserId == userId)
-            .Select(x => x.RoleCode).SingleOrDefaultAsync();
+            .Select(x => x.RoleCode).SingleOrDefaultAsync(cancellationToken);
 
         var allowed = await db.BusinessLocations.AsNoTracking().AnyAsync(x =>
             x.BusinessId == businessId && x.Id == locationId &&
-            (role == "Owner" || x.IsPrimary));
+            (role == "Owner" || x.IsPrimary), cancellationToken);
         return allowed ? null : Results.NotFound();
     }
 

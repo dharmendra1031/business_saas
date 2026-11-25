@@ -327,7 +327,7 @@ public static class RetailMasterEndpoints
     }
 
     internal static async Task<IResult?> CheckAccess(AppDbContext db, ClaimsPrincipal user,
-        long businessId, bool write)
+        long businessId, bool write, CancellationToken cancellationToken = default)
     {
         if (!long.TryParse(user.FindFirstValue(ClaimTypes.NameIdentifier), out var userId))
             return Results.NotFound();
@@ -339,7 +339,7 @@ public static class RetailMasterEndpoints
                               on business.BusinessTypeId equals type.Id
                           where member.BusinessId == businessId && member.UserId == userId
                               && type.Code == "RETAIL"
-                          select member.RoleCode).SingleOrDefaultAsync();
+                          select member.RoleCode).SingleOrDefaultAsync(cancellationToken);
         if (role is not ("Owner" or "Manager"))
             return Results.NotFound();
 
@@ -347,7 +347,7 @@ public static class RetailMasterEndpoints
                 x.BusinessId == businessId &&
                 (x.Status == "Active" && x.PaidStartsAtUtc <= DateTime.UtcNow &&
                     x.PaidEndsAtUtc > DateTime.UtcNow && x.PaidPlanVersionId != null ||
-                    x.Status == "Trial" && x.TrialEndsAtUtc > DateTime.UtcNow)))
+                    x.Status == "Trial" && x.TrialEndsAtUtc > DateTime.UtcNow), cancellationToken))
             return Results.Problem("Subscription is not active. Editing is unavailable.",
                 statusCode: StatusCodes.Status403Forbidden);
 

@@ -285,7 +285,7 @@ public static class RetailBillingSettingsEndpoints
         salesPaused = !business.CashSalesEnabled && !business.CreditSalesEnabled
     };
 
-    internal static async Task<long?> OwnerId(AppDbContext db, long businessId, ClaimsPrincipal user)
+    internal static async Task<long?> OwnerId(AppDbContext db, long businessId, ClaimsPrincipal user, CancellationToken cancellationToken = default)
     {
         if (!long.TryParse(user.FindFirstValue(ClaimTypes.NameIdentifier), out var actor))
             return null;
@@ -296,7 +296,7 @@ public static class RetailBillingSettingsEndpoints
                           on business.BusinessTypeId equals type.Id
                       where membership.BusinessId == businessId && membership.UserId == actor &&
                             membership.RoleCode == "Owner" && type.Code == "RETAIL"
-                      select (long?)membership.UserId).SingleOrDefaultAsync();
+                      select (long?)membership.UserId).SingleOrDefaultAsync(cancellationToken);
     }
 
     private sealed record BillingSettingsRequest(bool CashSalesEnabled, bool CreditSalesEnabled,
