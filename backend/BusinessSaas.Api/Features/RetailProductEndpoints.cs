@@ -17,15 +17,11 @@ public static class RetailProductEndpoints
         group.MapGet("", async (long businessId, string? search, string? status,
             long? categoryId, int? page, long? locationId, string? code, ClaimsPrincipal user, AppDbContext db, CancellationToken cancellationToken) =>
         {
-            var denied = await RetailMasterEndpoints.CheckAccess(db, user, businessId, false, cancellationToken);
+            var denied = locationId is > 0
+                ? await RetailStockEndpoints.CheckLocation(db, user, businessId, locationId.Value, false, cancellationToken)
+                : await RetailMasterEndpoints.CheckAccess(db, user, businessId, false, cancellationToken);
             if (denied is not null) return denied;
-
-            if (locationId is not null)
-            {
-                if (locationId <= 0) return Results.BadRequest(new { message = "Invalid location." });
-                var locationDenied = await RetailStockEndpoints.CheckLocation(db, user, businessId, locationId.Value, false, cancellationToken);
-                if (locationDenied is not null) return locationDenied;
-            }
+            if (locationId is <= 0) return Results.BadRequest(new { message = "Invalid location." });
 
             var currentPage = page ?? 1;
             if (currentPage is < 1 or > 100000 || categoryId is <= 0)

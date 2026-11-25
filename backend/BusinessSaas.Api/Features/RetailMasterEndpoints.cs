@@ -327,7 +327,7 @@ public static class RetailMasterEndpoints
     }
 
     internal static async Task<IResult?> CheckAccess(AppDbContext db, ClaimsPrincipal user,
-        long businessId, bool write, CancellationToken cancellationToken = default)
+        long businessId, bool write, CancellationToken cancellationToken = default, long? locationId = null)
     {
         if (!long.TryParse(user.FindFirstValue(ClaimTypes.NameIdentifier), out var userId))
             return Results.NotFound();
@@ -350,6 +350,11 @@ public static class RetailMasterEndpoints
                     x.Status == "Trial" && x.TrialEndsAtUtc > DateTime.UtcNow), cancellationToken))
             return Results.Problem("Subscription is not active. Editing is unavailable.",
                 statusCode: StatusCodes.Status403Forbidden);
+
+        if (locationId.HasValue && !await db.BusinessLocations.AsNoTracking().AnyAsync(x =>
+                x.BusinessId == businessId && x.Id == locationId.Value &&
+                (role == "Owner" || x.IsPrimary), cancellationToken))
+            return Results.NotFound();
 
         return null;
     }

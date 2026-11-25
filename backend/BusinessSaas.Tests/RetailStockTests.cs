@@ -131,6 +131,9 @@ public sealed class RetailStockTests
         Assert.Equal(HttpStatusCode.NotFound, (await manager.GetAsync(lookup + secondLocationId)).StatusCode);
         Assert.Equal(HttpStatusCode.NotFound, (await other.GetAsync(lookup + locationId)).StatusCode);
         Assert.Equal(HttpStatusCode.NotFound, (await cashier.GetAsync(lookup + locationId)).StatusCode);
+        Assert.Equal(HttpStatusCode.BadRequest, (await owner.GetAsync(lookup + "0")).StatusCode);
+        Assert.Equal(HttpStatusCode.NotFound, (await other.GetAsync(lookup + "0")).StatusCode);
+        Assert.Equal(HttpStatusCode.NotFound, (await cashier.GetAsync(lookup + "0")).StatusCode);
         var noLocation = await owner.GetFromJsonAsync<JsonElement>($"/api/businesses/{businessId}/products?code=STOCK-100");
         Assert.Equal(JsonValueKind.Null, noLocation.GetProperty("items")[0].GetProperty("availableStock").ValueKind);
 

@@ -163,22 +163,9 @@ public static class RetailStockEndpoints
         });
     }
 
-    internal static async Task<IResult?> CheckLocation(AppDbContext db,
-        ClaimsPrincipal user, long businessId, long locationId, bool write, CancellationToken cancellationToken = default)
-    {
-        var denied = await RetailMasterEndpoints.CheckAccess(db, user, businessId, write, cancellationToken);
-        if (denied is not null) return denied;
-
-        var userId = long.Parse(user.FindFirstValue(ClaimTypes.NameIdentifier)!);
-        var role = await db.BusinessUsers.AsNoTracking()
-            .Where(x => x.BusinessId == businessId && x.UserId == userId)
-            .Select(x => x.RoleCode).SingleOrDefaultAsync(cancellationToken);
-
-        var allowed = await db.BusinessLocations.AsNoTracking().AnyAsync(x =>
-            x.BusinessId == businessId && x.Id == locationId &&
-            (role == "Owner" || x.IsPrimary), cancellationToken);
-        return allowed ? null : Results.NotFound();
-    }
+    internal static Task<IResult?> CheckLocation(AppDbContext db,
+        ClaimsPrincipal user, long businessId, long locationId, bool write, CancellationToken cancellationToken = default) =>
+        RetailMasterEndpoints.CheckAccess(db, user, businessId, write, cancellationToken, locationId);
 
     private sealed record OpeningStockRequest(long ProductId, decimal Quantity);
 }

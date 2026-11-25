@@ -188,8 +188,9 @@ public static class RetailContactEndpoints
             var billed = await invoices.GroupBy(x => x.CurrencyCode).Select(x => new {
                 CurrencyCode = x.Key, Debit = x.Sum(s => s.Total), InvoiceCount = x.Count()
             }).ToListAsync(cancellationToken);
-            var collections = await (from payment in CreditCollections.CustomerPayments(db, businessId, customerId)
+            var collections = await (from payment in db.RetailCreditPayments.AsNoTracking()
                                      join sale in invoices on payment.SaleId equals sale.Id
+                                     where payment.BusinessId == businessId
                                      group payment by sale.CurrencyCode into amounts
                                      select new { CurrencyCode = amounts.Key, Paid = amounts.Sum(p => p.Amount) })
                 .ToDictionaryAsync(x => x.CurrencyCode, x => x.Paid, cancellationToken);
