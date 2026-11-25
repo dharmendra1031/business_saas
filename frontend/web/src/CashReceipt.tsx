@@ -1,5 +1,6 @@
 import { useEffect, useRef, useState } from 'react'
 import { api, ApiResponseError, operationKey, post } from './api'
+import { baseQuantity } from './stockQuantity'
 
 export interface Receipt {
   id: number
@@ -15,6 +16,7 @@ export interface Receipt {
   timeZoneId?: string | null
   lines: { id: number; productName: string; unitPrice: number; quantity: number;
     productSku?: string | null; unitCode?: string | null; lineTotal?: number | null;
+    conversionFactor?: number | null; baseUnitCode?: string | null;
     returnedQuantity?: number | null; remainingQuantity?: number | null;
     returnedAmount?: number | null; remainingAmount?: number | null }[]
 }
@@ -125,8 +127,7 @@ function ReturnEstimate({ receipt, options }: { receipt: Receipt; options: Retur
   const selected = receipt.lines.filter(line => (quantities[line.id] ?? '') !== '' && Number(quantities[line.id]) !== 0)
   const valid = selected.length > 0 && selected.every(line => {
     const value = Number(quantities[line.id])
-    return Number.isFinite(value) && value > 0 && value <= available(line) &&
-      Math.abs(Math.round(value * 1000) - value * 1000) < 0.000001
+    return value <= available(line) && baseQuantity(value, line.conversionFactor ?? 1) !== null
   })
   function change(next: Record<number, string>) {
     setQuantities(next); setEstimate(null); setConfirmed(false); setError('')
@@ -207,7 +208,12 @@ function ReturnEstimate({ receipt, options }: { receipt: Receipt; options: Retur
             <small className="d-block">Sold: {line.quantity} · Returned: {line.returnedQuantity ?? '—'} · Remaining: {line.remainingQuantity ?? '—'} {line.unitCode}</small></td>
           <td><input type="number" className="form-control form-control-sm" min="0" max={available(line)} step="0.001"
             aria-label={`Return quantity for ${line.productName}`} disabled={busy || available(line) === 0} value={quantities[line.id] ?? ''}
-            onChange={event => change({ ...quantities, [line.id]: event.target.value })} /></td>
+            onChange={event => change({ ...quantities, [line.id]: event.target.value })} />
+            {line.conversionFactor != null && Number(quantities[line.id] ?? '') !== 0 &&
+              <small className="d-block mt-1">{baseQuantity(Number(quantities[line.id]), line.conversionFactor) === null
+                ? 'Enter a quantity that converts exactly to three stock decimals.'
+                : `${baseQuantity(Number(quantities[line.id]), line.conversionFactor)} ${line.baseUnitCode ?? 'base units'} stock equivalent`}
+              </small>}</td>
           <td className="text-end">{estimate?.lines.some(item => item.lineId === line.id)
             ? estimate.currencyCode + ' ' + estimate.lines.find(item => item.lineId === line.id)!.amount.toFixed(2) : '—'}</td>
         </tr>)}</tbody>

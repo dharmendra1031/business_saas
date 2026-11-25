@@ -238,7 +238,7 @@ public static class RetailCashSales
         var cumulativeQty = returned.Sum(x => x.Quantity) + quantity;
         var originalAmount = OriginalAmount(line);
         if (cumulativeQty > line.Quantity ||
-            !ValidBaseQuantity(quantity, line.ConversionFactor ?? 1m)) return null;
+            !StockPosting.ValidBaseQuantity(quantity, line.ConversionFactor ?? 1m)) return null;
         var cumulativeAmount = cumulativeQty == line.Quantity ? originalAmount :
             decimal.Round(originalAmount * (cumulativeQty / line.Quantity), 2, MidpointRounding.AwayFromZero);
         var amount = cumulativeAmount - returned.Sum(x => x.Amount);
@@ -474,13 +474,6 @@ public static class RetailCashSales
     private static decimal SaleUnitPrice(decimal basePrice, decimal factor, decimal? overridePrice = null) =>
         overridePrice ?? decimal.Round(basePrice * factor, 2, MidpointRounding.AwayFromZero);
 
-    private static bool ValidBaseQuantity(decimal quantity, decimal factor)
-    {
-        if (factor is < 0.001m or > 9999999.999m) return false;
-        var converted = quantity * factor;
-        return converted is > 0 and <= 9999999999.999m && decimal.Round(converted, 3) == converted;
-    }
-
     private static async Task<IResult> Post(long businessId, CashRequest request,
         ClaimsPrincipal user, AppDbContext db, HttpContext context, IConfiguration config)
     {
@@ -589,7 +582,7 @@ public static class RetailCashSales
                 }
                 var unitPrice = SaleUnitPrice(product.SalePrice, factor ?? 1m, overridePrice);
                 if (unitPrice <= 0 || unitPrice > 9999999999999999.99m ||
-                    unitPrice != item.ExpectedUnitPrice || !ValidBaseQuantity(item.Quantity, factor ?? 1m))
+                    unitPrice != item.ExpectedUnitPrice || !StockPosting.ValidBaseQuantity(item.Quantity, factor ?? 1m))
                     return Results.BadRequest(new { code = "CASH_SALE_BASKET_CHANGED", item.ProductId,
                         message = "Price or converted quantity is invalid. Select the affected item again." });
                 var lineTotal = decimal.Round(unitPrice * item.Quantity, 2,

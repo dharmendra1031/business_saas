@@ -125,7 +125,7 @@ public static class RetailPurchaseEndpoints
                         factor = conversion.Factor;
                         unitCode = alternate.Code;
                     }
-                    if (!ValidBaseQuantity(line.Quantity, factor ?? 1m))
+                    if (!StockPosting.ValidBaseQuantity(line.Quantity, factor ?? 1m))
                         return Results.BadRequest(new { message = "Converted stock quantity must be positive, within the stock limit and exact to three decimals." });
                     orderLines.Add(new RetailPurchaseOrderLine
                     {
@@ -300,7 +300,7 @@ public static class RetailPurchaseEndpoints
             {
                 if (!lines.TryGetValue(line.PurchaseOrderLineId, out var ordered))
                     return Results.BadRequest(new { message = "Invalid purchase order line." });
-                if (!ValidBaseQuantity(line.Quantity, ordered.ConversionFactor ?? 1m))
+                if (!StockPosting.ValidBaseQuantity(line.Quantity, ordered.ConversionFactor ?? 1m))
                     return Results.BadRequest(new { message = "Receiving quantity cannot be represented exactly in the base stock unit." });
                 if (line.Quantity > ordered.OrderedQuantity - received.GetValueOrDefault(ordered.Id))
                     return Results.Conflict(new { message = "Receiving exceeds the remaining ordered quantity." });
@@ -378,7 +378,7 @@ public static class RetailPurchaseEndpoints
                 {
                     var ordered = allLines[line.PurchaseOrderLineId];
                     if (!ValidQuantity(line.Quantity) ||
-                        !ValidBaseQuantity(line.Quantity, ordered.ConversionFactor ?? 1m) ||
+                        !StockPosting.ValidBaseQuantity(line.Quantity, ordered.ConversionFactor ?? 1m) ||
                         line.Quantity > ordered.OrderedQuantity - received.GetValueOrDefault(ordered.Id) ||
                         !await db.RetailProducts.AsNoTracking().AnyAsync(x =>
                             x.Id == ordered.ProductId && x.BusinessId == businessId && x.IsActive))
@@ -462,12 +462,6 @@ public static class RetailPurchaseEndpoints
 
     private static bool ValidQuantity(decimal value) =>
         value is > 0 and <= MaxQuantity && decimal.Round(value, 3) == value;
-
-    private static bool ValidBaseQuantity(decimal quantity, decimal factor)
-    {
-        var converted = quantity * factor;
-        return converted is > 0 and <= 9999999999.999m && decimal.Round(converted, 3) == converted;
-    }
 
     private static bool ValidCost(decimal value) =>
         value is >= 0 and <= MaxCost && decimal.Round(value, 2) == value;

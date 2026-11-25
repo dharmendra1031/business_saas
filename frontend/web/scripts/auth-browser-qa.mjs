@@ -1923,6 +1923,7 @@ try {
             locationName: 'Main Shop', customerName: 'Sample Customer', customerId: 9,
             lines: [{ id: 1, productName: 'Loose Rice', productSku: 'RICE-KG', unitCode: 'KG',
               unitPrice: 96, quantity: 0.25, lineTotal: 24,
+              conversionFactor: 0.4, baseUnitCode: 'BAG',
               returnedQuantity: postedReturn ? 0.175 : 0.05, remainingQuantity: postedReturn ? 0.075 : 0.2,
               returnedAmount: postedReturn ? 16.8 : 4.8, remainingAmount: postedReturn ? 7.2 : 19.2 }] })
         })
@@ -1980,7 +1981,11 @@ try {
         const quantity = estimate.getByRole('spinbutton', { name: 'Return quantity for Loose Rice' })
         await quantity.fill('0.225')
         assert.equal(await estimate.getByRole('button', { name: 'Calculate estimate' }).isDisabled(), true)
+        await quantity.fill('0.001')
+        await estimate.getByText('Enter a quantity that converts exactly to three stock decimals.').waitFor()
+        assert.equal(await estimate.getByRole('button', { name: 'Calculate estimate' }).isDisabled(), true)
         await quantity.fill('0.125')
+        await estimate.getByText('0.05 BAG stock equivalent', { exact: true }).waitFor()
         await estimate.getByRole('button', { name: 'Calculate estimate' }).click()
         await estimate.getByText('Estimated return amount: INR 12.00', { exact: true }).waitFor()
         const record = estimate.getByRole('button', { name: 'Record return', exact: true })

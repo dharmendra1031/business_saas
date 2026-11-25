@@ -1013,6 +1013,37 @@ public sealed class SqlServerTests
             Assert.Equal(12m, await db.RetailStockMovements.Where(x => x.ProductId == packProductId &&
                 x.SourceType == "CashReturnLine").Select(x => x.QuantityChange).SingleAsync());
         }
+
+        // A valid fractional sale can still have return quantities which would
+        // produce a fourth stock decimal. Reject these before any refund posting.
+        Assert.Equal(HttpStatusCode.OK, (await Put(owner, prefix + "/products/" + packProductId,
+            convertedProduct with { conversions = new[] { new { unitId = boxId, factor = 12.5m } } })).StatusCode);
+        var fractionalSale = new { locationId, requestKey = "sql-fraction-pack-sale-20261125", tendered = 125m,
+            lines = new[] { new { productId = packProductId, quantity = 1m, expectedUnitPrice = 125m,
+                unitId = boxId, expectedFactor = 12.5m } } };
+        using var fractionalResponse = await Post(cashier, packSalePath, fractionalSale);
+        Assert.Equal(HttpStatusCode.OK, fractionalResponse.StatusCode);
+        var fractionReceipt = await fractionalResponse.Content.ReadFromJsonAsync<JsonElement>();
+        var fractionLineId = fractionReceipt.GetProperty("lines")[0].GetProperty("id").GetInt64();
+        var fractionPath = packSalePath + "/business-receipts/" + fractionReceipt.GetProperty("id").GetInt64();
+        Assert.Equal(HttpStatusCode.Conflict, (await Post(owner, fractionPath + "/return-estimate",
+            new { locationId, lines = new[] { new { lineId = fractionLineId, quantity = 0.001m } } })).StatusCode);
+        Assert.Equal(HttpStatusCode.Conflict, (await Post(owner, fractionPath + "/returns",
+            new { locationId, requestKey = "sql-invalid-fraction-return-20261125", reason = "Fractional return",
+                expectedRefund = 0.13m, cashRefundConfirmed = true,
+                lines = new[] { new { lineId = fractionLineId, quantity = 0.001m, restock = true } } })).StatusCode);
+        using var fractionEstimate = await Post(owner, fractionPath + "/return-estimate",
+            new { locationId, lines = new[] { new { lineId = fractionLineId, quantity = 0.2m } } });
+        Assert.Equal(HttpStatusCode.OK, fractionEstimate.StatusCode);
+        Assert.Equal(25m, (await fractionEstimate.Content.ReadFromJsonAsync<JsonElement>()).GetProperty("total").GetDecimal());
+        using (var scope = factory.Services.CreateScope())
+        {
+            var db = scope.ServiceProvider.GetRequiredService<AppDbContext>();
+            Assert.Equal(5.5m, await db.RetailStockBalances.Where(x => x.BusinessId == businessId &&
+                x.LocationId == locationId && x.ProductId == packProductId).Select(x => x.Quantity).SingleAsync());
+            Assert.False(await db.RetailCashReturns.AnyAsync(x => x.BusinessId == businessId &&
+                x.RequestKey == "sql-invalid-fraction-return-20261125"));
+        }
     }
 
     private static async Task RegisterAndLogin(HttpClient client, string email)

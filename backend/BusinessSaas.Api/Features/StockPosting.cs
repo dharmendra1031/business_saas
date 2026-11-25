@@ -8,6 +8,15 @@ public static class StockPosting
 {
     private const decimal MaxQuantity = 9999999999.999m;
 
+    public static bool ValidBaseQuantity(decimal quantity, decimal factor)
+    {
+        if (quantity is <= 0 or > MaxQuantity || factor is < 0.001m or > 9999999.999m ||
+            decimal.Round(quantity, 3) != quantity || decimal.Round(factor, 3) != factor)
+            return false;
+        var converted = quantity * factor;
+        return converted is > 0 and <= MaxQuantity && decimal.Round(converted, 3) == converted;
+    }
+
     public static bool IsSqlConflict(Exception error)
     {
         for (Exception? cause = error; cause is not null; cause = cause.InnerException)
