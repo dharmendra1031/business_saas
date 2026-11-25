@@ -275,13 +275,10 @@ export default function RetailContacts({ businessId, canOperate, type, isOwner, 
           <input id="contact-address" className="form-control" maxLength={300} disabled={saving}
             value={form.address} onChange={event => setForm(current => ({ ...current, address: event.target.value }))} />
         </div>}
-        {editingId !== null && <div>
-          <label className="form-label" htmlFor="contact-status">Status</label>
-          <select id="contact-status" className="form-select" value={form.isActive ? 'active' : 'inactive'} disabled={saving}
-            onChange={event => setForm(current => ({ ...current, isActive: event.target.value === 'active' }))}>
-            <option value="active">Active</option>
-            <option value="inactive">Inactive</option>
-          </select>
+        {editingId !== null && <div className="form-check form-wide">
+          <input id="contact-status" type="checkbox" className="form-check-input" checked={form.isActive} disabled={saving}
+            onChange={event => setForm(current => ({ ...current, isActive: event.target.checked }))} />
+          <label className="form-check-label" htmlFor="contact-status">Active</label>
         </div>}
         </div>
         <div className="form-footer">

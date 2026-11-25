@@ -91,7 +91,7 @@ export function MasterLookup({ id, title, value, options, emptyLabel, disabled, 
   id: string
   title: string
   value: number
-  options: { id: number; name: string }[]
+  options: { id: number; name: string; code?: string | null }[]
   emptyLabel: string
   disabled?: boolean
   onChange: (id: number) => void
@@ -100,15 +100,17 @@ export function MasterLookup({ id, title, value, options, emptyLabel, disabled, 
   const [search, setSearch] = useState('')
   const selected = options.find(item => item.id === value)
   function show() { setSearch(''); setOpen(true) }
-  const rows = options.filter(item => item.name.toLowerCase().includes(search.trim().toLowerCase()))
-    .map(item => ({ id: item.id, cells: [item.name] }))
+  const hasCodes = options.some(item => !!item.code)
+  const term = search.trim().toLowerCase()
+  const rows = options.filter(item => item.name.toLowerCase().includes(term) || item.code?.toLowerCase().includes(term))
+    .map(item => ({ id: item.id, cells: hasCodes ? [item.code || '—', item.name] : [item.name] }))
   return <>
     <button id={id} type="button" className="btn btn-outline-secondary w-100 text-start d-flex align-items-center justify-content-between gap-2"
       data-selected-id={value} disabled={disabled} aria-haspopup="dialog" aria-expanded={open} onClick={show}>
-      <span>{selected?.name ?? emptyLabel}</span><Search size={16} aria-hidden="true" />
+      <span>{selected ? selected.name + (selected.code ? ' (' + selected.code + ')' : '') : emptyLabel}</span><Search size={16} aria-hidden="true" />
     </button>
     {open && <LookupDialog title={title} searchId={id + '-search'} search={search} placeholder="Search"
-      columns={['Name']} rows={rows} status={rows.length ? '' : 'No matching records'}
+      columns={hasCodes ? ['Code', 'Name'] : ['Name']} rows={rows} status={rows.length ? '' : 'No matching records'}
       onSearch={setSearch} onSelect={selectedId => { onChange(selectedId); setOpen(false) }} onClose={() => setOpen(false)} />}
   </>
 }

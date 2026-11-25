@@ -6,6 +6,7 @@ export default function TeamMembers({ businessId, canOperate, cashSaleEnabled }:
   const { run } = useActionFeedback()
   const [members, setMembers] = useState<StaffMember[]>([])
   const [email, setEmail] = useState('')
+  const [adding, setAdding] = useState(false)
   const [role, setRole] = useState<'Manager' | 'Cashier'>('Manager')
   const [loading, setLoading] = useState(true)
   const [loadFailed, setLoadFailed] = useState(false)
@@ -35,7 +36,7 @@ export default function TeamMembers({ businessId, canOperate, cashSaleEnabled }:
 
   async function add(event: FormEvent<HTMLFormElement>) {
     event.preventDefault()
-    if (busy) return
+    if (busy || !canOperate || loading || loadFailed || !adding) return
     setBusy(true)
     setError('')
     try {
@@ -43,6 +44,7 @@ export default function TeamMembers({ businessId, canOperate, cashSaleEnabled }:
         () => post<StaffMember>(path, { email: email.trim(), roleCode: role }))
       setMembers(current => [...current, member])
       setEmail('')
+      setAdding(false)
     } catch {
       // The app-wide status popup handles the failed or ambiguous mutation.
     } finally {
@@ -68,16 +70,22 @@ export default function TeamMembers({ businessId, canOperate, cashSaleEnabled }:
 
   return (
     <section className="content-section" aria-labelledby="team-heading">
-      <h2 id="team-heading">Team Access</h2>
+      <div className="d-flex justify-content-between align-items-center gap-2 mb-3">
+        <h2 id="team-heading" className="mb-0">Team Access</h2>
+        {canOperate && !adding && <button type="button" className="btn btn-primary" disabled={busy || loading || loadFailed}
+          onClick={() => { setEmail(''); setRole('Manager'); setConfirmRemove(null); setAdding(true) }}>Add Team Member</button>}
+      </div>
       <p className="text-secondary small mb-3">
         Only existing accounts can be added. Team members work at the primary location. {cashSaleEnabled ? "Cashiers can record cash sales." : "Cash checkout is unavailable."}
       </p>
       {error && <div className="alert alert-danger" role="alert">{error}</div>}
       {!canOperate && <p role="status">Team access is read-only while the subscription is inactive.</p>}
-      <form onSubmit={event => void add(event)} className="team-form mb-4" aria-busy={busy}>
+      {canOperate && adding && <form onSubmit={event => void add(event)} className="product-form" aria-busy={busy}>
+        <h3>New team member</h3>
+        <div className="form-grid">
         <div>
           <label className="form-label" htmlFor="staff-email">Account email</label>
-          <input id="staff-email" className="form-control" type="email" autoComplete="off" disabled={busy}
+          <input id="staff-email" className="form-control" type="email" autoFocus autoComplete="off" disabled={busy}
             value={email} onChange={event => setEmail(event.target.value)}
             placeholder="person@example.com" maxLength={256} required />
         </div>
@@ -89,12 +97,14 @@ export default function TeamMembers({ businessId, canOperate, cashSaleEnabled }:
             <option value="Cashier">Cashier</option>
           </select>
         </div>
-        <ActionButton busy={busy} disabled={!canOperate || loading || loadFailed}>
-          Add Team Member
-        </ActionButton>
-      </form>
+        </div>
+        <div className="form-footer">
+          <button type="button" className="btn btn-outline-secondary" disabled={busy} onClick={() => setAdding(false)}>Cancel</button>
+          <ActionButton busy={busy} disabled={!canOperate || loading || loadFailed}>Save</ActionButton>
+        </div>
+      </form>}
 
-      {loading ? <p className="text-secondary" role="status">Loading team…</p>
+      {!adding && (loading ? <p className="text-secondary" role="status">Loading team…</p>
         : loadFailed ? <button type="button" className="btn btn-outline-secondary"
             onClick={() => setReload(value => value + 1)}>Retry loading team</button>
           : members.length === 0 ? <p className="text-secondary">No team members yet.</p>
@@ -124,7 +134,7 @@ export default function TeamMembers({ businessId, canOperate, cashSaleEnabled }:
                 ))}
               </tbody>
             </table>
-          </div>}
+          </div>)}
     </section>
   )
 }

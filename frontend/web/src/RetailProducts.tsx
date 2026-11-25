@@ -343,7 +343,6 @@ export default function RetailProducts({ businessId, canOperate, currencyCode }:
   const filterGroup = filterTrail[0]?.id ?? 0
   const filterSubgroup = filterTrail[1]?.id ?? 0
   const filterCategory = filterTrail[2]?.id ?? 0
-  const canCreate = groups.length > 0 && options.units.length > 0
 
   return (
     <section className="content-section retail-products business-module-card" aria-label="Product master">
@@ -352,7 +351,7 @@ export default function RetailProducts({ businessId, canOperate, currencyCode }:
         <div className="business-module-actions">
           {!formOpen && !loading && !loadError && total > 0 && <span className="business-module-count">{total.toLocaleString()} products</span>}
           {canOperate && !formOpen && <button type="button" className="btn btn-primary"
-            disabled={!canCreate || optionsLoading} onClick={startCreate}><Plus size={17} /> Add Product</button>}
+            disabled={!!optionsError || optionsLoading} onClick={startCreate}><Plus size={17} /> Add Product</button>}
         </div>
       </div>
 
@@ -367,9 +366,6 @@ export default function RetailProducts({ businessId, canOperate, currencyCode }:
         {optionsError} <button type="button" className="btn btn-sm btn-outline-secondary ms-2"
           onClick={() => setOptionsReload(value => value + 1)}>Retry setup</button>
       </div>}
-      {!optionsLoading && !optionsError && !canCreate && <p className="alert alert-info" role="status">
-        A group and unit are required. Add them from Product Masters first.
-      </p>}
 
       {formOpen && canOperate && <form className="product-form" aria-busy={saving || inlineSaving} onSubmit={event => void save(event)}>
         <h3>{editingId === null ? 'New product' : 'Edit product'}</h3>
@@ -416,15 +412,10 @@ export default function RetailProducts({ businessId, canOperate, currencyCode }:
           </div>}
           <div>
             <label className="form-label" htmlFor="product-unit">Stock unit *</label>
-            <select id="product-unit" className="form-select" required value={form.unitId}
-              onChange={event => changeForm('unitId', Number(event.target.value))}>
-              <option value={0}>Select unit</option>
-              {!unitSelected && form.unitId > 0 &&
-                <option value={form.unitId}>Previous unit (inactive)</option>}
-              {options.units.map(item => <option key={item.id} value={item.id}>
-                {item.name} ({item.code})
-              </option>)}
-            </select>
+            <MasterLookup id="product-unit" title="Select stock unit" value={form.unitId} emptyLabel="Select unit"
+              options={[...options.units, ...(!unitSelected && form.unitId > 0
+                ? [{ id: form.unitId, name: 'Previous unit (inactive)' }] : [])]}
+              onChange={id => changeForm('unitId', id)} />
             <button type="button" className="btn btn-sm btn-link" onClick={() => beginInline('units')}>+ Add unit</button>
           </div>
           <div>
@@ -470,15 +461,13 @@ export default function RetailProducts({ businessId, canOperate, currencyCode }:
                 <table className="table table-sm align-middle">
                   <thead><tr><th>Alternate unit</th><th>Quantity per pack</th><th>Selling price (optional)</th><th>Action</th></tr></thead>
                   <tbody>{form.conversions.map((line, index) => <tr key={index}>
-                    <td><select className="form-select form-select-sm" aria-label={`Alternate unit ${index + 1}`}
-                      required value={line.unitId} onChange={event => changeConversion(index, { unitId: Number(event.target.value), factor: '', salePrice: '' })}>
-                      <option value={0}>Select unit</option>
-                      {line.unitId > 0 && !options.units.some(x => x.id === line.unitId) &&
-                        <option value={line.unitId}>Previous unit (inactive)</option>}
-                      {options.units.filter(x => x.id !== form.unitId &&
-                        (x.id === line.unitId || !form.conversions.some(row => row.unitId === x.id)))
-                        .map(x => <option key={x.id} value={x.id}>{x.name} ({x.code})</option>)}
-                    </select></td>
+                    <td><MasterLookup id={`product-conversion-unit-${index}`} title={`Alternate unit ${index + 1}`}
+                      value={line.unitId} emptyLabel="Select unit"
+                      options={[...options.units.filter(x => x.id !== form.unitId &&
+                        (x.id === line.unitId || !form.conversions.some(row => row.unitId === x.id))),
+                        ...(line.unitId > 0 && !options.units.some(x => x.id === line.unitId)
+                          ? [{ id: line.unitId, name: 'Previous unit (inactive)' }] : [])]}
+                      onChange={id => changeConversion(index, { unitId: id, factor: '', salePrice: '' })} /></td>
                     <td><input className="form-control form-control-sm" type="number" inputMode="decimal"
                       aria-label={`Conversion factor ${index + 1}`} min="0.001" max="9999999.999" step="0.001"
                       required value={line.factor} onChange={event => changeConversion(index, { factor: event.target.value })} /></td>
