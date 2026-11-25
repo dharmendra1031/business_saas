@@ -1227,3 +1227,7 @@ Reviewed source revision: d6f8252770372c9af17aa5cc97cebb206ad7dc15. Read-only re
 Normalization assessment: reviewed master/line and product/unit structures separate repeating groups and association data; no demonstrated 1NF or 2NF violation in these selected structures. A complete functional-dependency/3NF assessment remains pending. Historical snapshots and materialized balances are deliberate exceptions to strict normalization. No Remove or Refactor decision is authorized by this targeted review.
 
 Remaining DB-05/06 work: exhaustive table/column references across frontend, API, reports, migrations and tests; actual SQL Server catalog, storage and index usage; orphan and cross-tenant checks. No live database connection or workload measurements were available. Do not mark DB-05/06 complete.
+
+## DB-07 — Document-line tenant integrity (application layer)
+
+Purchase detail rejects receiving lines outside the scoped order (commit 0fffbc1). Cash receipt detail, return history, return/exchange estimation and return posting/replay reject return lines outside the original sale. Tests deliberately introduce cross-business line references via existing independent FKs, verify conflict and absence of new refund/stock posting, and restore fixture integrity. These are application guards, not database constraints. CI and database-level integrity/migration validation remain outstanding. Register aggregate queries and other tenant relationships require separate review.

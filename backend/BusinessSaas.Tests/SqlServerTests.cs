@@ -1421,7 +1421,7 @@ public sealed class SqlServerTests(Xunit.Abstractions.ITestOutputHelper output)
 
     [Fact]
     [Trait("Database", "SqlServer")]
-    public async Task Purchase_detail_rejects_receiving_line_from_another_business()
+    public async Task Corrupt_cross_business_document_lines_are_rejected()
     {
         var connectionString = Environment.GetEnvironmentVariable("SQLSERVER_TEST_CONNECTION");
         if (string.IsNullOrWhiteSpace(connectionString)) return;
@@ -1429,6 +1429,7 @@ public sealed class SqlServerTests(Xunit.Abstractions.ITestOutputHelper output)
         using var factory = new WebApplicationFactory<Program>().WithWebHostBuilder(builder =>
         {
             builder.UseEnvironment("Development");
+            builder.UseSetting("RetailReturns:PostingEnabled", "true");
             builder.ConfigureServices(services =>
             {
                 services.RemoveAll<DbContextOptions<AppDbContext>>();
@@ -1513,6 +1514,71 @@ public sealed class SqlServerTests(Xunit.Abstractions.ITestOutputHelper output)
         finally
         {
             line.PurchaseOrderLineId = ownLine.Id;
+            await db.SaveChangesAsync();
+        }
+
+        async Task<RetailCashSale> CreateSale(long tenant, long productId)
+        {
+            var sale = new RetailCashSale
+            {
+                BusinessId = tenant,
+                LocationId = await db.BusinessLocations.Where(x => x.BusinessId == tenant).Select(x => x.Id).SingleAsync(),
+                CashierId = await db.BusinessUsers.Where(x => x.BusinessId == tenant).Select(x => x.UserId).SingleAsync(),
+                CurrencyCode = await db.Businesses.Where(x => x.Id == tenant).Select(x => x.CurrencyCode).SingleAsync(),
+                RequestKey = "sql-isolation-sale", PostedAtUtc = DateTime.UtcNow, Total = 10m, Tendered = 10m,
+                Lines = [new RetailCashSaleLine
+                {
+                    ProductId = productId, ProductName = "Item", Quantity = 1m, UnitPrice = 10m, LineTotal = 10m
+                }]
+            };
+            db.RetailCashSales.Add(sale);
+            await db.SaveChangesAsync();
+            return sale;
+        }
+        var ownSale = await CreateSale(businessId, ownLine.ProductId);
+        var foreignSale = await CreateSale(otherId, foreignLine.ProductId);
+        var refund = new RetailCashReturn
+        {
+            BusinessId = businessId, SaleId = ownSale.Id, ActorUserId = ownSale.CashierId,
+            RequestKey = "sql-isolation-refund", Reason = "Test refund", Total = 5m, PostedAtUtc = DateTime.UtcNow,
+            Lines = [new RetailCashReturnLine
+            {
+                SaleLineId = ownSale.Lines.Single().Id, Quantity = 0.5m, Amount = 5m
+            }]
+        };
+        db.RetailCashReturns.Add(refund);
+        await db.SaveChangesAsync();
+        var salePath = $"/api/businesses/{businessId}/cash-sales/business-receipts/{ownSale.Id}";
+        var locationQuery = $"?locationId={ownSale.LocationId}";
+        using var validHistory = await owner.GetAsync(salePath + "/returns" + locationQuery);
+        Assert.Equal(HttpStatusCode.OK, validHistory.StatusCode);
+        var refundLine = refund.Lines.Single();
+        refundLine.SaleLineId = foreignSale.Lines.Single().Id;
+        await db.SaveChangesAsync();
+        try
+        {
+            using var badDetail = await owner.GetAsync(salePath + locationQuery);
+            Assert.Equal(HttpStatusCode.Conflict, badDetail.StatusCode);
+            using var badHistory = await owner.GetAsync(salePath + "/returns" + locationQuery);
+            Assert.Equal(HttpStatusCode.Conflict, badHistory.StatusCode);
+            using var estimate = await Post(owner, salePath + "/return-estimate", new
+            {
+                locationId = ownSale.LocationId,
+                lines = new[] { new { lineId = ownSale.Lines.Single().Id, quantity = 0.5m } }
+            });
+            Assert.Equal(HttpStatusCode.Conflict, estimate.StatusCode);
+            using var postRefund = await Post(owner, salePath + "/returns", new
+            {
+                locationId = ownSale.LocationId, requestKey = "sql-isolation-new-refund",
+                reason = "Test refund", expectedRefund = 5m, cashRefundConfirmed = true,
+                lines = new[] { new { lineId = ownSale.Lines.Single().Id, quantity = 0.5m, restock = false } }
+            });
+            Assert.Equal(HttpStatusCode.Conflict, postRefund.StatusCode);
+            Assert.Equal(1, await db.RetailCashReturns.CountAsync(x => x.SaleId == ownSale.Id));
+        }
+        finally
+        {
+            refundLine.SaleLineId = ownSale.Lines.Single().Id;
             await db.SaveChangesAsync();
         }
     }

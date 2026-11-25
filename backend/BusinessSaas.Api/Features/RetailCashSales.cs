@@ -194,13 +194,22 @@ public static class RetailCashSales
         var sale = await CashOnly(db).Include(x => x.Lines)
             .SingleOrDefaultAsync(x => x.Id == receiptId && x.BusinessId == businessId && x.LocationId == locationId, cancellationToken);
         if (sale is null) return Results.NotFound();
-        return Results.Ok(Receipt(sale, await ReturnedLines(db, businessId, receiptId, cancellationToken)));
+        var earlier = await ReturnedLines(db, businessId, receiptId, cancellationToken);
+        if (!ReturnLinesMatchSale(sale, earlier))
+            return Results.Conflict(new { message = "Return lines require reconciliation." });
+        return Results.Ok(Receipt(sale, earlier));
     }
 
     private static Task<List<RetailCashReturnLine>> ReturnedLines(AppDbContext db, long businessId, long receiptId, CancellationToken cancellationToken = default) =>
         db.RetailCashReturns.AsNoTracking()
             .Where(x => x.BusinessId == businessId && x.SaleId == receiptId)
             .SelectMany(x => x.Lines).ToListAsync(cancellationToken);
+
+    private static bool ReturnLinesMatchSale(RetailCashSale sale, IEnumerable<RetailCashReturnLine> returns)
+    {
+        var ids = sale.Lines.Select(x => x.Id).ToHashSet();
+        return returns.All(x => ids.Contains(x.SaleLineId));
+    }
 
     public sealed record ReturnEstimateLine(long LineId, decimal Quantity);
     public sealed record ReturnEstimateRequest(long LocationId, List<ReturnEstimateLine>? Lines);
@@ -226,6 +235,8 @@ public static class RetailCashSales
 
         var original = sale.Lines.ToDictionary(x => x.Id);
         var earlier = await ReturnedLines(db, businessId, receiptId);
+        if (!ReturnLinesMatchSale(sale, earlier))
+            return Results.Conflict(new { message = "Return lines require reconciliation." });
         if (sale.Lines.Count == 0 || sale.Lines.Any(x => x.Quantity <= 0 || OriginalAmount(x) < 0) ||
             sale.Lines.Sum(OriginalAmount) != sale.Total)
             return Results.Conflict(new { message = "Original receipt amounts require reconciliation." });
@@ -276,6 +287,8 @@ public static class RetailCashSales
                 return Results.Conflict(new { message = "Original invoice requires reconciliation." });
 
             var earlier = await ReturnedLines(db, businessId, receiptId);
+            if (!ReturnLinesMatchSale(original, earlier))
+                return Results.Conflict(new { message = "Return lines require reconciliation." });
             var originals = original.Lines.ToDictionary(x => x.Id);
             var restocks = new Dictionary<long, decimal>();
             var returnLines = new List<object>();
@@ -411,10 +424,12 @@ public static class RetailCashSales
         ClaimsPrincipal user, AppDbContext db, int page = 1, string? requestKey = null)
     {
         if (!long.TryParse(user.FindFirstValue(ClaimTypes.NameIdentifier), out var actor) ||
-            await Shop(db, businessId, actor, locationId, ownerOnly: true) is null ||
-            !await CashOnly(db).AnyAsync(x => x.Id == receiptId && x.BusinessId == businessId &&
-                x.LocationId == locationId))
+            await Shop(db, businessId, actor, locationId, ownerOnly: true) is null)
             return Results.NotFound();
+        var sale = await CashOnly(db).Where(x => x.Id == receiptId && x.BusinessId == businessId &&
+                x.LocationId == locationId)
+            .Select(x => new { LineIds = x.Lines.Select(line => line.Id).ToList() }).SingleOrDefaultAsync();
+        if (sale is null) return Results.NotFound();
         if (page is < 1 or > 100000 || requestKey is { Length: > 80 })
             return Results.BadRequest(new { message = "Invalid return history filter." });
         const int pageSize = 10;
@@ -422,6 +437,9 @@ public static class RetailCashSales
         if (requestKey is not null) query = query.Where(x => x.RequestKey == requestKey);
         var records = await query.OrderByDescending(x => x.Id).Skip((page - 1) * pageSize)
             .Take(pageSize + 1).Include(x => x.Lines).ToListAsync();
+        var lineIds = sale.LineIds.ToHashSet();
+        if (records.Any(record => record.Lines.Any(line => !lineIds.Contains(line.SaleLineId))))
+            return Results.Conflict(new { message = "Return lines require reconciliation." });
         return Results.Ok(new { items = records.Take(pageSize).Select(x => new {
             x.Id, x.SaleId, x.RequestKey, x.Total, x.Reason, x.ActorUserId,
             PostedAtUtc = DateTime.SpecifyKind(x.PostedAtUtc, DateTimeKind.Utc),
@@ -483,7 +501,8 @@ public static class RetailCashSales
                 .Where(x => x.BusinessId == businessId && x.RequestKey == request.RequestKey).SingleOrDefaultAsync();
             if (prior is not null)
             {
-                if (prior.SaleId != receiptId || prior.Total != request.ExpectedRefund || prior.Reason != reason ||
+                if (prior.SaleId != receiptId || !ReturnLinesMatchSale(sale, prior.Lines) ||
+                    prior.Total != request.ExpectedRefund || prior.Reason != reason ||
                     !prior.Lines.Select(x => new ReturnItem(x.SaleLineId, x.Quantity, x.Restock)).OrderBy(x => x.LineId)
                         .SequenceEqual(items.OrderBy(x => x.LineId)))
                     return Results.Conflict(new { message = "Return key belongs to a different transaction." });
@@ -496,6 +515,8 @@ public static class RetailCashSales
                 return Results.Conflict(new { message = "Original receipt requires reconciliation." });
 
             var earlier = await ReturnedLines(db, businessId, receiptId);
+            if (!ReturnLinesMatchSale(sale, earlier))
+                return Results.Conflict(new { message = "Return lines require reconciliation." });
             var original = sale.Lines.ToDictionary(x => x.Id);
             var record = new RetailCashReturn { BusinessId = businessId, SaleId = receiptId, ActorUserId = actor,
                 Reason = reason, RequestKey = request.RequestKey, PostedAtUtc = DateTime.UtcNow };
