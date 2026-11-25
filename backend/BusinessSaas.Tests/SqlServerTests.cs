@@ -1307,6 +1307,63 @@ public sealed class SqlServerTests
         }
         var finalCashReport = await owner.GetFromJsonAsync<JsonElement>(dailyPath + creditDate.ToString("yyyy-MM-dd"));
         Assert.Equal(cashReportBefore.GetProperty("totals").GetRawText(), finalCashReport.GetProperty("totals").GetRawText());
+
+        // Owner report and cashier checkout may overlap on separate SQL connections.
+        // A retriable SQL conflict is allowed, but no partial or duplicate posting is.
+        var reportRaceProduct = await Created(prefix + "/products", new
+        {
+            name = "SQL Report Race Product", sku = "SQL-REPORT-RACE",
+            categoryId, brandId, unitId, salePrice = 15m, taxClassification = ""
+        });
+        using (var opening = await Post(owner, stockPath + "/opening",
+            new { productId = reportRaceProduct, quantity = 2m }))
+            Assert.Equal(HttpStatusCode.Created, opening.StatusCode);
+        var allCashRegister = prefix + "/cash-sales/business-receipts?locationId=0&payment=Cash&status=All";
+        var beforeRace = await owner.GetFromJsonAsync<JsonElement>(allCashRegister);
+        var beforeCount = beforeRace.GetProperty("total").GetInt32();
+        var beforeTotal = beforeRace.GetProperty("totals").EnumerateArray()
+            .Sum(x => x.GetProperty("cash").GetDecimal());
+        var reportRaceSale = new
+        {
+            locationId, requestKey = "sql-report-checkout-race-20261125", tendered = 15m,
+            lines = new[] { new { productId = reportRaceProduct, quantity = 1m, expectedUnitPrice = 15m } }
+        };
+        var reportRace = await Task.WhenAll(owner.GetAsync(allCashRegister),
+            Post(cashier, prefix + "/cash-sales", reportRaceSale));
+        using var concurrentReport = reportRace[0];
+        using var concurrentCheckout = reportRace[1];
+        Assert.True(concurrentReport.StatusCode is HttpStatusCode.OK or HttpStatusCode.Conflict,
+            await concurrentReport.Content.ReadAsStringAsync());
+        Assert.True(concurrentCheckout.StatusCode is HttpStatusCode.OK or HttpStatusCode.Conflict,
+            await concurrentCheckout.Content.ReadAsStringAsync());
+        if (concurrentReport.StatusCode == HttpStatusCode.OK)
+        {
+            var observed = await concurrentReport.Content.ReadFromJsonAsync<JsonElement>();
+            var observedCount = observed.GetProperty("total").GetInt32();
+            Assert.InRange(observedCount, beforeCount, beforeCount + 1);
+            Assert.Equal(beforeTotal + (observedCount - beforeCount) * 15m,
+                observed.GetProperty("totals").EnumerateArray().Sum(x => x.GetProperty("cash").GetDecimal()));
+            Assert.Equal(Math.Min(observedCount, 10), observed.GetProperty("items").GetArrayLength());
+        }
+        // Replay the same key after both requests finish, whether checkout won or conflicted.
+        using var reportRaceReplay = await Post(cashier, prefix + "/cash-sales", reportRaceSale);
+        Assert.Equal(HttpStatusCode.OK, reportRaceReplay.StatusCode);
+        var reportRaceId = (await reportRaceReplay.Content.ReadFromJsonAsync<JsonElement>()).GetProperty("id").GetInt64();
+        var afterRace = await owner.GetFromJsonAsync<JsonElement>(allCashRegister);
+        Assert.Equal(beforeCount + 1, afterRace.GetProperty("total").GetInt32());
+        Assert.Equal(beforeTotal + 15m,
+            afterRace.GetProperty("totals").EnumerateArray().Sum(x => x.GetProperty("cash").GetDecimal()));
+        Assert.Equal(reportRaceId, afterRace.GetProperty("items")[0].GetProperty("id").GetInt64());
+        using (var scope = factory.Services.CreateScope())
+        {
+            var db = scope.ServiceProvider.GetRequiredService<AppDbContext>();
+            Assert.Equal(1, await db.RetailCashSales.CountAsync(x => x.BusinessId == businessId &&
+                x.RequestKey == reportRaceSale.requestKey));
+            Assert.Equal(1m, await db.RetailStockBalances.Where(x => x.BusinessId == businessId &&
+                x.LocationId == locationId && x.ProductId == reportRaceProduct).Select(x => x.Quantity).SingleAsync());
+            Assert.Equal(1, await db.RetailStockMovements.CountAsync(x => x.BusinessId == businessId &&
+                x.ProductId == reportRaceProduct && x.SourceType == "CashSaleLine"));
+        }
     }
 
     [Fact]

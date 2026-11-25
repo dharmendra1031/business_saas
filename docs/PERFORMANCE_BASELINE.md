@@ -64,3 +64,20 @@ returns. Compare actual plans, logical reads, CPU, p50/p95 and write throughput 
 disposable staging data (e.g. 10k/100k products and 100k/1m sales), with the same
 data and filters before/after the migration. Do not infer a production capacity
 or speedup from passing CI.
+
+## Sales register and checkout concurrency
+
+The SQL Server retail-flow regression submits an owner cash invoice register read
+and a cashier checkout concurrently on independent HTTP requests. It accepts a
+retriable conflict, checks a successful report's count and cash total against
+the before/after committed states, replays the same checkout key, and verifies
+one durable invoice, one stock movement and the correct stock balance.
+
+This is a consistency regression, not a deterministic lock-overlap or latency
+benchmark. On disposable staging SQL Server, repeat concurrent report reads
+and checkouts with representative invoice volumes. Capture query duration,
+logical reads, blocked process reports or lock waits, deadlocks, checkout
+p95 and conflict/retry rate. Keep posting transactions and request-key constraints
+unchanged. Do not use NOLOCK or downgrade report isolation solely to reduce
+blocking; evaluate transaction-level snapshot isolation only with explicit
+database configuration, version-store capacity and consistency testing.
