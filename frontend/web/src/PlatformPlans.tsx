@@ -99,19 +99,25 @@ export default function PlatformPlans({ business, onChooseBusiness }: { business
   }, [editing, publishing])
 
   useEffect(() => {
-    let active = true
+    if (activeTab !== 'catalog') { setLoading(false); return }
+    const controller = new AbortController()
     setLoading(true)
     setError('')
-    api<PlanResponse>('/platform/plans')
-      .then(result => { if (active) setData(result) })
-      .catch(cause => {
-        if (!active || cause instanceof SessionExpiredError) return
+    queueMicrotask(async () => {
+      if (controller.signal.aborted) return
+      try {
+        const result = await api<PlanResponse>('/platform/plans', { signal: controller.signal })
+        if (!controller.signal.aborted) setData(result)
+      } catch (cause) {
+        if (controller.signal.aborted || cause instanceof SessionExpiredError) return
         setData(null)
         setError('Unable to load subscription plans.')
-      })
-      .finally(() => { if (active) setLoading(false) })
-    return () => { active = false }
-  }, [reload])
+      } finally {
+        if (!controller.signal.aborted) setLoading(false)
+      }
+    })
+    return () => controller.abort()
+  }, [activeTab, reload])
 
   function openDraft(plan: Plan) {
     setPublishing(null)

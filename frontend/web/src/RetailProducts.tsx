@@ -107,18 +107,20 @@ export default function RetailProducts({ businessId, canOperate, currencyCode }:
   const basePath = `/businesses/${businessId}/products`
 
   useEffect(() => {
+    const controller = new AbortController()
     let active = true
     setOptionsLoading(true)
     setOptions({ categories: [], units: [], brands: [] })
     setOptionsError('')
-    api<CatalogOptions>(basePath + '/options?includeInactiveCategories=true')
+    api<CatalogOptions>(basePath + '/options?includeInactiveCategories=true', { signal: controller.signal })
       .then(value => { if (active) setOptions({ ...value, brands: value.brands ?? [] }) })
       .catch(cause => { if (active && !(cause instanceof SessionExpiredError)) setOptionsError(errorMessage(cause)) })
       .finally(() => { if (active) setOptionsLoading(false) })
-    return () => { active = false }
+    return () => { active = false; controller.abort() }
   }, [basePath, optionsReload])
 
   useEffect(() => {
+    const controller = new AbortController()
     let active = true
     setLoading(true)
     setProducts([])
@@ -128,7 +130,7 @@ export default function RetailProducts({ businessId, canOperate, currencyCode }:
       search: query, status, page: String(page),
       ...(categoryFilter ? { categoryId: String(categoryFilter) } : {})
     })
-    api<ProductPage>(basePath + '?' + params)
+    api<ProductPage>(basePath + '?' + params, { signal: controller.signal })
       .then(value => {
         if (!active) return
         setProducts(value.items)
@@ -136,7 +138,7 @@ export default function RetailProducts({ businessId, canOperate, currencyCode }:
       })
       .catch(cause => { if (active && !(cause instanceof SessionExpiredError)) setLoadError(errorMessage(cause)) })
       .finally(() => { if (active) setLoading(false) })
-    return () => { active = false }
+    return () => { active = false; controller.abort() }
   }, [basePath, query, status, page, categoryFilter, reload])
 
   useEffect(() => { if (formOpen) firstInput.current?.focus() }, [formOpen, editingId])

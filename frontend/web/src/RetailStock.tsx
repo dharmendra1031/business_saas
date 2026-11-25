@@ -102,6 +102,7 @@ export default function RetailStock({ businessId, locations, canOperate, isOwner
 
   useEffect(() => {
     if (!locationId) return
+    const controller = new AbortController()
     let active = true
     setLoading(true)
     setError('')
@@ -109,7 +110,7 @@ export default function RetailStock({ businessId, locations, canOperate, isOwner
     setTotal(0)
     api<StockPage>(basePath + '?' + new URLSearchParams({
       page: String(page), search: query, ...(alertsOnly ? { alertsOnly: 'true' } : {})
-    }))
+    }), { signal: controller.signal })
       .then(data => {
         if (!active) return
         setItems(data.items)
@@ -119,11 +120,12 @@ export default function RetailStock({ businessId, locations, canOperate, isOwner
         if (active && !(cause instanceof SessionExpiredError)) setError(message(cause))
       })
       .finally(() => { if (active) setLoading(false) })
-    return () => { active = false }
+    return () => { active = false; controller.abort() }
   }, [basePath, page, query, alertsOnly, reload])
 
   useEffect(() => {
     if (!historyProductId) return
+    const controller = new AbortController()
     let active = true
     setHistoryLoading(true)
     setHistoryError('')
@@ -132,7 +134,7 @@ export default function RetailStock({ businessId, locations, canOperate, isOwner
     const params = new URLSearchParams({
       productId: String(historyProductId), page: String(historyPage)
     })
-    api<MovementPage>(basePath + '/movements?' + params)
+    api<MovementPage>(basePath + '/movements?' + params, { signal: controller.signal })
       .then(data => {
         if (!active) return
         setHistory(data.items)
@@ -142,7 +144,7 @@ export default function RetailStock({ businessId, locations, canOperate, isOwner
         if (active && !(cause instanceof SessionExpiredError)) setHistoryError(message(cause))
       })
       .finally(() => { if (active) setHistoryLoading(false) })
-    return () => { active = false }
+    return () => { active = false; controller.abort() }
   }, [basePath, historyProductId, historyPage, reload])
 
   useEffect(() => {

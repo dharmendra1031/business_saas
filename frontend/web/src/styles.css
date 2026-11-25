@@ -152,8 +152,6 @@ button:focus-visible, a:focus-visible, input:focus-visible, select:focus-visible
 .platform-dashboard .page-header { margin-bottom: 19px; }
 .platform-metric-grid { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 14px; margin-bottom: 20px; }
 .platform-metric { min-width: 0; border: 1px solid var(--line); border-radius: 9px; background: #fff; padding: 18px 20px; }
-.platform-metric-top { display: flex; align-items: center; justify-content: space-between; gap: 10px; font-size: .84rem; font-weight: 600; color: #435061; }
-.platform-metric-top svg { color: #1249a5; flex-shrink: 0; }
 .platform-metric > strong { display: block; margin: 11px 0 5px; font-size: clamp(1.35rem, 2.2vw, 2rem); line-height: 1.15; font-weight: 750; color: #000000; }
 .platform-metric > small { font-size: .74rem; color: var(--muted); }
 .platform-analytics-grid { display: grid; grid-template-columns: minmax(0, 1.7fr) minmax(320px, 1fr); gap: 16px; margin-bottom: 18px; }
@@ -180,7 +178,6 @@ button:focus-visible, a:focus-visible, input:focus-visible, select:focus-visible
 .platform-activity-list { display: grid; }
 .platform-activity { display: flex; gap: 12px; align-items: flex-start; border-bottom: 1px solid var(--line); padding: 12px 0; }
 .platform-activity:last-child { border: 0; }
-.platform-activity-dot { flex-shrink: 0; width: 9px; height: 9px; border-radius: 50%; background: #165ed4; margin-top: 6px; }
 .platform-activity strong, .platform-activity span, .platform-activity time { display: block; font-size: .8rem; }
 .platform-activity span, .platform-activity time { color: var(--muted); margin-top: 3px; }
 .platform-overview-note { color: var(--muted); font-size: .75rem; margin: 15px 0 0; }
