@@ -2860,7 +2860,7 @@ try {
       0, 'Existing captured draft may never expose a duplicate payment preparation action')
     await t.page.getByText('21 payment requests · Page 1').waitFor()
     await t.page.getByText('Page 1.', { exact: false }).waitFor()
-    const historyLayout = () => t.page.getByRole('heading', { name: 'Billing Draft History' }).evaluate(el => {
+    const historyLayout = () => t.page.locator('h2').filter({ hasText: 'Billing Draft History' }).evaluate(el => {
       const rect = el.closest('section').getBoundingClientRect()
       return { width: rect.width, height: rect.height, scrollHeight: document.documentElement.scrollHeight }
     })
@@ -2874,6 +2874,21 @@ try {
     await modal.waitFor({ state: 'hidden' })
     await t.page.getByRole('button', { name: 'Prepare Payment', exact: true }).click()
     assert.equal(await modal.getByLabel('Reason').inputValue(), '')
+    let attemptedPreparation = 0
+    await t.page.route('**/api/platform/billing/drafts/8/payment-requests', route => {
+      assert.equal(route.request().method(), 'POST')
+      const body = route.request().postDataJSON()
+      assert.equal(body.reason, 'Approved payment preparation')
+      assert.ok(body.requestKey)
+      attemptedPreparation++
+      return response(route, 409, { message: 'Payment preparation rejected.' })
+    })
+    await modal.getByLabel('Reason').fill('Approved payment preparation')
+    await modal.getByRole('button', { name: 'Confirm Preparation' }).click()
+    await modal.getByRole('alert').getByText('Payment preparation rejected.').waitFor()
+    assert.equal(await modal.getByLabel('Reason').inputValue(), 'Approved payment preparation')
+    assert.equal(attemptedPreparation, 1)
+    assert.deepEqual(await historyLayout(), before, 'Rejected preparation must preserve register layout')
     await modal.getByRole('button', { name: 'Cancel' }).click()
     await modal.waitFor({ state: 'hidden' })
     await t.page.getByRole('button', { name: 'Next requests' }).click()
