@@ -3,7 +3,7 @@
 > **Scope notice:** The generic usability and accessible UI criteria apply to every Business SaaS app. Salon-specific screen matrices remain **vertical examples**, not menus that Retail and Repair must inherit. The first retail workflow is in [Retail V1 SRS](./RETAIL_V1_SRS.md). CBK is [read-only design reference](./CBK_UI_REFERENCE.md); reimplement in React without copying private assets.
 
 **Status:** Mandatory design and implementation standard; shared feedback component implemented, individual screens still migrating and require acceptance.  
-**Date:** 2026-11-24  
+**Date:** 2026-11-25  
 **Repository:** `dharmendra1031/business_saas` ONLY  
 **Scope:** Platform Super Admin, Retail Business Owner/Manager/Cashier, POS, Salon, Repair and future supported applications  
 **Product aim:** Every authorized user can complete daily business tasks quickly, confidently and consistently without intensive training.
@@ -67,6 +67,15 @@ Do not force every role through the same feature-rich navigation. **Modules gran
 18. **Drafts:** sensitive or lengthy edits receive unsaved-change protection or explicit save-as-draft where appropriate.
 19. **Authorization:** UI hiding is never the only security control. Verify active module, user permission and branch tenant access on API.
 20. **Performance:** do not block checkout on nonessential dashboard/report requests.
+
+## 4.1. Mandatory selection overlay rule (25 November 2026)
+
+- Opening any dropdown, suggestion list, date picker or record lookup must not change the underlying form, row or page height, move surrounding controls, or create document overflow.
+- Small fixed choices use native selects. Large master-record selections use the CBK-style search-and-select popup, with a single search field and a result table. Do not render an expanding inline result list that pushes the form down.
+- Custom menus must be overlays positioned outside normal layout flow, with viewport collision handling; do not clip them inside table or card overflow containers. Modal record lookups use the native dialog top layer and the existing shared lookup implementation.
+- Keep overlays within the visible viewport. Scroll results inside the popup, not the underlying page. Support Escape, keyboard navigation, accessible names and appropriate focus restoration; selection must preserve the current draft.
+- Acceptance: compare the underlying form bounds and document scroll height before and while opening the popup with results. Verify desktop, tablet, mobile and RTL layouts. Opening or closing a selection control must cause no layout shift. Do not mark a screen verified solely from a passing build.
+- Fix the original control and styles, remove superseded code after checking callers, and do not add duplicate selection libraries or CSS overrides.
 
 ## 4A. Enterprise-level shared Save / Update feedback contract (approved 24 November 2026)
 

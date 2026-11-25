@@ -476,11 +476,20 @@ try {
     await t.page.getByRole('heading', { name: 'New purchase order', level: 3 }).waitFor()
     assert.equal(await t.page.getByRole('heading', { name: 'Purchase order list' }).count(), 0,
       'Order entry must not show the unrelated register')
+    const purchaseLayout = () => t.page.evaluate(() => {
+      const form = document.querySelector('.purchase-entry-table')?.closest('form')
+      const bounds = form.getBoundingClientRect()
+      return { x: bounds.x, y: bounds.y, width: bounds.width, height: bounds.height,
+        scrollHeight: document.documentElement.scrollHeight }
+    })
+    const originalLayout = await purchaseLayout()
     await t.page.locator('#purchase-supplier').click()
     await t.page.getByRole('dialog', { name: 'Search suppliers' }).getByRole('button', { name: 'Wholesaler' }).waitFor()
+    assert.deepEqual(await purchaseLayout(), originalLayout, 'Supplier lookup must not shift the form or change page height')
     await t.page.keyboard.press('Escape')
     await t.page.getByRole('button', { name: 'Search items' }).click()
     await t.page.getByRole('dialog', { name: 'Search items' }).getByRole('button', { name: /Blue Shirt/ }).waitFor()
+    assert.deepEqual(await purchaseLayout(), originalLayout, 'Item lookup must not shift the form or change page height')
     await t.page.keyboard.press('Escape')
     assert.equal(await t.page.getByRole('dialog').count(), 0)
     assert.equal(await t.page.locator('select#purchase-supplier, select#purchase-product').count(), 0)
