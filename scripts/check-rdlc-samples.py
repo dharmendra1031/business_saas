@@ -64,3 +64,18 @@ for path in converted:
         else:
             assert pdf[0].rect.height * 25.4 / 72 <= 130, path.name
         print(path.name, "selected unit/rate/amount and page geometry verified")
+
+# Credit invoices are original unpaid-at-issue documents, not cash receipts.
+credit = sorted((root / "credit").glob("*.pdf"))
+assert {path.name for path in credit} == {"A4-credit.pdf", "Thermal80-credit.pdf"}
+for path in credit:
+    with pymupdf.open(path) as pdf:
+        assert len(pdf) == 1, path.name
+        text = " ".join(pdf[0].get_text().split()).replace(",", "")
+        for expected in ("CREDIT INVOICE", "Due date: 02 Dec 2026", "Unpaid at issue", "Credit Customer", "INR 440.00"):
+            assert expected in text, (path.name, expected, text)
+        assert "Cash received" not in text and "Change" not in text, (path.name, text)
+        assert abs(pdf[0].rect.width * 25.4 / 72 - (80 if path.name.startswith("Thermal80") else 210)) < 1
+        if path.name.startswith("Thermal80"):
+            assert pdf[0].rect.height * 25.4 / 72 <= 150, path.name
+        print(path.name, "credit invoice original amount, due date and customer verified")

@@ -33,7 +33,7 @@ public sealed class RetailReceiptReportTests
         Assert.Equal(2, sets.Count);
         Assert.Equal(new[] { "BusinessName", "ReceiptNumber", "DateText", "TimeText",
             "CurrencyCode", "PaymentMethod", "TotalAmount", "CashReceived",
-            "ChangeAmount", "FooterText", "MerchantLegalName", "MerchantAddress", "MerchantPhone", "MerchantEmail", "CustomerName", "CustomerPhone", "CustomerAddress", "LocationName", "MerchantLogo" }, sets["InvoiceHeader"]);
+            "ChangeAmount", "FooterText", "MerchantLegalName", "MerchantAddress", "MerchantPhone", "MerchantEmail", "CustomerName", "CustomerPhone", "CustomerAddress", "LocationName", "MerchantLogo", "CreditDueDateText" }, sets["InvoiceHeader"]);
         Assert.Equal(new[] { "LineNumber", "ProductName", "Quantity", "UnitPrice",
             "LineTotal", "ProductSku", "UnitCode" }, sets["InvoiceLines"]);
         Assert.Equal("InvoiceLines", Assert.Single(r.Descendants(rdl + "Tablix"))
@@ -99,7 +99,7 @@ public sealed class RetailReceiptReportTests
                 .Descendants(xs + "element").Select(f => (string)f.Attribute("name")!).ToArray());
         Assert.Equal(new[] { "BusinessName", "ReceiptNumber", "DateText", "TimeText",
             "CurrencyCode", "PaymentMethod", "TotalAmount", "CashReceived",
-            "ChangeAmount", "FooterText", "MerchantLegalName", "MerchantAddress", "MerchantPhone", "MerchantEmail", "CustomerName", "CustomerPhone", "CustomerAddress", "LocationName", "MerchantLogo" }, fields["InvoiceHeader"]);
+            "ChangeAmount", "FooterText", "MerchantLegalName", "MerchantAddress", "MerchantPhone", "MerchantEmail", "CustomerName", "CustomerPhone", "CustomerAddress", "LocationName", "MerchantLogo", "CreditDueDateText" }, fields["InvoiceHeader"]);
         Assert.Equal(new[] { "LineNumber", "ProductName", "Quantity", "UnitPrice",
             "LineTotal", "ProductSku", "UnitCode" }, fields["InvoiceLines"]);
     }
@@ -189,6 +189,39 @@ public sealed class RetailReceiptReportTests
                     processId = Environment.ProcessId,
                     bytes = bytes.Length, repeatBytes = repeat.Length
                 }));
+        }
+    }
+
+    [Theory]
+    [InlineData("A4")]
+    [InlineData("Thermal80")]
+    [Trait("Renderer", "Windows")]
+    public void Credit_invoice_prints_original_unpaid_amount_and_mandatory_customer(string paper)
+    {
+        var business = new Business { Id = 42, Name = "Demo Retail Store",
+            ReceiptShowCustomerName = false, ReceiptShowCashReceived = true, ReceiptShowChange = true };
+        var sale = new RetailCashSale { Id = 79, BusinessId = 42, CustomerId = 9, CustomerName = "Credit Customer",
+            CreditDueDate = new DateOnly(2026, 12, 2), CurrencyCode = "INR", Total = 440m, Tendered = 0m,
+            PostedAtUtc = new DateTime(2026, 11, 25, 4, 0, 0, DateTimeKind.Utc),
+            Lines = [new RetailCashSaleLine { Id = 1, ProductName = "Packed Water", Quantity = 2m,
+                UnitCode = "BOX", UnitPrice = 220m, LineTotal = 440m }] };
+        var data = RetailReceiptReportData.FromCashSale(sale, business, TimeZoneInfo.Utc);
+        Assert.Equal("Credit", data.Header.PaymentMethod);
+        Assert.Equal("02 Dec 2026", data.Header.CreditDueDateText);
+        Assert.Equal(440m, data.Header.TotalAmount);
+        Assert.Equal(0m, data.Header.ChangeAmount);
+        Assert.True(data.Parameters.ShowCustomerName);
+        Assert.False(data.Parameters.ShowCashReceived);
+        Assert.False(data.Parameters.ShowChange);
+        if (!OperatingSystem.IsWindows()) return;
+        var pdf = RetailReceiptRenderer.Render(data, paper);
+        Assert.True(pdf.AsSpan().StartsWith("%PDF-"u8));
+        var output = Environment.GetEnvironmentVariable("RDLC_TEST_OUTPUT");
+        if (!string.IsNullOrWhiteSpace(output))
+        {
+            var folder = Path.Combine(output, "credit");
+            Directory.CreateDirectory(folder);
+            File.WriteAllBytes(Path.Combine(folder, paper + "-credit.pdf"), pdf);
         }
     }
 

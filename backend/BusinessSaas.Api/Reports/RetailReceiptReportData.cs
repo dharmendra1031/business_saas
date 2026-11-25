@@ -9,7 +9,8 @@ public sealed record RetailReceiptHeader(
     string BusinessName, string ReceiptNumber, string DateText, string TimeText,
     string CurrencyCode, string PaymentMethod, decimal TotalAmount,
     decimal CashReceived, decimal ChangeAmount, string FooterText, string MerchantLegalName, string MerchantAddress, string MerchantPhone, string MerchantEmail,
-    string CustomerName, string CustomerPhone, string CustomerAddress, string LocationName, byte[]? MerchantLogo);
+    string CustomerName, string CustomerPhone, string CustomerAddress, string LocationName, byte[]? MerchantLogo,
+    string CreditDueDateText = "");
 
 public sealed record RetailReceiptLine(
     int LineNumber, string ProductName, decimal Quantity,
@@ -45,8 +46,10 @@ public sealed record RetailReceiptReportData(
                 line.LineTotal ?? decimal.Round(line.Quantity * line.UnitPrice, 2, MidpointRounding.AwayFromZero),
                 line.ProductSku ?? "", line.UnitCode ?? ""))
             .ToArray();
+        var credit = sale.CreditDueDate.HasValue;
         if (lines.Sum(x => x.LineTotal) != sale.Total ||
-            sale.Tendered < sale.Total)
+            (credit ? sale.Tendered != 0m || !sale.CustomerId.HasValue || string.IsNullOrWhiteSpace(sale.CustomerName)
+                    : sale.Tendered < sale.Total))
             throw new InvalidOperationException("Posted receipt amounts require reconciliation.");
 
         var receiptZone = sale.TimeZoneId is null
@@ -57,17 +60,18 @@ public sealed record RetailReceiptReportData(
             sale.BusinessName ?? business.Name, sale.Id.ToString(CultureInfo.InvariantCulture),
             local.ToString("dd MMM yyyy", CultureInfo.InvariantCulture),
             local.ToString("hh:mm tt", CultureInfo.InvariantCulture),
-            sale.CurrencyCode, "Cash", sale.Total, sale.Tendered,
-            sale.Tendered - sale.Total, business.ReceiptFooterText,
+            sale.CurrencyCode, credit ? "Credit" : "Cash", sale.Total, sale.Tendered,
+            credit ? 0m : sale.Tendered - sale.Total, business.ReceiptFooterText,
             sale.MerchantLegalName ?? "", sale.MerchantAddress ?? "", sale.MerchantPhone ?? "", sale.MerchantEmail ?? "",
-            sale.CustomerName ?? "", sale.CustomerPhone ?? "", sale.CustomerAddress ?? "", sale.LocationName ?? "", sale.MerchantLogo);
+            sale.CustomerName ?? "", sale.CustomerPhone ?? "", sale.CustomerAddress ?? "", sale.LocationName ?? "", sale.MerchantLogo,
+            sale.CreditDueDate?.ToString("dd MMM yyyy", CultureInfo.InvariantCulture) ?? "");
         return new RetailReceiptReportData(header, lines,
             new RetailReceiptParameters(
                 business.ReceiptShowTime, business.ReceiptShowUnitPrice,
-                business.ReceiptShowCashReceived, business.ReceiptShowChange,
+                !credit && business.ReceiptShowCashReceived, !credit && business.ReceiptShowChange,
                 business.ReceiptShowFooter, business.ReceiptShowBranch,
                 business.ReceiptShowSku, business.ReceiptShowUnit,
                 business.ReceiptShowLegalName, business.ReceiptShowAddress, business.ReceiptShowPhone, business.ReceiptShowEmail,
-                business.ReceiptShowCustomerName, business.ReceiptShowCustomerPhone, business.ReceiptShowCustomerAddress, business.ReceiptShowLogo));
+                credit || business.ReceiptShowCustomerName, business.ReceiptShowCustomerPhone, business.ReceiptShowCustomerAddress, business.ReceiptShowLogo));
     }
 }

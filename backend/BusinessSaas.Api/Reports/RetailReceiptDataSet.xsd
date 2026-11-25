@@ -28,6 +28,7 @@
               <xs:element name="CustomerAddress" type="xs:string" minOccurs="0" />
               <xs:element name="LocationName" type="xs:string" minOccurs="0" />
               <xs:element name="MerchantLogo" type="xs:base64Binary" minOccurs="0" />
+              <xs:element name="CreditDueDateText" type="xs:string" minOccurs="0" />
             </xs:sequence>
           </xs:complexType>
         </xs:element>

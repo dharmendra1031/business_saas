@@ -33,6 +33,7 @@
         <Field Name="CustomerAddress"><DataField>CustomerAddress</DataField><rd:TypeName>System.String</rd:TypeName></Field>
         <Field Name="LocationName"><DataField>LocationName</DataField><rd:TypeName>System.String</rd:TypeName></Field>
         <Field Name="MerchantLogo"><DataField>MerchantLogo</DataField><rd:TypeName>System.Byte[]</rd:TypeName></Field>
+        <Field Name="CreditDueDateText"><DataField>CreditDueDateText</DataField><rd:TypeName>System.String</rd:TypeName></Field>
       </Fields>
     </DataSet>
     <DataSet Name="InvoiceLines">
@@ -118,7 +119,7 @@
             <TablixCell />
           </TablixCells></TablixRow>
           <TablixRow><Height>0.25in</Height><TablixCells>
-            <TablixCell><CellContents><Textbox Name="ReceiptTitle"><CanGrow>true</CanGrow><KeepTogether>true</KeepTogether><Paragraphs><Paragraph><TextRuns><TextRun><Value>=First(Fields!PaymentMethod.Value, &quot;InvoiceHeader&quot;) &amp; &quot; RECEIPT&quot;</Value><Style><FontFamily>Arial</FontFamily><FontSize>10pt</FontSize><FontWeight>Bold</FontWeight><Color>#000000</Color></Style></TextRun></TextRuns><Style><TextAlign>Center</TextAlign></Style></Paragraph></Paragraphs><rd:DefaultName>ReceiptTitle</rd:DefaultName><Style><PaddingLeft>2pt</PaddingLeft><PaddingRight>2pt</PaddingRight><PaddingTop>1pt</PaddingTop><PaddingBottom>1pt</PaddingBottom></Style></Textbox><ColSpan>7</ColSpan></CellContents></TablixCell>
+            <TablixCell><CellContents><Textbox Name="ReceiptTitle"><CanGrow>true</CanGrow><KeepTogether>true</KeepTogether><Paragraphs><Paragraph><TextRuns><TextRun><Value>=IIf(First(Fields!PaymentMethod.Value, &quot;InvoiceHeader&quot;) = &quot;Credit&quot;, &quot;CREDIT INVOICE&quot; &amp; vbCrLf &amp; &quot;Due date: &quot; &amp; First(Fields!CreditDueDateText.Value, &quot;InvoiceHeader&quot;) &amp; vbCrLf &amp; &quot;Unpaid at issue&quot;, First(Fields!PaymentMethod.Value, &quot;InvoiceHeader&quot;) &amp; &quot; RECEIPT&quot;)</Value><Style><FontFamily>Arial</FontFamily><FontSize>10pt</FontSize><FontWeight>Bold</FontWeight><Color>#000000</Color></Style></TextRun></TextRuns><Style><TextAlign>Center</TextAlign></Style></Paragraph></Paragraphs><rd:DefaultName>ReceiptTitle</rd:DefaultName><Style><PaddingLeft>2pt</PaddingLeft><PaddingRight>2pt</PaddingRight><PaddingTop>1pt</PaddingTop><PaddingBottom>1pt</PaddingBottom></Style></Textbox><ColSpan>7</ColSpan></CellContents></TablixCell>
             <TablixCell />
             <TablixCell />
             <TablixCell />
