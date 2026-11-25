@@ -56,8 +56,8 @@
 .business-setup-list li > span:nth-child(2) { padding-top: 3px; }
 .business-setup-list small { display: block; color: #405367; font-size: .81rem; margin-top: 3px; }
 .business-operational-section { margin-bottom: 14px; }
-.business-kpi-grid { display: grid; grid-template-columns: repeat(3,minmax(0,1fr)); gap: 11px; }
-.business-kpi-card { display: flex; flex-direction: column; gap: 5px; min-width: 0; min-height: 122px; height: 100%; padding: 14px;
+.business-kpi-grid { display: grid; grid-template-columns: repeat(2,minmax(0,1fr)); gap: 11px; }
+.business-kpi-card { display: flex; flex-direction: column; gap: 5px; min-width: 0; min-height: 88px; height: 100%; padding: 12px;
   border: 1px solid #e1e7f1; border-radius: 9px; background: #fff; }
 .business-kpi-card small { color: #39506b; font-size: .84rem; font-weight: 720; }
 .business-kpi-card strong { color: #000000; font-size: 1.45rem; line-height: 1.2; font-weight: 800; }
@@ -97,14 +97,13 @@
 .business-subscription-panel > summary svg { color: #1d4e95; }
 .business-subscription-panel > .content-section { border: 0; border-top: 1px solid #e6ecf4;
   box-shadow: none; border-radius: 0 0 12px 12px; }
-@media (max-width: 1100px) { .business-kpi-grid { grid-template-columns: repeat(2,minmax(0,1fr)); } }
 @media (max-width: 600px) {
   .business-shell .business-dashboard-page { padding-top: 14px; }
   .business-dashboard-summary { padding: 10px 12px; font-size: .82rem; }
   .business-setup-panel, .business-dashboard-panel { padding: 15px; }
   .business-setup-list { grid-template-columns: 1fr; gap: 13px; }
   .business-kpi-grid { gap: 8px; }
-  .business-kpi-card { min-height: 112px; padding: 11px; }
+  .business-kpi-card { padding: 10px; }
 }
 /* BUS-06–32: shared retail module surfaces. One coherent design language for real forms/tables. */
 .business-shell .business-module-card { padding: 0 0 18px; overflow: hidden; margin-top: 0; }
@@ -255,17 +254,13 @@
   .business-shell .retail-products .product-filters { grid-template-columns: minmax(0, 1fr); }
 }
 
-/* Preview-only modules: functional tabs, without decorative dashboards. */
+/* Released business modules. */
 .business-shell .business-preview-nav { gap: 10px; }
 .business-shell .business-preview-nav span { flex: 1; }
-.business-shell .business-preview-nav small { color: #ffffff; font-size: .6rem;
-  border: 1px solid #607494; padding: 3px 5px; border-radius: 4px; font-weight: 720; }
 .business-preview { min-width: 0; }
 .business-preview-heading { display: flex; flex-wrap: wrap; gap: 12px;
   align-items: center; justify-content: space-between; margin-bottom: 14px; }
 .business-preview-heading h2 { margin: 0; color: #000000; font-weight: 760; font-size: 1.12rem; }
-.business-preview-heading > span { font-size: .76rem; color: #5f4e1c; background: #fff4da;
-  border: 1px solid #e6d5a7; padding: 5px 9px; border-radius: 6px; }
 .business-preview-tabs { display: flex; flex-wrap: wrap; gap: 8px; margin-bottom: 14px; }
 .business-preview-tabs button { display: flex; align-items: center; gap: 8px; padding: 8px 12px;
   min-height: 44px; background: #fff; border: 1px solid #e0e7f2; border-radius: 7px;
@@ -275,8 +270,6 @@
 .business-shell .business-preview-content { padding: 19px; }
 .business-preview-content h3 { font-size: 1.03rem; font-weight: 760; margin: 0 0 8px; }
 .business-preview-description { font-size: .86rem; color: #3f5368; margin: 0 0 14px; }
-.business-preview-unavailable { padding: 14px; border: 1px dashed #d5e0ed;
-  background: #fafcff; border-radius: 7px; color: #3c5066; font-size: .86rem; margin: 0; }
 .business-preview-identity { display: grid; grid-template-columns: repeat(2,minmax(0,1fr)); gap: 10px; margin: 0; }
 .business-preview-identity > div { min-width: 0; min-height: 78px; height: 100%; padding: 12px;
   background: #f8faff; border: 1px solid #e5ebf5; border-radius: 7px; }

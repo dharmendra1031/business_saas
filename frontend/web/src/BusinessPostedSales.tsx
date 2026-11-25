@@ -132,7 +132,7 @@ export default function BusinessPostedSales({ dashboard, userId }: { dashboard: 
         {result.items.length === 0 ? <p>No matching invoices.</p> : <div className="table-responsive">
           <table className="table table-sm align-middle">
             <thead><tr>{['Invoice', 'Posted', 'Location', 'Customer', 'Payment', 'Status'].map(x => <th scope="col" key={x}>{x}</th>)}
-              <th scope="col" className="text-end">Amount</th><th scope="col">Action</th></tr></thead>
+              <th scope="col" className="text-end">Amount</th><th scope="col">Print</th></tr></thead>
             <tbody>{result.items.map(item => <tr key={item.id}>
               <td><button type="button" className="btn btn-link p-0" onClick={() => setSelected(item)}>Receipt #{item.id}</button></td>
               <td>{new Date(item.postedAtUtc).toLocaleString(undefined, { timeZone: business.timeZoneId })}</td>
@@ -140,11 +140,8 @@ export default function BusinessPostedSales({ dashboard, userId }: { dashboard: 
               <td>{item.customerName || (item.customerId ? 'Customer #' + item.customerId : 'Walk-in')}</td>
               <td>{item.paymentMethod}</td><td>{item.status}</td>
               <td className="text-end text-nowrap">{item.currencyCode} {item.total.toFixed(2)}</td>
-              <td><div className="d-flex flex-wrap gap-1">
-                <button type="button" className="btn btn-sm btn-outline-secondary" aria-label={'View invoice ' + item.id} onClick={() => setSelected(item)}>View</button>
-                {item.printAvailable && <a className="btn btn-sm btn-outline-secondary" aria-label={'Print receipt ' + item.id}
-                  href={invoicePdf(item)} target="_blank" rel="noopener noreferrer">Print</a>}
-              </div></td>
+              <td>{item.printAvailable && <a className="btn btn-sm btn-outline-secondary" aria-label={'Print receipt ' + item.id}
+                  href={invoicePdf(item)} target="_blank" rel="noopener noreferrer">Print</a>}</td>
             </tr>)}</tbody>
           </table>
         </div>}

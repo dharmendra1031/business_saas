@@ -438,9 +438,9 @@ try {
     const t = await scenario('owner-operational', { role: 'Owner', hasProducts: true, pendingApprovals: 3 })
     await t.login()
     await t.page.getByRole('heading', { name: 'Business Overview' }).waitFor()
-    assert.equal(await t.page.locator('.business-kpi-card').count(), 1,
-      'Unsupported sales and stock KPIs should not consume dashboard space')
-    assert.equal(await t.page.locator('.business-kpi-card strong').first().innerText(), '3')
+    assert.equal(await t.page.locator('.business-kpi-card').count(), 0,
+      'Approvals should appear only as an action, not as a duplicate KPI')
+    await t.page.getByRole('button', { name: /Review 3 draft purchase orders/ }).waitFor()
     await t.page.getByRole('heading', { name: 'Attention Needed' }).waitFor()
     assert.equal(await t.page.getByRole('heading', { name: 'Recent Activity' }).count(), 0,
       'An unsupported activity feed must not be an empty panel')
@@ -779,8 +779,8 @@ try {
     })
     await t.login()
     await t.page.getByRole('heading', { name: 'Business Overview' }).waitFor()
-    assert.equal(await t.page.locator('.business-kpi-card').count(), 3,
-      'Only verified cash and draft-order metrics should be shown')
+    assert.equal(await t.page.locator('.business-kpi-card').count(), 2,
+      'Only verified cash metrics should occupy KPI cards')
     const heights = await t.page.locator('.business-kpi-card').evaluateAll(cards =>
       cards.map(card => card.getBoundingClientRect().height))
     assert.ok(Math.max(...heights) - Math.min(...heights) <= 1,
@@ -1570,8 +1570,8 @@ try {
     })
     await t.login()
     await t.page.getByRole('heading', { name: 'Business Overview' }).waitFor()
-    const alertCard = t.page.locator('.business-kpi-card').filter({ hasText: 'Stock Alerts' })
-    assert.equal(await alertCard.locator('strong').innerText(), '2')
+    await t.page.getByText('2 stock alerts · 1 out of stock', { exact: true }).waitFor()
+    assert.equal(await t.page.locator('.business-kpi-card').filter({ hasText: 'Stock Alerts' }).count(), 0)
     assert.equal(await t.page.locator('.business-stock-alerts li').count(), 2)
     await t.page.locator('.business-stock-alerts li').filter({ hasText: 'Out of stock' }).waitFor()
     assert.ok(await t.page.evaluate(() => document.documentElement.scrollWidth) <= 361,
@@ -2021,6 +2021,8 @@ try {
     const t = await scenario('business-owner-all-tabs', { role: 'Owner', hasProducts: true })
     await t.login()
     await t.page.getByRole('heading', { name: 'Business Overview' }).waitFor()
+    assert.equal(await t.page.locator('.app-sidebar .nav-entry').filter({ hasText: 'Cash Register' }).count(), 0,
+      'Unreleased cash register must not appear in the owner workspace')
     const modules = [
       ['Products', 'Products', 'BUS-06-products-compact'],
       ['Purchase Orders', 'Purchase Orders', 'BUS-20-purchases-compact'],
@@ -2029,7 +2031,6 @@ try {
       ['Suppliers', 'Suppliers', null],
       ['Customers', 'Customers', null],
       ['Sales & Returns', 'Sales & Returns', 'BUS-35-posted-sales-compact'],
-      ['Cash Register', 'Cash Register', null],
       ['Reports', 'Reports', null],
       ['Staff & Access', 'Team Access', null],
       ['Business Settings', 'Business Settings', null]
@@ -2047,6 +2048,8 @@ try {
         assert.ok(headerHeight >= 63, label + ': common module header should be 64px minimum')
       }
       if (label === 'Sales & Returns') {
+        assert.equal(await t.page.getByRole('tab', { name: 'Exchanges' }).count(), 0)
+        assert.equal(await t.page.getByText('Under construction', { exact: true }).count(), 0)
         await t.page.route('**/api/businesses/1/cash-sales/business-receipts?*', route => {
           const params = new URL(route.request().url()).searchParams
           assert.equal(params.get('locationId'), '0')
@@ -2099,6 +2102,7 @@ try {
           assert.deepEqual(request, firstReturnRequest)
           return response(route, 200, postedReturn)
         })
+        assert.equal(await t.page.getByRole('button', { name: 'View invoice 42' }).count(), 0)
         await t.page.getByRole('button', { name: 'Receipt #42' }).click()
         const receipt = t.page.getByRole('region', { name: 'Cash receipt' })
         const originalLines = receipt.getByRole('table', { name: 'Original posted sale lines' })
@@ -2197,6 +2201,7 @@ try {
         await t.page.getByRole('tab', { name: 'Invoices', exact: true }).click()
       }
       if (label === 'Reports') {
+        assert.equal(await t.page.getByRole('tab').count(), 2, 'Only released reports should be shown')
         await t.page.route('**/api/businesses/1/cash-sales/daily-report?*', route => {
           const params = new URL(route.request().url()).searchParams
           assert.equal(params.get('locationId'), '1')
@@ -2216,7 +2221,7 @@ try {
     }
     await t.check()
     await t.context.close()
-    console.log('PASS business owner live/preview tabs keep one compact title')
+    console.log('PASS owner released tabs keep one compact title')
   }
 
   {
@@ -2257,6 +2262,8 @@ try {
       'Manager must not see owner-only receipt totals')
     assert.equal(await t.page.getByRole('button', { name: 'Staff & Access' }).count(), 0)
     assert.equal(await t.page.getByRole('button', { name: 'Business Settings' }).count(), 0)
+    assert.equal(await t.page.getByRole('button', { name: 'Sales & Returns' }).count(), 0)
+    assert.equal(await t.page.getByRole('button', { name: 'Reports', exact: true }).count(), 0)
     assert.equal(await t.page.getByText('Subscription & billing').count(), 0)
     assert.equal(await t.page.getByRole('button', { name: /Open POS Checkout/ }).count(), 0,
       'POS must only be visible when enabled by the API')

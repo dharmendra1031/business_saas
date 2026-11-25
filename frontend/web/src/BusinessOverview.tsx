@@ -58,8 +58,7 @@ export default function BusinessOverview({ dashboard, onNavigate, onReviewApprov
     {hasProducts && <>
       <section className="business-operational-section" aria-labelledby="business-overview-title">
         <h2 id="business-overview-title">Business Overview</h2>
-        <div className="business-kpi-grid">
-          {isOwner && cash && <>
+        {cash && <div className="business-kpi-grid">
             <div className="business-kpi-card"><small>Today's Cash Sales</small>
               <strong>{money.format(cash.total)}</strong>
               <span>Posted cash receipts only</span>
@@ -68,18 +67,7 @@ export default function BusinessOverview({ dashboard, onNavigate, onReviewApprov
               <strong>{cash.billCount.toLocaleString()}</strong>
               <span>Posted cash bills only</span>
             </div>
-          </>}
-          {isOwner && <div className="business-kpi-card"><small>Draft Purchase Orders</small>
-            <strong>{pendingApprovals.toLocaleString()}</strong><span>Owner review</span></div>}
-          {isOwner && stockAlerts && <div className="business-kpi-card">
-            <small>Stock Alerts</small>
-            <strong>{stockAlerts.count.toLocaleString()}</strong>
-            <span>{stockAlerts.outOfStockCount > 0
-              ? stockAlerts.outOfStockCount + ' out of stock · ' +
-                (stockAlerts.count - stockAlerts.outOfStockCount) + ' low stock'
-              : 'Posted stock records only'}</span>
-          </div>}
-        </div>
+        </div>}
       </section>
 
       <section className="content-section business-dashboard-panel" aria-labelledby="business-attention-title">
@@ -91,8 +79,9 @@ export default function BusinessOverview({ dashboard, onNavigate, onReviewApprov
               <ArrowRight size={16} aria-hidden="true" />
             </button>
           : !isOwner ? <p>No assigned actions to show yet.</p>
-            : stockAlerts && stockAlerts.count === 0 ? <p>No alerts for monitored stock records.</p> : null}
+            : stockAlerts && stockAlerts.count === 0 ? <p>No pending approvals or stock alerts.</p> : null}
         {isOwner && stockAlerts && stockAlerts.count > 0 && <div className="business-stock-alerts">
+          <p>{stockAlerts.count.toLocaleString()} stock alerts · {stockAlerts.outOfStockCount.toLocaleString()} out of stock</p>
           <button type="button" className="business-setup-alert-link"
             onClick={() => onNavigate('stock', stockAlerts.items[0]?.locationId)}>
             View stock alerts in Inventory

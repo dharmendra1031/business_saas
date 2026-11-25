@@ -1,5 +1,5 @@
 import { useEffect, useRef, useState } from 'react'
-import { Activity, ArrowRight, BarChart3, Boxes, Building2, CreditCard, KeyRound, LayoutDashboard, LogOut, Menu, Package, ReceiptText, Search, Settings2, ShieldCheck, ShoppingCart, Store, Tags, Truck, UserRound, Users, Wallet } from 'lucide-react'
+import { Activity, ArrowRight, BarChart3, Boxes, Building2, CreditCard, KeyRound, LayoutDashboard, LogOut, Menu, Package, ReceiptText, Search, Settings2, ShieldCheck, ShoppingCart, Store, Tags, Truck, UserRound, Users } from 'lucide-react'
 import { api, ApiResponseError, resetCsrf, SessionExpiredError, setSessionExpiredHandler, type Business, type RetailDashboard, type User } from './api'
 import CashCheckout from './CashCheckout'
 import TeamMembers from './TeamMembers'
@@ -354,16 +354,15 @@ export default function App() {
               aria-current={retailPage === section ? 'page' : undefined}
               onClick={() => navigateRetail(section)}><Icon size={18} /> {label}</button>)}
           </>}
-          {dashboard.roleCode !== 'Cashier' && <>
+          {dashboard.roleCode === 'Owner' && <>
             <div className="sidebar-heading">SALES & REPORTING</div>
             {([
               ['sales', 'Sales & Returns', ReceiptText],
-              ['register', 'Cash Register', Wallet],
               ['reports', 'Reports', BarChart3]
             ] as const).map(([section, label, Icon]) => <button key={section} type="button"
               className={`nav-entry business-preview-nav${retailPage === section ? ' active' : ''}`}
               aria-current={retailPage === section ? 'page' : undefined}
-              onClick={() => navigateRetail(section)}><Icon size={18} /> <span>{label}</span>{(section === 'register' || dashboard.roleCode !== 'Owner') && <small>Preview</small>}</button>)}
+              onClick={() => navigateRetail(section)}><Icon size={18} /> <span>{label}</span></button>)}
           </>}
           {dashboard.roleCode === 'Owner' && <button type="button"
             className={`nav-entry${retailPage === 'team' ? ' active' : ''}`}
@@ -575,9 +574,8 @@ export default function App() {
                   roleCode={dashboard.roleCode} initialStockAlertLocationId={stockAlertLocationId} />}
               {retailPage === 'team' && dashboard.roleCode === 'Owner' &&
                 <TeamMembers businessId={dashboard.business.id} canOperate={dashboard.canOperate} cashSaleEnabled={!!dashboard.cashSaleEnabled} />}
-              {(retailPage === 'sales' || retailPage === 'register' || retailPage === 'reports' ||
-                (retailPage === 'settings' && dashboard.roleCode === 'Owner')) &&
-                dashboard.roleCode !== 'Cashier' && user && <BusinessPreview key={user.id + '-' + dashboard.business.id + '-' + retailPage}
+              {(retailPage === 'sales' || retailPage === 'reports' || retailPage === 'settings') &&
+                dashboard.roleCode === 'Owner' && user && <BusinessPreview key={user.id + '-' + dashboard.business.id + '-' + retailPage}
                   module={retailPage} dashboard={dashboard} userId={user.id}
                   onBillingUpdated={() => void refreshDashboard(true)} />}
             </>
