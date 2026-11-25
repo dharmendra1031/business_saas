@@ -135,9 +135,9 @@ export default function CreditPayment({ customerPath, invoice, storageKey, pendi
           <thead><tr><th>Payment</th><th>Posted (UTC)</th><th>Method</th><th className="text-end">Amount</th></tr></thead>
           <tbody>{history.items.map(item => <tr key={item.id}><td>#{item.id}</td><td>{item.postedAtUtc.replace('T', ' ').slice(0, 16)}</td>
             <td>{item.method}</td><td className="text-end">{invoice.currencyCode} {item.amount.toFixed(2)}</td></tr>)}</tbody>
-        </table></div><div className="btn-group">
+        </table></div>{(page > 1 || history.hasMore) && <div className="btn-group">
           <button type="button" className="btn btn-sm btn-outline-secondary" disabled={page === 1 || busy} onClick={() => setPage(x => x - 1)}>Previous payments</button>
           <button type="button" className="btn btn-sm btn-outline-secondary" disabled={!history.hasMore || busy} onClick={() => setPage(x => x + 1)}>Next payments</button>
-        </div></>}
+        </div>}</>}
   </section>
 }

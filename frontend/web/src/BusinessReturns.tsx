@@ -1,4 +1,4 @@
-import { Fragment, useEffect, useState } from 'react'
+import { useEffect, useState } from 'react'
 import { MasterLookup } from './LookupDialog'
 import { api, SessionExpiredError, type RetailDashboard } from './api'
 import CashReceipt, { type Receipt } from './CashReceipt'
@@ -26,7 +26,7 @@ export default function BusinessReturns({ dashboard }: { dashboard: RetailDashbo
   const [reload, setReload] = useState(0)
   const [result, setResult] = useState<ReturnRegister | null>(null)
   const [error, setError] = useState('')
-  const [expanded, setExpanded] = useState<number | null>(null)
+  const [detail, setDetail] = useState<PostedReturn | null>(null)
   const [selected, setSelected] = useState<PostedReturn | null>(null)
   const [receipt, setReceipt] = useState<Receipt | null>(null)
   const [receiptError, setReceiptError] = useState('')
@@ -39,7 +39,7 @@ export default function BusinessReturns({ dashboard }: { dashboard: RetailDashbo
   useEffect(() => {
     let active = true
     const controller = new AbortController()
-    setResult(null); setError(''); setExpanded(null)
+    setResult(null); setError(''); setDetail(null)
     const query = new URLSearchParams({ locationId: String(applied.locationId), search: applied.search, page: String(page) })
     if (applied.fromDate) query.set('fromDate', applied.fromDate)
     if (applied.toDate) query.set('toDate', applied.toDate)
@@ -73,6 +73,26 @@ export default function BusinessReturns({ dashboard }: { dashboard: RetailDashbo
   </>
 
   const money = (currency: string, amount: number) => currency + ' ' + amount.toFixed(2)
+  if (detail) return <section aria-label="Return details">
+    <div className="d-flex flex-wrap align-items-center justify-content-between gap-2 mb-3">
+      <h3 className="h5 mb-0">Return #{detail.id}</h3>
+      <button type="button" className="btn btn-outline-secondary btn-sm" onClick={() => setDetail(null)}>Back to returns</button>
+    </div>
+    <p>{detail.customerName || (detail.customerId ? 'Customer #' + detail.customerId : 'Walk-in')} · {detail.locationName || locations.find(x => x.id === detail.locationId)?.name || '—'} · {new Date(detail.postedAtUtc).toLocaleString(undefined, { timeZone: business.timeZoneId })}</p>
+    <p>Reason: {detail.reason}</p>
+    <div className="table-responsive"><table className="table table-sm mb-0" aria-label={'Return ' + detail.id + ' lines'}>
+                <thead><tr><th>Product / SKU</th><th className="text-end">Quantity</th><th>Stock</th><th className="text-end">Refund</th></tr></thead>
+                <tbody>{detail.lines.map(line => <tr key={line.id}>
+                  <td>{line.productName}{line.productSku && <small className="d-block">{line.productSku}</small>}</td>
+                  <td className="text-end">{line.quantity} {line.unitCode}</td><td>{line.restock ? 'Restocked' : 'Not restocked'}</td>
+                  <td className="text-end">{money(detail.currencyCode, line.amount)}</td>
+                </tr>)}</tbody>
+              </table></div>
+    <div className="d-flex flex-wrap align-items-center justify-content-between gap-2 mt-3">
+      <strong>Refund: {money(detail.currencyCode, detail.total)}</strong>
+      <button type="button" className="btn btn-outline-secondary" onClick={() => { setDetail(null); setSelected(detail) }}>Invoice #{detail.saleId}</button>
+    </div>
+  </section>
   return <>
     <form className="d-flex flex-wrap align-items-end gap-2 mb-3" onSubmit={event => {
       event.preventDefault()
@@ -102,10 +122,8 @@ export default function BusinessReturns({ dashboard }: { dashboard: RetailDashbo
         <table className="table table-sm align-middle">
           <thead><tr>{['Return', 'Posted', 'Original invoice', 'Location', 'Customer', 'Reason', 'Stock'].map(x => <th scope="col" key={x}>{x}</th>)}
             <th scope="col" className="text-end">Refund</th></tr></thead>
-          <tbody>{result.items.map(item => <Fragment key={item.id}>
-            <tr>
-              <td><button className="btn btn-link p-0" type="button" aria-expanded={expanded === item.id}
-                onClick={() => setExpanded(expanded === item.id ? null : item.id)}>Return #{item.id}</button></td>
+          <tbody>{result.items.map(item => <tr key={item.id}>
+              <td><button className="btn btn-link p-0" type="button" onClick={() => setDetail(item)}>Return #{item.id}</button></td>
               <td>{new Date(item.postedAtUtc).toLocaleString(undefined, { timeZone: business.timeZoneId })}</td>
               <td><button type="button" className="btn btn-link p-0" onClick={() => setSelected(item)}>Invoice #{item.saleId}</button></td>
               <td>{item.locationName || locations.find(x => x.id === item.locationId)?.name || '—'}</td>
@@ -115,24 +133,14 @@ export default function BusinessReturns({ dashboard }: { dashboard: RetailDashbo
                 item.lines.some(x => x.restock) ? 'Mixed' : 'Not restocked'}</td>
               <td className="text-end text-nowrap">{money(item.currencyCode, item.total)}</td>
             </tr>
-            {expanded === item.id && <tr><td colSpan={8}>
-              <table className="table table-sm mb-0" aria-label={'Return ' + item.id + ' lines'}>
-                <thead><tr><th>Product / SKU</th><th className="text-end">Quantity</th><th>Stock</th><th className="text-end">Refund</th></tr></thead>
-                <tbody>{item.lines.map(line => <tr key={line.id}>
-                  <td>{line.productName}{line.productSku && <small className="d-block">{line.productSku}</small>}</td>
-                  <td className="text-end">{line.quantity} {line.unitCode}</td><td>{line.restock ? 'Restocked' : 'Not restocked'}</td>
-                  <td className="text-end">{money(item.currencyCode, line.amount)}</td>
-                </tr>)}</tbody>
-              </table>
-            </td></tr>}
-          </Fragment>)}</tbody>
+          )}</tbody>
         </table>
       </div>}
-      <div className="d-flex flex-wrap gap-2 align-items-center">
+      {(page > 1 || result.hasMore) && <div className="d-flex flex-wrap gap-2 align-items-center">
         <button type="button" className="btn btn-sm btn-outline-secondary" disabled={page === 1} onClick={() => setPage(x => x - 1)}>Previous</button>
         <span>{result.items.length ? `Showing ${(page - 1) * result.pageSize + 1}–${(page - 1) * result.pageSize + result.items.length} of ${result.total}` : `0 shown · ${result.total} matching`}</span>
         <button type="button" className="btn btn-sm btn-outline-secondary" disabled={!result.hasMore} onClick={() => setPage(x => x + 1)}>Next</button>
-      </div>
+      </div>}
     </>}
   </>
 }

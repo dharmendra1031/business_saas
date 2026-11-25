@@ -68,11 +68,11 @@ export default function BusinessOutstanding({ businessId }: { businessId: number
                 <td className="text-end fw-semibold">{money(x.outstanding)}</td><td className="text-end">{money(x.overdue)}</td></tr>)}</tbody>
             </table></div>
           </>}
-        <div className="d-flex align-items-center gap-2">
+        {(page > 1 || report.hasMore) && <div className="d-flex align-items-center gap-2">
           <button type="button" className="btn btn-sm btn-outline-secondary" disabled={page === 1} onClick={() => setPage(x => x - 1)}>Previous</button>
           <span>Page {report.page}</span>
           <button type="button" className="btn btn-sm btn-outline-secondary" disabled={!report.hasMore} onClick={() => setPage(x => x + 1)}>Next</button>
-        </div>
+        </div>}
       </>}
   </>
 }

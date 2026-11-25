@@ -144,13 +144,13 @@ export default function BusinessPostedSales({ dashboard, userId }: { dashboard: 
             </tr>)}</tbody>
           </table>
         </div>}
-        <div className="d-flex flex-wrap gap-2 align-items-center">
+        {(page > 1 || result.hasMore) && <div className="d-flex flex-wrap gap-2 align-items-center">
           <button type="button" className="btn btn-outline-secondary btn-sm" disabled={page === 1}
             onClick={() => setPage(value => value - 1)}>Previous</button>
           <span>{result.items.length ? `Showing ${(page - 1) * result.pageSize + 1}–${(page - 1) * result.pageSize + result.items.length} of ${result.total}` : `0 shown · ${result.total} matching`}</span>
           <button type="button" className="btn btn-outline-secondary btn-sm" disabled={!result.hasMore}
             onClick={() => setPage(value => value + 1)}>Next</button>
-        </div>
+        </div>}
       </>}
   </>
 }

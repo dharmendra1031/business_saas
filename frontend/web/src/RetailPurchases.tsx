@@ -348,14 +348,10 @@ export default function RetailPurchases({ businessId, canOperate, locations, rol
     })
 
   function toggleReceiving() {
-    if (!detail) return
-    if (receivingOpen) {
-      setReceivingOpen(false)
-      setReceiving({})
-      return
-    }
+    if (!detail || busy) return
     setReceiving({})
-    setReceivingOpen(true)
+    setReceivingOpen(value => !value)
+    setError('')
   }
 
   async function createOrder(event: FormEvent<HTMLFormElement>) {
@@ -425,7 +421,7 @@ export default function RetailPurchases({ businessId, canOperate, locations, rol
 
   async function saveReceiving(event: FormEvent<HTMLFormElement>) {
     event.preventDefault()
-    if (!detail || busy || !canOperate) return
+    if (!detail || busy || !canOperate || !receivingOpen || detail.status !== 'Approved') return
     const draftOnly = (event.nativeEvent as SubmitEvent).submitter?.getAttribute('data-action') === 'draft'
     const receivingLines = detail.lines.filter(line => Number(receiving[line.id] ?? '0') > 0)
       .map(line => ({
@@ -705,13 +701,16 @@ export default function RetailPurchases({ businessId, canOperate, locations, rol
 
       {!creating && selectedId !== null && <div className="product-form">
         <div className="masters-heading">
-          <h3>Purchase order #{selectedId}</h3>
+          <h3>{receivingOpen ? 'Goods receiving' : 'Purchase order'} #{selectedId}</h3>
           <button type="button" className="btn btn-sm btn-outline-secondary"
-            disabled={busy} onClick={() => { setSelectedId(null); setDetail(null) }}>Back to orders</button>
+            disabled={busy} onClick={() => {
+              if (receivingOpen) toggleReceiving()
+              else { setSelectedId(null); setDetail(null) }
+            }}>{receivingOpen ? 'Back to purchase order' : 'Back to orders'}</button>
         </div>
         {detailError && <div className="alert alert-danger">{detailError}</div>}
         {!detail && !detailError && <p role="status">Loading order…</p>}
-        {detail && <>
+        {detail && !receivingOpen && <>
           <p>Status: <strong>{detail.status === 'Draft' && roleCode === 'Manager' ? 'Awaiting owner approval' : detail.status}</strong></p>
           {canOperate && roleCode === 'Owner' && detail.status === 'Draft' &&
             <button type="button" className="btn btn-primary mb-3" disabled={busy}
@@ -743,49 +742,9 @@ export default function RetailPurchases({ businessId, canOperate, locations, rol
             </span>
           </p>
           {canOperate && detail.status === 'Approved' &&
-            <>
-              <button type="button" className="btn btn-outline-primary"
-                onClick={() => { toggleReceiving(); setError('') }}>
-                {receivingOpen ? 'Close receiving form' : 'Receive goods'}
-              </button>
-              {receivingOpen && <form className="product-form"
-                onSubmit={event => void saveReceiving(event)}>
-                <h3>Goods receiving</h3>
-                <button className="btn btn-outline-secondary" type="button" onClick={() => setReceiving(
-                  Object.fromEntries(detail.lines.filter(x => x.remainingQuantity > 0).map(x => [x.id, String(x.remainingQuantity)]))
-                )}>Receive all remaining</button>
-                <p className="field-help">Enter received quantities. Stock updates when you post.</p>
-                <div className="table-responsive">
-                  <table className="table table-sm align-middle business-record-table">
-                    <thead><tr><th>Product</th><th className="text-end">Remaining</th>
-                      <th>Receive now</th></tr></thead>
-                    <tbody>{detail.lines.filter(x => x.remainingQuantity > 0).map(line => <tr key={line.id}>
-                      <td>{line.name}{line.unitCode && <span className="product-secondary">{line.unitCode}</span>}</td>
-                      <td className="text-end">{line.remainingQuantity.toFixed(3)}</td>
-                      <td><input className="form-control" type="number" step="0.001" min="0"
-                        max={line.remainingQuantity} aria-label={`Receive ${line.name}`}
-                        value={receiving[line.id] ?? ''}
-                        onChange={event => setReceiving(value =>
-                          ({ ...value, [line.id]: event.target.value }))} />
-                        {line.conversionFactor != null && line.conversionFactor !== 1 && Number(receiving[line.id] ?? '') !== 0 &&
-                          <small className="d-block mt-1">
-                            {baseQuantity(Number(receiving[line.id]), line.conversionFactor) === null
-                              ? 'Enter an exact base stock quantity.'
-                              : `${baseQuantity(Number(receiving[line.id]), line.conversionFactor)} ${line.baseUnitCode} stock`}
-                          </small>}</td>
-                    </tr>)}</tbody>
-                  </table>
-                </div>
-                <div className="form-footer">
-                  <button className="btn btn-primary" type="submit" disabled={busy || !validReceiving}>
-                    {busy ? 'Processing…' : 'Receive & Post Stock'}
-                  </button>
-                  <button className="btn btn-outline-secondary" type="submit"
-                    data-action="draft" disabled={busy || !validReceiving}>Save Draft</button>
-                </div>
-              </form>}
-            </>}
-          <div className="product-form">
+            <button type="button" className="btn btn-primary" disabled={busy}
+              onClick={toggleReceiving}>Receive goods</button>}
+          <div className="mt-3">
             <h3>Receiving history</h3>
             {!detail.receivings.length ? <p className="masters-empty">No receiving vouchers yet.</p>
               : <div className="table-responsive">
@@ -817,6 +776,41 @@ export default function RetailPurchases({ businessId, canOperate, locations, rol
               </div>}
           </div>
         </>}
+        {detail && receivingOpen && <form aria-label="Goods receiving" aria-busy={busy} onSubmit={event => void saveReceiving(event)}>
+                <button className="btn btn-outline-secondary" type="button" disabled={busy} onClick={() => setReceiving(
+                  Object.fromEntries(detail.lines.filter(x => x.remainingQuantity > 0).map(x => [x.id, String(x.remainingQuantity)]))
+                )}>Receive all remaining</button>
+                <p className="field-help">Enter received quantities. Stock updates when you post.</p>
+                <div className="table-responsive">
+                  <table className="table table-sm align-middle business-record-table">
+                    <thead><tr><th>Product</th><th className="text-end">Remaining</th>
+                      <th>Receive now</th></tr></thead>
+                    <tbody>{detail.lines.filter(x => x.remainingQuantity > 0).map(line => <tr key={line.id}>
+                      <td>{line.name}{line.unitCode && <span className="product-secondary">{line.unitCode}</span>}</td>
+                      <td className="text-end">{line.remainingQuantity.toFixed(3)}</td>
+                      <td><input className="form-control" type="number" step="0.001" min="0"
+                        max={line.remainingQuantity} disabled={busy} aria-label={`Receive ${line.name}`}
+                        value={receiving[line.id] ?? ''}
+                        onChange={event => setReceiving(value =>
+                          ({ ...value, [line.id]: event.target.value }))} />
+                        {line.conversionFactor != null && line.conversionFactor !== 1 && Number(receiving[line.id] ?? '') !== 0 &&
+                          <small className="d-block mt-1">
+                            {baseQuantity(Number(receiving[line.id]), line.conversionFactor) === null
+                              ? 'Enter an exact base stock quantity.'
+                              : `${baseQuantity(Number(receiving[line.id]), line.conversionFactor)} ${line.baseUnitCode} stock`}
+                          </small>}</td>
+                    </tr>)}</tbody>
+                  </table>
+                </div>
+                <div className="form-footer">
+                  <button type="button" className="btn btn-outline-secondary" disabled={busy} onClick={toggleReceiving}>Cancel</button>
+                  <button className="btn btn-primary" type="submit" disabled={busy || !validReceiving}>
+                    {busy ? 'Processing…' : 'Receive & Post Stock'}
+                  </button>
+                  <button className="btn btn-outline-secondary" type="submit"
+                    data-action="draft" disabled={busy || !validReceiving}>Save Draft</button>
+                </div>
+              </form>}
       </div>}
     </section>
   )
