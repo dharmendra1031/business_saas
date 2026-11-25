@@ -172,7 +172,7 @@ public static class RetailContactEndpoints
         });
         CreditCollections.MapCreditCollections(customers);
         customers.MapGet("/{customerId:long}/credit-ledger", async (long businessId, long customerId,
-            ClaimsPrincipal user, AppDbContext db, int page = 1) =>
+            ClaimsPrincipal user, AppDbContext db, IConfiguration config, IWebHostEnvironment environment, int page = 1) =>
         {
             if (await RetailBillingSettingsEndpoints.OwnerId(db, businessId, user) is null)
                 return Results.NotFound();
@@ -200,6 +200,8 @@ public static class RetailContactEndpoints
                 }).ToListAsync();
             await tx.CommitAsync();
             return Results.Ok(new { customerId, customer.Name, customer.CreditLimit,
+                canCollect = environment.IsDevelopment() && config.GetValue<bool>("RetailCredit:CollectionsEnabled") &&
+                    await RetailMasterEndpoints.CheckAccess(db, user, businessId, true) is null,
                 totals = billed.Select(x => new { x.CurrencyCode, x.Debit, x.InvoiceCount,
                     Paid = collections.GetValueOrDefault(x.CurrencyCode),
                     Outstanding = x.Debit - collections.GetValueOrDefault(x.CurrencyCode) }),

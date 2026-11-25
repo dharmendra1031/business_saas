@@ -2,6 +2,7 @@ import { useEffect, useRef, useState, type FormEvent } from 'react'
 import { api, post, SessionExpiredError } from './api'
 import { ActionButton, useActionFeedback } from './ActionFeedback'
 import { moneyCents } from './posMoney'
+import CreditPayment, { readCollection, type CreditInvoice, type PendingCollection } from './CreditPayment'
 
 type ContactType = 'suppliers' | 'customers'
 
@@ -29,12 +30,20 @@ interface CreditLedger {
   name: string
   creditLimit: number
   totals: { currencyCode: string; debit: number; paid: number; outstanding: number; invoiceCount: number }[]
-  items: { id: number; locationName?: string | null; currencyCode: string; debit: number; paid: number; outstanding: number;
-    creditDueDate: string; postedAtUtc: string }[]
+  canCollect?: boolean
+  items: CreditInvoice[]
   hasMore: boolean
 }
 
-function CustomerCreditLedger({ path, onClose }: { path: string; onClose: () => void }) {
+function CustomerCreditLedger({ path, userId, onClose }: { path: string; userId: number; onClose: () => void }) {
+  const storageKey = 'credit-collection:' + userId + ':' + path
+  const [recovery] = useState(() => {
+    try { return { pending: readCollection(storageKey), error: '' } }
+    catch { return { pending: null, error: 'Saved payment could not be read. Reconcile it before recording more cash.' } }
+  })
+  const [pending, setPending] = useState<PendingCollection | null>(recovery.pending)
+  const [selected, setSelected] = useState<CreditInvoice | null>(recovery.pending?.invoice ?? null)
+  const [notice, setNotice] = useState('')
   const [page, setPage] = useState(1)
   const [reload, setReload] = useState(0)
   const [ledger, setLedger] = useState<CreditLedger | null>(null)
@@ -55,6 +64,16 @@ function CustomerCreditLedger({ path, onClose }: { path: string; onClose: () => 
       <h3 className="h6 mb-0">Credit ledger{ledger ? ' — ' + ledger.name : ''}</h3>
       <button type="button" className="btn btn-sm btn-outline-secondary" onClick={onClose}>Close ledger</button>
     </div>
+    {notice && <p className="alert alert-success py-2 mt-2" role="status">{notice}</p>}
+    {recovery.error && <p className="alert alert-danger py-2 mt-2" role="alert">{recovery.error}</p>}
+    {pending && !selected && <button type="button" className="btn btn-sm btn-outline-secondary mt-2"
+      onClick={() => setSelected(pending.invoice)}>Recover saved collection</button>}
+    {selected && <CreditPayment key={selected.id} customerPath={path.replace(/\/credit-ledger$/, '')}
+      invoice={selected} storageKey={storageKey} pending={pending} canCollect={ledger?.canCollect === true && !recovery.error}
+      onPending={setPending} onRecorded={payment => {
+        setNotice('Payment #' + payment.id + ' recorded. Ledger refreshed from saved transactions.')
+        setSelected(null); setReload(x => x + 1)
+      }} onClose={() => setSelected(null)} />}
     {error ? <p role="alert" className="mt-2">{error} <button type="button" className="btn btn-sm btn-outline-secondary"
       onClick={() => setReload(x => x + 1)}>Retry</button></p> : !ledger ? <p role="status" className="mt-2">Loading credit ledger…</p> :
       <>
@@ -64,12 +83,17 @@ function CustomerCreditLedger({ path, onClose }: { path: string; onClose: () => 
             Outstanding: <strong>{total.currencyCode} {total.outstanding.toFixed(2)}</strong> · {total.invoiceCount} invoices
           </p>)}
           <div className="table-responsive"><table className="table table-sm align-middle">
-            <thead><tr><th>Invoice</th><th>Location</th><th>Due date</th><th className="text-end">Invoice amount</th><th className="text-end">Received</th><th className="text-end">Outstanding</th></tr></thead>
+            <thead><tr><th>Invoice</th><th>Location</th><th>Due date</th><th className="text-end">Invoice amount</th><th className="text-end">Received</th><th className="text-end">Outstanding</th><th>Action</th></tr></thead>
             <tbody>{ledger.items.map(invoice => <tr key={invoice.id}>
               <td>#{invoice.id}</td><td>{invoice.locationName ?? '—'}</td><td>{invoice.creditDueDate}</td>
               <td className="text-end">{invoice.currencyCode} {invoice.debit.toFixed(2)}</td>
               <td className="text-end">{invoice.currencyCode} {invoice.paid.toFixed(2)}</td>
               <td className="text-end">{invoice.currencyCode} {invoice.outstanding.toFixed(2)}</td>
+              <td><button type="button" className="btn btn-sm btn-outline-secondary"
+                disabled={!!pending || selected !== null}
+                onClick={() => { setNotice(''); setSelected(invoice) }}>
+                {ledger.canCollect && !recovery.error && invoice.outstanding > 0 ? 'Receive payment' : 'Payments'} #{invoice.id}
+              </button></td>
             </tr>)}</tbody>
           </table></div>
           <div className="btn-group">
@@ -78,12 +102,13 @@ function CustomerCreditLedger({ path, onClose }: { path: string; onClose: () => 
             <button type="button" className="btn btn-sm btn-outline-secondary" disabled={!ledger.hasMore}
               onClick={() => setPage(x => x + 1)}>Next</button>
           </div></>}
-        <p className="small mb-0 mt-2">Credit collection pilot. Payment entry is not released in this screen yet.</p>
+        <p className="small mb-0 mt-2">Credit collection pilot. Payments are recorded against the original invoice; no cash drawer or printable payment receipt is connected yet.</p>
       </>}
   </section>
 }
 
-export default function RetailContacts({ businessId, canOperate, type, isOwner, currencyCode }: {
+export default function RetailContacts({ businessId, canOperate, type, isOwner, currencyCode, userId }: {
+  userId: number
   businessId: number
   canOperate: boolean
   type: ContactType
@@ -279,7 +304,7 @@ export default function RetailContacts({ businessId, canOperate, type, isOwner, 
 
       {!supplier && isOwner && ledgerCustomer !== null &&
         <CustomerCreditLedger key={basePath + '/' + ledgerCustomer}
-          path={basePath + '/' + ledgerCustomer + '/credit-ledger'} onClose={() => setLedgerCustomer(null)} />}
+          path={basePath + '/' + ledgerCustomer + '/credit-ledger'} userId={userId} onClose={() => setLedgerCustomer(null)} />}
 
       <form className="masters-search" onSubmit={event => {
         event.preventDefault()
