@@ -1979,6 +1979,42 @@ try {
   }
 
   {
+    const t = await scenario('customer-outstanding-report', { role: 'Owner', hasProducts: true })
+    await t.page.route('**/api/businesses/1/customers/outstanding-report?*', route => {
+      const params = new URL(route.request().url()).searchParams
+      const empty = params.get('search') === 'missing'
+      const overdue = params.get('overdueOnly') === 'true'
+      return response(route, 200, { businessDate: '2026-11-25', timeZoneId: 'Asia/Kolkata',
+        totals: empty ? [] : [{ currencyCode: 'INR', outstanding: overdue ? 30 : 100,
+          notDue: overdue ? 0 : 70, overdue: 30, days1To30: 20, days31To60: 10,
+          days61To90: 0, daysOver90: 0, invoiceCount: overdue ? 2 : 3 }],
+        items: empty ? [] : [{ customerId: 61, name: 'Credit Customer', isActive: false,
+          currencyCode: 'INR', outstanding: overdue ? 30 : 100, overdue: 30,
+          oldestDueDate: '2026-10-20', invoiceCount: overdue ? 2 : 3 }], page: 1, hasMore: false })
+    })
+    await t.login()
+    await t.page.locator('.app-sidebar .nav-entry').filter({ hasText: 'Reports' }).first().click()
+    await t.page.getByRole('tab', { name: 'Outstanding' }).click()
+    await t.page.getByRole('heading', { name: 'Customer Outstanding' }).waitFor()
+    await t.page.getByRole('row').filter({ hasText: 'Credit Customer' }).getByText('100.00', { exact: true }).waitFor()
+    await t.page.getByRole('row').filter({ hasText: 'Credit Customer' }).getByText('Inactive', { exact: true }).waitFor()
+    await t.page.getByLabel('Show', { exact: true }).selectOption('overdue')
+    await t.page.getByRole('row').filter({ hasText: 'Credit Customer' }).getByText('100.00', { exact: true }).waitFor({ state: 'hidden' })
+    await t.page.getByRole('table', { name: 'Customer balances' }).getByText('Credit Customer', { exact: false }).waitFor()
+    for (const width of [1366, 768, 360]) {
+      await t.page.setViewportSize({ width, height: 820 })
+      assert.ok(await t.page.evaluate(() => document.documentElement.scrollWidth) <= width + 1)
+      await t.screenshot('customer-outstanding-' + width)
+    }
+    await t.page.getByLabel('Customer search').fill('missing')
+    await t.page.getByRole('button', { name: 'Search / Refresh' }).click()
+    await t.page.getByText('No matching unpaid credit invoices.', { exact: true }).waitFor()
+    await t.check()
+    await t.context.close()
+    console.log('PASS outstanding report filtering and responsive layout')
+  }
+
+  {
     const t = await scenario('business-owner-all-tabs', { role: 'Owner', hasProducts: true })
     await t.login()
     await t.page.getByRole('heading', { name: 'Business Overview' }).waitFor()
