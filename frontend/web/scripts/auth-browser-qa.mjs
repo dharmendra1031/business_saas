@@ -1390,21 +1390,21 @@ try {
       { id: 301, name: 'Regular Item', sku: 'REG-301', barcode: null,
         salePrice: 2, available: 3, unitCode: 'PCS' },
       { id: 302, name: 'Tiny Item', sku: 'TINY-302', barcode: null,
-        salePrice: 0.01, available: 3, unitCode: 'KG' }
+        salePrice: 0.50, available: 3, unitCode: 'KG' }
     ]))
     await t.page.route('**/api/businesses/1/cash-sales', route => {
       if (route.request().method() !== 'POST') return response(route, 404, {})
       salePosts++
       const sent = route.request().postDataJSON()
-      assert.equal(sent.tendered, 2.01)
+      assert.equal(sent.tendered, 2.15)
       assert.equal(sent.lines.length, 2)
-      assert.equal(sent.lines.find(line => line.productId === 302).quantity, 0.5)
+      assert.equal(sent.lines.find(line => line.productId === 302).quantity, 0.29)
       return response(route, 200, {
-        id: 601, total: 2.01, tendered: 2.01, currencyCode: 'INR',
+        id: 601, total: 2.15, tendered: 2.15, currencyCode: 'INR',
         postedAtUtc: '2026-11-24T05:00:00Z',
         lines: [
           { id: 602, productName: 'Regular Item', unitPrice: 2, quantity: 1 },
-          { id: 603, productName: 'Tiny Item', unitPrice: 0.01, quantity: 0.5 }
+          { id: 603, productName: 'Tiny Item', unitPrice: 0.50, quantity: 0.29, lineTotal: 0.15 }
         ]
       })
     })
@@ -1418,11 +1418,19 @@ try {
       'Non-zero basket must still reject a product whose line rounds to zero')
     assert.match(await t.page.locator('.pos-total-row').innerText(), /₹2\.00/)
     assert.equal(salePosts, 0)
-    await tinyQuantity.fill('0.500')
+    await tinyQuantity.fill('0.010')
     assert.equal(await t.page.getByText(/A product line rounds to ₹0\.00/).count(), 0)
     assert.match(await t.page.locator('.pos-total-row').innerText(), /₹2\.01/)
+    await tinyQuantity.fill('0.290')
+    assert.match(await t.page.locator('.pos-total-row').innerText(), /₹2\.15/)
+    const tinyLine = t.page.locator('.pos-basket-line').filter({ hasText: 'Tiny Item' })
+    assert.equal(await tinyLine.locator('.pos-line-amount').innerText(), '₹0.15')
     await t.page.getByRole('button', { name: /Pay \/ Checkout/ }).click()
-    await t.page.getByLabel('Cash received').fill('2.01')
+    const dialog = t.page.getByRole('dialog')
+    await dialog.getByText('INR 2.15', { exact: true }).waitFor()
+    await t.page.getByLabel('Cash received').fill('2.14')
+    assert.equal(await dialog.getByRole('button', { name: 'Save Only' }).isDisabled(), true)
+    await t.page.getByLabel('Cash received').fill('2.15')
     await t.page.getByRole('button', { name: 'Save Only' }).click()
     await t.page.getByRole('heading', { name: 'Cash receipt #601' }).waitFor()
     assert.equal(salePosts, 1)

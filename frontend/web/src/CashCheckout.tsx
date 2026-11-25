@@ -22,6 +22,20 @@ function validQuantity(value: number): boolean {
     Math.abs(Math.round(value * 1000) - value * 1000) < 0.000001
 }
 
+// Keep integer cents within a range where conversion back to a number retains
+// cent precision. SQL decimal supports larger values than the browser can display.
+const maxExactCents = 2 ** 52 - 1
+
+function lineAmountCents(line: Line): number {
+  const cents = Math.round(line.expectedUnitPrice * 100)
+  if (!validQuantity(line.quantity) || !Number.isSafeInteger(cents) || cents < 0 ||
+    Math.abs(cents - line.expectedUnitPrice * 100) > 0.000001) return NaN
+  // Quantity has at most three decimals. Integer arithmetic matches the server's
+  // positive decimal midpoint rounding without a floating-point half-cent error.
+  const amount = (BigInt(cents) * BigInt(Math.round(line.quantity * 1000)) + 500n) / 1000n
+  return amount <= BigInt(maxExactCents) ? Number(amount) : NaN
+}
+
 function restore(key: string): SaleRequest | null {
   let raw: string | null
   try { raw = sessionStorage.getItem(key) } catch { return null }
@@ -95,11 +109,13 @@ export default function CashCheckout({ userId, dashboard, onExit }: {
   const searchInput = useRef<HTMLInputElement>(null)
   const customerInput = useRef<HTMLInputElement>(null)
   const checkoutButton = useRef<HTMLButtonElement>(null)
-  const total = basket.reduce((sum, line) =>
-    sum + Math.round(Math.round(line.expectedUnitPrice * 100) * line.quantity), 0) / 100
-  const hasZeroValueLine = basket.some(line =>
-    Math.round(Math.round(line.expectedUnitPrice * 100) * line.quantity) === 0)
-  const money = (amount: number) => (business.currencyCode === 'INR' ? '₹' : business.currencyCode + ' ') + amount.toFixed(2)
+  const lineAmounts = basket.map(lineAmountCents)
+  const totalCents = lineAmounts.reduce((sum, amount) => sum + amount, 0)
+  const hasUnsupportedAmount = !Number.isSafeInteger(totalCents) || totalCents > maxExactCents
+  const total = hasUnsupportedAmount ? NaN : totalCents / 100
+  const hasZeroValueLine = lineAmounts.some(amount => amount === 0)
+  const money = (amount: number) => Number.isFinite(amount)
+    ? (business.currencyCode === 'INR' ? '₹' : business.currencyCode + ' ') + amount.toFixed(2) : '—'
 
   useEffect(() => {
     if (!historyPage || !locationId || pending || receipt) return
@@ -275,8 +291,6 @@ export default function CashCheckout({ userId, dashboard, onExit }: {
       Math.max(0.001, line.quantity - step)).toFixed(3))
     if (next !== line.quantity) updateQuantity(line, next)
   }
-
-  const itemCount = Number(basket.reduce((sum, line) => sum + line.quantity, 0).toFixed(3))
 
   async function recordSale(openPrint = false) {
     const received = Number(cash)
@@ -535,7 +549,7 @@ export default function CashCheckout({ userId, dashboard, onExit }: {
           <span className="pos-count-pill">{basket.length} {basket.length === 1 ? 'product' : 'products'}</span>
         </div>
         <div className="pos-basket-toolbar">
-          <span><ShoppingBag size={16} /> {itemCount} units</span>
+          <span><ShoppingBag size={16} /> {basket.length} {basket.length === 1 ? 'product' : 'products'}</span>
           {basket.length > 0 && !clearArmed && <button type="button" className="pos-basket-clear"
             disabled={busy || scanBusy} onClick={() => setClearArmed(true)}><Trash2 size={15} /> Clear</button>}
           {clearArmed && <div className="pos-clear-confirm">
@@ -572,7 +586,7 @@ export default function CashCheckout({ userId, dashboard, onExit }: {
           <ShoppingBag size={34} /><strong>Your basket is empty</strong>
           <p>Select a product from the catalogue to start this sale.</p>
         </div>}
-        {basket.length > 0 && <ul className="pos-basket-lines">{basket.map(line =>
+        {basket.length > 0 && <ul className="pos-basket-lines">{basket.map((line, index) =>
           <li key={line.productId} className="pos-basket-line">
             <div className="pos-line-description">
               <strong>{line.name}</strong>
@@ -593,7 +607,7 @@ export default function CashCheckout({ userId, dashboard, onExit }: {
                   Math.min(1000000, availableStock(line) ?? 1000000)}
                 onClick={() => stepQuantity(line, 1)}><Plus size={15} /></button>
             </div>
-            <b className="pos-line-amount">{money(Math.round(Math.round(line.expectedUnitPrice * 100) * line.quantity) / 100)}</b>
+            <b className="pos-line-amount">{money(lineAmounts[index] / 100)}</b>
             <button type="button" className="pos-remove-item" disabled={busy || scanBusy}
               aria-label={`Remove ${line.name}`} onClick={() => {
                 setBasket(previous => previous.filter(x => x.productId !== line.productId))
@@ -603,6 +617,9 @@ export default function CashCheckout({ userId, dashboard, onExit }: {
               }}><Trash2 size={16} /></button>
           </li>)}</ul>}
         <div className="pos-basket-checkout">
+          {hasUnsupportedAmount && <p role="alert" className="pos-field-status">
+            The basket amount cannot be represented accurately. Check prices and quantities or split the sale.
+          </p>}
           {hasZeroValueLine && <p role="status" className="pos-field-status">
             A product line rounds to {money(0)}. Increase its quantity or remove it.
           </p>}
