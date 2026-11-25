@@ -38,6 +38,7 @@ interface ReturnRequest {
 }
 interface PostedReturn {
   id: number; saleId: number; requestKey: string; total: number; reason: string; postedAtUtc: string;
+  replacementSaleId?: number | null; netCashSettlement?: number | null;
   lines: { saleLineId: number; quantity: number; amount: number; restock: boolean }[]
 }
 interface ReturnPage { items: PostedReturn[]; hasMore: boolean }
@@ -94,7 +95,7 @@ function ReturnHistory({ receipt, options, timeZone }: {
       !result ? <p role="status">Loading returns…</p> :
       !result.items.length ? <p className="small">No posted returns.</p> : <>
         <div className="table-responsive"><table className="table table-sm align-middle">
-          <thead><tr><th scope="col">Return</th><th scope="col">Posted</th><th scope="col">Reason</th><th scope="col" className="text-end">Refund</th></tr></thead>
+          <thead><tr><th scope="col">Return</th><th scope="col">Posted</th><th scope="col">Reason</th><th scope="col" className="text-end">Return value</th></tr></thead>
           <tbody>{result.items.map(item => <tr key={item.id}>
             <td><button type="button" className="btn btn-link p-0" aria-expanded={expanded === item.id}
               onClick={() => setExpanded(expanded === item.id ? null : item.id)}>Return #{item.id}</button>
@@ -102,7 +103,12 @@ function ReturnHistory({ receipt, options, timeZone }: {
                 {receipt.lines.find(x => x.id === line.saleLineId)?.productName ?? 'Line #' + line.saleLineId}: {line.quantity} · {money(line.amount)} · {line.restock ? 'Restocked' : 'Not restocked'}
               </div>)}</div>}</td>
             <td>{new Date(item.postedAtUtc).toLocaleString(undefined, { timeZone })}</td>
-            <td>{item.reason}</td><td className="text-end">{money(item.total)}</td>
+            <td>{item.reason}{item.replacementSaleId != null && <small className="d-block">
+              Exchange · Invoice #{item.replacementSaleId} · {
+                item.netCashSettlement == null ? 'Settlement requires reconciliation' :
+                item.netCashSettlement > 0 ? 'Cash collected: ' + money(item.netCashSettlement) :
+                item.netCashSettlement < 0 ? 'Cash refunded: ' + money(-item.netCashSettlement) : 'No cash settlement'
+              }</small>}</td><td className="text-end">{money(item.total)}</td>
           </tr>)}</tbody>
         </table></div>
         {(page > 1 || result.hasMore) && <div className="d-flex gap-2 align-items-center">
@@ -554,8 +560,8 @@ export default function CashReceipt({ receipt, businessName, timeZone, pdfPath, 
       Change {money(receipt.tendered - receipt.total)}</p>}
     {printNotice && <p role="status" className="small text-body-secondary">{printNotice}</p>}
     {receipt.printAvailable
-      ? <a className="btn btn-outline-secondary me-2" href={pdfPath} target="_blank" rel="noopener noreferrer">{credit ? 'Print credit invoice' : 'Print receipt'}</a>
-      : <p className="small text-body-secondary" role="status">{receipt.exchange ? 'Exchange RDLC printing is not released.' : 'RDLC printing requires a Windows report host.'}</p>}
+      ? <a className="btn btn-outline-secondary me-2" href={pdfPath} target="_blank" rel="noopener noreferrer">{receipt.exchange ? 'Print exchange invoice' : credit ? 'Print credit invoice' : 'Print receipt'}</a>
+      : <p className="small text-body-secondary" role="status">RDLC printing requires a Windows report host.</p>}
     {restoredExchange.error && <p role="alert" className="text-danger">{restoredExchange.error}</p>}
     {returnEstimate && !receipt.exchange && !pendingExchange && !restoredExchange.error && returnEstimate.canOperate && <button type="button" className="btn btn-outline-secondary me-2" aria-expanded={showEstimate}
       onClick={() => { setShowExchange(false); setShowEstimate(value => !value) }}>{showEstimate ? 'Close estimate' : 'Estimate return'}</button>}

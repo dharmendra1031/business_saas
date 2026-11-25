@@ -11,6 +11,7 @@ interface PostedReturn {
   id: number; saleId: number; locationId: number; locationName?: string;
   customerId?: number; customerName?: string; currencyCode: string;
   total: number; reason: string; postedAtUtc: string; lines: ReturnLine[]
+  replacementSaleId?: number | null; netCashSettlement?: number | null
 }
 interface ReturnRegister {
   total: number; pageSize: number; hasMore: boolean; items: PostedReturn[]
@@ -81,7 +82,7 @@ export default function BusinessReturns({ dashboard }: { dashboard: RetailDashbo
     <p>{detail.customerName || (detail.customerId ? 'Customer #' + detail.customerId : 'Walk-in')} · {detail.locationName || locations.find(x => x.id === detail.locationId)?.name || '—'} · {new Date(detail.postedAtUtc).toLocaleString(undefined, { timeZone: business.timeZoneId })}</p>
     <p>Reason: {detail.reason}</p>
     <div className="table-responsive"><table className="table table-sm mb-0" aria-label={'Return ' + detail.id + ' lines'}>
-                <thead><tr><th>Product / SKU</th><th className="text-end">Quantity</th><th>Stock</th><th className="text-end">Refund</th></tr></thead>
+                <thead><tr><th>Product / SKU</th><th className="text-end">Quantity</th><th>Stock</th><th className="text-end">Return value</th></tr></thead>
                 <tbody>{detail.lines.map(line => <tr key={line.id}>
                   <td>{line.productName}{line.productSku && <small className="d-block">{line.productSku}</small>}</td>
                   <td className="text-end">{line.quantity} {line.unitCode}</td><td>{line.restock ? 'Restocked' : 'Not restocked'}</td>
@@ -89,7 +90,12 @@ export default function BusinessReturns({ dashboard }: { dashboard: RetailDashbo
                 </tr>)}</tbody>
               </table></div>
     <div className="d-flex flex-wrap align-items-center justify-content-between gap-2 mt-3">
-      <strong>Refund: {money(detail.currencyCode, detail.total)}</strong>
+      <strong>Return value: {money(detail.currencyCode, detail.total)}</strong>
+      {detail.replacementSaleId != null && <span>Replacement invoice #{detail.replacementSaleId} · {
+        detail.netCashSettlement == null ? 'Settlement requires reconciliation' :
+        detail.netCashSettlement > 0 ? 'Cash collected: ' + money(detail.currencyCode, detail.netCashSettlement) :
+        detail.netCashSettlement < 0 ? 'Cash refunded: ' + money(detail.currencyCode, -detail.netCashSettlement) : 'No cash settlement'
+      }</span>}
       <button type="button" className="btn btn-outline-secondary" onClick={() => setSelected(detail)}>Invoice #{detail.saleId}</button>
     </div>
   </section>
@@ -115,20 +121,20 @@ export default function BusinessReturns({ dashboard }: { dashboard: RetailDashbo
     {error ? <p role="alert">{error} <button type="button" className="btn btn-sm btn-outline-secondary"
       onClick={() => setReload(x => x + 1)}>Retry</button></p> : !result ? <p role="status">Loading posted returns…</p> : <>
       {result.totals.length > 0 && <div className="d-flex flex-wrap gap-3 border-bottom pb-2 mb-2">
-        {result.totals.map(total => <span key={total.currencyCode}>Refunded <strong>{money(total.currencyCode, total.refundTotal)}</strong>
+        {result.totals.map(total => <span key={total.currencyCode}>Return value <strong>{money(total.currencyCode, total.refundTotal)}</strong>
           {' · '}{total.returnCount} returns</span>)}
       </div>}
       {result.items.length === 0 ? <p>No matching posted returns.</p> : <div className="table-responsive">
         <table className="table table-sm align-middle">
           <thead><tr>{['Return', 'Posted', 'Original invoice', 'Location', 'Customer', 'Reason', 'Stock'].map(x => <th scope="col" key={x}>{x}</th>)}
-            <th scope="col" className="text-end">Refund</th></tr></thead>
+            <th scope="col" className="text-end">Return value</th></tr></thead>
           <tbody>{result.items.map(item => <tr key={item.id}>
               <td><button className="btn btn-link p-0" type="button" onClick={() => setDetail(item)}>Return #{item.id}</button></td>
               <td>{new Date(item.postedAtUtc).toLocaleString(undefined, { timeZone: business.timeZoneId })}</td>
               <td><button type="button" className="btn btn-link p-0" onClick={() => setSelected(item)}>Invoice #{item.saleId}</button></td>
               <td>{item.locationName || locations.find(x => x.id === item.locationId)?.name || '—'}</td>
               <td>{item.customerName || (item.customerId ? 'Customer #' + item.customerId : 'Walk-in')}</td>
-              <td>{item.reason}</td>
+              <td>{item.reason}{item.replacementSaleId != null && <small className="d-block">Exchange · Invoice #{item.replacementSaleId}</small>}</td>
               <td>{!item.lines.length ? '—' : item.lines.every(x => x.restock) ? 'Restocked' :
                 item.lines.some(x => x.restock) ? 'Mixed' : 'Not restocked'}</td>
               <td className="text-end text-nowrap">{money(item.currencyCode, item.total)}</td>

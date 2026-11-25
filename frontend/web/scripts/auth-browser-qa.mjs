@@ -2588,14 +2588,15 @@ try {
           assert.equal(params.get('locationId'), '1')
           return response(route, 200, { date: params.get('date'), timeZoneId: 'Asia/Kolkata',
             totals: params.get('date') === '2026-11-23'
-              ? [{ currencyCode: 'INR', receiptCount: 1, salesTotal: 24, returnCount: 1, refundTotal: 4.8, netSales: 19.2 }] : [] })
+              ? [{ currencyCode: 'INR', receiptCount: 1, salesTotal: 24, returnCount: 1, refundTotal: 4.8, netSales: 19.2, cashCollected: 24, cashRefunded: 4.8 }] : [] })
         })
         await t.page.getByLabel('Business date').fill('2026-11-22')
         await t.page.getByText('No posted cash receipts or returns for this date and location.').waitFor()
         await t.page.getByLabel('Business date').fill('2026-11-23')
         const reportRow = t.page.getByRole('row').filter({ hasText: 'INR' })
-        await reportRow.getByText('24.00', { exact: true }).waitFor()
-        await reportRow.getByText('4.80', { exact: true }).waitFor()
+        await reportRow.waitFor()
+        assert.equal(await reportRow.getByText('24.00', { exact: true }).count(), 2)
+        assert.equal(await reportRow.getByText('4.80', { exact: true }).count(), 2)
         await reportRow.getByText('19.20', { exact: true }).waitFor()
       }
       if (label === 'Business Settings') {

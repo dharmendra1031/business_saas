@@ -1010,6 +1010,8 @@ public sealed class SqlServerTests(Xunit.Abstractions.ITestOutputHelper output)
         Assert.Equal(30m, earlierTotal.GetProperty("salesTotal").GetDecimal());
         Assert.Equal(0m, earlierTotal.GetProperty("refundTotal").GetDecimal());
         Assert.Equal(30m, earlierTotal.GetProperty("netSales").GetDecimal());
+        Assert.Equal(30m, earlierTotal.GetProperty("cashCollected").GetDecimal());
+        Assert.Equal(0m, earlierTotal.GetProperty("cashRefunded").GetDecimal());
         var dailyReport = await owner.GetFromJsonAsync<JsonElement>(dailyPath + reportDate.ToString("yyyy-MM-dd"));
         var todayTotal = dailyReport.GetProperty("totals")[0];
         Assert.True(todayTotal.GetProperty("refundTotal").GetDecimal() >= 10m);
@@ -1522,6 +1524,17 @@ public sealed class SqlServerTests(Xunit.Abstractions.ITestOutputHelper output)
         }
         Assert.Equal((beforePosting.Sales + 1, beforePosting.Returns + 1, beforePosting.Movements + 2,
             beforePosting.SalesTotal + 30m, beforePosting.ReturnsTotal + 15m), await ExchangeBaseline());
+
+        var exchangeDate = DateOnly.FromDateTime(TimeZoneInfo.ConvertTimeFromUtc(
+            replacementReceipt.GetProperty("postedAtUtc").GetDateTime().ToUniversalTime(), zone));
+        var exchangeReport = await owner.GetFromJsonAsync<JsonElement>(dailyPath + exchangeDate.ToString("yyyy-MM-dd"));
+        var exchangeTotals = exchangeReport.GetProperty("totals")[0];
+        Assert.Equal(exchangeTotals.GetProperty("salesTotal").GetDecimal() - 15m,
+            exchangeTotals.GetProperty("cashCollected").GetDecimal());
+        Assert.Equal(exchangeTotals.GetProperty("refundTotal").GetDecimal() - 15m,
+            exchangeTotals.GetProperty("cashRefunded").GetDecimal());
+        Assert.Equal(exchangeTotals.GetProperty("netSales").GetDecimal(),
+            exchangeTotals.GetProperty("cashCollected").GetDecimal() - exchangeTotals.GetProperty("cashRefunded").GetDecimal());
     }
 
     [Fact]

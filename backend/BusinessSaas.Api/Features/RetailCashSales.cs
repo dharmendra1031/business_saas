@@ -534,6 +534,7 @@ public static class RetailCashSales
                     join sale in CashOnly(db) on refund.SaleId equals sale.Id
                     where refund.BusinessId == businessId && sale.BusinessId == businessId
                     select new { refund.Id, refund.SaleId, refund.Total, refund.Reason, refund.PostedAtUtc,
+                        refund.ReplacementSaleId, refund.NetCashSettlement,
                         sale.LocationId, sale.LocationName, sale.CustomerId, sale.CustomerName,
                         sale.CustomerPhone, sale.CurrencyCode };
         if (locationId > 0) query = query.Where(x => x.LocationId == locationId);
@@ -584,7 +585,7 @@ public static class RetailCashSales
             var byReturn = lines.ToLookup(x => x.ReturnId);
             await tx.CommitAsync(cancellationToken);
             return Results.Ok(new { total, page, pageSize, totals,
-                items = items.Select(x => new { x.Id, x.SaleId, x.Total, x.Reason,
+                items = items.Select(x => new { x.Id, x.SaleId, x.Total, x.Reason, x.ReplacementSaleId, x.NetCashSettlement,
                     PostedAtUtc = DateTime.SpecifyKind(x.PostedAtUtc, DateTimeKind.Utc),
                     x.LocationId, x.LocationName, x.CustomerId, x.CustomerName, x.CurrencyCode,
                     Lines = byReturn[x.Id] }),
@@ -867,16 +868,24 @@ public static class RetailCashSales
         var zone = TimeZoneInfo.FindSystemTimeZoneById(business.TimeZoneId);
         var start = LocalDateStart(date, zone);
         var end = LocalDateStart(date.AddDays(1), zone);
-        var sales = CashOnly(db)
-            .Where(x => x.BusinessId == businessId && x.LocationId == locationId &&
-                x.PostedAtUtc >= start && x.PostedAtUtc < end)
-            .Select(x => new { x.CurrencyCode, Amount = x.Total, IsReturn = false });
+        var exchangeLinks = db.RetailCashReturns.AsNoTracking()
+            .Where(x => x.BusinessId == businessId && x.ReplacementSaleId != null);
+        var sales = from sale in CashOnly(db)
+                    where sale.BusinessId == businessId && sale.LocationId == locationId &&
+                        sale.PostedAtUtc >= start && sale.PostedAtUtc < end
+                    join link in exchangeLinks on (long?)sale.Id equals link.ReplacementSaleId into links
+                    from link in links.DefaultIfEmpty()
+                    select new { sale.CurrencyCode, Amount = sale.Total, IsReturn = false,
+                        CashIn = link == null ? sale.Total : link.NetCashSettlement > 0 ? link.NetCashSettlement.Value : 0m,
+                        CashOut = 0m };
         // Refunds belong to their own posting date, including returns of older sales.
         var refunds = from r in db.RetailCashReturns.AsNoTracking()
                       join sale in CashOnly(db) on r.SaleId equals sale.Id
                       where r.BusinessId == businessId && sale.BusinessId == businessId &&
                           sale.LocationId == locationId && r.PostedAtUtc >= start && r.PostedAtUtc < end
-                      select new { sale.CurrencyCode, Amount = r.Total, IsReturn = true };
+                      select new { sale.CurrencyCode, Amount = r.Total, IsReturn = true,
+                          CashIn = 0m, CashOut = r.ReplacementSaleId == null ? r.Total :
+                              r.NetCashSettlement < 0 ? -r.NetCashSettlement.Value : 0m };
         var totals = await sales.Concat(refunds)
             .GroupBy(x => x.CurrencyCode).OrderBy(x => x.Key)
             .Select(x => new {
@@ -885,7 +894,9 @@ public static class RetailCashSales
                 ReturnCount = x.Sum(s => s.IsReturn ? 1 : 0),
                 SalesTotal = x.Sum(s => s.IsReturn ? 0m : s.Amount),
                 RefundTotal = x.Sum(s => s.IsReturn ? s.Amount : 0m),
-                NetSales = x.Sum(s => s.IsReturn ? -s.Amount : s.Amount)
+                NetSales = x.Sum(s => s.IsReturn ? -s.Amount : s.Amount),
+                CashCollected = x.Sum(s => s.CashIn),
+                CashRefunded = x.Sum(s => s.CashOut)
             }).ToListAsync();
         return Results.Ok(new { date, business.TimeZoneId, totals });
     }

@@ -6,7 +6,7 @@ interface Report {
   date: string
   timeZoneId: string
   totals: { currencyCode: string; receiptCount: number; salesTotal: number;
-    returnCount: number; refundTotal: number; netSales: number }[]
+    returnCount: number; refundTotal: number; netSales: number; cashCollected: number; cashRefunded: number }[]
 }
 
 export default function BusinessDailySales({ dashboard }: { dashboard: RetailDashboard }) {
@@ -56,15 +56,19 @@ export default function BusinessDailySales({ dashboard }: { dashboard: RetailDas
         {report.totals.length === 0 ? <p>No posted cash receipts or returns for this date and location.</p> :
           <div className="table-responsive"><table className="table table-sm">
             <thead><tr><th scope="col">Currency</th><th scope="col">Receipts</th><th scope="col">Returns</th>
-              <th scope="col" className="text-end">Gross cash sales</th>
-              <th scope="col" className="text-end">Cash refunds</th>
-              <th scope="col" className="text-end">Net cash sales</th></tr></thead>
+              <th scope="col" className="text-end">Gross sales value</th>
+              <th scope="col" className="text-end">Return value</th>
+              <th scope="col" className="text-end">Net sales</th>
+              <th scope="col" className="text-end">Cash collected</th>
+              <th scope="col" className="text-end">Cash refunded</th></tr></thead>
             <tbody>{report.totals.map(total => <tr key={total.currencyCode}>
               <td>{total.currencyCode}</td><td>{total.receiptCount.toLocaleString()}</td>
               <td>{total.returnCount.toLocaleString()}</td>
               <td className="text-end">{total.salesTotal.toFixed(2)}</td>
               <td className="text-end">{total.refundTotal.toFixed(2)}</td>
               <td className="text-end"><strong>{total.netSales.toFixed(2)}</strong></td>
+              <td className="text-end">{total.cashCollected.toFixed(2)}</td>
+              <td className="text-end">{total.cashRefunded.toFixed(2)}</td>
             </tr>)}</tbody>
           </table></div>}
       </>}
