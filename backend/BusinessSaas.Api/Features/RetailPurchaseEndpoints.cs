@@ -18,9 +18,9 @@ public static class RetailPurchaseEndpoints
             .RequireAuthorization();
 
         group.MapGet("", async (long businessId, int? page, bool? draftOnly,
-            ClaimsPrincipal user, AppDbContext db) =>
+            ClaimsPrincipal user, AppDbContext db, CancellationToken cancellationToken) =>
         {
-            var denied = await RetailMasterEndpoints.CheckAccess(db, user, businessId, false);
+            var denied = await RetailMasterEndpoints.CheckAccess(db, user, businessId, false, cancellationToken);
             if (denied is not null) return denied;
             var currentPage = page ?? 1;
             if (currentPage is < 1 or > 100000)
@@ -29,7 +29,7 @@ public static class RetailPurchaseEndpoints
             var userId = UserId(user);
             var role = await db.BusinessUsers.AsNoTracking()
                 .Where(x => x.BusinessId == businessId && x.UserId == userId)
-                .Select(x => x.RoleCode).SingleAsync();
+                .Select(x => x.RoleCode).SingleAsync(cancellationToken);
 
             var query = from order in db.RetailPurchaseOrders.AsNoTracking()
                         join supplier in db.RetailSuppliers.AsNoTracking()
@@ -51,9 +51,9 @@ public static class RetailPurchaseEndpoints
                             order.CreatedAtUtc,
                             order.ApprovedAtUtc
                         };
-            var total = await query.CountAsync();
+            var total = await query.CountAsync(cancellationToken);
             var items = await query.OrderByDescending(x => x.Id)
-                .Skip((currentPage - 1) * PageSize).Take(PageSize).ToListAsync();
+                .Skip((currentPage - 1) * PageSize).Take(PageSize).ToListAsync(cancellationToken);
             return Results.Ok(new { items, total, page = currentPage, pageSize = PageSize });
         });
 
@@ -180,14 +180,14 @@ public static class RetailPurchaseEndpoints
         });
 
         group.MapGet("/{orderId:long}", async (long businessId, long orderId,
-            ClaimsPrincipal user, AppDbContext db) =>
+            ClaimsPrincipal user, AppDbContext db, CancellationToken cancellationToken) =>
         {
             var order = await db.RetailPurchaseOrders.AsNoTracking().SingleOrDefaultAsync(x =>
-                x.BusinessId == businessId && x.Id == orderId);
+                x.BusinessId == businessId && x.Id == orderId, cancellationToken);
             if (order is null) return Results.NotFound();
 
             var denied = await RetailStockEndpoints.CheckLocation(db, user,
-                businessId, order.LocationId, false);
+                businessId, order.LocationId, false, cancellationToken);
             if (denied is not null) return denied;
 
             var lines = await (from line in db.RetailPurchaseOrderLines.AsNoTracking()
@@ -205,9 +205,9 @@ public static class RetailPurchaseEndpoints
                                    BaseUnitCode = unit.Code, line.SelectedUnitId,
                                    ConversionFactor = line.ConversionFactor ?? 1m,
                                    line.OrderedQuantity, line.UnitCost
-                               }).ToListAsync();
+                               }).ToListAsync(cancellationToken);
 
-            var received = await PostedQuantities(db, businessId, orderId);
+            var received = await PostedQuantities(db, businessId, orderId, cancellationToken);
             var items = lines.Select(line => new
             {
                 line.Id,
@@ -229,7 +229,7 @@ public static class RetailPurchaseEndpoints
                 .Select(x => new { x.Id, x.Status, x.CreatedAtUtc, x.PostedAtUtc,
                     Lines = db.RetailReceivingLines.Where(l => l.ReceivingId == x.Id)
                         .OrderBy(l => l.Id).Select(l => new { l.PurchaseOrderLineId, l.Quantity }).ToList() })
-                .ToListAsync();
+                .ToListAsync(cancellationToken);
             return Results.Ok(new
             {
                 order.Id, order.BusinessId, order.LocationId, order.SupplierId,
@@ -463,7 +463,7 @@ public static class RetailPurchaseEndpoints
     }
 
     private static async Task<Dictionary<long, decimal>> PostedQuantities(
-        AppDbContext db, long businessId, long orderId)
+        AppDbContext db, long businessId, long orderId, CancellationToken cancellationToken = default)
     {
         return await (from line in db.RetailReceivingLines.AsNoTracking()
                       join receipt in db.RetailReceivings.AsNoTracking()
@@ -472,7 +472,7 @@ public static class RetailPurchaseEndpoints
                             receipt.PurchaseOrderId == orderId && receipt.Status == "Posted"
                       group line by line.PurchaseOrderLineId into values
                       select new { LineId = values.Key, Total = values.Sum(x => x.Quantity) })
-            .ToDictionaryAsync(x => x.LineId, x => x.Total);
+            .ToDictionaryAsync(x => x.LineId, x => x.Total, cancellationToken);
     }
 
     private static bool ValidQuantity(decimal value) =>

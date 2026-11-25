@@ -38,7 +38,7 @@ public static class RetailCashSales
     }
 
     private static async Task<Business?> Shop(AppDbContext db, long businessId, long actor, long locationId,
-        bool ownerOnly = false)
+        bool ownerOnly = false, CancellationToken cancellationToken = default)
     {
         return await (from b in db.Businesses.AsNoTracking()
                       join t in db.BusinessTypes on b.BusinessTypeId equals t.Id
@@ -47,7 +47,7 @@ public static class RetailCashSales
                       where b.Id == businessId && t.Code == "RETAIL" && m.UserId == actor &&
                           loc.Id == locationId && (m.RoleCode == "Owner" ||
                           (!ownerOnly && loc.IsPrimary && (m.RoleCode == "Cashier" || m.RoleCode == "Manager")))
-                      select b).SingleOrDefaultAsync();
+                      select b).SingleOrDefaultAsync(cancellationToken);
     }
 
     private static IQueryable<RetailCashSale> CashOnly(AppDbContext db) =>
@@ -330,19 +330,19 @@ public static class RetailCashSales
 
     // Read-only register of posted cash refunds. Stock quantities remain in their original sale units.
     private static async Task<IResult> BusinessReturnRegister(long businessId, ClaimsPrincipal user,
-        AppDbContext db, long locationId = 0, int page = 1, DateOnly? fromDate = null,
+        AppDbContext db, CancellationToken cancellationToken, long locationId = 0, int page = 1, DateOnly? fromDate = null,
         DateOnly? toDate = null, string? search = null)
     {
-        if (await RetailBillingSettingsEndpoints.OwnerId(db, businessId, user) is null)
+        if (await RetailBillingSettingsEndpoints.OwnerId(db, businessId, user, cancellationToken) is null)
             return Results.NotFound();
         if (locationId < 0 || locationId > 0 && !await db.BusinessLocations.AnyAsync(x =>
-            x.BusinessId == businessId && x.Id == locationId)) return Results.NotFound();
+            x.BusinessId == businessId && x.Id == locationId, cancellationToken)) return Results.NotFound();
         var term = search?.Trim() ?? "";
         if (page is < 1 or > 100000 || term.Length > 100 ||
             fromDate?.Year is < 1900 or > 9998 || toDate?.Year is < 1900 or > 9998 || fromDate > toDate)
             return Results.BadRequest(new { message = "Invalid return filters." });
 
-        var zoneId = await db.Businesses.Where(x => x.Id == businessId).Select(x => x.TimeZoneId).SingleAsync();
+        var zoneId = await db.Businesses.Where(x => x.Id == businessId).Select(x => x.TimeZoneId).SingleAsync(cancellationToken);
         var zone = TimeZoneInfo.FindSystemTimeZoneById(zoneId);
         var query = from refund in db.RetailCashReturns.AsNoTracking()
                     join sale in CashOnly(db) on refund.SaleId equals sale.Id
@@ -371,16 +371,16 @@ public static class RetailCashSales
                 (x.CustomerPhone != null && x.CustomerPhone.Contains(term)));
         }
 
-        await using var tx = await db.Database.BeginTransactionAsync(IsolationLevel.Serializable);
+        await using var tx = await db.Database.BeginTransactionAsync(IsolationLevel.Serializable, cancellationToken);
         try
         {
             const int pageSize = 10;
-            var total = await query.CountAsync();
             var totals = await query.GroupBy(x => x.CurrencyCode).Select(g => new {
                 CurrencyCode = g.Key, RefundTotal = g.Sum(x => x.Total), ReturnCount = g.Count()
-            }).OrderBy(x => x.CurrencyCode).ToListAsync();
+            }).OrderBy(x => x.CurrencyCode).ToListAsync(cancellationToken);
+            var total = totals.Sum(x => x.ReturnCount);
             var items = await query.OrderByDescending(x => x.Id).Skip((page - 1) * pageSize)
-                .Take(pageSize).ToListAsync();
+                .Take(pageSize).ToListAsync(cancellationToken);
             var ids = items.Select(x => x.Id).ToArray();
             var lines = await (from refund in db.RetailCashReturns.AsNoTracking()
                                where refund.BusinessId == businessId && ids.Contains(refund.Id)
@@ -391,9 +391,9 @@ public static class RetailCashSales
                                orderby line.Id
                                select new { ReturnId = refund.Id, line.Id, original.ProductName, original.ProductSku,
                                    original.UnitCode, original.BaseUnitCode, original.ConversionFactor,
-                                   line.Quantity, line.Amount, line.Restock }).ToListAsync();
+                                   line.Quantity, line.Amount, line.Restock }).ToListAsync(cancellationToken);
             var byReturn = lines.ToLookup(x => x.ReturnId);
-            await tx.CommitAsync();
+            await tx.CommitAsync(cancellationToken);
             return Results.Ok(new { total, page, pageSize, totals,
                 items = items.Select(x => new { x.Id, x.SaleId, x.Total, x.Reason,
                     PostedAtUtc = DateTime.SpecifyKind(x.PostedAtUtc, DateTimeKind.Utc),
@@ -539,14 +539,14 @@ public static class RetailCashSales
     }
 
     private static async Task<IResult> BusinessReceiptHistory(long businessId, long locationId,
-        ClaimsPrincipal user, AppDbContext db, int page = 1, long? receiptId = null, DateOnly? postedDate = null,
+        ClaimsPrincipal user, AppDbContext db, CancellationToken cancellationToken, int page = 1, long? receiptId = null, DateOnly? postedDate = null,
         DateOnly? fromDate = null, DateOnly? toDate = null, string? search = null,
         string payment = "Cash", string status = "All")
     {
-        if (await RetailBillingSettingsEndpoints.OwnerId(db, businessId, user) is null)
+        if (await RetailBillingSettingsEndpoints.OwnerId(db, businessId, user, cancellationToken) is null)
             return Results.NotFound();
         if (locationId < 0 || locationId > 0 && !await db.BusinessLocations.AnyAsync(x =>
-            x.BusinessId == businessId && x.Id == locationId)) return Results.NotFound();
+            x.BusinessId == businessId && x.Id == locationId, cancellationToken)) return Results.NotFound();
         var term = search?.Trim() ?? "";
         fromDate ??= postedDate;
         toDate ??= postedDate;
@@ -556,7 +556,7 @@ public static class RetailCashSales
             status is not ("All" or "Posted" or "Partial return" or "Returned"))
             return Results.BadRequest(new { message = "Invalid invoice filters." });
 
-        var zoneId = await db.Businesses.Where(x => x.Id == businessId).Select(x => x.TimeZoneId).SingleAsync();
+        var zoneId = await db.Businesses.Where(x => x.Id == businessId).Select(x => x.TimeZoneId).SingleAsync(cancellationToken);
         var zone = TimeZoneInfo.FindSystemTimeZoneById(zoneId);
         var sales = db.RetailCashSales.AsNoTracking().Where(x => x.BusinessId == businessId);
         if (locationId > 0) sales = sales.Where(x => x.LocationId == locationId);
@@ -603,20 +603,21 @@ public static class RetailCashSales
                         sale.CurrencyCode, sale.Total, sale.PostedAtUtc, sale.CreditDueDate,
                         Status = returnStatus };
 
-        await using var tx = await db.Database.BeginTransactionAsync(IsolationLevel.Serializable);
+        await using var tx = await db.Database.BeginTransactionAsync(IsolationLevel.Serializable, cancellationToken);
         try
         {
-            var total = await query.CountAsync();
             var totals = await query.GroupBy(x => x.CurrencyCode).Select(g => new {
-                CurrencyCode = g.Key, Total = g.Sum(x => x.Total),
+                CurrencyCode = g.Key, Count = g.Count(), Total = g.Sum(x => x.Total),
                 Cash = g.Sum(x => x.CreditDueDate == null ? x.Total : 0m),
                 Credit = g.Sum(x => x.CreditDueDate != null ? x.Total : 0m)
-            }).OrderBy(x => x.CurrencyCode).ToListAsync();
+            }).OrderBy(x => x.CurrencyCode).ToListAsync(cancellationToken);
+            var total = totals.Sum(x => x.Count);
             const int pageSize = 10;
             var items = await query.OrderByDescending(x => x.Id).Skip((page - 1) * pageSize)
-                .Take(pageSize).ToListAsync();
-            await tx.CommitAsync();
-            return Results.Ok(new { total, page, pageSize, totals,
+                .Take(pageSize).ToListAsync(cancellationToken);
+            await tx.CommitAsync(cancellationToken);
+            return Results.Ok(new { total, page, pageSize,
+                totals = totals.Select(x => new { x.CurrencyCode, x.Total, x.Cash, x.Credit }),
                 items = items.Select(x => new { x.Id, x.LocationId, x.LocationName, x.CustomerId, x.CustomerName,
                     x.CurrencyCode, x.Total, PostedAtUtc = DateTime.SpecifyKind(x.PostedAtUtc, DateTimeKind.Utc),
                     x.Status, PaymentMethod = x.CreditDueDate == null ? "Cash" : "Credit",
@@ -697,7 +698,7 @@ public static class RetailCashSales
         ClaimsPrincipal user, AppDbContext db, IConfiguration config, CancellationToken cancellationToken, bool exact = false)
     {
         if (!long.TryParse(user.FindFirstValue(ClaimTypes.NameIdentifier), out var actor) ||
-            await Shop(db, businessId, actor, locationId) is null) return Results.NotFound();
+            await Shop(db, businessId, actor, locationId, cancellationToken: cancellationToken) is null) return Results.NotFound();
         var term = search?.Trim().ToUpperInvariant() ?? "";
         if (term.Length > 150 || (exact && term.Length == 0)) return Results.BadRequest();
         var eligible = db.RetailProducts.AsNoTracking()
@@ -741,7 +742,7 @@ public static class RetailCashSales
         ClaimsPrincipal user, AppDbContext db, CancellationToken cancellationToken)
     {
         if (!long.TryParse(user.FindFirstValue(ClaimTypes.NameIdentifier), out var actor) ||
-            await Shop(db, businessId, actor, locationId) is null) return Results.NotFound();
+            await Shop(db, businessId, actor, locationId, cancellationToken: cancellationToken) is null) return Results.NotFound();
         var term = search?.Trim().ToUpperInvariant() ?? "";
         if (term.Length is < 2 or > 100) return Results.BadRequest();
         return Results.Ok(await db.RetailCustomers.AsNoTracking()

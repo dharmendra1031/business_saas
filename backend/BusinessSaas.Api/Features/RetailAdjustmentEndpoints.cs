@@ -15,9 +15,9 @@ public static class RetailAdjustmentEndpoints
             .RequireAuthorization();
 
         group.MapGet("", async (long businessId, long locationId, int? page,
-            ClaimsPrincipal user, AppDbContext db) =>
+            ClaimsPrincipal user, AppDbContext db, CancellationToken cancellationToken) =>
         {
-            var denied = await RetailStockEndpoints.CheckLocation(db, user, businessId, locationId, false);
+            var denied = await RetailStockEndpoints.CheckLocation(db, user, businessId, locationId, false, cancellationToken);
             if (denied is not null) return denied;
 
             var currentPage = page ?? 1;
@@ -51,9 +51,9 @@ public static class RetailAdjustmentEndpoints
                             adjustment.PostedAtUtc
                         };
 
-            var total = await query.CountAsync();
+            var total = await query.CountAsync(cancellationToken);
             var items = await query.OrderByDescending(x => x.Id)
-                .Skip((currentPage - 1) * PageSize).Take(PageSize).ToListAsync();
+                .Skip((currentPage - 1) * PageSize).Take(PageSize).ToListAsync(cancellationToken);
             return Results.Ok(new { items, total, page = currentPage, pageSize = PageSize });
         });
 
