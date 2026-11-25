@@ -1830,6 +1830,10 @@ namespace BusinessSaas.Api.Data.Migrations
                         .HasMaxLength(12)
                         .HasColumnType("nvarchar(12)");
 
+                    b.Property<long?>("SelectedUnitId").HasColumnType("bigint");
+                    b.Property<decimal?>("ConversionFactor").HasPrecision(18, 3).HasColumnType("decimal(18,3)");
+                    b.Property<string>("BaseUnitCode").HasMaxLength(12).HasColumnType("nvarchar(12)");
+
                     b.Property<decimal?>("LineTotal")
                         .HasPrecision(18, 2)
                         .HasColumnType("decimal(18,2)");

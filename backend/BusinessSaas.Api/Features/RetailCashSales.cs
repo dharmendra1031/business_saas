@@ -86,6 +86,8 @@ public static class RetailCashSales
             first.ProductId, first.ProductName, first.UnitPrice, first.Quantity,
             Lines = lines.Select(line => new { line.Id, line.SaleId, line.ProductId,
                 line.ProductName, line.ProductSku, line.UnitCode, line.Quantity, line.UnitPrice,
+                line.SelectedUnitId, line.ConversionFactor, line.BaseUnitCode,
+                BaseQuantity = line.Quantity * (line.ConversionFactor ?? 1m),
                 LineTotal = OriginalAmount(line),
                 ReturnedQuantity = returns?.Where(x => x.SaleLineId == line.Id).Sum(x => x.Quantity),
                 RemainingQuantity = line.Quantity - returns?.Where(x => x.SaleLineId == line.Id).Sum(x => x.Quantity),
@@ -235,7 +237,8 @@ public static class RetailCashSales
         var returned = earlier.Where(x => x.SaleLineId == line.Id).ToArray();
         var cumulativeQty = returned.Sum(x => x.Quantity) + quantity;
         var originalAmount = OriginalAmount(line);
-        if (cumulativeQty > line.Quantity) return null;
+        if (cumulativeQty > line.Quantity ||
+            !ValidBaseQuantity(quantity, line.ConversionFactor ?? 1m)) return null;
         var cumulativeAmount = cumulativeQty == line.Quantity ? originalAmount :
             decimal.Round(originalAmount * (cumulativeQty / line.Quantity), 2, MidpointRounding.AwayFromZero);
         var amount = cumulativeAmount - returned.Sum(x => x.Amount);
@@ -306,7 +309,8 @@ public static class RetailCashSales
             foreach (var line in record.Lines.Where(x => x.Restock).OrderBy(x => original[x.SaleLineId].ProductId))
             {
                 if (await StockPosting.ApplyAsync(db, businessId, sale.LocationId, original[line.SaleLineId].ProductId,
-                    line.Quantity, "CashReturnLine", line.Id, actor, reason: reason) is null)
+                    line.Quantity * (original[line.SaleLineId].ConversionFactor ?? 1m),
+                    "CashReturnLine", line.Id, actor, reason: reason) is null)
                     return Results.Conflict(new { message = "Stock restoration failed; return was not posted." });
             }
             await tx.CommitAsync();
@@ -451,17 +455,28 @@ public static class RetailCashSales
     public sealed record CashRequest(long LocationId, decimal Tendered, string RequestKey,
         List<Item>? Lines = null, long ProductId = 0, decimal Quantity = 0, decimal ExpectedUnitPrice = 0, long? CustomerId = null);
 
-    public sealed record Item(long ProductId, decimal Quantity, decimal ExpectedUnitPrice);
+    public sealed record Item(long ProductId, decimal Quantity, decimal ExpectedUnitPrice,
+        long? UnitId = null, decimal? ExpectedFactor = null);
+
+    private static bool ValidBaseQuantity(decimal quantity, decimal factor)
+    {
+        if (factor is < 0.001m or > 9999999.999m) return false;
+        var converted = quantity * factor;
+        return converted is > 0 and <= 9999999999.999m && decimal.Round(converted, 3) == converted;
+    }
 
     private static async Task<IResult> Post(long businessId, CashRequest request,
-        ClaimsPrincipal user, AppDbContext db, HttpContext context)
+        ClaimsPrincipal user, AppDbContext db, HttpContext context, IConfiguration config)
     {
         var started = Stopwatch.GetTimestamp();
         if (!long.TryParse(user.FindFirstValue(ClaimTypes.NameIdentifier), out var actor))
             return Results.NotFound();
         var items = request.Lines ?? [new Item(request.ProductId, request.Quantity, request.ExpectedUnitPrice)];
         if (request.CustomerId is <= 0 || items.Count is < 1 or > 100 || items.Any(x => x is null || x.ProductId <= 0 || x.Quantity is < 0.001m or > 1000000m ||
-            decimal.Round(x.Quantity, 3) != x.Quantity) ||
+            decimal.Round(x.Quantity, 3) != x.Quantity || x.UnitId is <= 0 ||
+            (x.UnitId is null) != (x.ExpectedFactor is null) ||
+            x.ExpectedFactor is < 0.001m or > 9999999.999m ||
+            x.ExpectedFactor.HasValue && decimal.Round(x.ExpectedFactor.Value, 3) != x.ExpectedFactor.Value) ||
             items.Select(x => x.ProductId).Distinct().Count() != items.Count || string.IsNullOrWhiteSpace(request.RequestKey) || request.RequestKey.Length is < 12 or > 80 ||
             request.Tendered is <= 0 or > 9999999999999999.99m ||
             decimal.Round(request.Tendered, 2) != request.Tendered)
@@ -477,7 +492,7 @@ public static class RetailCashSales
             if (previous is not null)
             {
                 var recorded = previous.Lines.OrderBy(x => x.ProductId)
-                    .Select(x => new Item(x.ProductId, x.Quantity, x.UnitPrice));
+                    .Select(x => new Item(x.ProductId, x.Quantity, x.UnitPrice, x.SelectedUnitId, x.ConversionFactor));
                 if (previous.LocationId != request.LocationId || previous.Tendered != request.Tendered ||
                     previous.CustomerId != request.CustomerId ||
                     !recorded.SequenceEqual(items.OrderBy(x => x.ProductId)))
@@ -503,16 +518,24 @@ public static class RetailCashSales
                     return Results.BadRequest(new { code = "CASH_SALE_CUSTOMER_CHANGED",
                         message = "Customer is unavailable. Select an active customer or continue as walk-in." });
             }
+            if (items.Any(x => x.UnitId.HasValue) && !config.GetValue<bool>("RetailSales:AlternateUnitsEnabled"))
+                return Results.BadRequest(new { code = "CASH_SALE_BASKET_CHANGED",
+                    productId = items.First(x => x.UnitId.HasValue).ProductId,
+                    message = "Alternate sale units are not enabled on this development host." });
             var ids = items.Select(x => x.ProductId).ToArray();
             var products = await db.RetailProducts.AsNoTracking()
                 .Where(x => x.BusinessId == businessId && x.IsActive && ids.Contains(x.Id))
-                .ToDictionaryAsync(x => x.Id);
+                .Include(x => x.Conversions).ToDictionaryAsync(x => x.Id);
             var locationName = await db.BusinessLocations.AsNoTracking()
                 .Where(x => x.BusinessId == businessId && x.Id == request.LocationId)
                 .Select(x => x.Name).SingleAsync();
             var unitIds = products.Values.Select(x => x.UnitId).Distinct().ToArray();
             var units = await db.RetailUnits.AsNoTracking()
                 .Where(x => x.BusinessId == businessId && unitIds.Contains(x.Id))
+                .ToDictionaryAsync(x => x.Id, x => x.Code);
+            var alternateIds = items.Where(x => x.UnitId.HasValue).Select(x => x.UnitId!.Value).Distinct().ToArray();
+            var alternateUnits = await db.RetailUnits.AsNoTracking()
+                .Where(x => x.BusinessId == businessId && x.IsActive && alternateIds.Contains(x.Id))
                 .ToDictionaryAsync(x => x.Id, x => x.Code);
             var sale = new RetailCashSale {
                 BusinessId = businessId, CashierId = actor, LocationId = request.LocationId,
@@ -530,18 +553,38 @@ public static class RetailCashSales
             foreach (var item in items)
             {
                 if (!products.TryGetValue(item.ProductId, out var product) || product.TaxClassification != "" ||
-                    product.SalePrice <= 0 || product.SalePrice != item.ExpectedUnitPrice ||
+                    product.SalePrice <= 0 ||
                     !units.TryGetValue(product.UnitId, out var unitCode))
                     return Results.BadRequest(new { code = "CASH_SALE_BASKET_CHANGED", item.ProductId,
                         message = "Product or price changed. Remove and select the affected item again." });
-                var lineTotal = decimal.Round(product.SalePrice * item.Quantity, 2,
+                var baseCode = unitCode;
+                decimal? factor = null;
+                if (item.UnitId is long alternateId)
+                {
+                    var conversion = product.Conversions.SingleOrDefault(x => x.UnitId == alternateId);
+                    if (alternateId == product.UnitId || conversion is null ||
+                        conversion.Factor != item.ExpectedFactor ||
+                        !alternateUnits.TryGetValue(alternateId, out unitCode))
+                        return Results.BadRequest(new { code = "CASH_SALE_BASKET_CHANGED", item.ProductId,
+                            message = "Sale unit or conversion changed. Select the affected item again." });
+                    factor = conversion.Factor;
+                }
+                var unitPrice = decimal.Round(product.SalePrice * (factor ?? 1m), 2,
+                    MidpointRounding.AwayFromZero);
+                if (unitPrice <= 0 || unitPrice > 9999999999999999.99m ||
+                    unitPrice != item.ExpectedUnitPrice || !ValidBaseQuantity(item.Quantity, factor ?? 1m))
+                    return Results.BadRequest(new { code = "CASH_SALE_BASKET_CHANGED", item.ProductId,
+                        message = "Price or converted quantity is invalid. Select the affected item again." });
+                var lineTotal = decimal.Round(unitPrice * item.Quantity, 2,
                     MidpointRounding.AwayFromZero);
                 // Never post stock for a line whose billable amount rounds to zero.
                 if (lineTotal == 0m)
                     return Results.BadRequest(new { code = "CASH_SALE_ZERO_VALUE_LINE", item.ProductId,
                         message = "This line rounds to zero. Increase quantity or remove the product." });
                 sale.Lines.Add(new RetailCashSaleLine { ProductId = product.Id, ProductName = product.Name,
-                    Quantity = item.Quantity, UnitPrice = product.SalePrice,
+                    Quantity = item.Quantity, UnitPrice = unitPrice,
+                    SelectedUnitId = item.UnitId, ConversionFactor = factor,
+                    BaseUnitCode = factor.HasValue ? baseCode : null,
                     ProductSku = product.Sku, UnitCode = unitCode, LineTotal = lineTotal });
                 sale.Total += lineTotal;
             }
@@ -554,7 +597,7 @@ public static class RetailCashSales
             foreach (var line in sale.Lines.OrderBy(x => x.ProductId))
             {
                 if (await StockPosting.ApplyAsync(db, businessId, sale.LocationId, line.ProductId,
-                        -line.Quantity, "CashSaleLine", line.Id, actor) is null)
+                        -line.Quantity * (line.ConversionFactor ?? 1m), "CashSaleLine", line.Id, actor) is null)
                     return Results.BadRequest(new { code = "CASH_SALE_BASKET_CHANGED", line.ProductId,
                         message = $"Insufficient stock for {line.ProductName} at this location. Remove it and select it again if stock is available." });
             }

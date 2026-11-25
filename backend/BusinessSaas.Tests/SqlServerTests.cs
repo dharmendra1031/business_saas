@@ -345,6 +345,7 @@ public sealed class SqlServerTests
         {
             builder.UseEnvironment("Development"); // Cash posting is not released outside Development yet.
             builder.UseSetting("RetailReturns:PostingEnabled", "true");
+            builder.UseSetting("RetailSales:AlternateUnitsEnabled", "true");
             builder.ConfigureServices(services =>
             {
                 services.RemoveAll<DbContextOptions<AppDbContext>>();
@@ -941,6 +942,56 @@ public sealed class SqlServerTests
                 x.LocationId == locationId && x.ProductId == packProductId).Select(x => x.Quantity).SingleAsync());
             Assert.Single(await db.RetailStockMovements.Where(x => x.BusinessId == businessId &&
                 x.ProductId == packProductId && x.SourceType == "Receiving").ToListAsync());
+        }
+        // The master now says 24 PCS per BOX. Sell one BOX from the 30 PCS received.
+        var convertedSale = new { locationId, requestKey = "sql-pack-sale-20261125", tendered = 240m,
+            lines = new[] { new { productId = packProductId, quantity = 1m, expectedUnitPrice = 240m,
+                unitId = boxId, expectedFactor = 24m } } };
+        var packSalePath = prefix + "/cash-sales";
+        Assert.Equal(HttpStatusCode.BadRequest, (await Post(cashier, packSalePath, convertedSale with {
+            requestKey = "sql-pack-stale-sale-20261125",
+            lines = new[] { new { productId = packProductId, quantity = 1m, expectedUnitPrice = 120m,
+                unitId = boxId, expectedFactor = 12m } }
+        })).StatusCode);
+        Assert.Equal(HttpStatusCode.BadRequest, (await Post(cashier, packSalePath, convertedSale with {
+            requestKey = "sql-pack-oversell-20261125", tendered = 480m,
+            lines = new[] { new { productId = packProductId, quantity = 2m, expectedUnitPrice = 240m,
+                unitId = boxId, expectedFactor = 24m } }
+        })).StatusCode);
+        using var packSaleResponse = await Post(cashier, packSalePath, convertedSale);
+        Assert.Equal(HttpStatusCode.OK, packSaleResponse.StatusCode);
+        var packSale = await packSaleResponse.Content.ReadFromJsonAsync<JsonElement>();
+        var packSaleId = packSale.GetProperty("id").GetInt64();
+        var soldPack = packSale.GetProperty("lines")[0];
+        var soldPackLineId = soldPack.GetProperty("id").GetInt64();
+        Assert.Equal("SQBOX", soldPack.GetProperty("unitCode").GetString());
+        Assert.Equal("SQPCS", soldPack.GetProperty("baseUnitCode").GetString());
+        Assert.Equal(24m, soldPack.GetProperty("baseQuantity").GetDecimal());
+        Assert.Equal(240m, soldPack.GetProperty("lineTotal").GetDecimal());
+        Assert.Equal(HttpStatusCode.OK, (await Put(owner, prefix + "/products/" + packProductId,
+            convertedProduct)).StatusCode);
+        using var replayPack = await Post(cashier, packSalePath, convertedSale);
+        Assert.Equal(HttpStatusCode.OK, replayPack.StatusCode);
+        Assert.Equal(packSaleId, (await replayPack.Content.ReadFromJsonAsync<JsonElement>()).GetProperty("id").GetInt64());
+        var packReturnPath = packSalePath + "/business-receipts/" + packSaleId;
+        using var packEstimate = await Post(owner, packReturnPath + "/return-estimate",
+            new { locationId, lines = new[] { new { lineId = soldPackLineId, quantity = 0.5m } } });
+        Assert.Equal(HttpStatusCode.OK, packEstimate.StatusCode);
+        Assert.Equal(120m, (await packEstimate.Content.ReadFromJsonAsync<JsonElement>()).GetProperty("total").GetDecimal());
+        var packReturn = new { locationId, requestKey = "sql-pack-return-20261125", reason = "Returned half box",
+            expectedRefund = 120m, cashRefundConfirmed = true,
+            lines = new[] { new { lineId = soldPackLineId, quantity = 0.5m, restock = true } } };
+        Assert.Equal(HttpStatusCode.OK, (await Post(owner, packReturnPath + "/returns", packReturn)).StatusCode);
+        Assert.Equal(HttpStatusCode.OK, (await Post(owner, packReturnPath + "/returns", packReturn)).StatusCode);
+        using (var scope = factory.Services.CreateScope())
+        {
+            var db = scope.ServiceProvider.GetRequiredService<AppDbContext>();
+            Assert.Equal(18m, await db.RetailStockBalances.Where(x => x.BusinessId == businessId &&
+                x.LocationId == locationId && x.ProductId == packProductId).Select(x => x.Quantity).SingleAsync());
+            Assert.Equal(-24m, await db.RetailStockMovements.Where(x => x.ProductId == packProductId &&
+                x.SourceType == "CashSaleLine").Select(x => x.QuantityChange).SingleAsync());
+            Assert.Equal(12m, await db.RetailStockMovements.Where(x => x.ProductId == packProductId &&
+                x.SourceType == "CashReturnLine").Select(x => x.QuantityChange).SingleAsync());
         }
     }
 

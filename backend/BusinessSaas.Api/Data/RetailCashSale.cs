@@ -35,6 +35,9 @@ public sealed class RetailCashSaleLine
     public string ProductName { get; set; } = "";
     public string? ProductSku { get; set; }
     public string? UnitCode { get; set; }
+    public long? SelectedUnitId { get; set; }
+    public decimal? ConversionFactor { get; set; }
+    public string? BaseUnitCode { get; set; }
     public decimal? LineTotal { get; set; }
     public decimal UnitPrice { get; set; }
     public decimal Quantity { get; set; }

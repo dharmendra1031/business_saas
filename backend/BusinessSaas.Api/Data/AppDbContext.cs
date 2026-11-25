@@ -864,6 +864,8 @@ public sealed class AppDbContext(DbContextOptions<AppDbContext> options)
         {
             entity.Property(x => x.ProductSku).HasMaxLength(50);
             entity.Property(x => x.UnitCode).HasMaxLength(12);
+            entity.Property(x => x.BaseUnitCode).HasMaxLength(12);
+            entity.Property(x => x.ConversionFactor).HasPrecision(18, 3);
             entity.Property(x => x.LineTotal).HasPrecision(18, 2);
             // SQL Server stores decimals numerically. SQLite test storage uses TEXT affinity,
             // where comparing decimal text to numeric literals would reject valid sales.
