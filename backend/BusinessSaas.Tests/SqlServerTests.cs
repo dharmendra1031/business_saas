@@ -829,6 +829,16 @@ public sealed class SqlServerTests
         Assert.Equal(10m, recovered.GetProperty("items")[0].GetProperty("total").GetDecimal());
         Assert.Equal(HttpStatusCode.NotFound, (await cashier.GetAsync(historyPath)).StatusCode);
         Assert.Equal(HttpStatusCode.NotFound, (await stranger.GetAsync(historyPath)).StatusCode);
+        var returnRegisterPath = prefix + "/cash-sales/business-returns?locationId=0";
+        var returnRegister = await owner.GetFromJsonAsync<JsonElement>(returnRegisterPath);
+        Assert.Equal(1, returnRegister.GetProperty("total").GetInt32());
+        Assert.Equal(10m, returnRegister.GetProperty("totals")[0].GetProperty("refundTotal").GetDecimal());
+        Assert.Equal(sale.GetProperty("id").GetInt64(), returnRegister.GetProperty("items")[0].GetProperty("saleId").GetInt64());
+        Assert.True(returnRegister.GetProperty("items")[0].GetProperty("lines")[0].GetProperty("restock").GetBoolean());
+        Assert.Equal(0.125m, returnRegister.GetProperty("items")[0].GetProperty("lines")[0].GetProperty("quantity").GetDecimal());
+        Assert.Equal(HttpStatusCode.NotFound, (await cashier.GetAsync(returnRegisterPath)).StatusCode);
+        Assert.Equal(HttpStatusCode.NotFound, (await stranger.GetAsync(returnRegisterPath)).StatusCode);
+        Assert.Equal(HttpStatusCode.BadRequest, (await owner.GetAsync(returnRegisterPath + "&fromDate=2026-12-01&toDate=2026-11-01")).StatusCode);
         var partialDetail = await owner.GetFromJsonAsync<JsonElement>(originalReceiptPath);
         Assert.Equal(0.125m, partialDetail.GetProperty("lines")[0].GetProperty("returnedQuantity").GetDecimal());
         Assert.Equal(0.250m, partialDetail.GetProperty("lines")[0].GetProperty("remainingQuantity").GetDecimal());
@@ -841,6 +851,10 @@ public sealed class SqlServerTests
             lines = new[] { new { lineId, quantity = 0.250m, restock = false } }
         });
         Assert.Equal(HttpStatusCode.OK, remainder.StatusCode);
+        var completeRegister = await owner.GetFromJsonAsync<JsonElement>(returnRegisterPath);
+        Assert.Equal(2, completeRegister.GetProperty("total").GetInt32());
+        Assert.Equal(30m, completeRegister.GetProperty("totals")[0].GetProperty("refundTotal").GetDecimal());
+        Assert.False(completeRegister.GetProperty("items")[0].GetProperty("lines")[0].GetProperty("restock").GetBoolean());
         var fullDetail = await owner.GetFromJsonAsync<JsonElement>(originalReceiptPath);
         Assert.Equal(0m, fullDetail.GetProperty("lines")[0].GetProperty("remainingQuantity").GetDecimal());
         Assert.Equal(0m, fullDetail.GetProperty("lines")[0].GetProperty("remainingAmount").GetDecimal());

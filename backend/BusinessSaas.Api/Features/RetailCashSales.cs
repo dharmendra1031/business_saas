@@ -20,6 +20,7 @@ public static class RetailCashSales
         group.MapGet("/receipts/{receiptId:long}/pdf", ReceiptPdf);
         group.MapGet("/receipts", ReceiptHistory);
         group.MapGet("/business-receipts", BusinessReceiptHistory);
+        group.MapGet("/business-returns", BusinessReturnRegister);
         group.MapGet("/business-receipts/{receiptId:long}", BusinessReceiptById);
         group.MapPost("/business-receipts/{receiptId:long}/return-estimate", EstimateReturn);
         group.MapGet("/business-receipts/{receiptId:long}/returns", ReturnHistory);
@@ -234,6 +235,85 @@ public static class RetailCashSales
             total += amount;
         }
         return Results.Ok(new { receiptId, sale.CurrencyCode, total, lines = estimates, canPost = config.GetValue<bool>("RetailReturns:PostingEnabled") });
+    }
+
+    // Read-only register of posted cash refunds. Stock quantities remain in their original sale units.
+    private static async Task<IResult> BusinessReturnRegister(long businessId, ClaimsPrincipal user,
+        AppDbContext db, long locationId = 0, int page = 1, DateOnly? fromDate = null,
+        DateOnly? toDate = null, string? search = null)
+    {
+        if (await RetailBillingSettingsEndpoints.OwnerId(db, businessId, user) is null)
+            return Results.NotFound();
+        if (locationId < 0 || locationId > 0 && !await db.BusinessLocations.AnyAsync(x =>
+            x.BusinessId == businessId && x.Id == locationId)) return Results.NotFound();
+        var term = search?.Trim() ?? "";
+        if (page is < 1 or > 100000 || term.Length > 100 ||
+            fromDate?.Year is < 1900 or > 9998 || toDate?.Year is < 1900 or > 9998 || fromDate > toDate)
+            return Results.BadRequest(new { message = "Invalid return filters." });
+
+        var zoneId = await db.Businesses.Where(x => x.Id == businessId).Select(x => x.TimeZoneId).SingleAsync();
+        var zone = TimeZoneInfo.FindSystemTimeZoneById(zoneId);
+        var query = from refund in db.RetailCashReturns.AsNoTracking()
+                    join sale in CashOnly(db) on refund.SaleId equals sale.Id
+                    where refund.BusinessId == businessId && sale.BusinessId == businessId
+                    select new { refund.Id, refund.SaleId, refund.Total, refund.Reason, refund.PostedAtUtc,
+                        sale.LocationId, sale.LocationName, sale.CustomerId, sale.CustomerName,
+                        sale.CustomerPhone, sale.CurrencyCode };
+        if (locationId > 0) query = query.Where(x => x.LocationId == locationId);
+        if (fromDate.HasValue)
+        {
+            var start = LocalDateStart(fromDate.Value, zone);
+            query = query.Where(x => x.PostedAtUtc >= start);
+        }
+        if (toDate.HasValue)
+        {
+            var end = LocalDateStart(toDate.Value.AddDays(1), zone);
+            query = query.Where(x => x.PostedAtUtc < end);
+        }
+        if (term.Length > 0)
+        {
+            var name = term.ToUpperInvariant();
+            if (long.TryParse(term.TrimStart('#'), out var number) && number > 0)
+                query = query.Where(x => x.Id == number || x.SaleId == number ||
+                    (x.CustomerPhone != null && x.CustomerPhone.Contains(term)));
+            else query = query.Where(x => (x.CustomerName != null && x.CustomerName.ToUpper().Contains(name)) ||
+                (x.CustomerPhone != null && x.CustomerPhone.Contains(term)));
+        }
+
+        await using var tx = await db.Database.BeginTransactionAsync(IsolationLevel.Serializable);
+        try
+        {
+            const int pageSize = 10;
+            var total = await query.CountAsync();
+            var totals = await query.GroupBy(x => x.CurrencyCode).Select(g => new {
+                CurrencyCode = g.Key, RefundTotal = g.Sum(x => x.Total), ReturnCount = g.Count()
+            }).OrderBy(x => x.CurrencyCode).ToListAsync();
+            var items = await query.OrderByDescending(x => x.Id).Skip((page - 1) * pageSize)
+                .Take(pageSize).ToListAsync();
+            var ids = items.Select(x => x.Id).ToArray();
+            var lines = await (from refund in db.RetailCashReturns.AsNoTracking()
+                               where refund.BusinessId == businessId && ids.Contains(refund.Id)
+                               from line in refund.Lines
+                               join original in db.Set<RetailCashSaleLine>().AsNoTracking()
+                                   on new { Id = line.SaleLineId, SaleId = refund.SaleId }
+                                   equals new { original.Id, original.SaleId }
+                               orderby line.Id
+                               select new { ReturnId = refund.Id, line.Id, original.ProductName, original.ProductSku,
+                                   original.UnitCode, original.BaseUnitCode, original.ConversionFactor,
+                                   line.Quantity, line.Amount, line.Restock }).ToListAsync();
+            var byReturn = lines.ToLookup(x => x.ReturnId);
+            await tx.CommitAsync();
+            return Results.Ok(new { total, page, pageSize, totals,
+                items = items.Select(x => new { x.Id, x.SaleId, x.Total, x.Reason,
+                    PostedAtUtc = DateTime.SpecifyKind(x.PostedAtUtc, DateTimeKind.Utc),
+                    x.LocationId, x.LocationName, x.CustomerId, x.CustomerName, x.CurrencyCode,
+                    Lines = byReturn[x.Id] }),
+                hasMore = (long)page * pageSize < total });
+        }
+        catch (Exception error) when (StockPosting.IsSqlConflict(error))
+        {
+            return Results.Conflict(new { message = "Returns are being updated. Refresh the register." });
+        }
     }
 
     private static async Task<IResult> ReturnHistory(long businessId, long locationId, long receiptId,

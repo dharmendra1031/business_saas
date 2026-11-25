@@ -5,6 +5,7 @@ import {
 } from 'lucide-react'
 import type { RetailDashboard } from './api'
 import BusinessPostedSales from './BusinessPostedSales'
+import BusinessReturns from './BusinessReturns'
 import BusinessDailySales from './BusinessDailySales'
 import BusinessOutstanding from './BusinessOutstanding'
 import BusinessBillingSettings from './BusinessBillingSettings'
@@ -63,13 +64,14 @@ export default function BusinessPreview({ module, dashboard, userId, onBillingUp
   const billingSettings = module === 'settings' && tab === 2 && dashboard.roleCode === 'Owner'
   const receiptSettings = module === 'settings' && tab === 1 && dashboard.roleCode === 'Owner'
   const postedSales = module === 'sales' && tab === 0 && dashboard.roleCode === 'Owner'
+  const postedReturns = module === 'sales' && tab === 1 && dashboard.roleCode === 'Owner'
   const dailySales = module === 'reports' && tab === 0 && dashboard.roleCode === 'Owner'
   const outstanding = module === 'reports' && tab === 4 && dashboard.roleCode === 'Owner'
 
   return <div className="business-preview">
     <div className="business-preview-heading">
       <h2>{item.title}</h2>
-      {!postedSales && !dailySales && !outstanding && !billingSettings && !receiptSettings && <span>Under construction</span>}
+      {!postedSales && !postedReturns && !dailySales && !outstanding && !billingSettings && !receiptSettings && <span>Under construction</span>}
     </div>
 
     <div className="business-preview-tabs" role="tablist" aria-label={`${item.title} sections`}>
@@ -86,8 +88,9 @@ export default function BusinessPreview({ module, dashboard, userId, onBillingUp
 
     <section className="content-section business-preview-content" role="tabpanel">
       <h3>{selected.title}</h3>
-      {!postedSales && <p className="business-preview-description">{dailySales ? 'Gross cash sales, refunds and net cash sales.' : selected.description}</p>}
+      {!postedSales && !postedReturns && <p className="business-preview-description">{dailySales ? 'Gross cash sales, refunds and net cash sales.' : selected.description}</p>}
       {postedSales ? <BusinessPostedSales dashboard={dashboard} userId={userId} /> :
+        postedReturns ? <BusinessReturns dashboard={dashboard} /> :
         dailySales ? <BusinessDailySales dashboard={dashboard} /> :
         outstanding ? <BusinessOutstanding businessId={dashboard.business.id} /> : receiptSettings ?
           <BusinessReceiptSettings businessId={dashboard.business.id} canOperate={dashboard.canOperate}

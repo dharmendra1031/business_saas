@@ -363,7 +363,7 @@ export default function App() {
             ] as const).map(([section, label, Icon]) => <button key={section} type="button"
               className={`nav-entry business-preview-nav${retailPage === section ? ' active' : ''}`}
               aria-current={retailPage === section ? 'page' : undefined}
-              onClick={() => navigateRetail(section)}><Icon size={18} /> <span>{label}</span><small>Preview</small></button>)}
+              onClick={() => navigateRetail(section)}><Icon size={18} /> <span>{label}</span>{(section === 'register' || dashboard.roleCode !== 'Owner') && <small>Preview</small>}</button>)}
           </>}
           {dashboard.roleCode === 'Owner' && <button type="button"
             className={`nav-entry${retailPage === 'team' ? ' active' : ''}`}
@@ -372,7 +372,7 @@ export default function App() {
           {dashboard.roleCode === 'Owner' && <button type="button"
             className={`nav-entry business-preview-nav${retailPage === 'settings' ? ' active' : ''}`}
             aria-current={retailPage === 'settings' ? 'page' : undefined}
-            onClick={() => navigateRetail('settings')}><Settings2 size={18} /> <span>Business Settings</span><small>Preview</small></button>}
+            onClick={() => navigateRetail('settings')}><Settings2 size={18} /> <span>Business Settings</span></button>}
         </>}
         {canViewPlatform && page === 'platform' && <>
           <div className="sidebar-heading">SUPER ADMIN MODULES</div>
