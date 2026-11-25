@@ -525,7 +525,7 @@ public sealed class SqlServerTests
         Assert.Equal(HttpStatusCode.OK, partialEstimate.StatusCode);
         var partialBody = await partialEstimate.Content.ReadFromJsonAsync<JsonElement>();
         Assert.Equal(10m, partialBody.GetProperty("total").GetDecimal());
-        Assert.False(partialBody.GetProperty("canPost").GetBoolean());
+        Assert.True(partialBody.GetProperty("canPost").GetBoolean());
         using var fullEstimate = await Post(owner, estimatePath, Estimate(0.375m));
         Assert.Equal(HttpStatusCode.OK, fullEstimate.StatusCode);
         Assert.Equal(30m, (await fullEstimate.Content.ReadFromJsonAsync<JsonElement>()).GetProperty("total").GetDecimal());
@@ -818,6 +818,14 @@ public sealed class SqlServerTests
             requestKey = "sql-return-excess-20261125", expectedRefund = 30m,
             lines = new[] { new { lineId, quantity = 0.375m, restock = true } }
         })).StatusCode);
+        var historyPath = returnPath + "?locationId=" + locationId;
+        var history = await owner.GetFromJsonAsync<JsonElement>(historyPath);
+        Assert.Equal(returnedBody.GetProperty("id").GetInt64(), history.GetProperty("items")[0].GetProperty("id").GetInt64());
+        Assert.False(history.GetProperty("hasMore").GetBoolean());
+        var recovered = await owner.GetFromJsonAsync<JsonElement>(historyPath + "&requestKey=" + request.requestKey);
+        Assert.Equal(10m, recovered.GetProperty("items")[0].GetProperty("total").GetDecimal());
+        Assert.Equal(HttpStatusCode.NotFound, (await cashier.GetAsync(historyPath)).StatusCode);
+        Assert.Equal(HttpStatusCode.NotFound, (await stranger.GetAsync(historyPath)).StatusCode);
         var partialDetail = await owner.GetFromJsonAsync<JsonElement>(originalReceiptPath);
         Assert.Equal(0.125m, partialDetail.GetProperty("lines")[0].GetProperty("returnedQuantity").GetDecimal());
         Assert.Equal(0.250m, partialDetail.GetProperty("lines")[0].GetProperty("remainingQuantity").GetDecimal());

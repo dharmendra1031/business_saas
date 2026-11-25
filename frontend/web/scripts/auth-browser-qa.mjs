@@ -1806,6 +1806,31 @@ try {
               unitPrice: 96, quantity: 0.25, lineTotal: 24,
               returnedQuantity: 0.05, remainingQuantity: 0.2, returnedAmount: 4.8, remainingAmount: 19.2 }] })
         })
+        let postedReturn = null
+        let firstReturnRequest = null
+        let returnAttempts = 0
+        await t.page.route('**/api/businesses/1/cash-sales/business-receipts/42/returns?*', route => {
+          const params = new URL(route.request().url()).searchParams
+          assert.equal(params.get('locationId'), '1')
+          return response(route, 200, { items: postedReturn ? [postedReturn] : [], hasMore: false })
+        })
+        await t.page.route('**/api/businesses/1/cash-sales/business-receipts/42/returns', route => {
+          assert.equal(route.request().method(), 'POST')
+          const request = route.request().postDataJSON()
+          assert.equal(request.expectedRefund, 12)
+          assert.equal(request.cashRefundConfirmed, true)
+          assert.equal(request.lines[0].restock, false)
+          returnAttempts++
+          if (returnAttempts === 1) {
+            firstReturnRequest = request
+            postedReturn = { id: 81, saleId: 42, requestKey: request.requestKey, total: 12,
+              reason: request.reason, postedAtUtc: '2026-11-23T07:00:00Z',
+              lines: [{ saleLineId: 1, quantity: 0.125, amount: 12, restock: false }] }
+            return route.abort()
+          }
+          assert.deepEqual(request, firstReturnRequest)
+          return response(route, 200, postedReturn)
+        })
         await t.page.getByRole('button', { name: 'Receipt #42' }).click()
         const receipt = t.page.getByRole('region', { name: 'Cash receipt' })
         const originalLines = receipt.getByRole('table', { name: 'Original posted sale lines' })
@@ -1825,7 +1850,7 @@ try {
           assert.equal(request.lines[0].lineId, 1)
           const qty = request.lines[0].quantity
           return response(route, 200, { receiptId: 42, currencyCode: 'INR', total: qty * 96,
-            lines: [{ lineId: 1, quantity: qty, amount: qty * 96 }], canPost: false })
+            lines: [{ lineId: 1, quantity: qty, amount: qty * 96 }], canPost: true })
         })
         await receipt.getByRole('button', { name: 'Estimate return' }).click()
         const estimate = receipt.getByRole('region', { name: 'Return estimate' })
@@ -1839,6 +1864,20 @@ try {
         await quantity.fill('0.125')
         await estimate.getByRole('button', { name: 'Calculate estimate' }).click()
         await estimate.getByText('Estimated return amount: INR 12.00', { exact: true }).waitFor()
+        const record = estimate.getByRole('button', { name: 'Record return', exact: true })
+        assert.equal(await record.isDisabled(), true)
+        await estimate.getByLabel('Stock disposition — Loose Rice').selectOption('no-stock')
+        await estimate.getByLabel('Return reason').fill('Damaged goods')
+        await estimate.getByRole('checkbox').check()
+        await record.click()
+        const recovery = receipt.getByRole('region', { name: 'Return recovery' })
+        await recovery.getByRole('alert').waitFor()
+        await recovery.getByRole('button', { name: 'Check posted return' }).click()
+        await receipt.getByText(/Return #81 recorded: INR 12.00/).waitFor()
+        assert.equal(returnAttempts, 1)
+        const history = receipt.getByRole('region', { name: 'Return history' })
+        await history.getByRole('button', { name: 'Return #81' }).click()
+        await history.getByText(/Not restocked/).waitFor()
         await receipt.getByRole('button', { name: 'Back to receipts' }).click()
         assert.equal(await t.page.getByLabel('Receipt number').inputValue(), '42')
         assert.equal(await t.page.getByLabel('Posted date').inputValue(), '2026-11-23')

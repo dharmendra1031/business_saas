@@ -48,9 +48,10 @@ const modules = {
   }
 } as const
 
-export default function BusinessPreview({ module, dashboard, onBillingUpdated }: {
+export default function BusinessPreview({ module, dashboard, userId, onBillingUpdated }: {
   module: BusinessPreviewModule
   dashboard: RetailDashboard
+  userId: number
   onBillingUpdated?: () => void
 }) {
   const item = modules[module]
@@ -81,8 +82,8 @@ export default function BusinessPreview({ module, dashboard, onBillingUpdated }:
 
     <section className="content-section business-preview-content" role="tabpanel">
       <h3>{selected.title}</h3>
-      <p className="business-preview-description">{dailySales ? 'Totals from posted cash receipts.' : selected.description}</p>
-      {postedSales ? <BusinessPostedSales dashboard={dashboard} /> :
+      <p className="business-preview-description">{dailySales ? 'Gross cash sales, refunds and net cash sales.' : selected.description}</p>
+      {postedSales ? <BusinessPostedSales dashboard={dashboard} userId={userId} /> :
         dailySales ? <BusinessDailySales dashboard={dashboard} /> : receiptSettings ?
           <BusinessReceiptSettings businessId={dashboard.business.id} canOperate={dashboard.canOperate}
             onSaved={() => onBillingUpdated?.()} /> :

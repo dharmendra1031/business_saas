@@ -577,8 +577,8 @@ export default function App() {
                 <TeamMembers businessId={dashboard.business.id} canOperate={dashboard.canOperate} cashSaleEnabled={!!dashboard.cashSaleEnabled} />}
               {(retailPage === 'sales' || retailPage === 'register' || retailPage === 'reports' ||
                 (retailPage === 'settings' && dashboard.roleCode === 'Owner')) &&
-                dashboard.roleCode !== 'Cashier' && <BusinessPreview key={retailPage}
-                  module={retailPage} dashboard={dashboard}
+                dashboard.roleCode !== 'Cashier' && user && <BusinessPreview key={user.id + '-' + dashboard.business.id + '-' + retailPage}
+                  module={retailPage} dashboard={dashboard} userId={user.id}
                   onBillingUpdated={() => void refreshDashboard(true)} />}
             </>
           )}

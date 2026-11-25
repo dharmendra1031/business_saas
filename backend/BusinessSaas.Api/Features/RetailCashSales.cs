@@ -22,6 +22,7 @@ public static class RetailCashSales
         group.MapGet("/business-receipts", BusinessReceiptHistory);
         group.MapGet("/business-receipts/{receiptId:long}", BusinessReceiptById);
         group.MapPost("/business-receipts/{receiptId:long}/return-estimate", EstimateReturn);
+        group.MapGet("/business-receipts/{receiptId:long}/returns", ReturnHistory);
         group.MapPost("/business-receipts/{receiptId:long}/returns", PostReturn);
         group.MapGet("/business-receipts/{receiptId:long}/pdf", BusinessReceiptPdf);
         group.MapGet("/daily-report", DailyReport);
@@ -159,7 +160,7 @@ public static class RetailCashSales
 
     // Read-only estimate of the original sale; not a refund authorization or posting.
     private static async Task<IResult> EstimateReturn(long businessId, long receiptId,
-        ReturnEstimateRequest request, ClaimsPrincipal user, AppDbContext db)
+        ReturnEstimateRequest request, ClaimsPrincipal user, AppDbContext db, IConfiguration config)
     {
         if (!long.TryParse(user.FindFirstValue(ClaimTypes.NameIdentifier), out var actor) ||
             await Shop(db, businessId, actor, request.LocationId, ownerOnly: true) is null)
@@ -193,7 +194,31 @@ public static class RetailCashSales
             estimates.Add(new { item.LineId, item.Quantity, Amount = amount });
             total += amount;
         }
-        return Results.Ok(new { receiptId, sale.CurrencyCode, total, lines = estimates, canPost = false });
+        return Results.Ok(new { receiptId, sale.CurrencyCode, total, lines = estimates, canPost = config.GetValue<bool>("RetailReturns:PostingEnabled") });
+    }
+
+    private static async Task<IResult> ReturnHistory(long businessId, long locationId, long receiptId,
+        ClaimsPrincipal user, AppDbContext db, int page = 1, string? requestKey = null)
+    {
+        if (!long.TryParse(user.FindFirstValue(ClaimTypes.NameIdentifier), out var actor) ||
+            await Shop(db, businessId, actor, locationId, ownerOnly: true) is null ||
+            !await db.RetailCashSales.AnyAsync(x => x.Id == receiptId && x.BusinessId == businessId &&
+                x.LocationId == locationId))
+            return Results.NotFound();
+        if (page is < 1 or > 100000 || requestKey is { Length: > 80 })
+            return Results.BadRequest(new { message = "Invalid return history filter." });
+        const int pageSize = 10;
+        var query = db.RetailCashReturns.AsNoTracking().Where(x => x.BusinessId == businessId && x.SaleId == receiptId);
+        if (requestKey is not null) query = query.Where(x => x.RequestKey == requestKey);
+        var records = await query.OrderByDescending(x => x.Id).Skip((page - 1) * pageSize)
+            .Take(pageSize + 1).Include(x => x.Lines).ToListAsync();
+        return Results.Ok(new { items = records.Take(pageSize).Select(x => new {
+            x.Id, x.SaleId, x.RequestKey, x.Total, x.Reason, x.ActorUserId,
+            PostedAtUtc = DateTime.SpecifyKind(x.PostedAtUtc, DateTimeKind.Utc),
+            Lines = x.Lines.OrderBy(line => line.Id).Select(line => new {
+                line.SaleLineId, line.Quantity, line.Amount, line.Restock
+            })
+        }), hasMore = records.Count > pageSize });
     }
 
     public sealed record ReturnItem(long LineId, decimal Quantity, bool Restock);
@@ -268,13 +293,13 @@ public static class RetailCashSales
                 if (!original.TryGetValue(item.LineId, out var line))
                     return Results.BadRequest(new { message = "Return line is not on the original receipt." });
                 if (AllocateReturn(line, earlier, item.Quantity) is not decimal amount)
-                    return Results.Conflict(new { message = "Return exceeds the remaining balance or requires reconciliation." });
+                    return Results.Conflict(new { code = "RETURN_REJECTED", message = "Return exceeds the remaining balance or requires reconciliation." });
                 record.Lines.Add(new RetailCashReturnLine { SaleLineId = line.Id, Quantity = item.Quantity,
                     Amount = amount, Restock = item.Restock });
                 record.Total += amount;
             }
             if (record.Total != request.ExpectedRefund)
-                return Results.Conflict(new { message = "Refund amount changed. Verify remaining return balance." });
+                return Results.Conflict(new { code = "RETURN_REJECTED", message = "Refund amount changed. Verify remaining return balance." });
 
             db.RetailCashReturns.Add(record);
             await db.SaveChangesAsync();
