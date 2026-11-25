@@ -119,3 +119,25 @@ dotnet test backend/BusinessSaas.Tests/BusinessSaas.Tests.csproj --configuration
 Keep the existing serializable report transaction and financial aggregation until
 representative execution plans, logical reads and concurrent collection tests
 support a specific change. Do not add indexes solely from query shape.
+
+## 100,000-invoice scale case
+
+The same parameterized SQL Server regression now runs with 10,000 and 100,000
+invoices per synthetic business. Each case has distinct accounts and tenant
+keys; no duplicated test implementation. At 100,000 invoices the expected
+cash total is INR 1,000,000, the final page is 10,000 and the single-day
+filter contains 50,000 invoices. Both cases log individual request durations
+with dataset size. Seed time is not checkout throughput.
+
+The initial 10,000-invoice case passed in Build run 45634425941 on 25 November
+2026 (SQL job 139275939336): first page 80.2 ms, last page 52.6 ms, daily filter
+74.5 ms, partial return filter 100.3 ms, returned filter 48.2 ms, posted filter
+60.9 ms. These are single in-process request observations, not p95 or a
+controlled before/after comparison. The 100,000 case is not certified until
+its SQL Server job passes.
+
+Next diagnostic step: capture actual parameterized EF SQL for register
+summary and page queries on the isolated test database; use actual execution
+plans and SET STATISTICS IO, TIME ON with the same filters. Check logical
+reads by table, sorts/spills, estimated versus actual rows, and concurrent
+lock waits separately. Do not infer index use or locking from HTTP timings.
