@@ -1,5 +1,5 @@
 import { useEffect, useRef, useState } from 'react'
-import { Activity, ArrowRight, BarChart3, Boxes, Building2, CreditCard, KeyRound, LayoutDashboard, LogOut, Menu, Package, ReceiptText, Search, Settings2, ShieldCheck, ShoppingCart, Store, Tags, Truck, UserRound, Users } from 'lucide-react'
+import { Activity, ArrowRight, BarChart3, Boxes, Building2, CreditCard, LayoutDashboard, LogOut, Menu, Package, ReceiptText, Search, Settings2, ShieldCheck, ShoppingCart, Store, Tags, Truck, UserRound, Users } from 'lucide-react'
 import { api, ApiResponseError, resetCsrf, SessionExpiredError, setSessionExpiredHandler, type Business, type RetailDashboard, type User } from './api'
 import CashCheckout from './CashCheckout'
 import TeamMembers from './TeamMembers'
@@ -380,7 +380,6 @@ export default function App() {
             ['customers', 'Customers', Users],
             ['businesses', 'Businesses', Building2],
             ['plans', 'Plans & Billing', CreditCard],
-            ['licenses', 'Licenses', KeyRound],
             ['settings', 'Platform Settings', Settings2],
             ['audit', 'Security & Audit', ShieldCheck],
             ['operations', 'Operations', Activity]
@@ -404,10 +403,6 @@ export default function App() {
                   setPage('platform')
                 }}><Icon size={18} /> {label}</button>)}
         </>}
-        {page === 'platform' && <div className="sidebar-footer">
-          Platform Administration
-          <small className="d-block mt-1">Manage SaaS accounts, not shop transactions</small>
-        </div>}
       </aside>}
 
       <div className="app-main">
@@ -430,8 +425,6 @@ export default function App() {
             <span className="platform-topbar-logo" aria-hidden="true">B</span>
             <strong>Business SaaS</strong>
             <span className="platform-topbar-badge">Super Admin</span>
-            <span className="platform-topbar-divider" aria-hidden="true" />
-            <span className="platform-topbar-caption">Platform Administration</span>
           </div>}
           <div className="topbar-title">
             <button type="button" ref={menuToggle} className="mobile-menu-toggle" aria-label={menuOpen ? 'Close navigation' : 'Open navigation'}

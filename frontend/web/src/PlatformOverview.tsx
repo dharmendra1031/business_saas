@@ -1,7 +1,7 @@
 import { useEffect, useState } from 'react'
 import {
   Activity, AlertTriangle, ArrowRight, BadgeCheck, Building2, Clock3, Plus, RefreshCw,
-  TrendingUp, Users, Wallet
+  TrendingUp, Users
 } from 'lucide-react'
 import { api, SessionExpiredError } from './api'
 
@@ -223,7 +223,7 @@ export default function PlatformOverview({
         <div>
           <span className="platform-kicker">SUPER ADMIN</span>
           <h1>Platform Dashboard</h1>
-          <p>Manage businesses, subscriptions, customer accounts and platform operations.</p>
+          <p>Businesses and subscriptions</p>
         </div>
       </div>
       <div className="platform-hero-actions">
@@ -332,18 +332,6 @@ export default function PlatformOverview({
               </div>
             </div>)}
           </div>}
-        </section>
-        <section className="content-section platform-quick-card">
-          <div className="platform-panel-heading">
-            <div><h2><Wallet size={19} /> Quick Stats</h2><p>Current platform signals</p></div>
-          </div>
-          <dl className="platform-quick-stat-list">
-            <div><dt>Active trials</dt><dd>{summary.activeTrials.toLocaleString()}</dd></div>
-            <div><dt>Expired trials</dt><dd>{summary.expiredTrials.toLocaleString()}</dd></div>
-            <div><dt>Expiring soon</dt><dd>{summary.expiringTrialCount.toLocaleString()}</dd></div>
-            <div><dt>Monthly revenue</dt><dd className="platform-stat-unavailable">Unavailable</dd></div>
-          </dl>
-          <p className="platform-quick-note">Revenue needs a verified subscription payment ledger.</p>
         </section>
       </div>
 
