@@ -71,7 +71,7 @@ public static class RetailPurchaseEndpoints
                     !ValidCost(x.UnitCost) || x.UnitId is <= 0 ||
                     (x.UnitId is null) != (x.ExpectedFactor is null) ||
                     x.ExpectedFactor is < 0.001m or > 9999999.999m ||
-                    x.ExpectedFactor.HasValue && decimal.Round(x.ExpectedFactor.Value, 3) != x.ExpectedFactor.Value)))
+                    x.ExpectedFactor.HasValue && decimal.Round(x.ExpectedFactor.Value, 3) != x.ExpectedFactor.Value))
                 return Results.BadRequest(new { message = "Enter 1–50 distinct products with valid quantities and costs." });
 
             var requestKey = request.RequestKey?.Trim() ?? "";
