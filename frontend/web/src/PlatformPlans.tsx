@@ -208,8 +208,8 @@ export default function PlatformPlans({ business, onChooseBusiness }: { business
       <div><span className="platform-kicker">PLATFORM MANAGEMENT</span><h1>Plans & Billing</h1>
         <p>Review real plan prices, publish audited versions and prepare internal billing drafts.</p>
       </div>
-      <button type="button" className="btn btn-outline-secondary btn-sm"
-        disabled={loading || busy} onClick={() => setReload(value => value + 1)}><RefreshCw size={15} /> Refresh</button>
+      {activeTab === 'catalog' && !editing && !publishing && <button type="button" className="btn btn-outline-secondary btn-sm"
+        disabled={loading || busy} onClick={() => setReload(value => value + 1)}><RefreshCw size={15} /> Refresh</button>}
     </div>
     {error && <div className="alert alert-danger" role="alert">{error}
       {!editing && !publishing && <button type="button" className="btn btn-outline-secondary btn-sm ms-2"

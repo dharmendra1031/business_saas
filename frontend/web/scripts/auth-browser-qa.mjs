@@ -2801,9 +2801,11 @@ try {
     // only from the first page of the independent payment-request register.
     const t = await scenario('super-admin-billing-status-and-pagination', { role: 'Platform' })
     const requestPages = [], capturePages = []
-    let draftReads = 0
-    await t.page.route('**/api/platform/plans', route =>
-      response(route, 200, { items: [], unknownPlanAssignments: 0 }))
+    let draftReads = 0, planReads = 0
+    await t.page.route('**/api/platform/plans', route => {
+      planReads++
+      return response(route, 200, { items: [], unknownPlanAssignments: 0 })
+    })
     await t.page.route('**/api/platform/billing/drafts?*', route => {
       draftReads++
       return response(route, 200, {
@@ -2855,6 +2857,9 @@ try {
     await t.page.locator('.platform-shell .app-sidebar .nav-entry')
       .filter({ hasText: 'Plans & Billing' }).click()
     await t.page.getByRole('heading', { name: 'Plans & Billing' }).waitFor()
+    await t.page.getByRole('heading', { name: 'Subscription Plans' }).waitFor()
+    await t.page.getByText('0 plan types', { exact: true }).waitFor()
+    assert.equal(planReads, 1)
     await t.page.getByRole('tab', { name: 'Billing Drafts' }).click()
     await t.page.getByRole('heading', { name: 'Billing Draft History' }).waitFor()
     await t.page.getByText('Captured — verified').waitFor()
@@ -2903,6 +2908,7 @@ try {
     assert.deepEqual(capturePages, [1, 2])
     assert.deepEqual(requestPages, [1, 2])
     assert.equal(draftReads, 1, 'Paging payment and capture registers must not reload draft history')
+    assert.equal(planReads, 1, 'Billing operations must not reload the hidden plan catalog')
     await t.screenshot('SA-billing-captured-status-pagination')
     await t.check()
     await t.context.close()
