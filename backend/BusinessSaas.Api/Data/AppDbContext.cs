@@ -394,6 +394,9 @@ public sealed class RetailPurchaseOrderLine
     public long ProductId { get; set; }
     public decimal OrderedQuantity { get; set; }
     public decimal UnitCost { get; set; }
+    public long? SelectedUnitId { get; set; }
+    public string? SelectedUnitCode { get; set; }
+    public decimal? ConversionFactor { get; set; }
 }
 
 public sealed class RetailReceiving
@@ -961,6 +964,8 @@ public sealed class AppDbContext(DbContextOptions<AppDbContext> options)
         builder.Entity<RetailPurchaseOrderLine>(entity =>
         {
             entity.Property(x => x.OrderedQuantity).HasPrecision(18, 3);
+            entity.Property(x => x.SelectedUnitCode).HasMaxLength(12);
+            entity.Property(x => x.ConversionFactor).HasPrecision(18, 3);
             entity.Property(x => x.UnitCost).HasPrecision(18, 2);
             entity.HasIndex(x => new { x.PurchaseOrderId, x.ProductId }).IsUnique();
             entity.HasOne<RetailPurchaseOrder>().WithMany()

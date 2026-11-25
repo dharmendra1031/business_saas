@@ -8,11 +8,14 @@ interface Supplier {
   isActive: boolean
 }
 
+interface AlternateUnit { unitId: number; factor: number; unitCode?: string; isActive?: boolean }
+
 interface Product {
   id: number
   name: string
   sku: string
   unitCode?: string
+  conversions?: AlternateUnit[]
   isActive: boolean
 }
 
@@ -37,6 +40,10 @@ interface OrderLine {
   name: string
   sku: string
   unitCode?: string
+  baseUnitCode?: string
+  conversionFactor?: number
+  baseOrderedQuantity?: number
+  baseReceivedQuantity?: number
   orderedQuantity: number
   unitCost: number
   receivedQuantity: number
@@ -64,6 +71,8 @@ interface NewLine {
   name: string
   sku: string
   unitCode?: string
+  alternateUnits: AlternateUnit[]
+  selectedUnitId: number
   quantity: string
   unitCost: string
 }
@@ -226,9 +235,14 @@ export default function RetailPurchases({ businessId, canOperate, locations, rol
     if (!product || lines.some(x => x.productId === id) || lines.length >= 50) return
     setLines(value => [...value, {
       productId: product.id, name: product.name, sku: product.sku,
-      unitCode: product.unitCode, quantity: '1', unitCost: '0'
+      unitCode: product.unitCode, alternateUnits: (product.conversions ?? []).filter(x => x.isActive && x.unitCode),
+      selectedUnitId: 0, quantity: '1', unitCost: '0'
     }])
     setError('')
+  }
+
+  function selectedUnit(line: NewLine) {
+    return line.alternateUnits.find(x => x.unitId === line.selectedUnitId)
   }
 
   function toggleReceiving() {
@@ -260,7 +274,8 @@ export default function RetailPurchases({ businessId, canOperate, locations, rol
     try {
       const result = await post<{ id: number }>(basePath, {
         locationId, supplierId, lines: lines.map(x => ({
-          productId: x.productId, quantity: Number(x.quantity), unitCost: Number(x.unitCost)
+          productId: x.productId, quantity: Number(x.quantity), unitCost: Number(x.unitCost),
+          ...(selectedUnit(x) ? { unitId: x.selectedUnitId, expectedFactor: selectedUnit(x)!.factor } : {})
         })), requestKey: orderKey
       })
       savedOrderId = result.id
@@ -481,10 +496,19 @@ export default function RetailPurchases({ businessId, canOperate, locations, rol
           {lines.length >= 50 && <p className="field-help" role="status">Maximum 50 products per purchase order.</p>}
           {lines.length > 0 && <div className="table-responsive">
             <table className="table table-sm align-middle business-record-table">
-              <thead><tr><th>Product</th><th>Order quantity (stock unit)</th>
-                <th>Unit cost ({currencyCode})</th><th></th></tr></thead>
+              <thead><tr><th>Product</th><th>Order quantity</th>
+                <th>Cost per selected unit ({currencyCode})</th><th></th></tr></thead>
               <tbody>{lines.map(line => <tr key={line.productId}>
-                <td>{line.name}<span className="product-secondary">{line.sku}{line.unitCode ? ` · ${line.unitCode}` : ''}</span></td>
+                <td>{line.name}<span className="product-secondary">{line.sku}</span>
+                  {line.alternateUnits.length > 0 ? <select className="form-select form-select-sm mt-1"
+                    aria-label={`Purchase unit for ${line.name}`} value={line.selectedUnitId}
+                    onChange={event => setLines(values => values.map(x => x.productId === line.productId
+                      ? { ...x, selectedUnitId: Number(event.target.value), unitCost: '0' } : x))}>
+                    <option value={0}>{line.unitCode ?? 'Base unit'}</option>
+                    {line.alternateUnits.map(unit => <option key={unit.unitId} value={unit.unitId}>
+                      {unit.unitCode} = {unit.factor} {line.unitCode}
+                    </option>)}
+                  </select> : <span className="product-secondary">{line.unitCode}</span>}</td>
                 <td><input type="number" className="form-control" aria-label={`${line.name} quantity`}
                   min="0.001" max="9999999.999" step="0.001" required value={line.quantity}
                   onChange={event => setLines(values => values.map(x =>
@@ -575,8 +599,12 @@ export default function RetailPurchases({ businessId, canOperate, locations, rol
                 <th className="text-end">Unit cost</th></tr></thead>
               <tbody>{detail.lines.map(line => <tr key={line.id}>
                 <td>{line.name}<span className="product-secondary">{line.sku}{line.unitCode ? ` · ${line.unitCode}` : ''}</span></td>
-                <td className="text-end">{line.orderedQuantity.toFixed(3)}</td>
-                <td className="text-end">{line.receivedQuantity.toFixed(3)}</td>
+                <td className="text-end">{line.orderedQuantity.toFixed(3)}
+                  {line.conversionFactor != null && line.conversionFactor !== 1 &&
+                    <small className="d-block">{line.baseOrderedQuantity} {line.baseUnitCode}</small>}</td>
+                <td className="text-end">{line.receivedQuantity.toFixed(3)}
+                  {line.conversionFactor != null && line.conversionFactor !== 1 &&
+                    <small className="d-block">{line.baseReceivedQuantity} {line.baseUnitCode}</small>}</td>
                 <td className="text-end"><strong>{line.remainingQuantity.toFixed(3)}</strong></td>
                 <td className="text-end">{line.unitCost.toFixed(2)} {currencyCode}</td>
               </tr>)}</tbody>
@@ -602,7 +630,7 @@ export default function RetailPurchases({ businessId, canOperate, locations, rol
                 <button className="btn btn-outline-secondary" type="button" onClick={() => setReceiving(
                   Object.fromEntries(detail.lines.filter(x => x.remainingQuantity > 0).map(x => [x.id, String(x.remainingQuantity)]))
                 )}>Receive all remaining</button>
-                <p className="field-help">Enter the delivered quantities. Stock updates only when a receiving is posted.</p>
+                <p className="field-help">Enter delivered quantities in the order unit. Stock is updated in the base unit only when receiving is posted.</p>
                 <div className="table-responsive">
                   <table className="table table-sm align-middle business-record-table">
                     <thead><tr><th>Product</th><th className="text-end">Remaining</th>

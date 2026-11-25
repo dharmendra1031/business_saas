@@ -1137,6 +1137,10 @@ namespace BusinessSaas.Api.Data.Migrations
 
                     SqlServerPropertyBuilderExtensions.UseIdentityColumn(b.Property<long>("Id"));
 
+                    b.Property<long?>("SelectedUnitId").HasColumnType("bigint");
+                    b.Property<string>("SelectedUnitCode").HasMaxLength(12).HasColumnType("nvarchar(12)");
+                    b.Property<decimal?>("ConversionFactor").HasPrecision(18, 3).HasColumnType("decimal(18,3)");
+
                     b.Property<decimal>("OrderedQuantity")
                         .HasPrecision(18, 3)
                         .HasColumnType("decimal(18,3)");

@@ -251,7 +251,10 @@ public static class RetailProductEndpoints
             db.RetailBrands.Where(brand => brand.Id == product.BrandId &&
                 brand.BusinessId == businessId).Select(brand => brand.Name).FirstOrDefault(),
             product.Conversions.OrderBy(x => x.UnitId)
-                .Select(x => new ConversionRequest(x.UnitId, x.Factor)).ToList());
+                .Select(x => new ConversionItem(x.UnitId, x.Factor,
+                    db.RetailUnits.Where(u => u.Id == x.UnitId && u.BusinessId == businessId)
+                        .Select(u => u.Code).FirstOrDefault(),
+                    db.RetailUnits.Any(u => u.Id == x.UnitId && u.BusinessId == businessId && u.IsActive))).ToList());
 
     private static async Task<bool> ValidReferences(AppDbContext db, long businessId,
         long categoryId, long unitId, long? brandId, bool requireActive,
@@ -353,5 +356,7 @@ public static class RetailProductEndpoints
     private sealed record ProductItem(long Id, string Name, string Sku, string? Barcode,
         long CategoryId, string CategoryName, long UnitId, string UnitCode,
         decimal SalePrice, string TaxClassification, bool IsActive, decimal? ReorderLevel,
-        long? BrandId, string? BrandName, List<ConversionRequest> Conversions);
+        long? BrandId, string? BrandName, List<ConversionItem> Conversions);
+
+    private sealed record ConversionItem(long UnitId, decimal Factor, string? UnitCode, bool IsActive);
 }

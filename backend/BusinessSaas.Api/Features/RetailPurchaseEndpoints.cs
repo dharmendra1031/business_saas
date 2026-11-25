@@ -68,7 +68,10 @@ public static class RetailPurchaseEndpoints
                 request.Lines.Count is < 1 or > 50 ||
                 request.Lines.Select(x => x.ProductId).Distinct().Count() != request.Lines.Count ||
                 request.Lines.Any(x => x.ProductId <= 0 || !ValidQuantity(x.Quantity) ||
-                    !ValidCost(x.UnitCost)))
+                    !ValidCost(x.UnitCost) || x.UnitId is <= 0 ||
+                    (x.UnitId is null) != (x.ExpectedFactor is null) ||
+                    x.ExpectedFactor is < 0.001m or > 9999999.999m ||
+                    x.ExpectedFactor.HasValue && decimal.Round(x.ExpectedFactor.Value, 3) != x.ExpectedFactor.Value)))
                 return Results.BadRequest(new { message = "Enter 1–50 distinct products with valid quantities and costs." });
 
             var requestKey = request.RequestKey?.Trim() ?? "";
@@ -91,9 +94,41 @@ public static class RetailPurchaseEndpoints
                 return Results.NotFound();
 
             var ids = request.Lines.Select(x => x.ProductId).ToArray();
-            if (await db.RetailProducts.AsNoTracking().CountAsync(x =>
-                x.BusinessId == businessId && x.IsActive && ids.Contains(x.Id)) != ids.Length)
+            var products = await db.RetailProducts.AsNoTracking()
+                .Where(x => x.BusinessId == businessId && x.IsActive && ids.Contains(x.Id))
+                .Include(x => x.Conversions).ToDictionaryAsync(x => x.Id);
+            if (products.Count != ids.Length)
                 return Results.BadRequest(new { message = "Select active products from this business." });
+
+            var alternateIds = request.Lines.Where(x => x.UnitId.HasValue).Select(x => x.UnitId!.Value).Distinct().ToArray();
+            var alternateUnits = await db.RetailUnits.AsNoTracking()
+                .Where(x => x.BusinessId == businessId && x.IsActive && alternateIds.Contains(x.Id))
+                .ToDictionaryAsync(x => x.Id);
+            var orderLines = new List<RetailPurchaseOrderLine>();
+            foreach (var line in request.Lines)
+            {
+                var product = products[line.ProductId];
+                decimal? factor = null;
+                string? unitCode = null;
+                if (line.UnitId is long alternateId)
+                {
+                    var conversion = product.Conversions.SingleOrDefault(x => x.UnitId == alternateId);
+                    if (alternateId == product.UnitId || conversion is null ||
+                        !alternateUnits.TryGetValue(alternateId, out var alternate))
+                        return Results.BadRequest(new { message = "Select an active alternate unit configured for this product." });
+                    if (conversion.Factor != line.ExpectedFactor)
+                        return Results.Conflict(new { message = "Unit conversion changed. Refresh the product and verify its quantity and cost." });
+                    factor = conversion.Factor;
+                    unitCode = alternate.Code;
+                }
+                if (!ValidBaseQuantity(line.Quantity, factor ?? 1m))
+                    return Results.BadRequest(new { message = "Converted stock quantity must be positive, within the stock limit and exact to three decimals." });
+                orderLines.Add(new RetailPurchaseOrderLine
+                {
+                    ProductId = line.ProductId, OrderedQuantity = line.Quantity, UnitCost = line.UnitCost,
+                    SelectedUnitId = line.UnitId, SelectedUnitCode = unitCode, ConversionFactor = factor
+                });
+            }
 
             await using var transaction = await db.Database.BeginTransactionAsync();
             var order = new RetailPurchaseOrder
@@ -108,14 +143,8 @@ public static class RetailPurchaseEndpoints
             try
             {
                 await db.SaveChangesAsync();
-                db.RetailPurchaseOrderLines.AddRange(request.Lines.Select(line =>
-                    new RetailPurchaseOrderLine
-                    {
-                        PurchaseOrderId = order.Id,
-                        ProductId = line.ProductId,
-                        OrderedQuantity = line.Quantity,
-                        UnitCost = line.UnitCost
-                    }));
+                foreach (var line in orderLines) line.PurchaseOrderId = order.Id;
+                db.RetailPurchaseOrderLines.AddRange(orderLines);
                 await db.SaveChangesAsync();
                 await transaction.CommitAsync();
             }
@@ -159,7 +188,10 @@ public static class RetailPurchaseEndpoints
                                select new
                                {
                                    line.Id, line.ProductId, product.Name, product.Sku,
-                                   UnitCode = unit.Code, line.OrderedQuantity, line.UnitCost
+                                   UnitCode = line.SelectedUnitCode ?? unit.Code,
+                                   BaseUnitCode = unit.Code, line.SelectedUnitId,
+                                   ConversionFactor = line.ConversionFactor ?? 1m,
+                                   line.OrderedQuantity, line.UnitCost
                                }).ToListAsync();
 
             var received = await PostedQuantities(db, businessId, orderId);
@@ -169,7 +201,9 @@ public static class RetailPurchaseEndpoints
                 line.ProductId,
                 line.Name,
                 line.Sku,
-                line.UnitCode,
+                line.UnitCode, line.BaseUnitCode, line.SelectedUnitId, line.ConversionFactor,
+                BaseOrderedQuantity = line.OrderedQuantity * line.ConversionFactor,
+                BaseReceivedQuantity = received.GetValueOrDefault(line.Id) * line.ConversionFactor,
                 line.OrderedQuantity,
                 line.UnitCost,
                 ReceivedQuantity = received.GetValueOrDefault(line.Id),
@@ -261,6 +295,8 @@ public static class RetailPurchaseEndpoints
             {
                 if (!lines.TryGetValue(line.PurchaseOrderLineId, out var ordered))
                     return Results.BadRequest(new { message = "Invalid purchase order line." });
+                if (!ValidBaseQuantity(line.Quantity, ordered.ConversionFactor ?? 1m))
+                    return Results.BadRequest(new { message = "Receiving quantity cannot be represented exactly in the base stock unit." });
                 if (line.Quantity > ordered.OrderedQuantity - received.GetValueOrDefault(ordered.Id))
                     return Results.Conflict(new { message = "Receiving exceeds the remaining ordered quantity." });
             }
@@ -337,6 +373,7 @@ public static class RetailPurchaseEndpoints
                 {
                     var ordered = allLines[line.PurchaseOrderLineId];
                     if (!ValidQuantity(line.Quantity) ||
+                        !ValidBaseQuantity(line.Quantity, ordered.ConversionFactor ?? 1m) ||
                         line.Quantity > ordered.OrderedQuantity - received.GetValueOrDefault(ordered.Id) ||
                         !await db.RetailProducts.AsNoTracking().AnyAsync(x =>
                             x.Id == ordered.ProductId && x.BusinessId == businessId && x.IsActive))
@@ -347,7 +384,7 @@ public static class RetailPurchaseEndpoints
                 {
                     var ordered = allLines[line.PurchaseOrderLineId];
                     var balance = await StockPosting.ApplyAsync(db, businessId,
-                        order.LocationId, ordered.ProductId, line.Quantity, "Receiving",
+                        order.LocationId, ordered.ProductId, line.Quantity * (ordered.ConversionFactor ?? 1m), "Receiving",
                         line.Id, UserId(user));
                     if (balance is null)
                         return Results.Conflict(new { message = "Stock conflict. Refresh and retry." });
@@ -392,7 +429,8 @@ public static class RetailPurchaseEndpoints
             .Where(x => x.PurchaseOrderId == orderId).ToDictionaryAsync(x => x.ProductId);
         return saved.Count == lines.Count && lines.All(line =>
             saved.TryGetValue(line.ProductId, out var item) &&
-            item.OrderedQuantity == line.Quantity && item.UnitCost == line.UnitCost);
+            item.OrderedQuantity == line.Quantity && item.UnitCost == line.UnitCost &&
+            item.SelectedUnitId == line.UnitId && item.ConversionFactor == line.ExpectedFactor);
     }
 
     private static async Task<bool> SameReceivingLines(AppDbContext db, long receivingId, List<ReceivingLine> lines)
@@ -420,6 +458,12 @@ public static class RetailPurchaseEndpoints
     private static bool ValidQuantity(decimal value) =>
         value is > 0 and <= MaxQuantity && decimal.Round(value, 3) == value;
 
+    private static bool ValidBaseQuantity(decimal quantity, decimal factor)
+    {
+        var converted = quantity * factor;
+        return converted is > 0 and <= 9999999999.999m && decimal.Round(converted, 3) == converted;
+    }
+
     private static bool ValidCost(decimal value) =>
         value is >= 0 and <= MaxCost && decimal.Round(value, 2) == value;
 
@@ -436,7 +480,8 @@ public static class RetailPurchaseEndpoints
             ? null : Results.NotFound();
     }
 
-    private sealed record OrderLine(long ProductId, decimal Quantity, decimal UnitCost);
+    private sealed record OrderLine(long ProductId, decimal Quantity, decimal UnitCost,
+        long? UnitId = null, decimal? ExpectedFactor = null);
     private sealed record CreateOrder(long LocationId, long SupplierId, List<OrderLine>? Lines, string? RequestKey);
     private sealed record ReceivingLine(long PurchaseOrderLineId, decimal Quantity);
     private sealed record CreateReceiving(List<ReceivingLine>? Lines, string? RequestKey);

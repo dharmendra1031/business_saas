@@ -900,6 +900,48 @@ public sealed class SqlServerTests
         Assert.Equal(todayTotal.GetProperty("salesTotal").GetDecimal() - todayTotal.GetProperty("refundTotal").GetDecimal(),
             todayTotal.GetProperty("netSales").GetDecimal());
         Assert.Equal(HttpStatusCode.NotFound, (await cashier.GetAsync(dailyPath + reportDate.ToString("yyyy-MM-dd"))).StatusCode);
+
+        // Converted purchase quantities use the factor recorded on the PO, not a later master edit.
+        var boxId = await Created(prefix + "/units", new { name = "SQL Box", code = "SQBOX" });
+        var convertedProduct = new { name = "SQL Pack Test", sku = "SQL-PACK-TEST", categoryId, unitId,
+            salePrice = 10m, taxClassification = "", isActive = true,
+            conversions = new[] { new { unitId = boxId, factor = 12m } } };
+        var packProductId = await Created(prefix + "/products", convertedProduct);
+        var convertedPurchase = new { locationId, supplierId, requestKey = "sql-converted-purchase-20261125",
+            lines = new[] { new { productId = packProductId, quantity = 10m, unitCost = 100m,
+                unitId = boxId, expectedFactor = 12m } } };
+        var purchasePath = prefix + "/purchase-orders";
+        var packOrderId = await Created(purchasePath, convertedPurchase);
+        var packOrderPath = purchasePath + "/" + packOrderId;
+        var packDetail = await owner.GetFromJsonAsync<JsonElement>(packOrderPath);
+        var packLine = packDetail.GetProperty("lines")[0];
+        var packLineId = packLine.GetProperty("id").GetInt64();
+        Assert.Equal("SQBOX", packLine.GetProperty("unitCode").GetString());
+        Assert.Equal("SQPCS", packLine.GetProperty("baseUnitCode").GetString());
+        Assert.Equal(120m, packLine.GetProperty("baseOrderedQuantity").GetDecimal());
+        Assert.Equal(HttpStatusCode.OK, (await Put(owner, prefix + "/products/" + packProductId,
+            convertedProduct with { conversions = new[] { new { unitId = boxId, factor = 24m } } })).StatusCode);
+        Assert.Equal(HttpStatusCode.OK, (await Post(owner, purchasePath, convertedPurchase)).StatusCode);
+        Assert.Equal(HttpStatusCode.Conflict, (await Post(owner, purchasePath,
+            convertedPurchase with { requestKey = "sql-stale-factor-20261125" })).StatusCode);
+        Assert.Equal(HttpStatusCode.OK, (await Post(owner, packOrderPath + "/approve", new { })).StatusCode);
+        var packReceivePath = packOrderPath + "/receivings";
+        var receivePackId = await Created(packReceivePath, new { requestKey = "sql-pack-receive-20261125",
+            lines = new[] { new { purchaseOrderLineId = packLineId, quantity = 2.5m } } });
+        var postPack = packReceivePath + "/" + receivePackId + "/post";
+        Assert.Equal(HttpStatusCode.OK, (await Post(owner, postPack, new { })).StatusCode);
+        Assert.Equal(HttpStatusCode.OK, (await Post(owner, postPack, new { })).StatusCode);
+        var packAfter = (await owner.GetFromJsonAsync<JsonElement>(packOrderPath)).GetProperty("lines")[0];
+        Assert.Equal(7.5m, packAfter.GetProperty("remainingQuantity").GetDecimal());
+        Assert.Equal(30m, packAfter.GetProperty("baseReceivedQuantity").GetDecimal());
+        using (var scope = factory.Services.CreateScope())
+        {
+            var db = scope.ServiceProvider.GetRequiredService<AppDbContext>();
+            Assert.Equal(30m, await db.RetailStockBalances.Where(x => x.BusinessId == businessId &&
+                x.LocationId == locationId && x.ProductId == packProductId).Select(x => x.Quantity).SingleAsync());
+            Assert.Single(await db.RetailStockMovements.Where(x => x.BusinessId == businessId &&
+                x.ProductId == packProductId && x.SourceType == "Receiving").ToListAsync());
+        }
     }
 
     private static async Task RegisterAndLogin(HttpClient client, string email)
