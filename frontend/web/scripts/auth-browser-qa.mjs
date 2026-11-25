@@ -475,7 +475,7 @@ try {
       const url = new URL(request.url())
       if (/^\/api\/businesses\/1\/(suppliers|products)$/.test(url.pathname)) {
         catalogReads.push(url.pathname)
-        if (url.pathname.endsWith('/suppliers'))
+        if (request.method() === 'GET' && url.pathname.endsWith('/suppliers'))
           assert.equal(url.searchParams.get('activeOnly'), 'true', 'Supplier filtering must occur before server pagination')
       }
     })
