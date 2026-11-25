@@ -439,14 +439,14 @@ public static class RetailCashSales
                 Conversions = x.Conversions.Where(conversion => allowAlternates && conversion.UnitId != x.UnitId &&
                     db.RetailUnits.Any(unit => unit.Id == conversion.UnitId && unit.BusinessId == businessId && unit.IsActive))
                     .OrderBy(conversion => conversion.UnitId)
-                    .Select(conversion => new { conversion.UnitId, conversion.Factor,
+                    .Select(conversion => new { conversion.UnitId, conversion.Factor, conversion.SalePrice,
                         UnitCode = db.RetailUnits.Where(unit => unit.Id == conversion.UnitId && unit.BusinessId == businessId)
                             .Select(unit => unit.Code).FirstOrDefault() }).ToList()
             }).ToListAsync(cancellationToken);
         return Results.Ok(products.Select(x => new {
             x.Id, x.Name, x.Sku, x.Barcode, x.SalePrice, x.UnitCode, x.Available,
             Conversions = x.Conversions.Select(unit => new { unit.UnitId, unit.Factor, unit.UnitCode,
-                SalePrice = SaleUnitPrice(x.SalePrice, unit.Factor) })
+                SalePrice = SaleUnitPrice(x.SalePrice, unit.Factor, unit.SalePrice) })
                 .Where(unit => unit.SalePrice > 0 && unit.SalePrice <= 9999999999999999.99m)
         }));
     }
@@ -471,8 +471,8 @@ public static class RetailCashSales
     public sealed record Item(long ProductId, decimal Quantity, decimal ExpectedUnitPrice,
         long? UnitId = null, decimal? ExpectedFactor = null);
 
-    private static decimal SaleUnitPrice(decimal basePrice, decimal factor) =>
-        decimal.Round(basePrice * factor, 2, MidpointRounding.AwayFromZero);
+    private static decimal SaleUnitPrice(decimal basePrice, decimal factor, decimal? overridePrice = null) =>
+        overridePrice ?? decimal.Round(basePrice * factor, 2, MidpointRounding.AwayFromZero);
 
     private static bool ValidBaseQuantity(decimal quantity, decimal factor)
     {
@@ -575,6 +575,7 @@ public static class RetailCashSales
                         message = "Product or price changed. Remove and select the affected item again." });
                 var baseCode = unitCode;
                 decimal? factor = null;
+                decimal? overridePrice = null;
                 if (item.UnitId is long alternateId)
                 {
                     var conversion = product.Conversions.SingleOrDefault(x => x.UnitId == alternateId);
@@ -584,8 +585,9 @@ public static class RetailCashSales
                         return Results.BadRequest(new { code = "CASH_SALE_BASKET_CHANGED", item.ProductId,
                             message = "Sale unit or conversion changed. Select the affected item again." });
                     factor = conversion.Factor;
+                    overridePrice = conversion.SalePrice;
                 }
-                var unitPrice = SaleUnitPrice(product.SalePrice, factor ?? 1m);
+                var unitPrice = SaleUnitPrice(product.SalePrice, factor ?? 1m, overridePrice);
                 if (unitPrice <= 0 || unitPrice > 9999999999999999.99m ||
                     unitPrice != item.ExpectedUnitPrice || !ValidBaseQuantity(item.Quantity, factor ?? 1m))
                     return Results.BadRequest(new { code = "CASH_SALE_BASKET_CHANGED", item.ProductId,

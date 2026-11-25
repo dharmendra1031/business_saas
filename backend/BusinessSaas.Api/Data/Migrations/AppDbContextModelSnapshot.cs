@@ -1973,6 +1973,7 @@ namespace BusinessSaas.Api.Data.Migrations
                     b.Property<long>("ProductId").HasColumnType("bigint");
                     b.Property<long>("UnitId").HasColumnType("bigint");
                     b.Property<decimal>("Factor").HasPrecision(18, 3).HasColumnType("decimal(18,3)");
+                    b.Property<decimal?>("SalePrice").HasPrecision(18, 2).HasColumnType("decimal(18,2)");
                     b.HasKey("ProductId", "UnitId");
                     b.HasIndex("UnitId");
                     b.ToTable("RetailProductUnits", t => t.HasCheckConstraint("CK_RetailProductUnits_Factor",

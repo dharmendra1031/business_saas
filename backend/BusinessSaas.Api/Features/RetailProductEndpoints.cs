@@ -128,7 +128,7 @@ public static class RetailProductEndpoints
                 return Results.BadRequest(new { message = "Select an active category and unit from this business." });
 
             if (!await ValidConversions(db, businessId, request.UnitId, request.Conversions, []))
-                return Results.BadRequest(new { message = "Choose distinct active alternate units with positive factors of up to three decimals." });
+                return Results.BadRequest(new { message = "Choose distinct active alternate units, valid conversion factors and positive optional sale prices." });
 
             var product = new RetailProduct
             {
@@ -203,7 +203,7 @@ public static class RetailProductEndpoints
                 if (product.UnitId != request.UnitId && product.Conversions.Count > 0)
                     return Results.Conflict(new { message = "Remove alternate units and save before changing the base stock unit." });
                 if (!await ValidConversions(db, businessId, request.UnitId, request.Conversions, product.Conversions))
-                    return Results.BadRequest(new { message = "Choose distinct active alternate units with positive factors of up to three decimals." });
+                    return Results.BadRequest(new { message = "Choose distinct active alternate units, valid conversion factors and positive optional sale prices." });
 
                 if (product.UnitId != request.UnitId &&
                     (await db.RetailPurchaseOrderLines.AsNoTracking().AnyAsync(x => x.ProductId == productId) ||
@@ -263,7 +263,8 @@ public static class RetailProductEndpoints
                 .Select(x => new ConversionItem(x.UnitId, x.Factor,
                     db.RetailUnits.Where(u => u.Id == x.UnitId && u.BusinessId == businessId)
                         .Select(u => u.Code).FirstOrDefault(),
-                    db.RetailUnits.Any(u => u.Id == x.UnitId && u.BusinessId == businessId && u.IsActive))).ToList());
+                    db.RetailUnits.Any(u => u.Id == x.UnitId && u.BusinessId == businessId && u.IsActive),
+                    x.SalePrice)).ToList());
 
     private static async Task<bool> ValidReferences(AppDbContext db, long businessId,
         long categoryId, long unitId, long? brandId, bool requireActive,
@@ -292,14 +293,16 @@ public static class RetailProductEndpoints
         if (requested is null) return true; // Existing clients omit this field.
         if (requested.Count > 10 || requested.Any(x => x is null || x.UnitId <= 0 ||
             x.UnitId == baseUnitId || x.Factor is < 0.001m or > 9999999.999m ||
-            decimal.Round(x.Factor, 3) != x.Factor) ||
+            decimal.Round(x.Factor, 3) != x.Factor ||
+            x.SalePrice is <= 0 or > 9999999999.99m ||
+            x.SalePrice.HasValue && decimal.Round(x.SalePrice.Value, 2) != x.SalePrice.Value) ||
             requested.Select(x => x.UnitId).Distinct().Count() != requested.Count) return false;
         var ids = requested.Select(x => x.UnitId).ToArray();
         var units = await db.RetailUnits.AsNoTracking()
             .Where(x => x.BusinessId == businessId && ids.Contains(x.Id))
             .Select(x => new { x.Id, x.IsActive }).ToListAsync();
         return requested.All(x => units.Any(u => u.Id == x.UnitId &&
-            (u.IsActive || existing.Any(e => e.UnitId == x.UnitId && e.Factor == x.Factor))));
+            (u.IsActive || existing.Any(e => e.UnitId == x.UnitId && e.Factor == x.Factor && e.SalePrice == x.SalePrice))));
     }
 
     private static void ApplyConversions(RetailProduct product, List<ConversionRequest>? requested)
@@ -311,8 +314,12 @@ public static class RetailProductEndpoints
         {
             var existing = product.Conversions.SingleOrDefault(x => x.UnitId == item.UnitId);
             if (existing is null)
-                product.Conversions.Add(new RetailProductUnit { UnitId = item.UnitId, Factor = item.Factor });
-            else existing.Factor = item.Factor;
+                product.Conversions.Add(new RetailProductUnit { UnitId = item.UnitId, Factor = item.Factor, SalePrice = item.SalePrice });
+            else
+            {
+                existing.Factor = item.Factor;
+                existing.SalePrice = item.SalePrice;
+            }
         }
     }
 
@@ -360,12 +367,12 @@ public static class RetailProductEndpoints
         long CategoryId, long UnitId, decimal SalePrice, string? TaxClassification, bool? IsActive,
         decimal? ReorderLevel = null, long? BrandId = null, List<ConversionRequest>? Conversions = null);
 
-    private sealed record ConversionRequest(long UnitId, decimal Factor);
+    private sealed record ConversionRequest(long UnitId, decimal Factor, decimal? SalePrice = null);
 
     private sealed record ProductItem(long Id, string Name, string Sku, string? Barcode,
         long CategoryId, string CategoryName, long UnitId, string UnitCode,
         decimal SalePrice, string TaxClassification, bool IsActive, decimal? ReorderLevel,
         long? BrandId, string? BrandName, List<ConversionItem> Conversions);
 
-    private sealed record ConversionItem(long UnitId, decimal Factor, string? UnitCode, bool IsActive);
+    private sealed record ConversionItem(long UnitId, decimal Factor, string? UnitCode, bool IsActive, decimal? SalePrice);
 }

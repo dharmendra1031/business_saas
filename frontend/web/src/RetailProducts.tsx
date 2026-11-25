@@ -3,6 +3,7 @@ import { api, post, SessionExpiredError, UncertainWriteError } from './api'
 import { Package, Plus, Search } from 'lucide-react'
 import { classificationPath, classificationTrail } from './retailClassification'
 import { ActionButton, useActionFeedback } from './ActionFeedback'
+import { moneyCents } from './posMoney'
 
 interface Product {
   id: number
@@ -15,7 +16,7 @@ interface Product {
   brandName?: string | null
   unitId: number
   unitCode: string
-  conversions?: { unitId: number; factor: number }[]
+  conversions?: { unitId: number; factor: number; salePrice?: number | null }[]
   salePrice: number
   reorderLevel: number | null
   taxClassification: string
@@ -49,7 +50,7 @@ interface ProductForm {
   barcode: string
   categoryId: number
   unitId: number
-  conversions: { unitId: number; factor: string }[]
+  conversions: { unitId: number; factor: string; salePrice: string }[]
   brandId: number
   salePrice: string
   reorderLevel: string
@@ -169,7 +170,7 @@ export default function RetailProducts({ businessId, canOperate, currencyCode }:
       barcode: item.barcode ?? '',
       categoryId: item.categoryId,
       unitId: item.unitId,
-      conversions: (item.conversions ?? []).map(x => ({ unitId: x.unitId, factor: String(x.factor) })),
+      conversions: (item.conversions ?? []).map(x => ({ unitId: x.unitId, factor: String(x.factor), salePrice: x.salePrice == null ? '' : String(x.salePrice) })),
       brandId: item.brandId ?? 0,
       salePrice: item.salePrice.toFixed(2),
       reorderLevel: item.reorderLevel == null ? '' : String(item.reorderLevel),
@@ -189,7 +190,8 @@ export default function RetailProducts({ businessId, canOperate, currencyCode }:
     new Set(form.conversions.map(x => x.unitId)).size === form.conversions.length &&
     form.conversions.every(x => x.unitId > 0 && x.unitId !== form.unitId &&
       Number(x.factor) >= 0.001 && Number(x.factor) <= 9999999.999 &&
-      /^\d+(?:\.\d{0,3})?$/.test(x.factor))
+      /^\d+(?:\.\d{0,3})?$/.test(x.factor) &&
+      (x.salePrice === '' || (moneyCents(x.salePrice) > 0 && moneyCents(x.salePrice) <= 999999999999)))
   function changeConversion(index: number, value: Partial<ProductForm['conversions'][number]>) {
     changeForm('conversions', form.conversions.map((x, i) => i === index ? { ...x, ...value } : x))
   }
@@ -207,7 +209,8 @@ export default function RetailProducts({ businessId, canOperate, currencyCode }:
       sku: form.sku.trim().toUpperCase(),
       barcode: form.barcode.trim() || null,
       brandId: form.brandId || null,
-      conversions: form.conversions.map(x => ({ unitId: x.unitId, factor: Number(x.factor) })),
+      conversions: form.conversions.map(x => ({ unitId: x.unitId, factor: Number(x.factor),
+        salePrice: x.salePrice === '' ? null : moneyCents(x.salePrice) / 100 })),
       taxClassification: form.taxClassification.trim().toUpperCase(),
       salePrice: Number(form.salePrice),
       reorderLevel: form.reorderLevel.trim() === '' ? null : Number(form.reorderLevel),
@@ -416,13 +419,13 @@ export default function RetailProducts({ businessId, canOperate, currencyCode }:
           <div className="form-wide">
             <details open={form.conversions.length > 0 || undefined}>
               <summary>Alternate units (optional)</summary>
-              <p className="field-help">Define how many base units one alternate unit contains. Purchase and POS currently use the base unit only.</p>
+              <p className="field-help">Define the base units per pack. Leave selling price blank to use the base price × factor. POS alternate units require host activation.</p>
               {form.conversions.length > 0 && <div className="table-responsive">
                 <table className="table table-sm align-middle">
-                  <thead><tr><th>Alternate unit</th><th>Base units per unit</th><th>Action</th></tr></thead>
+                  <thead><tr><th>Alternate unit</th><th>Base units per unit</th><th>Selling price (optional)</th><th>Action</th></tr></thead>
                   <tbody>{form.conversions.map((line, index) => <tr key={index}>
                     <td><select className="form-select form-select-sm" aria-label={`Alternate unit ${index + 1}`}
-                      required value={line.unitId} onChange={event => changeConversion(index, { unitId: Number(event.target.value) })}>
+                      required value={line.unitId} onChange={event => changeConversion(index, { unitId: Number(event.target.value), factor: '', salePrice: '' })}>
                       <option value={0}>Select unit</option>
                       {line.unitId > 0 && !options.units.some(x => x.id === line.unitId) &&
                         <option value={line.unitId}>Previous unit (inactive)</option>}
@@ -433,6 +436,10 @@ export default function RetailProducts({ businessId, canOperate, currencyCode }:
                     <td><input className="form-control form-control-sm" type="number" inputMode="decimal"
                       aria-label={`Conversion factor ${index + 1}`} min="0.001" max="9999999.999" step="0.001"
                       required value={line.factor} onChange={event => changeConversion(index, { factor: event.target.value })} /></td>
+                    <td><input className="form-control form-control-sm" type="number" inputMode="decimal"
+                      aria-label={`Alternate selling price ${index + 1}`} min="0.01" max="9999999999.99" step="0.01"
+                      placeholder="Auto" value={line.salePrice}
+                      onChange={event => changeConversion(index, { salePrice: event.target.value })} /></td>
                     <td><button type="button" className="btn btn-sm btn-outline-secondary"
                       onClick={() => changeForm('conversions', form.conversions.filter((_, i) => i !== index))}>Remove</button></td>
                   </tr>)}</tbody>
@@ -441,10 +448,10 @@ export default function RetailProducts({ businessId, canOperate, currencyCode }:
               <button type="button" className="btn btn-sm btn-outline-secondary"
                 disabled={!form.unitId || form.conversions.length >= 10 ||
                   !options.units.some(x => x.id !== form.unitId && !form.conversions.some(row => row.unitId === x.id))}
-                onClick={() => changeForm('conversions', [...form.conversions, { unitId: 0, factor: '' }])}>
+                onClick={() => changeForm('conversions', [...form.conversions, { unitId: 0, factor: '', salePrice: '' }])}>
                 + Add alternate unit
               </button>
-              {!conversionValid && <p className="field-help">Select distinct units and enter positive factors with up to three decimal places.</p>}
+              {!conversionValid && <p className="field-help">Choose distinct units, positive factors (up to three decimals) and optional positive prices (up to two decimals).</p>}
             </details>
           </div>
           {inlineType && <div className="form-wide product-form" role="group"

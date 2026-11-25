@@ -304,6 +304,7 @@ public sealed class RetailProductUnit
     public long ProductId { get; set; }
     public long UnitId { get; set; }
     public decimal Factor { get; set; }
+    public decimal? SalePrice { get; set; }
 }
 
 public sealed class RetailSupplier
@@ -797,6 +798,7 @@ public sealed class AppDbContext(DbContextOptions<AppDbContext> options)
                 "[Factor] > 0 AND [Factor] <= 9999999.999"));
             entity.HasKey(x => new { x.ProductId, x.UnitId });
             entity.Property(x => x.Factor).HasPrecision(18, 3);
+            entity.Property(x => x.SalePrice).HasPrecision(18, 2);
             entity.HasOne<RetailProduct>().WithMany(x => x.Conversions)
                 .HasForeignKey(x => x.ProductId).OnDelete(DeleteBehavior.Cascade);
             entity.HasOne<RetailUnit>().WithMany().HasForeignKey(x => x.UnitId).OnDelete(DeleteBehavior.Restrict);
