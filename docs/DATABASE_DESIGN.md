@@ -1204,3 +1204,26 @@ Indexes:
 ## Audit baseline
 
 DB-01–04: source documentation; live comparison pending. DB-05–06: review duplication and normalization; preserve historical invoice snapshots. DB-07: verify tenant constraints and authorization. DB-08–09: measure SQL plans and locking before tuning. DB-10: reconcile posted financial and stock records. DB-11–12: load, backup/restore and migration rehearsal pending. No schema changes in this documentation phase.
+
+
+## DB-05 / DB-06 — Targeted source dependency and normalization review
+
+Reviewed source revision: d6f8252770372c9af17aa5cc97cebb206ad7dc15. Read-only review; not an exhaustive usage audit or live database inspection.
+
+| Object | Decision | Source evidence and rationale |
+|---|---|---|
+| RetailCashSales customer and merchant snapshots | Keep | Features/RetailCashSales.cs:895–911 captures posted values; Reports/RetailReceiptReportData.cs:51–75 consumes historical values. Intentional denormalization. |
+| RetailCashSales.MerchantLogo | Further Verification Required | Data/AppDbContext.cs: configures max length 32768; posting copies ReceiptLogo and RDLC consumes it. Measure actual storage and reprint requirements before considering immutable shared logo versions. |
+| RetailCashSales.CustomerId | Further Verification Required | Data/AppDbContext.cs RetailCashSale mapping has no customer FK; CreditCollections.cs:125 joins current customer. Assess orphan data, deletion policy and tenant-scoped FK migration before changing. |
+| RetailStockBalances and RetailStockMovements.BalanceAfter | Keep | Features/StockPosting.cs ApplyAsync requires caller transaction, performs bounded atomic balance update and writes ledger with resulting balance. Intentional materialized balance, not unused duplication. |
+| RetailStockMovements.SourceType/SourceId | Keep | StockPosting.cs:45–47 checks source replay. Polymorphic reference cannot be enforced by a single ordinary FK; review source-specific integrity separately. |
+| RetailCategories, RetailBrands, RetailUnits.NameKey | Keep | RetailMasterEndpoints.cs uses NameKey in search, ordering, uniqueness checks and updates. |
+| RetailProductUnits | Keep | AppDbContext maps composite ProductId/UnitId PK and conversion factor check. Association carries conversion-specific data. |
+| RetailProducts.TaxClassification | Keep | RetailProductEndpoints.cs:150,234,264 and RetailCashSales.cs:700,801 use the field. Deferred tax functionality does not establish dead storage. |
+| SubscriptionBillingDrafts, SubscriptionPaymentRequests, SubscriptionPayments, BillingDocumentDrafts | Keep | PlatformBillingEndpoints.cs:24–38,92–136 and BillingDocumentEndpoints.cs:98–139,195–233 demonstrate distinct draft, request, settlement and document roles. |
+| Tenant-scoped references | Further Verification Required | AppDbContext product and stock mappings use separate BusinessId and referenced entity IDs. Individual FKs do not enforce same-tenant relationships. DB-07 must check actual authorization, data and migration impact. |
+| Secondary indexes | Further Verification Required | Source definitions alone cannot establish usage or redundancy; collect execution plans and SQL Server usage statistics with representative workload and observation interval. |
+
+Normalization assessment: reviewed master/line and product/unit structures separate repeating groups and association data; no demonstrated 1NF or 2NF violation in these selected structures. A complete functional-dependency/3NF assessment remains pending. Historical snapshots and materialized balances are deliberate exceptions to strict normalization. No Remove or Refactor decision is authorized by this targeted review.
+
+Remaining DB-05/06 work: exhaustive table/column references across frontend, API, reports, migrations and tests; actual SQL Server catalog, storage and index usage; orphan and cross-tenant checks. No live database connection or workload measurements were available. Do not mark DB-05/06 complete.
