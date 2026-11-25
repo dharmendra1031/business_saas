@@ -55,6 +55,7 @@ Counts: {"Partial":101,"Pending":53,"Deferred":36}.
 ### Phase 1 — reconciliation regression
 
 - BS-090 / BS-116 / BS-129: extended the existing SQL Server purchase-to-sale integration scenario to reconcile all product/location stock balances against signed stock movements after cash sales, credit sales, returns and retries. CI and full acceptance pending; no production logic changed.
+- BS-111 / BS-116 / BS-129: added independent invoice and refund register reconciliation against persisted headers and lines, grouped by currency; cash and credit gross totals checked separately. CI pending.
 
 ## Non-negotiable rule — UI/UX review **after EVERY task**
 

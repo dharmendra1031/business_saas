@@ -1379,6 +1379,43 @@ public sealed class SqlServerTests(Xunit.Abstractions.ITestOutputHelper output)
             Assert.Equal(balances.OrderBy(x => x.LocationId).ThenBy(x => x.ProductId).ToArray(),
                 movements.OrderBy(x => x.LocationId).ThenBy(x => x.ProductId).ToArray());
             Assert.All(balances, x => Assert.True(x.Quantity >= 0m));
+
+            // Registers expose gross invoice totals and posted refunds separately.
+            // Compare unfiltered, paginated API summaries to all persisted records.
+            var invoiceRegister = await owner.GetFromJsonAsync<JsonElement>(
+                prefix + "/cash-sales/business-receipts?locationId=0&payment=All&status=All");
+            var refundRegister = await owner.GetFromJsonAsync<JsonElement>(
+                prefix + "/cash-sales/business-returns?locationId=0");
+            var invoices = await db.RetailCashSales.AsNoTracking()
+                .Where(x => x.BusinessId == businessId).Include(x => x.Lines).ToListAsync();
+            var refunds = await db.RetailCashReturns.AsNoTracking()
+                .Where(x => x.BusinessId == businessId).Include(x => x.Lines).ToListAsync();
+            Assert.Equal(invoices.Count, invoiceRegister.GetProperty("total").GetInt32());
+            Assert.Equal(refunds.Count, refundRegister.GetProperty("total").GetInt32());
+            Assert.All(invoices, x => Assert.Equal(x.Total, x.Lines.Sum(l => l.LineTotal)));
+            Assert.All(refunds, x => Assert.Equal(x.Total, x.Lines.Sum(l => l.Amount)));
+            var invoiceTotals = invoiceRegister.GetProperty("totals").EnumerateArray()
+                .ToDictionary(x => x.GetProperty("currencyCode").GetString()!);
+            Assert.Equal(invoices.Select(x => x.CurrencyCode).Distinct().Count(), invoiceTotals.Count);
+            foreach (var group in invoices.GroupBy(x => x.CurrencyCode))
+            {
+                var total = invoiceTotals[group.Key];
+                Assert.Equal(group.Sum(x => x.Total), total.GetProperty("total").GetDecimal());
+                Assert.Equal(group.Where(x => x.CreditDueDate == null).Sum(x => x.Total),
+                    total.GetProperty("cash").GetDecimal());
+                Assert.Equal(group.Where(x => x.CreditDueDate != null).Sum(x => x.Total),
+                    total.GetProperty("credit").GetDecimal());
+            }
+            var refundTotals = refundRegister.GetProperty("totals").EnumerateArray()
+                .ToDictionary(x => x.GetProperty("currencyCode").GetString()!);
+            var currencyBySale = invoices.ToDictionary(x => x.Id, x => x.CurrencyCode);
+            var refundsByCurrency = refunds.GroupBy(x => currencyBySale[x.SaleId]).ToList();
+            Assert.Equal(refundsByCurrency.Count, refundTotals.Count);
+            foreach (var group in refundsByCurrency)
+            {
+                Assert.Equal(group.Sum(x => x.Total), refundTotals[group.Key].GetProperty("refundTotal").GetDecimal());
+                Assert.Equal(group.Count(), refundTotals[group.Key].GetProperty("returnCount").GetInt32());
+            }
         }
     }
 
