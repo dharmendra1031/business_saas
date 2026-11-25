@@ -309,6 +309,9 @@
   .business-shell .retail-masters .masters-search > button { flex: 1 1 100%; }
 }
 
+/* Purchase entry uses a scrollable line table and one lookup field in its next row. */
+.purchase-entry-table { min-width: 680px; }
+.purchase-entry-table input[type="number"] { min-width: 90px; }
 /* Purchase lookup: one editable field with its result dropdown. */
 .purchase-search-select { position: relative; min-width: 0; }
 .purchase-search-options { max-height: 180px; overflow-y: auto; background: #fff;

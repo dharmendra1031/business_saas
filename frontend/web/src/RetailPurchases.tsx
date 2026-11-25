@@ -1,14 +1,16 @@
 import { Plus } from 'lucide-react'
-import { useEffect, useState, type FormEvent } from 'react'
+import { useEffect, useRef, useState, type FormEvent } from 'react'
 import { api, post, operationKey, SessionExpiredError } from './api'
 import { baseQuantity } from './stockQuantity'
 
 // One input for both searching and choosing an existing record.
-function SearchSelect({ id, value, placeholder, options, disabled, onSearch, onSelect }: {
+function SearchSelect({ id, value, placeholder, options, loading, exactMatchId, disabled, onSearch, onSelect }: {
   id: string
   value: string
   placeholder: string
   options: { id: number; label: string }[]
+  loading: boolean
+  exactMatchId?: number
   disabled?: boolean
   onSearch: (value: string) => void
   onSelect: (id: number) => void
@@ -38,6 +40,7 @@ function SearchSelect({ id, value, placeholder, options, disabled, onSearch, onS
         } else if (event.key === 'Enter') {
           event.preventDefault()
           if (active) choose(active.id)
+          else if (open && exactMatchId !== undefined) choose(exactMatchId)
           else if (open && options.length === 1) choose(options[0].id)
         } else if (event.key === 'Escape') {
           setOpen(false); setIndex(-1)
@@ -47,7 +50,7 @@ function SearchSelect({ id, value, placeholder, options, disabled, onSearch, onS
       {options.map((option, i) => <div key={option.id} id={id + '-option-' + option.id}
         role="option" aria-selected={i === index}
         onMouseDown={event => event.preventDefault()} onClick={() => choose(option.id)}>{option.label}</div>)}
-      {options.length === 0 && <div className="small p-2" role="status">No matching records</div>}
+      {options.length === 0 && <div className="small p-2" role="status">{loading ? 'Searching…' : 'No matching records'}</div>}
     </div>}
   </div>
 }
@@ -155,13 +158,22 @@ export default function RetailPurchases({ businessId, canOperate, locations, rol
   const [locationId, setLocationId] = useState(locations[0]?.id ?? 0)
   const [supplierSearch, setSupplierSearch] = useState('')
   const [suppliers, setSuppliers] = useState<Supplier[]>([])
+  const [suppliersLoading, setSuppliersLoading] = useState(true)
   const [supplierId, setSupplierId] = useState(0)
   const [supplierFormOpen, setSupplierFormOpen] = useState(false)
   const [newSupplier, setNewSupplier] = useState({ name: '', phone: '', email: '' })
   const [addingSupplier, setAddingSupplier] = useState(false)
   const [productSearch, setProductSearch] = useState('')
   const [products, setProducts] = useState<Product[]>([])
+  const [productsLoading, setProductsLoading] = useState(true)
   const [lines, setLines] = useState<NewLine[]>([])
+  const focusQuantity = useRef<number | null>(null)
+
+  useEffect(() => {
+    if (focusQuantity.current === null) return
+    document.getElementById('purchase-qty-' + focusQuantity.current)?.focus()
+    focusQuantity.current = null
+  }, [lines])
   const [selectedId, setSelectedId] = useState<number | null>(null)
   const [detail, setDetail] = useState<OrderDetail | null>(null)
   const [detailError, setDetailError] = useState('')
@@ -195,10 +207,12 @@ export default function RetailPurchases({ businessId, canOperate, locations, rol
     // The order register and approval review do not need create-form catalogs.
     if (!creating) return
     let active = true
+    setSuppliersLoading(true)
     const timer = setTimeout(() => {
       api<Page<Supplier>>(`/businesses/${businessId}/suppliers?search=${encodeURIComponent(supplierSearch.trim())}&page=1`)
         .then(data => { if (active) setSuppliers(data.items.filter(x => x.isActive)) })
         .catch(cause => { if (active && !(cause instanceof SessionExpiredError)) setError(message(cause)) })
+        .finally(() => { if (active) setSuppliersLoading(false) })
     }, 250)
     return () => { active = false; clearTimeout(timer) }
   }, [businessId, supplierSearch, reload, creating])
@@ -206,10 +220,12 @@ export default function RetailPurchases({ businessId, canOperate, locations, rol
   useEffect(() => {
     if (!creating) return
     let active = true
+    setProductsLoading(true)
     const timer = setTimeout(() => {
       api<Page<Product>>(`/businesses/${businessId}/products?search=${encodeURIComponent(productSearch.trim())}&page=1`)
         .then(data => { if (active) setProducts(data.items.filter(x => x.isActive)) })
         .catch(cause => { if (active && !(cause instanceof SessionExpiredError)) setError(message(cause)) })
+        .finally(() => { if (active) setProductsLoading(false) })
     }, 250)
     return () => { active = false; clearTimeout(timer) }
   }, [businessId, productSearch, reload, creating])
@@ -262,22 +278,25 @@ export default function RetailPurchases({ businessId, canOperate, locations, rol
     setSupplierId(0)
     setSupplierSearch('')
     setSuppliers([])
+    setSuppliersLoading(true)
     setSupplierFormOpen(false)
     setNewSupplier({ name: '', phone: '', email: '' })
     setProductSearch('')
     setProducts([])
+    setProductsLoading(true)
     setLines([])
   }
 
   function addLine(id: number) {
     const product = products.find(x => x.id === id)
     if (!product || lines.some(x => x.productId === id) || lines.length >= 50) return
+    focusQuantity.current = id
     setLines(value => [...value, {
       productId: product.id, name: product.name, sku: product.sku,
       unitCode: product.unitCode, alternateUnits: (product.conversions ?? []).filter(x => x.isActive && x.unitCode),
-      selectedUnitId: 0, quantity: '1', unitCost: '0'
+      selectedUnitId: 0, quantity: '1', unitCost: ''
     }])
-    if (productSearch) { setProductSearch(''); setProducts([]) }
+    if (productSearch) { setProductSearch(''); setProducts([]); setProductsLoading(true) }
     setError('')
   }
 
@@ -310,7 +329,7 @@ export default function RetailPurchases({ businessId, canOperate, locations, rol
 
   async function createOrder(event: FormEvent<HTMLFormElement>) {
     event.preventDefault()
-    if (!canOperate || busy) return
+    if (!canOperate || busy || addingSupplier || supplierFormOpen) return
     const approveNow = roleCode === 'Owner' &&
       (event.nativeEvent as SubmitEvent).submitter?.getAttribute('data-action') !== 'draft'
     if (!locationId || !supplierId || lines.length === 0 || lines.length > 50 ||
@@ -460,31 +479,32 @@ export default function RetailPurchases({ businessId, canOperate, locations, rol
         <h3>New purchase order</h3>
         <div className="form-grid">
           <div>
-            <label className="form-label" htmlFor="purchase-location">Location *</label>
-            <select className="form-select" id="purchase-location" value={locationId}
-              onChange={event => setLocationId(Number(event.target.value))} required>
-              {locations.map(x => <option key={x.id} value={x.id}>{x.name}</option>)}
-            </select>
+            <label className="form-label" htmlFor={locations.length !== 1 ? 'purchase-location' : undefined}>Location *</label>
+            {locations.length === 1 ? <div className="fw-semibold">{locations[0].name}</div> :
+              <select className="form-select" id="purchase-location" value={locationId}
+                disabled={busy} onChange={event => setLocationId(Number(event.target.value))} required>
+                {locations.map(x => <option key={x.id} value={x.id}>{x.name}</option>)}
+              </select>}
           </div>
           <div>
             <label className="form-label" htmlFor="purchase-supplier">Supplier *</label>
             <SearchSelect id="purchase-supplier" value={supplierSearch} placeholder="Search or select supplier"
-              options={suppliers.map(x => ({ id: x.id, label: x.name }))}
+              options={suppliers.map(x => ({ id: x.id, label: x.name }))} loading={suppliersLoading}
               disabled={busy || addingSupplier}
-              onSearch={value => { setSupplierId(0); setSupplierSearch(value); setSuppliers([]) }}
+              onSearch={value => { setSupplierId(0); setSupplierSearch(value); setSuppliers([]); setSuppliersLoading(true) }}
               onSelect={id => {
                 const supplier = suppliers.find(x => x.id === id)
                 if (supplier) { setSupplierId(id); setSupplierSearch(supplier.name) }
               }} />
             <button type="button" className="btn btn-sm btn-outline-secondary mt-2"
-              disabled={addingSupplier}
+              disabled={busy || addingSupplier}
               onClick={() => {
                 if (supplierFormOpen) setNewSupplier({ name: '', phone: '', email: '' })
                 setSupplierFormOpen(open => !open)
               }}>
               {supplierFormOpen ? 'Cancel adding supplier' : '+ New supplier'}
             </button>
-            {supplierFormOpen && <div className="product-form" role="group" aria-label="New supplier"
+            {supplierFormOpen && <div className="mt-3" role="group" aria-label="New supplier"
               onKeyDown={event => {
                 if (event.key === 'Enter' && event.target instanceof HTMLInputElement)
                   event.preventDefault()
@@ -516,23 +536,16 @@ export default function RetailPurchases({ businessId, canOperate, locations, rol
             </div>}
           </div>
         </div>
-        <div className="product-form">
+        <div className="mt-3">
           <h3>Order items</h3>
-          <label className="form-label" htmlFor="purchase-product">Product</label>
-          <SearchSelect id="purchase-product" value={productSearch} placeholder="Search or select product"
-            disabled={busy || lines.length >= 50}
-            options={products.filter(x => !lines.some(line => line.productId === x.id))
-              .map(x => ({ id: x.id, label: x.name + ' (' + x.sku + (x.unitCode ? ' · ' + x.unitCode : '') + ')' }))}
-            onSearch={value => { setProductSearch(value); setProducts([]) }} onSelect={addLine} />
-          {lines.length >= 50 && <p className="field-help" role="status">Maximum 50 products per purchase order.</p>}
-          {lines.length > 0 && <div className="table-responsive">
-            <table className="table table-sm align-middle business-record-table">
-              <thead><tr><th>Product</th><th>Qty</th>
-                <th>Unit cost ({currencyCode})</th><th></th></tr></thead>
+          <div className="table-responsive">
+            <table className="table table-sm align-middle business-record-table purchase-entry-table">
+              <thead><tr><th>Item code</th><th>Item name</th><th>Unit</th><th>Qty</th>
+                <th>Rate ({currencyCode})</th><th className="text-end">Amount</th><th></th></tr></thead>
               <tbody>{lines.map(line => <tr key={line.productId}>
-                <td>{line.name}<span className="product-secondary">{line.sku}</span>
-                  {line.alternateUnits.length > 0 ? <select className="form-select form-select-sm mt-1"
-                    aria-label={`Purchase unit for ${line.name}`} value={line.selectedUnitId}
+                <td>{line.sku}</td><td>{line.name}</td>
+                <td>{line.alternateUnits.length > 0 ? <select className="form-select form-select-sm mt-1"
+                    aria-label={`Purchase unit for ${line.name}`} value={line.selectedUnitId} disabled={busy}
                     onChange={event => setLines(values => values.map(x => x.productId === line.productId
                       ? { ...x, selectedUnitId: Number(event.target.value), quantity: '1', unitCost: '' } : x))}>
                     <option value={0}>{line.unitCode ?? 'Base unit'}</option>
@@ -540,8 +553,8 @@ export default function RetailPurchases({ businessId, canOperate, locations, rol
                       {unit.unitCode} = {unit.factor} {line.unitCode}
                     </option>)}
                   </select> : <span className="product-secondary">{line.unitCode}</span>}</td>
-                <td><input type="number" className="form-control" aria-label={`${line.name} quantity`}
-                  min="0.001" max="9999999.999" step="0.001" required value={line.quantity}
+                <td><input id={'purchase-qty-' + line.productId} type="number" className="form-control" aria-label={`${line.name} quantity`}
+                  disabled={busy} min="0.001" max="9999999.999" step="0.001" required value={line.quantity}
                   onChange={event => setLines(values => values.map(x =>
                     x.productId === line.productId ? { ...x, quantity: event.target.value } : x))}/>
                   {line.selectedUnitId !== 0 && <small className="d-block mt-1">
@@ -550,17 +563,33 @@ export default function RetailPurchases({ businessId, canOperate, locations, rol
                       : `${baseQuantity(Number(line.quantity), selectedUnit(line)?.factor ?? 1)} ${line.unitCode} stock`}
                   </small>}</td>
                 <td><input type="number" className="form-control" aria-label={`${line.name} unit cost`}
-                  min="0" max="99999999.99" step="0.01" required value={line.unitCost}
+                  min="0" max="99999999.99" step="0.01" required disabled={busy} value={line.unitCost}
                   onChange={event => setLines(values => values.map(x =>
                     x.productId === line.productId ? { ...x, unitCost: event.target.value } : x))}/></td>
-                <td><button className="btn btn-sm btn-outline-secondary" type="button"
+                <td className="text-end text-nowrap">{line.unitCost.trim() === '' ? '—' : money(Number(line.quantity || 0) * Number(line.unitCost))}</td>
+                <td><button className="btn btn-sm btn-outline-secondary" type="button" disabled={busy}
                   onClick={() => setLines(values => values.filter(x =>
                     x.productId !== line.productId))}>Remove</button></td>
-              </tr>)}</tbody>
+              </tr>)}
+              {lines.length < 50 && <tr>
+                <td colSpan={2}>
+                  <label className="visually-hidden" htmlFor="purchase-product">Item code or name</label>
+                  <SearchSelect id="purchase-product" value={productSearch} placeholder="Search item code or name"
+                    loading={productsLoading} disabled={busy}
+                    options={products.filter(x => !lines.some(line => line.productId === x.id))
+                      .map(x => ({ id: x.id, label: x.name + ' (' + x.sku + (x.unitCode ? ' · ' + x.unitCode : '') + ')' }))}
+                    exactMatchId={products.find(x => x.sku.toLowerCase() === productSearch.trim().toLowerCase() &&
+                      !lines.some(line => line.productId === x.id))?.id}
+                    onSearch={value => { setProductSearch(value); setProducts([]); setProductsLoading(true) }} onSelect={addLine} />
+                </td>
+                <td colSpan={5}></td>
+              </tr>}
+              </tbody>
             </table>
-          </div>}
+          </div>
+          {lines.length >= 50 && <p className="field-help" role="status">Maximum 50 products per purchase order.</p>}
           {lines.length > 0 && <p className="text-end mb-0">
-            <strong>Estimated order value: {money(lines.reduce((sum, line) =>
+            <strong>Total: {money(lines.reduce((sum, line) =>
               sum + Number(line.quantity || 0) * Number(line.unitCost || 0), 0))}</strong>
           </p>}
         </div>
@@ -568,11 +597,11 @@ export default function RetailPurchases({ businessId, canOperate, locations, rol
           <button type="button" className="btn btn-outline-secondary" disabled={busy || addingSupplier}
             onClick={() => { resetOrderDraft(); setCreating(false) }}>Cancel</button>
           <button type="submit" className="btn btn-primary"
-            disabled={busy || !supplierId || !validOrderLines}>
+            disabled={busy || addingSupplier || supplierFormOpen || !supplierId || !validOrderLines}>
             {busy ? 'Saving…' : roleCode === 'Owner' ? 'Save & Approve' : 'Submit for Approval'}
           </button>
           {roleCode === 'Owner' && <button type="submit" data-action="draft"
-            className="btn btn-outline-secondary" disabled={busy || !supplierId || !validOrderLines}>
+            className="btn btn-outline-secondary" disabled={busy || addingSupplier || supplierFormOpen || !supplierId || !validOrderLines}>
             Save Draft
           </button>}
         </div>
