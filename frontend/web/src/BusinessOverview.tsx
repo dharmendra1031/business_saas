@@ -78,7 +78,7 @@ export default function BusinessOverview({ dashboard, onNavigate, onReviewApprov
               <span>Review {pendingApprovals} draft purchase {pendingApprovals === 1 ? 'order' : 'orders'}</span>
               <ArrowRight size={16} aria-hidden="true" />
             </button>
-          : isOwner && stockAlerts && stockAlerts.count === 0 ? <p>No pending approvals or stock alerts.</p> : null
+          : isOwner && stockAlerts && stockAlerts.count === 0 ? <p>No pending approvals or stock alerts.</p> : null}
         {isOwner && stockAlerts && stockAlerts.count > 0 && <div className="business-stock-alerts">
           <p>{stockAlerts.count.toLocaleString()} stock alerts · {stockAlerts.outOfStockCount.toLocaleString()} out of stock</p>
           <button type="button" className="business-setup-alert-link"
