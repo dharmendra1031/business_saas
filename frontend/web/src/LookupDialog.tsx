@@ -77,7 +77,7 @@ export default function LookupDialog({ title, searchId, search, placeholder, col
       </table>
     </div>
     <p className="lookup-status small mt-2 mb-0" role="status">{status}</p>
-    {pagination && <div className="d-flex justify-content-end align-items-center gap-2 mt-2">
+    {pagination && (pagination.page > 1 || pagination.hasMore || pagination.busy) && <div className="d-flex justify-content-end align-items-center gap-2 mt-2">
       <button type="button" className="btn btn-outline-secondary btn-sm" disabled={pagination.busy || pagination.page === 1}
         onClick={() => pagination.onChange(pagination.page - 1)}>Previous</button>
       <span className="small">Page {pagination.page}</span>

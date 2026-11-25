@@ -158,6 +158,32 @@ public sealed class RetailContactTests
         var page = await owner.GetFromJsonAsync<JsonElement>(suppliers + "?search=wholesale&page=1");
         Assert.Equal(1, page.GetProperty("total").GetInt32());
         Assert.False(page.GetProperty("items")[0].GetProperty("isActive").GetBoolean());
+        using (var scope = factory.Services.CreateScope())
+        {
+            var db = scope.ServiceProvider.GetRequiredService<AppDbContext>();
+            db.RetailSuppliers.AddRange(Enumerable.Range(1, 20).Select(i => new RetailSupplier
+            {
+                BusinessId = businessId, Name = $"AAA inactive {i:D2}", NameKey = $"AAA INACTIVE {i:D2}",
+                Phone = "1234567890", Email = "", IsActive = false
+            }));
+            db.RetailSuppliers.Add(new RetailSupplier
+            {
+                BusinessId = businessId, Name = "ZZZ Active", NameKey = "ZZZ ACTIVE",
+                Phone = "9876543210", Email = "", IsActive = true
+            });
+            await db.SaveChangesAsync();
+        }
+        var activePage = await manager.GetFromJsonAsync<JsonElement>(suppliers + "?activeOnly=true&page=1");
+        Assert.Equal(1, activePage.GetProperty("total").GetInt32());
+        Assert.Equal("ZZZ Active", activePage.GetProperty("items")[0].GetProperty("name").GetString());
+        Assert.Equal(HttpStatusCode.NotFound,
+            (await other.GetAsync(suppliers + "?activeOnly=true")).StatusCode);
+        Assert.Equal(HttpStatusCode.NotFound,
+            (await cashier.GetAsync(suppliers + "?activeOnly=true")).StatusCode);
+        var activeSearch = await owner.GetFromJsonAsync<JsonElement>(suppliers + "?activeOnly=true&search=9876543210");
+        Assert.Equal(1, activeSearch.GetProperty("total").GetInt32());
+        var inactiveSearch = await owner.GetFromJsonAsync<JsonElement>(suppliers + "?activeOnly=true&search=wholesale");
+        Assert.Equal(0, inactiveSearch.GetProperty("total").GetInt32());
         Assert.Equal(HttpStatusCode.BadRequest,
             (await owner.GetAsync(customers + "?page=0")).StatusCode);
 
@@ -181,7 +207,7 @@ public sealed class RetailContactTests
         using (var scope = factory.Services.CreateScope())
         {
             var db = scope.ServiceProvider.GetRequiredService<AppDbContext>();
-            Assert.Equal(1, await db.RetailSuppliers.CountAsync(x => x.BusinessId == businessId));
+            Assert.Equal(22, await db.RetailSuppliers.CountAsync(x => x.BusinessId == businessId));
             Assert.Equal(2, await db.RetailCustomers.CountAsync(x => x.BusinessId == businessId));
             Assert.Equal(1, await db.RetailSuppliers.CountAsync(x => x.BusinessId == otherId));
         }

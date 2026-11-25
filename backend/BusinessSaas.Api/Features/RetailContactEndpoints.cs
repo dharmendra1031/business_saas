@@ -16,7 +16,7 @@ public static class RetailContactEndpoints
         var suppliers = app.MapGroup("/api/businesses/{businessId:long}/suppliers")
             .RequireAuthorization();
 
-        suppliers.MapGet("", async (long businessId, string? search, int? page,
+        suppliers.MapGet("", async (long businessId, string? search, int? page, bool? activeOnly,
             ClaimsPrincipal user, AppDbContext db) =>
         {
             var denied = await RetailMasterEndpoints.CheckAccess(db, user, businessId, false);
@@ -27,6 +27,7 @@ public static class RetailContactEndpoints
                 return Results.BadRequest(new { message = "Invalid search or page." });
 
             var query = db.RetailSuppliers.AsNoTracking().Where(x => x.BusinessId == businessId);
+            if (activeOnly == true) query = query.Where(x => x.IsActive);
             if (term.Length > 0) query = query.Where(x =>
                 x.NameKey.Contains(term) || x.Phone.Contains(term) || x.Email.ToUpper().Contains(term));
 

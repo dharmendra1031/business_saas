@@ -191,9 +191,10 @@ export default function RetailPurchases({ businessId, canOperate, locations, rol
       try {
         const query = new URLSearchParams({ search: term.trim(), page: String(lookupPage) })
         if (supplier) {
+          query.set('activeOnly', 'true')
           const data = await api<Page<Supplier>>(`/businesses/${businessId}/suppliers?${query}`, { signal: controller.signal })
           if (controller.signal.aborted) return
-          setSuppliers(data.items.filter(item => item.isActive))
+          setSuppliers(data.items)
           setLookupTotal(data.total)
           setLookupPageSize(data.pageSize ?? 20)
         } else {
@@ -603,7 +604,7 @@ export default function RetailPurchases({ businessId, canOperate, locations, rol
         {lookup === 'supplier' && <LookupDialog title="Search suppliers" searchId="purchase-supplier-search"
           search={supplierSearch} placeholder="Supplier name, phone or email" columns={['Supplier', 'Phone']}
           rows={suppliers.map(item => ({ id: item.id, cells: [item.name, item.phone || '—'], label: item.name }))}
-          status={suppliersLoading ? 'Searching…' : lookupError || (suppliers.length ? '' : 'No active suppliers on this page')}
+          status={suppliersLoading ? 'Searching…' : lookupError || (suppliers.length ? '' : 'No matching active suppliers')}
           pagination={{ page: lookupPage, hasMore: lookupPage * lookupPageSize < lookupTotal, busy: suppliersLoading, onChange: changeLookupPage }}
           onSearch={value => { setSupplierSearch(value); setLookupPage(1); setSuppliers([]); setSuppliersLoading(true) }}
           onSelect={id => {

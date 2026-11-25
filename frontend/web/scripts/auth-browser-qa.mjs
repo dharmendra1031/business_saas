@@ -475,6 +475,8 @@ try {
       const url = new URL(request.url())
       if (/^\/api\/businesses\/1\/(suppliers|products)$/.test(url.pathname)) {
         catalogReads.push(url.pathname)
+        if (url.pathname.endsWith('/suppliers'))
+          assert.equal(url.searchParams.get('activeOnly'), 'true', 'Supplier filtering must occur before server pagination')
       }
     })
     await t.login()
@@ -496,7 +498,9 @@ try {
     })
     const originalLayout = await purchaseLayout()
     await t.page.locator('#purchase-supplier').click()
-    await t.page.getByRole('dialog', { name: 'Search suppliers' }).getByRole('button', { name: 'Wholesaler' }).waitFor()
+    const supplierLookup = t.page.getByRole('dialog', { name: 'Search suppliers' })
+    await supplierLookup.getByRole('button', { name: 'Wholesaler' }).waitFor()
+    assert.equal(await supplierLookup.getByRole('button', { name: 'Next', exact: true }).count(), 0)
     assert.deepEqual(await purchaseLayout(), originalLayout, 'Supplier lookup must not shift the form or change page height')
     await t.page.keyboard.press('Escape')
     await t.page.getByRole('button', { name: 'Search items' }).click()
