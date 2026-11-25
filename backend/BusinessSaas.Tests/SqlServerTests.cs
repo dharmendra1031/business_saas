@@ -1090,6 +1090,12 @@ public sealed class SqlServerTests
         Assert.Equal(1, partialPackRegister.GetProperty("total").GetInt32());
         Assert.Equal(packSaleId, partialPackRegister.GetProperty("items")[0].GetProperty("id").GetInt64());
         Assert.Equal("Partial return", partialPackRegister.GetProperty("items")[0].GetProperty("status").GetString());
+        var allPackRegister = await owner.GetFromJsonAsync<JsonElement>(filteredPackRegister + "&status=All");
+        Assert.Equal(1, allPackRegister.GetProperty("total").GetInt32());
+        Assert.Equal(partialPackRegister.GetProperty("totals").GetRawText(),
+            allPackRegister.GetProperty("totals").GetRawText());
+        Assert.Equal(220m, allPackRegister.GetProperty("totals")[0].GetProperty("cash").GetDecimal());
+        Assert.Equal("Partial return", allPackRegister.GetProperty("items")[0].GetProperty("status").GetString());
         var postedPackRegister = await owner.GetFromJsonAsync<JsonElement>(filteredPackRegister + "&status=Posted");
         Assert.Equal(0, postedPackRegister.GetProperty("total").GetInt32());
         Assert.Empty(postedPackRegister.GetProperty("items").EnumerateArray());

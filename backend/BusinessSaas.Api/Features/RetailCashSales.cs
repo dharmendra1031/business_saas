@@ -615,7 +615,12 @@ public static class RetailCashSales
         await using var tx = await db.Database.BeginTransactionAsync(IsolationLevel.Serializable, cancellationToken);
         try
         {
-            var totals = await query.GroupBy(x => x.CurrencyCode).Select(g => new {
+            // Without a return-status filter, header totals do not need line quantity aggregates.
+            // Keep the original requirement that a receipt has at least one sale line.
+            var totalsSource = status == "All"
+                ? sales.Where(x => x.Lines.Any()).Select(x => new { x.CurrencyCode, x.Total, x.CreditDueDate })
+                : query.Select(x => new { x.CurrencyCode, x.Total, x.CreditDueDate });
+            var totals = await totalsSource.GroupBy(x => x.CurrencyCode).Select(g => new {
                 CurrencyCode = g.Key, Count = g.Count(), Total = g.Sum(x => x.Total),
                 Cash = g.Sum(x => x.CreditDueDate == null ? x.Total : 0m),
                 Credit = g.Sum(x => x.CreditDueDate != null ? x.Total : 0m)
