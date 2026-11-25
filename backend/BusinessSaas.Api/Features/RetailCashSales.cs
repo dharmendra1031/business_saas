@@ -830,6 +830,8 @@ public static class RetailCashSales
             if (lineTotal == 0m)
                 return Results.BadRequest(new { code = "CASH_SALE_ZERO_VALUE_LINE", item.ProductId,
                     message = "This line rounds to zero. Increase quantity or remove the product." });
+            if (lineTotal > 9999999999999999.99m - sale.Total)
+                return Results.BadRequest(new { message = "Invoice exceeds the supported amount." });
             sale.Lines.Add(new RetailCashSaleLine { ProductId = product.Id, ProductName = product.Name,
                 Quantity = item.Quantity, UnitPrice = unitPrice,
                 SelectedUnitId = item.UnitId, ConversionFactor = factor,

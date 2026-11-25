@@ -872,6 +872,14 @@ public sealed class SqlServerTests
             Assert.Equal(difference, body.GetProperty("difference").GetDecimal());
             Assert.Equal(settlement, body.GetProperty("settlement").GetString());
         }
+        using var collectQuote = await Post(owner, exchangePath, exchange with {
+            returns = new[] { new { lineId, quantity = 0.125m, restock = true } },
+            replacements = new[] { new { productId = unavailableId, quantity = 2m, expectedUnitPrice = 10m } }
+        });
+        Assert.Equal(HttpStatusCode.OK, collectQuote.StatusCode);
+        var collectBody = await collectQuote.Content.ReadFromJsonAsync<JsonElement>();
+        Assert.Equal(10m, collectBody.GetProperty("difference").GetDecimal());
+        Assert.Equal("Collect", collectBody.GetProperty("settlement").GetString());
         Assert.Equal(HttpStatusCode.Conflict, (await Post(owner, exchangePath, exchange with {
             replacements = new[] { new { productId = unavailableId, quantity = 3m, expectedUnitPrice = 10m } }
         })).StatusCode);

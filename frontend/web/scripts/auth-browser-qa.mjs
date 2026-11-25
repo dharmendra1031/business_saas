@@ -2174,7 +2174,7 @@ try {
         })
         await t.page.getByRole('tab', { name: 'Returns', exact: true }).click()
         await t.page.getByRole('button', { name: 'Return #81' }).click()
-        await t.page.getByRole('table', { name: 'Return 81 lines' }).getByText('Loose Rice', { exact: true }).waitFor()
+        await t.page.getByRole('table', { name: 'Return 81 lines' }).getByRole('cell', { name: /Loose Rice.*RICE-KG/ }).waitFor()
         await t.page.getByRole('table', { name: 'Return 81 lines' }).getByText('Not restocked', { exact: true }).waitFor()
         await t.page.getByRole('button', { name: 'Invoice #42' }).click()
         await t.page.getByRole('region', { name: 'Cash receipt' }).getByText('Sample Customer', { exact: true }).waitFor()
