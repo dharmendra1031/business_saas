@@ -21,6 +21,8 @@ export default function BusinessPostedSales({ dashboard, userId }: { dashboard: 
   const [selectedId, setSelectedId] = useState<number | null>(null)
   const [receipt, setReceipt] = useState<Receipt | null>(null)
   const [receiptError, setReceiptError] = useState('')
+  const [receiptReload, setReceiptReload] = useState(0)
+  const [returnNotice, setReturnNotice] = useState('')
   const validSearch = search === '' || /^[1-9]\d{0,18}$/.test(search)
 
   useEffect(() => {
@@ -50,23 +52,36 @@ export default function BusinessPostedSales({ dashboard, userId }: { dashboard: 
         if (active && !(cause instanceof SessionExpiredError)) setReceiptError('Unable to open this receipt.')
       })
     return () => { active = false }
-  }, [business.id, locationId, selectedId])
+  }, [business.id, locationId, selectedId, receiptReload])
 
   function closeReceipt() {
     setSelectedId(null)
     setReceipt(null)
     setReceiptError('')
+    setReturnNotice('')
+  }
+
+  function refreshReceipt() {
+    setReceipt(null)
+    setReceiptError('')
+    setReceiptReload(value => value + 1)
   }
 
   if (receipt) return <CashReceipt receipt={receipt} businessName={business.name}
     pdfPath={`/api/businesses/${business.id}/cash-sales/business-receipts/${receipt.id}/pdf?locationId=${locationId}`}
-    timeZone={business.timeZoneId} backLabel="Back to receipts" onBack={closeReceipt}
+    timeZone={business.timeZoneId} backLabel="Back to receipts" onBack={closeReceipt} returnNotice={returnNotice}
     returnEstimate={dashboard.roleCode === 'Owner' ? {
       path: `/businesses/${business.id}/cash-sales/business-receipts/${receipt.id}`, locationId,
-      userId, canOperate: dashboard.canOperate
+      userId, canOperate: dashboard.canOperate,
+      onRecorded: (id, total) => {
+        setReturnNotice(`Return #${id} recorded: ${receipt.currencyCode} ${total.toFixed(2)}.`)
+        refreshReceipt()
+      }
     } : undefined} />
   if (selectedId !== null) return <>
-    {receiptError ? <p className="alert alert-danger" role="alert">{receiptError}</p> :
+    {returnNotice && <p className="alert alert-success" role="status">{returnNotice}</p>}
+    {receiptError ? <p className="alert alert-danger" role="alert">{receiptError}{' '}
+      <button type="button" className="btn btn-outline-secondary btn-sm" onClick={refreshReceipt}>Retry</button></p> :
       <p role="status">Loading receipt…</p>}
     <button className="btn btn-outline-secondary" type="button" onClick={closeReceipt}>Back to receipts</button>
   </>

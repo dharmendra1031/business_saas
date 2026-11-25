@@ -19,7 +19,10 @@ export interface Receipt {
     returnedAmount?: number | null; remainingAmount?: number | null }[]
 }
 
-interface ReturnOptions { path: string; locationId: number; userId: number; canOperate: boolean }
+interface ReturnOptions {
+  path: string; locationId: number; userId: number; canOperate: boolean
+  onRecorded: (id: number, total: number) => void
+}
 interface ReturnRequest {
   locationId: number; requestKey: string; reason: string; expectedRefund: number;
   cashRefundConfirmed: boolean; lines: { lineId: number; quantity: number; restock: boolean }[]
@@ -35,13 +38,21 @@ function returnStorageKey(options: ReturnOptions) {
   return `cash-return:${options.userId}:${options.locationId}:${options.path}`
 }
 
-function readPending(key: string): { request: ReturnRequest | null; error: string } {
+function readPending(options: ReturnOptions): { request: ReturnRequest | null; error: string } {
   try {
-    const raw = sessionStorage.getItem(key)
+    const raw = sessionStorage.getItem(returnStorageKey(options))
     if (!raw) return { request: null, error: '' }
     const request = JSON.parse(raw) as ReturnRequest
-    if (!request.requestKey || !Array.isArray(request.lines) || !request.lines.length ||
-      !request.cashRefundConfirmed || !Number.isFinite(request.expectedRefund))
+    if (request.locationId !== options.locationId ||
+      typeof request.requestKey !== 'string' || !/^[0-9a-f]{32}$/.test(request.requestKey) ||
+      typeof request.reason !== 'string' || request.reason.length < 5 || request.reason.length > 200 ||
+      !Array.isArray(request.lines) || !request.lines.length || request.lines.length > 100 ||
+      request.lines.some(line => !Number.isSafeInteger(line.lineId) || line.lineId <= 0 ||
+        !Number.isFinite(line.quantity) || line.quantity < 0.001 || line.quantity > 1000000 ||
+        Math.abs(Math.round(line.quantity * 1000) - line.quantity * 1000) > 0.000001 ||
+        typeof line.restock !== 'boolean') ||
+      new Set(request.lines.map(line => line.lineId)).size !== request.lines.length ||
+      request.cashRefundConfirmed !== true || !Number.isFinite(request.expectedRefund) || request.expectedRefund < 0)
       throw new Error('Invalid pending return')
     return { request, error: '' }
   } catch {
@@ -49,8 +60,8 @@ function readPending(key: string): { request: ReturnRequest | null; error: strin
   }
 }
 
-function ReturnHistory({ receipt, options, refresh, timeZone }: {
-  receipt: Receipt; options: ReturnOptions; refresh: number; timeZone: string
+function ReturnHistory({ receipt, options, timeZone }: {
+  receipt: Receipt; options: ReturnOptions; timeZone: string
 }) {
   const [page, setPage] = useState(1)
   const [result, setResult] = useState<ReturnPage | null>(null)
@@ -65,7 +76,7 @@ function ReturnHistory({ receipt, options, refresh, timeZone }: {
     })).then(value => { if (active) setResult(value) })
       .catch(() => { if (active) setError('Unable to load return history.') })
     return () => { active = false }
-  }, [options.path, options.locationId, page, refresh, reload])
+  }, [options.path, options.locationId, page, reload])
   const money = (value: number) => receipt.currencyCode + ' ' + value.toFixed(2)
   return <section className="mt-3" aria-label="Return history">
     <h3 className="h6">Return history</h3>
@@ -93,11 +104,9 @@ function ReturnHistory({ receipt, options, refresh, timeZone }: {
   </section>
 }
 
-function ReturnEstimate({ receipt, options, onRecorded }: {
-  receipt: Receipt; options: ReturnOptions; onRecorded: (record: PostedReturn) => void
-}) {
+function ReturnEstimate({ receipt, options }: { receipt: Receipt; options: ReturnOptions }) {
   const key = returnStorageKey(options)
-  const [restored] = useState(() => readPending(key))
+  const [restored] = useState(() => readPending(options))
   const [pending, setPending] = useState(restored.request)
   const [quantities, setQuantities] = useState<Record<number, string>>({})
   const [dispositions, setDispositions] = useState<Record<number, string>>({})
@@ -105,8 +114,13 @@ function ReturnEstimate({ receipt, options, onRecorded }: {
   const [reason, setReason] = useState('')
   const [confirmed, setConfirmed] = useState(false)
   const [busy, setBusy] = useState(false)
-  const [error, setError] = useState(restored.error)
+  const [error, setError] = useState('')
   const lock = useRef(false)
+  const mounted = useRef(true)
+  useEffect(() => {
+    mounted.current = true
+    return () => { mounted.current = false }
+  }, [])
   const available = (line: Receipt['lines'][number]) => Math.max(0, line.remainingQuantity ?? 0)
   const selected = receipt.lines.filter(line => (quantities[line.id] ?? '') !== '' && Number(quantities[line.id]) !== 0)
   const valid = selected.length > 0 && selected.every(line => {
@@ -119,11 +133,14 @@ function ReturnEstimate({ receipt, options, onRecorded }: {
   }
   function finish(record: PostedReturn, request: ReturnRequest) {
     if (!Number.isSafeInteger(record.id) || record.id <= 0 || record.saleId !== receipt.id ||
-      record.requestKey !== request.requestKey || record.total !== request.expectedRefund)
+      record.requestKey !== request.requestKey || record.total !== request.expectedRefund ||
+      record.reason !== request.reason || record.lines.length !== request.lines.length ||
+      !request.lines.every(line => record.lines.some(saved => saved.saleLineId === line.lineId &&
+        saved.quantity === line.quantity && saved.restock === line.restock)))
       throw new Error('Return response could not be verified.')
     sessionStorage.removeItem(key)
     setPending(null)
-    onRecorded(record)
+    if (mounted.current) options.onRecorded(record.id, record.total)
   }
   async function recordReturn(request: ReturnRequest, checkOnly = false) {
     if (lock.current) return
@@ -195,7 +212,7 @@ function ReturnEstimate({ receipt, options, onRecorded }: {
             ? estimate.currencyCode + ' ' + estimate.lines.find(item => item.lineId === line.id)!.amount.toFixed(2) : '—'}</td>
         </tr>)}</tbody>
       </table></div>
-      {error && <p role="alert" className="text-danger">{error}</p>}
+      {(restored.error || error) && <p role="alert" className="text-danger">{restored.error || error}</p>}
       {estimate && <p role="status"><strong>Estimated return amount: {estimate.currencyCode} {estimate.total.toFixed(2)}</strong></p>}
       <button type="submit" className="btn btn-outline-primary btn-sm" disabled={!valid || busy}>
         {busy ? 'Calculating…' : 'Calculate estimate'}
@@ -229,7 +246,7 @@ function ReturnEstimate({ receipt, options, onRecorded }: {
   </section>
 }
 
-export default function CashReceipt({ receipt, businessName, timeZone, pdfPath, printNotice, backLabel, onBack, returnEstimate }: {
+export default function CashReceipt({ receipt, businessName, timeZone, pdfPath, printNotice, backLabel, onBack, returnEstimate, returnNotice }: {
   receipt: Receipt
   businessName: string
   timeZone: string
@@ -238,9 +255,9 @@ export default function CashReceipt({ receipt, businessName, timeZone, pdfPath, 
   backLabel: string
   onBack: () => void
   returnEstimate?: ReturnOptions
+  returnNotice?: string
 }) {
-  const [showEstimate, setShowEstimate] = useState(() => !!returnEstimate && !!readPending(returnStorageKey(returnEstimate)).request)
-  const [recorded, setRecorded] = useState<PostedReturn | null>(null)
+  const [showEstimate, setShowEstimate] = useState(() => !!returnEstimate && !!readPending(returnEstimate).request)
   const money = (amount: number) => receipt.currencyCode + ' ' + amount.toFixed(2)
   return <section className="content-section" aria-label="Cash receipt">
     <h2>Cash receipt #{receipt.id}</h2>
@@ -272,13 +289,13 @@ export default function CashReceipt({ receipt, businessName, timeZone, pdfPath, 
     {receipt.printAvailable
       ? <a className="btn btn-outline-secondary me-2" href={pdfPath} target="_blank" rel="noopener noreferrer">Print receipt</a>
       : <p className="small text-body-secondary" role="status">RDLC printing requires a Windows report host.</p>}
-    {returnEstimate && returnEstimate.canOperate && !recorded && <button type="button" className="btn btn-outline-secondary me-2" aria-expanded={showEstimate}
+    {returnEstimate && returnEstimate.canOperate && <button type="button" className="btn btn-outline-secondary me-2" aria-expanded={showEstimate}
       onClick={() => setShowEstimate(value => !value)}>{showEstimate ? 'Close estimate' : 'Estimate return'}</button>}
     <button type="button" className="btn btn-primary" onClick={onBack}>{backLabel}</button>
-    {recorded && <p className="alert alert-success mt-3" role="status">Return #{recorded.id} recorded: {money(recorded.total)}. Reopen this receipt for updated quantities.</p>}
-    {returnEstimate && showEstimate && !recorded && <div className="mt-3"><ReturnEstimate receipt={receipt}
-      options={returnEstimate} onRecorded={record => { setRecorded(record); setShowEstimate(false) }} /></div>}
-    {returnEstimate && <ReturnHistory receipt={receipt} options={returnEstimate} refresh={recorded?.id ?? 0}
+    {returnNotice && <p className="alert alert-success mt-3" role="status">{returnNotice}</p>}
+    {returnEstimate && showEstimate && <div className="mt-3"><ReturnEstimate receipt={receipt}
+      options={returnEstimate} /></div>}
+    {returnEstimate && <ReturnHistory receipt={receipt} options={returnEstimate}
       timeZone={receipt.timeZoneId ?? timeZone} />}
   </section>
 }

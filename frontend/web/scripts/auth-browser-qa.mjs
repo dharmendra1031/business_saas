@@ -1796,6 +1796,7 @@ try {
         await t.page.getByLabel('Posted date').fill('2026-11-23')
         await t.page.getByRole('button', { name: 'Search', exact: true }).click()
         await t.page.getByRole('row').filter({ hasText: '#42' }).getByText('INR 24.00').waitFor()
+        let postedReturn = null
         await t.page.route('**/api/businesses/1/cash-sales/business-receipts/42?*', route => {
           assert.equal(route.request().method(), 'GET')
           assert.equal(new URL(route.request().url()).searchParams.get('locationId'), '1')
@@ -1804,9 +1805,9 @@ try {
             locationName: 'Main Shop', customerName: 'Sample Customer', customerId: 9,
             lines: [{ id: 1, productName: 'Loose Rice', productSku: 'RICE-KG', unitCode: 'KG',
               unitPrice: 96, quantity: 0.25, lineTotal: 24,
-              returnedQuantity: 0.05, remainingQuantity: 0.2, returnedAmount: 4.8, remainingAmount: 19.2 }] })
+              returnedQuantity: postedReturn ? 0.175 : 0.05, remainingQuantity: postedReturn ? 0.075 : 0.2,
+              returnedAmount: postedReturn ? 16.8 : 4.8, remainingAmount: postedReturn ? 7.2 : 19.2 }] })
         })
-        let postedReturn = null
         let firstReturnRequest = null
         let returnAttempts = 0
         await t.page.route('**/api/businesses/1/cash-sales/business-receipts/42/returns?*', route => {
@@ -1869,6 +1870,15 @@ try {
         await estimate.getByLabel('Stock disposition — Loose Rice').selectOption('no-stock')
         await estimate.getByLabel('Return reason').fill('Damaged goods')
         await estimate.getByRole('checkbox').check()
+        await t.screenshot('BUS-38-return-confirmation-desktop')
+        const viewport = t.page.viewportSize()
+        for (const width of [768, 360]) {
+          await t.page.setViewportSize({ width, height: 800 })
+          assert.ok(await t.page.evaluate(() => document.documentElement.scrollWidth) <= width + 1,
+            'Return confirmation must fit ' + width + 'px without page overflow')
+          await t.screenshot('BUS-38-return-confirmation-' + width)
+        }
+        await t.page.setViewportSize(viewport)
         await record.click()
         const recovery = receipt.getByRole('region', { name: 'Return recovery' })
         await recovery.getByRole('alert').waitFor()
@@ -1878,6 +1888,8 @@ try {
         const history = receipt.getByRole('region', { name: 'Return history' })
         await history.getByRole('button', { name: 'Return #81' }).click()
         await history.getByText(/Not restocked/).waitFor()
+        await receipt.getByRole('button', { name: 'Estimate return' }).click()
+        await receipt.getByText('Sold: 0.25 · Returned: 0.175 · Remaining: 0.075 KG', { exact: true }).waitFor()
         await receipt.getByRole('button', { name: 'Back to receipts' }).click()
         assert.equal(await t.page.getByLabel('Receipt number').inputValue(), '42')
         assert.equal(await t.page.getByLabel('Posted date').inputValue(), '2026-11-23')
