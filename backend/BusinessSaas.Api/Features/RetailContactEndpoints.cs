@@ -17,7 +17,7 @@ public static class RetailContactEndpoints
             .RequireAuthorization();
 
         suppliers.MapGet("", async (long businessId, string? search, int? page, bool? activeOnly,
-            ClaimsPrincipal user, AppDbContext db) =>
+            ClaimsPrincipal user, AppDbContext db, CancellationToken cancellationToken) =>
         {
             var denied = await RetailMasterEndpoints.CheckAccess(db, user, businessId, false);
             if (denied is not null) return denied;
@@ -31,11 +31,11 @@ public static class RetailContactEndpoints
             if (term.Length > 0) query = query.Where(x =>
                 x.NameKey.Contains(term) || x.Phone.Contains(term) || x.Email.ToUpper().Contains(term));
 
-            var total = await query.CountAsync();
+            var total = await query.CountAsync(cancellationToken);
             var items = await query.OrderBy(x => x.NameKey).ThenBy(x => x.Id)
                 .Skip((currentPage - 1) * PageSize).Take(PageSize)
                 .Select(x => new { x.Id, x.Name, x.Phone, x.Email, x.IsActive })
-                .ToListAsync();
+                .ToListAsync(cancellationToken);
             return Results.Ok(new { items, total, page = currentPage, pageSize = PageSize });
         });
 
@@ -103,7 +103,7 @@ public static class RetailContactEndpoints
             .RequireAuthorization();
 
         customers.MapGet("", async (long businessId, string? search, int? page,
-            ClaimsPrincipal user, AppDbContext db) =>
+            ClaimsPrincipal user, AppDbContext db, CancellationToken cancellationToken) =>
         {
             var denied = await RetailMasterEndpoints.CheckAccess(db, user, businessId, false);
             if (denied is not null) return denied;
@@ -117,12 +117,12 @@ public static class RetailContactEndpoints
             if (term.Length > 0) query = query.Where(x =>
                 x.NameKey.Contains(term) || x.Phone.Contains(term) || x.Email.ToUpper().Contains(term));
 
-            var total = await query.CountAsync();
+            var total = await query.CountAsync(cancellationToken);
             var items = await query.OrderBy(x => x.NameKey).ThenBy(x => x.Id)
                 .Skip((currentPage - 1) * PageSize).Take(PageSize)
                 .Select(x => new { x.Id, x.Name, x.Phone, x.Email, x.Address, x.IsActive,
                     CreditLimit = isOwner ? (decimal?)x.CreditLimit : null })
-                .ToListAsync();
+                .ToListAsync(cancellationToken);
             return Results.Ok(new { items, total, page = currentPage, pageSize = PageSize });
         });
 

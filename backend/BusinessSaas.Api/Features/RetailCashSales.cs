@@ -738,7 +738,7 @@ public static class RetailCashSales
     }
 
     private static async Task<IResult> SearchCustomers(long businessId, long locationId, string? search,
-        ClaimsPrincipal user, AppDbContext db)
+        ClaimsPrincipal user, AppDbContext db, CancellationToken cancellationToken)
     {
         if (!long.TryParse(user.FindFirstValue(ClaimTypes.NameIdentifier), out var actor) ||
             await Shop(db, businessId, actor, locationId) is null) return Results.NotFound();
@@ -748,7 +748,7 @@ public static class RetailCashSales
             .Where(x => x.BusinessId == businessId && x.IsActive &&
                 (x.NameKey.Contains(term) || x.Phone.Contains(term)))
             .OrderBy(x => x.NameKey).ThenBy(x => x.Id).Take(20)
-            .Select(x => new { x.Id, x.Name, x.Phone }).ToListAsync());
+            .Select(x => new { x.Id, x.Name, x.Phone }).ToListAsync(cancellationToken));
     }
 
     public sealed record CashRequest(long LocationId, decimal Tendered, string RequestKey,

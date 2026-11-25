@@ -15,7 +15,7 @@ public static class RetailProductEndpoints
             .RequireAuthorization();
 
         group.MapGet("", async (long businessId, string? search, string? status,
-            long? categoryId, int? page, long? locationId, string? code, ClaimsPrincipal user, AppDbContext db) =>
+            long? categoryId, int? page, long? locationId, string? code, ClaimsPrincipal user, AppDbContext db, CancellationToken cancellationToken) =>
         {
             var denied = await RetailMasterEndpoints.CheckAccess(db, user, businessId, false);
             if (denied is not null) return denied;
@@ -46,7 +46,7 @@ public static class RetailProductEndpoints
             {
                 var categories = await db.RetailCategories.AsNoTracking()
                     .Where(x => x.BusinessId == businessId)
-                    .Select(x => new { x.Id, x.ParentId }).ToListAsync();
+                    .Select(x => new { x.Id, x.ParentId }).ToListAsync(cancellationToken);
                 var allowed = new HashSet<long> { categoryId.Value };
                 for (var i = 0; i < 2; i++)
                     foreach (var child in categories.Where(x => x.ParentId is not null &&
@@ -57,16 +57,16 @@ public static class RetailProductEndpoints
             if (status == "active") query = query.Where(x => x.IsActive);
             if (status == "inactive") query = query.Where(x => !x.IsActive);
 
-            var total = await query.CountAsync();
+            var total = await query.CountAsync(cancellationToken);
             var pageQuery = query.OrderBy(x => x.Name).ThenBy(x => x.Id)
                 .Skip((currentPage - 1) * PageSize).Take(PageSize);
-            var items = await ProductDetails(db, pageQuery, businessId, locationId).ToListAsync();
+            var items = await ProductDetails(db, pageQuery, businessId, locationId).ToListAsync(cancellationToken);
 
             return Results.Ok(new { items, total, page = currentPage, pageSize = PageSize });
         });
 
         group.MapGet("/options", async (long businessId, bool? includeInactiveCategories,
-            ClaimsPrincipal user, AppDbContext db) =>
+            ClaimsPrincipal user, AppDbContext db, CancellationToken cancellationToken) =>
         {
             var denied = await RetailMasterEndpoints.CheckAccess(db, user, businessId, false);
             if (denied is not null) return denied;
@@ -76,16 +76,16 @@ public static class RetailProductEndpoints
             if (includeInactiveCategories != true)
                 categoryQuery = categoryQuery.Where(x => x.IsActive);
             var categories = await categoryQuery.OrderBy(x => x.Name)
-                .Select(x => new { x.Id, x.Name, x.ParentId, x.IsActive }).ToListAsync();
+                .Select(x => new { x.Id, x.Name, x.ParentId, x.IsActive }).ToListAsync(cancellationToken);
             var units = await db.RetailUnits.AsNoTracking()
                 .Where(x => x.BusinessId == businessId && x.IsActive)
                 .OrderBy(x => x.Name)
-                .Select(x => new { x.Id, x.Name, x.Code }).ToListAsync();
+                .Select(x => new { x.Id, x.Name, x.Code }).ToListAsync(cancellationToken);
 
             var brands = await db.RetailBrands.AsNoTracking()
                 .Where(x => x.BusinessId == businessId && x.IsActive)
                 .OrderBy(x => x.Name)
-                .Select(x => new { x.Id, x.Name }).ToListAsync();
+                .Select(x => new { x.Id, x.Name }).ToListAsync(cancellationToken);
 
             return Results.Ok(new { categories, units, brands });
         });

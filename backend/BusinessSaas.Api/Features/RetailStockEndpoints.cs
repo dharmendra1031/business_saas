@@ -16,7 +16,7 @@ public static class RetailStockEndpoints
             .RequireAuthorization();
 
         group.MapGet("/locations/{locationId:long}", async (long businessId, long locationId,
-            string? search, int? page, bool? alertsOnly, ClaimsPrincipal user, AppDbContext db) =>
+            string? search, int? page, bool? alertsOnly, ClaimsPrincipal user, AppDbContext db, CancellationToken cancellationToken) =>
         {
             var denied = await CheckLocation(db, user, businessId, locationId, false);
             if (denied is not null) return denied;
@@ -40,7 +40,7 @@ public static class RetailStockEndpoints
                         balance.ProductId == product.Id &&
                         balance.Quantity <= product.ReorderLevel.Value));
 
-            var total = await products.CountAsync();
+            var total = await products.CountAsync(cancellationToken);
             var pageQuery = products.OrderBy(x => x.Name).ThenBy(x => x.Id)
                 .Skip((currentPage - 1) * PageSize).Take(PageSize);
 
@@ -61,13 +61,13 @@ public static class RetailStockEndpoints
                                    product.ReorderLevel,
                                    Quantity = balance == null ? 0m : balance.Quantity,
                                    HasStockRecord = balance != null
-                               }).ToListAsync();
+                               }).ToListAsync(cancellationToken);
 
             return Results.Ok(new { items, total, page = currentPage, pageSize = PageSize });
         });
 
         group.MapGet("/locations/{locationId:long}/movements", async (long businessId,
-            long locationId, long? productId, int? page, ClaimsPrincipal user, AppDbContext db) =>
+            long locationId, long? productId, int? page, ClaimsPrincipal user, AppDbContext db, CancellationToken cancellationToken) =>
         {
             var denied = await CheckLocation(db, user, businessId, locationId, false);
             if (denied is not null) return denied;
@@ -102,9 +102,9 @@ public static class RetailStockEndpoints
                         };
             if (productId is > 0) query = query.Where(x => x.ProductId == productId);
 
-            var total = await query.CountAsync();
+            var total = await query.CountAsync(cancellationToken);
             var items = await query.OrderByDescending(x => x.Id)
-                .Skip((currentPage - 1) * PageSize).Take(PageSize).ToListAsync();
+                .Skip((currentPage - 1) * PageSize).Take(PageSize).ToListAsync(cancellationToken);
             return Results.Ok(new { items, total, page = currentPage, pageSize = PageSize });
         });
 
