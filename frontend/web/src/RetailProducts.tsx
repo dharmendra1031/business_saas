@@ -198,7 +198,7 @@ export default function RetailProducts({ businessId, canOperate, currencyCode }:
 
   async function save(event: FormEvent) {
     event.preventDefault()
-    if (!canOperate || saving || !conversionValid) return
+    if (!canOperate || saving || inlineSaving || inlineType || optionsLoading || !conversionValid) return
 
     setSaving(true)
     setSkuError('')
@@ -322,7 +322,7 @@ export default function RetailProducts({ businessId, canOperate, currencyCode }:
       <div className="masters-heading business-module-heading">
         <h2>Products</h2>
         <div className="business-module-actions">
-          {!loading && !loadError && total > 0 && <span className="business-module-count">{total.toLocaleString()} products</span>}
+          {!formOpen && !loading && !loadError && total > 0 && <span className="business-module-count">{total.toLocaleString()} products</span>}
           {canOperate && !formOpen && <button type="button" className="btn btn-primary"
             disabled={!canCreate || optionsLoading} onClick={startCreate}><Plus size={17} /> Add Product</button>}
         </div>
@@ -403,13 +403,50 @@ export default function RetailProducts({ businessId, canOperate, currencyCode }:
             </select>
             <button type="button" className="btn btn-sm btn-link" onClick={() => beginInline('units')}>+ Add unit</button>
           </div>
+          <div>
+            <label className="form-label" htmlFor="product-brand">Brand (optional)</label>
+            <select id="product-brand" className="form-select" value={form.brandId}
+              onChange={event => changeForm('brandId', Number(event.target.value))}>
+              <option value={0}>No brand</option>
+              {form.brandId > 0 && !options.brands.some(x => x.id === form.brandId) &&
+                <option value={form.brandId}>Previous brand (inactive)</option>}
+              {options.brands.map(item => <option key={item.id} value={item.id}>{item.name}</option>)}
+            </select>
+            <button type="button" className="btn btn-sm btn-link" onClick={() => beginInline('brands')}>+ Add brand</button>
+          </div>
+          <div>
+            <label className="form-label" htmlFor="product-sku">Item code {editingId === null ? '(auto if blank)' : '*'}</label>
+            <input id="product-sku" className="form-control" required={editingId !== null} maxLength={50}
+              minLength={2} pattern="[a-zA-Z0-9._/-]{2,50}" autoComplete="off"
+              aria-invalid={Boolean(skuError)} aria-describedby={skuError ? 'product-code-error' : undefined}
+              value={form.sku} onChange={event => changeForm('sku', event.target.value.toUpperCase())} />
+            {skuError && <div id="product-code-error" className="field-help text-danger">{skuError}</div>}
+          </div>
+          <div>
+            <label className="form-label" htmlFor="product-barcode">Barcode</label>
+            <input id="product-barcode" className="form-control" maxLength={64}
+              autoComplete="off" value={form.barcode}
+              onChange={event => changeForm('barcode', event.target.value)} />
+          </div>
+          <div>
+            <label className="form-label" htmlFor="product-reorder">Low stock alert</label>
+            <input id="product-reorder" className="form-control" type="number" min="0"
+              max="9999999999.999" step="0.001" inputMode="decimal"
+              value={form.reorderLevel} onChange={event => changeForm('reorderLevel', event.target.value)} />
+            <div className="field-help">Leave blank to disable.</div>
+          </div>
+          {editingId !== null && <div className="form-check form-wide">
+            <input id="product-status" type="checkbox" className="form-check-input" checked={form.isActive}
+              onChange={event => changeForm('isActive', event.target.checked)} />
+            <label className="form-check-label" htmlFor="product-status">Active</label>
+          </div>}
           <div className="form-wide">
             <details open={form.conversions.length > 0 || undefined}>
               <summary>Alternate units (optional)</summary>
-              <p className="field-help">Example: 1 box = 12 pieces. Leave the pack price blank to calculate it from the base price. Alternate units in POS must be enabled.</p>
+              <p className="field-help">Example: 1 box = 12 pieces. Leave price blank to use the calculated price.</p>
               {form.conversions.length > 0 && <div className="table-responsive">
                 <table className="table table-sm align-middle">
-                  <thead><tr><th>Alternate unit</th><th>Base units per unit</th><th>Selling price (optional)</th><th>Action</th></tr></thead>
+                  <thead><tr><th>Alternate unit</th><th>Quantity per pack</th><th>Selling price (optional)</th><th>Action</th></tr></thead>
                   <tbody>{form.conversions.map((line, index) => <tr key={index}>
                     <td><select className="form-select form-select-sm" aria-label={`Alternate unit ${index + 1}`}
                       required value={line.unitId} onChange={event => changeConversion(index, { unitId: Number(event.target.value), factor: '', salePrice: '' })}>
@@ -438,10 +475,10 @@ export default function RetailProducts({ businessId, canOperate, currencyCode }:
                 onClick={() => changeForm('conversions', [...form.conversions, { unitId: 0, factor: '', salePrice: '' }])}>
                 + Add alternate unit
               </button>
-              {!conversionValid && <p className="field-help">Choose distinct units, positive factors (up to three decimals) and optional positive prices (up to two decimals).</p>}
+              {!conversionValid && <p className="field-help">Choose a different unit and enter a valid quantity and price.</p>}
             </details>
           </div>
-          {inlineType && <div className="form-wide product-form" role="group"
+          {inlineType && <div className="form-wide border-top pt-2" role="group"
             aria-label={`Add ${inlineType === 'categories' ? 'category' : inlineType === 'units' ? 'unit' : 'brand'}`}
             onKeyDown={event => { if (event.key === 'Enter') { event.preventDefault(); if (inlineValid) void addInline() } }}>
             <label className="form-label" htmlFor="inline-master-name">New {inlineType === 'categories' ? 'category' : inlineType === 'units' ? 'unit' : 'brand'} name</label>
@@ -466,60 +503,6 @@ export default function RetailProducts({ businessId, canOperate, currencyCode }:
                 onClick={() => setInlineType(null)}>Cancel</button>
             </div>
           </div>}
-          <details className="form-wide" key={editingId ?? 'new'} open={editingId !== null}>
-            <summary>More details (optional)</summary>
-            <div className="form-grid mt-3">
-          <div>
-            <label className="form-label" htmlFor="product-brand">Brand (optional)</label>
-            <select id="product-brand" className="form-select" value={form.brandId}
-              onChange={event => changeForm('brandId', Number(event.target.value))}>
-              <option value={0}>No brand</option>
-              {form.brandId > 0 && !options.brands.some(x => x.id === form.brandId) &&
-                <option value={form.brandId}>Previous brand (inactive)</option>}
-              {options.brands.map(item => <option key={item.id} value={item.id}>{item.name}</option>)}
-            </select>
-            <button type="button" className="btn btn-sm btn-link" onClick={() => beginInline('brands')}>+ Add brand</button>
-          </div>
-          <div>
-            <label className="form-label" htmlFor="product-sku">SKU {editingId === null ? '(auto if blank)' : '*'}</label>
-            <input id="product-sku" className="form-control" required={editingId !== null} maxLength={50}
-              minLength={2} pattern="[a-zA-Z0-9._/-]{2,50}" autoComplete="off"
-              aria-invalid={Boolean(skuError)} aria-describedby={skuError ? 'product-code-error' : undefined}
-              value={form.sku} onChange={event => changeForm('sku', event.target.value.toUpperCase())} />
-            {skuError && <div id="product-code-error" className="field-help text-danger">{skuError}</div>}
-          </div>
-          <div>
-            <label className="form-label" htmlFor="product-barcode">Barcode (optional)</label>
-            <input id="product-barcode" className="form-control" maxLength={64}
-              autoComplete="off" value={form.barcode}
-              aria-describedby="barcode-help"
-              onChange={event => changeForm('barcode', event.target.value)} />
-            <div id="barcode-help" className="field-help">Scan or enter an existing barcode.</div>
-          </div>
-          <div>
-            <label className="form-label" htmlFor="product-reorder">Reorder level (optional)</label>
-            <input id="product-reorder" className="form-control" type="number" min="0"
-              max="9999999999.999" step="0.001" inputMode="decimal"
-              value={form.reorderLevel} onChange={event => changeForm('reorderLevel', event.target.value)} />
-            <div className="field-help">Low stock alert quantity. Leave blank to disable.</div>
-          </div>
-          <div>
-            <label className="form-label" htmlFor="product-tax">Tax classification (optional)</label>
-            <input id="product-tax" className="form-control" maxLength={30}
-              pattern="[A-Za-z0-9_-]{0,30}" value={form.taxClassification}
-              onChange={event => changeForm('taxClassification', event.target.value.toUpperCase())} />
-            <div className="field-help">Reference code only; tax calculation is not enabled.</div>
-          </div>
-          {editingId !== null && <div>
-            <label className="form-label" htmlFor="product-status">Product status</label>
-            <select id="product-status" className="form-select" value={form.isActive ? 'active' : 'inactive'}
-              onChange={event => changeForm('isActive', event.target.value === 'active')}>
-              <option value="active">Active</option>
-              <option value="inactive">Inactive (hide from barcode lookup)</option>
-            </select>
-          </div>}
-            </div>
-          </details>
         </fieldset>
         <div className="form-footer">
           <button type="button" className="btn btn-outline-secondary" disabled={saving || inlineSaving}

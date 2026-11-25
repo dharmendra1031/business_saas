@@ -42,6 +42,7 @@ export default function RetailMasters({ businessId, canOperate }: {
   const [parentOptions, setParentOptions] = useState<MasterItem[]>([])
   const [active, setActive] = useState(true)
   const [editingId, setEditingId] = useState<number | null>(null)
+  const [formOpen, setFormOpen] = useState(false)
   const [loading, setLoading] = useState(true)
   const [saving, setSaving] = useState(false)
   const [error, setError] = useState('')
@@ -80,7 +81,11 @@ export default function RetailMasters({ businessId, canOperate }: {
     return () => { active = false }
   }, [businessId, needsParents, reload])
 
+  useEffect(() => { if (formOpen) firstInput.current?.focus() }, [formOpen, editingId])
+
   function clearForm() {
+    setFormOpen(false)
+    setError('')
     setEditingId(null)
     setName('')
     setCode('')
@@ -100,18 +105,18 @@ export default function RetailMasters({ businessId, canOperate }: {
   }
 
   function edit(item: MasterItem) {
+    setFormOpen(true)
     setEditingId(item.id)
     setName(item.name)
     setCode(item.code ?? '')
     setParentId(item.parentId ?? 0)
     setActive(item.isActive)
     setError('')
-    firstInput.current?.focus()
   }
 
   async function save(event: FormEvent) {
     event.preventDefault()
-    if (!canOperate || saving) return
+    if (!canOperate || saving || !formOpen) return
 
     setSaving(true)
     setError('')
@@ -135,7 +140,6 @@ export default function RetailMasters({ businessId, canOperate }: {
         })
       clearForm()
       setReload(value => value + 1)
-      firstInput.current?.focus()
     } catch {
       // Shared popup handles API errors; keep local input and field validation.
     } finally {
@@ -158,7 +162,7 @@ export default function RetailMasters({ businessId, canOperate }: {
         <div className="btn-group business-master-tabs" role="group" aria-label="Product master type">
           {(['groups', 'subgroups', 'categories', 'brands', 'units'] as MasterType[]).map(tab =>
             <button key={tab} type="button" className={`btn btn-sm ${type === tab ? 'btn-primary' : 'btn-outline-secondary'}`}
-              aria-pressed={type === tab} disabled={saving} onClick={() => changeType(tab)}>
+              aria-pressed={type === tab} disabled={saving || formOpen} onClick={() => changeType(tab)}>
               {tab === 'groups' ? 'Groups' : tab === 'subgroups' ? 'Subgroups' :
                 tab === 'categories' ? 'Categories' : tab === 'brands' ? 'Brands' : 'Units'}
             </button>)}
@@ -172,8 +176,14 @@ export default function RetailMasters({ businessId, canOperate }: {
           onClick={() => setReload(value => value + 1)}>Retry</button>
       </div>}
 
-      {canOperate && (
-        <form className="masters-form" aria-busy={saving} onSubmit={event => void save(event)}>
+      {canOperate && !formOpen && <div className="masters-search">
+        <button type="button" className="btn btn-primary" onClick={() => { clearForm(); setFormOpen(true) }}>Add {label.toLowerCase()}</button>
+      </div>}
+
+      {canOperate && formOpen && (
+        <form className="product-form" aria-busy={saving} onSubmit={event => void save(event)}>
+          <h3>{editingId === null ? 'New ' : 'Edit '}{label.toLowerCase()}</h3>
+          <div className="form-grid">
           <div>
             <label className="form-label" htmlFor="master-name">{label} name *</label>
             <input ref={firstInput} id="master-name" className="form-control" autoComplete="off" disabled={saving}
@@ -199,22 +209,20 @@ export default function RetailMasters({ businessId, canOperate }: {
                 <option key={item.id} value={item.id}>{classificationPath(parentOptions, item.id)}</option>)}
             </select>
           </div>}
-          {editingId !== null && <div>
-            <label className="form-label" htmlFor="master-status">Status</label>
-            <select id="master-status" className="form-select" value={active ? 'active' : 'inactive'} disabled={saving}
-              onChange={event => setActive(event.target.value === 'active')}>
-              <option value="active">Active</option>
-              <option value="inactive">Inactive</option>
-            </select>
+          {editingId !== null && <div className="form-check form-wide">
+            <input id="master-status" type="checkbox" className="form-check-input" checked={active} disabled={saving}
+              onChange={event => setActive(event.target.checked)} />
+            <label className="form-check-label" htmlFor="master-status">Active</label>
           </div>}
-          <ActionButton busy={saving}>
-            {editingId === null ? `Add ${label.toLowerCase()}` : 'Save changes'}
-          </ActionButton>
-          {editingId !== null && <button className="btn btn-outline-secondary" type="button"
-            disabled={saving} onClick={() => { clearForm(); firstInput.current?.focus() }}>Cancel edit</button>}
+          </div>
+          <div className="form-footer">
+            <button className="btn btn-outline-secondary" type="button" disabled={saving} onClick={clearForm}>Cancel</button>
+            <ActionButton busy={saving}>Save</ActionButton>
+          </div>
         </form>
       )}
 
+      {!formOpen && <>
       <form className="masters-search" onSubmit={event => {
         event.preventDefault()
         setPage(1)
@@ -238,7 +246,7 @@ export default function RetailMasters({ businessId, canOperate }: {
       </form>
 
       {loading ? <p className="text-secondary" role="status">Loading {type}…</p>
-        : loadError ? null : items.length === 0 ? <p className="masters-empty">No {type} found. {canOperate && !query ? `Add your first ${label.toLowerCase()} above.` : ''}</p>
+        : loadError ? null : items.length === 0 ? <p className="masters-empty">No {type} found. {canOperate && !query ? `Add your first ${label.toLowerCase()}.` : ''}</p>
           : <div className="table-responsive">
             <table className="table table-sm align-middle business-record-table">
               <thead><tr><th scope="col">Name</th>{isUnit && <th scope="col">Code</th>}
@@ -263,6 +271,7 @@ export default function RetailMasters({ businessId, canOperate }: {
             onClick={() => setPage(value => value + 1)}>Next</button>
         </div>
       </div>}
+      </>}
     </section>
   )
 }
