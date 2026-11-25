@@ -531,11 +531,20 @@ public static class RetailCashSales
     }
 
     private static async Task<IResult> ReceiptHistory(long businessId, long locationId, ClaimsPrincipal user,
-        AppDbContext db, int page = 1)
+        AppDbContext db, CancellationToken cancellationToken, int page = 1)
     {
         if (!long.TryParse(user.FindFirstValue(ClaimTypes.NameIdentifier), out var actor) ||
-            await Shop(db, businessId, actor, locationId) is null) return Results.NotFound();
-        return await ReadHistory(db, businessId, locationId, page, actor, null);
+            await Shop(db, businessId, actor, locationId, cancellationToken: cancellationToken) is null)
+            return Results.NotFound();
+        if (page is < 1 or > 100000) return Results.BadRequest(new { message = "Choose a valid receipt page." });
+
+        const int pageSize = 10;
+        var items = await CashOnly(db)
+            .Where(x => x.BusinessId == businessId && x.LocationId == locationId && x.CashierId == actor)
+            .OrderByDescending(x => x.Id).Skip((page - 1) * pageSize).Take(pageSize + 1)
+            .Select(x => new { x.Id, x.Total, x.CurrencyCode,
+                PostedAtUtc = DateTime.SpecifyKind(x.PostedAtUtc, DateTimeKind.Utc) }).ToListAsync(cancellationToken);
+        return Results.Ok(new { items = items.Take(pageSize), hasMore = items.Count > pageSize });
     }
 
     private static async Task<IResult> BusinessReceiptHistory(long businessId, long locationId,
@@ -672,26 +681,6 @@ public static class RetailCashSales
                 NetSales = x.Sum(s => s.IsReturn ? -s.Amount : s.Amount)
             }).ToListAsync();
         return Results.Ok(new { date, business.TimeZoneId, totals });
-    }
-
-    private static async Task<IResult> ReadHistory(AppDbContext db, long businessId, long locationId,
-        int page, long? cashierId, long? receiptId, DateTime? start = null, DateTime? end = null)
-    {
-        if (page is < 1 or > 100000) return Results.BadRequest(new { message = "Choose a valid receipt page." });
-        if (receiptId is <= 0) return Results.BadRequest(new { message = "Choose a valid receipt number." });
-
-        const int pageSize = 10;
-        var query = CashOnly(db)
-            .Where(x => x.BusinessId == businessId && x.LocationId == locationId);
-        if (cashierId.HasValue) query = query.Where(x => x.CashierId == cashierId.Value);
-        if (receiptId.HasValue) query = query.Where(x => x.Id == receiptId.Value);
-        if (start.HasValue && end.HasValue)
-            query = query.Where(x => x.PostedAtUtc >= start.Value && x.PostedAtUtc < end.Value);
-        var items = await query
-            .OrderByDescending(x => x.Id).Skip((page - 1) * pageSize).Take(pageSize + 1)
-            .Select(x => new { x.Id, x.Total, x.CurrencyCode,
-                PostedAtUtc = DateTime.SpecifyKind(x.PostedAtUtc, DateTimeKind.Utc) }).ToListAsync();
-        return Results.Ok(new { items = items.Take(pageSize), hasMore = items.Count > pageSize });
     }
 
     private static async Task<IResult> Search(long businessId, long locationId, string? search,
