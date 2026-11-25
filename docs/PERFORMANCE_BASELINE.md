@@ -141,3 +141,27 @@ summary and page queries on the isolated test database; use actual execution
 plans and SET STATISTICS IO, TIME ON with the same filters. Check logical
 reads by table, sorts/spills, estimated versus actual rows, and concurrent
 lock waits separately. Do not infer index use or locking from HTTP timings.
+
+## 50,000-product catalog baseline
+
+The existing catalog regression is parameterized for 5,000 and 50,000 products
+per isolated synthetic business. It inserts batches of 500 and logs individual
+API durations for first, last and out-of-range pages, exact SKU and barcode,
+substring search and unmatched search. Tenant isolation is verified with a
+second business using the same SKU and barcode but a different price.
+
+```sh
+dotnet test backend/BusinessSaas.Tests/BusinessSaas.Tests.csproj --configuration Release --filter "FullyQualifiedName~Large_catalog_reads" --logger "console;verbosity=detailed"
+```
+
+The 50,000 case is pending CI verification. These are read-path fixtures, not
+inventory posting or production capacity benchmarks. The existing tenant/SKU
+and filtered barcode unique indexes support exact matching; substring search
+and deep OFFSET pagination remain execution-plan review candidates. Capture
+actual parameterized SQL, actual plans and logical reads on isolated SQL Server
+before changing the indexes or search semantics.
+
+The 1,000-credit-invoice test passed in run 45645192673 (SQL job 139314172318):
+first page 166.0 ms, last page 29.9 ms, customer search 41.9 ms, overdue only
+36.6 ms, unmatched search 10.0 ms. These are individual CI observations.
+The 100,000-invoice regression is included in successful Build 45653605605.

@@ -1617,9 +1617,11 @@ public sealed class SqlServerTests(Xunit.Abstractions.ITestOutputHelper output)
         }
     }
 
-    [Fact]
+    [Theory]
+    [InlineData(5000)]
+    [InlineData(50000)]
     [Trait("Database", "SqlServer")]
-    public async Task Large_catalog_reads_preserve_order_pagination_and_tenant_isolation()
+    public async Task Large_catalog_reads_preserve_order_pagination_and_tenant_isolation(int count)
     {
         var connectionString = Environment.GetEnvironmentVariable("SQLSERVER_TEST_CONNECTION");
         if (string.IsNullOrWhiteSpace(connectionString))
@@ -1637,11 +1639,10 @@ public sealed class SqlServerTests(Xunit.Abstractions.ITestOutputHelper output)
         });
         using var owner = factory.CreateClient();
         using var other = factory.CreateClient();
-        await RegisterAndLogin(owner, "sql-catalog-scale-owner@example.test");
-        await RegisterAndLogin(other, "sql-catalog-scale-other@example.test");
-        var id = await BusinessFixtures.SeedAsync(factory.Services, owner, "Scale Catalog", "sql-catalog-scale-20261125");
-        var otherId = await BusinessFixtures.SeedAsync(factory.Services, other, "Other Catalog", "sql-catalog-scale-other-20261125");
-        const int count = 5000;
+        await RegisterAndLogin(owner, $"sql-catalog-scale-{count}-owner@example.test");
+        await RegisterAndLogin(other, $"sql-catalog-scale-{count}-other@example.test");
+        var id = await BusinessFixtures.SeedAsync(factory.Services, owner, "Scale Catalog", $"sql-catalog-scale-{count}-20261125");
+        var otherId = await BusinessFixtures.SeedAsync(factory.Services, other, "Other Catalog", $"sql-catalog-scale-{count}-other-20261125");
         using (var scope = factory.Services.CreateScope())
         {
             var db = scope.ServiceProvider.GetRequiredService<AppDbContext>();
@@ -1650,33 +1651,56 @@ public sealed class SqlServerTests(Xunit.Abstractions.ITestOutputHelper output)
             var otherCategory = await db.RetailCategories.Where(x => x.BusinessId == otherId).Select(x => x.Id).SingleAsync();
             var otherUnit = await db.RetailUnits.Where(x => x.BusinessId == otherId).Select(x => x.Id).SingleAsync();
             // Synthetic test data only; no sales or stock are posted.
-            db.RetailProducts.AddRange(Enumerable.Range(1, count).Select(n => new RetailProduct
+            for (var offset = 0; offset < count; offset += 500)
             {
-                BusinessId = id, CategoryId = categoryId, UnitId = unitId,
-                Name = $"Catalog item {n:D5}", Sku = $"SCALE-{n:D5}", SalePrice = 10m
-            }));
+                db.RetailProducts.AddRange(Enumerable.Range(offset + 1, Math.Min(500, count - offset))
+                    .Select(n => new RetailProduct
+                    {
+                        BusinessId = id, CategoryId = categoryId, UnitId = unitId,
+                        Name = $"Catalog item {n:D5}", Sku = $"SCALE-{n:D5}",
+                        Barcode = $"CAT-{n:D5}", SalePrice = 10m
+                    }));
+                await db.SaveChangesAsync();
+                db.ChangeTracker.Clear();
+            }
             db.RetailProducts.Add(new RetailProduct
             {
                 BusinessId = otherId, CategoryId = otherCategory, UnitId = otherUnit,
-                Name = "Foreign item", Sku = "SCALE-05000", SalePrice = 20m
+                Name = "Foreign item", Sku = $"SCALE-{count:D5}", Barcode = $"CAT-{count:D5}", SalePrice = 20m
             });
             await db.SaveChangesAsync();
         }
         var path = $"/api/businesses/{id}/products";
-        var first = await owner.GetFromJsonAsync<JsonElement>(path + "?page=1");
+        async Task<JsonElement> Read(string label, string filter)
+        {
+            var started = System.Diagnostics.Stopwatch.StartNew();
+            var result = await owner.GetFromJsonAsync<JsonElement>(path + filter);
+            output.WriteLine($"{count} products | {label}: {started.Elapsed.TotalMilliseconds:F1} ms");
+            return result;
+        }
+
+        var first = await Read("Catalog first page", "?page=1");
         Assert.Equal(count, first.GetProperty("total").GetInt32());
         Assert.Equal(20, first.GetProperty("items").GetArrayLength());
         Assert.Equal("SCALE-00001", first.GetProperty("items")[0].GetProperty("sku").GetString());
-        var last = await owner.GetFromJsonAsync<JsonElement>(path + "?page=250");
-        Assert.Equal("SCALE-04981", last.GetProperty("items")[0].GetProperty("sku").GetString());
-        Assert.Equal("SCALE-05000", last.GetProperty("items")[19].GetProperty("sku").GetString());
-        var beyond = await owner.GetFromJsonAsync<JsonElement>(path + "?page=251");
+        var last = await Read("Catalog last page", $"?page={count / 20}");
+        Assert.Equal($"SCALE-{count - 19:D5}", last.GetProperty("items")[0].GetProperty("sku").GetString());
+        Assert.Equal($"SCALE-{count:D5}", last.GetProperty("items")[19].GetProperty("sku").GetString());
+        var beyond = await Read("Catalog beyond last page", $"?page={count / 20 + 1}");
         Assert.Empty(beyond.GetProperty("items").EnumerateArray());
-        var exact = await owner.GetFromJsonAsync<JsonElement>(path + "?code=SCALE-05000&status=active");
+        var exact = await Read("Catalog exact SKU", $"?code=SCALE-{count:D5}&status=active");
         Assert.Equal(1, exact.GetProperty("total").GetInt32());
         Assert.Equal(10m, exact.GetProperty("items")[0].GetProperty("salePrice").GetDecimal());
+        var barcode = await Read("Catalog exact barcode", $"/lookup?barcode=CAT-{count:D5}");
+        Assert.Equal($"SCALE-{count:D5}", barcode.GetProperty("sku").GetString());
+        var substring = await Read("Catalog substring", $"?search=item%20{count:D5}");
+        Assert.Equal(1, substring.GetProperty("total").GetInt32());
+        Assert.Equal($"SCALE-{count:D5}", substring.GetProperty("items")[0].GetProperty("sku").GetString());
+        var empty = await Read("Catalog unmatched search", "?search=NO-SUCH-SCALE-ITEM");
+        Assert.Equal(0, empty.GetProperty("total").GetInt32());
+        Assert.Empty(empty.GetProperty("items").EnumerateArray());
         Assert.Equal(HttpStatusCode.NotFound, (await other.GetAsync(path)).StatusCode);
-        var foreign = await other.GetFromJsonAsync<JsonElement>($"/api/businesses/{otherId}/products?code=SCALE-05000");
+        var foreign = await other.GetFromJsonAsync<JsonElement>($"/api/businesses/{otherId}/products?code=SCALE-{count:D5}");
         Assert.Equal(1, foreign.GetProperty("total").GetInt32());
         Assert.Equal(20m, foreign.GetProperty("items")[0].GetProperty("salePrice").GetDecimal());
     }
