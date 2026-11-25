@@ -1931,18 +1931,22 @@ namespace BusinessSaas.Api.Data.Migrations
                     SqlServerPropertyBuilderExtensions.UseIdentityColumn(b.Property<long>("Id"));
                     b.Property<long>("ActorUserId").HasColumnType("bigint");
                     b.Property<long>("BusinessId").HasColumnType("bigint");
+                    b.Property<decimal?>("NetCashSettlement").HasPrecision(18, 2).HasColumnType("decimal(18,2)");
                     b.Property<DateTime>("PostedAtUtc").HasColumnType("datetime2");
                     b.Property<string>("Reason").IsRequired().HasMaxLength(200).HasColumnType("nvarchar(200)");
+                    b.Property<long?>("ReplacementSaleId").HasColumnType("bigint");
                     b.Property<string>("RequestKey").IsRequired().HasMaxLength(80).HasColumnType("nvarchar(80)");
                     b.Property<long>("SaleId").HasColumnType("bigint");
                     b.Property<decimal>("Total").HasPrecision(18, 2).HasColumnType("decimal(18,2)");
                     b.HasKey("Id");
                     b.HasIndex("ActorUserId");
+                    b.HasIndex("ReplacementSaleId").IsUnique().HasFilter("[ReplacementSaleId] IS NOT NULL");
                     b.HasIndex("SaleId");
                     b.HasIndex("BusinessId", "PostedAtUtc", "Id");
 
                     b.HasIndex("BusinessId", "RequestKey").IsUnique();
-                    b.ToTable("RetailCashReturns");
+                    b.ToTable("RetailCashReturns", t => t.HasCheckConstraint("CK_RetailCashReturns_ExchangeLink",
+                        "([ReplacementSaleId] IS NULL AND [NetCashSettlement] IS NULL) OR ([ReplacementSaleId] IS NOT NULL AND [NetCashSettlement] IS NOT NULL AND [ReplacementSaleId] <> [SaleId])"));
                 });
 
             modelBuilder.Entity("BusinessSaas.Api.Data.RetailCashReturnLine", b =>
@@ -1966,6 +1970,8 @@ namespace BusinessSaas.Api.Data.Migrations
                         .OnDelete(DeleteBehavior.Restrict).IsRequired();
                     b.HasOne("BusinessSaas.Api.Data.Business", null).WithMany().HasForeignKey("BusinessId")
                         .OnDelete(DeleteBehavior.Restrict).IsRequired();
+                    b.HasOne("BusinessSaas.Api.Data.RetailCashSale", null).WithMany().HasForeignKey("ReplacementSaleId")
+                        .OnDelete(DeleteBehavior.Restrict);
                     b.HasOne("BusinessSaas.Api.Data.RetailCashSale", null).WithMany().HasForeignKey("SaleId")
                         .OnDelete(DeleteBehavior.Restrict).IsRequired();
                 });

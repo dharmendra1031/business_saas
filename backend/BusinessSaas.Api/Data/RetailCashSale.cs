@@ -50,6 +50,9 @@ public sealed class RetailCashReturn
     public long Id { get; set; }
     public long BusinessId { get; set; }
     public long SaleId { get; set; }
+    // Both null for a standalone return. Positive settlement is cash collected, negative is refunded.
+    public long? ReplacementSaleId { get; set; }
+    public decimal? NetCashSettlement { get; set; }
     public long ActorUserId { get; set; }
     public string RequestKey { get; set; } = "";
     public string Reason { get; set; } = "";

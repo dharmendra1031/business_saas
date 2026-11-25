@@ -902,10 +902,15 @@ public sealed class AppDbContext(DbContextOptions<AppDbContext> options)
             entity.Property(x => x.RequestKey).HasMaxLength(80);
             entity.Property(x => x.Reason).HasMaxLength(200);
             entity.Property(x => x.Total).HasPrecision(18, 2);
+            entity.Property(x => x.NetCashSettlement).HasPrecision(18, 2);
+            entity.ToTable(t => t.HasCheckConstraint("CK_RetailCashReturns_ExchangeLink",
+                "([ReplacementSaleId] IS NULL AND [NetCashSettlement] IS NULL) OR ([ReplacementSaleId] IS NOT NULL AND [NetCashSettlement] IS NOT NULL AND [ReplacementSaleId] <> [SaleId])"));
+            entity.HasIndex(x => x.ReplacementSaleId).IsUnique().HasFilter("[ReplacementSaleId] IS NOT NULL");
             entity.HasIndex(x => new { x.BusinessId, x.PostedAtUtc, x.Id });
             entity.HasIndex(x => new { x.BusinessId, x.RequestKey }).IsUnique();
             entity.HasOne<Business>().WithMany().HasForeignKey(x => x.BusinessId).OnDelete(DeleteBehavior.Restrict);
             entity.HasOne<RetailCashSale>().WithMany().HasForeignKey(x => x.SaleId).OnDelete(DeleteBehavior.Restrict);
+            entity.HasOne<RetailCashSale>().WithMany().HasForeignKey(x => x.ReplacementSaleId).OnDelete(DeleteBehavior.Restrict);
             entity.HasOne<AppUser>().WithMany().HasForeignKey(x => x.ActorUserId).OnDelete(DeleteBehavior.Restrict);
         });
         builder.Entity<RetailCashReturnLine>(entity =>

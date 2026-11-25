@@ -85,6 +85,16 @@ public sealed class SqlServerTests(Xunit.Abstractions.ITestOutputHelper output)
                 name => name.EndsWith("_AddBillingTaxDocumentDrafts"));
             Assert.Contains("20261118210000_RetailCashBasket", await db.Database.GetAppliedMigrationsAsync());
             Assert.Contains("20261125170000_RetailReadIndexes", await db.Database.GetAppliedMigrationsAsync());
+            Assert.Contains("20261125180000_RetailExchangeLink", await db.Database.GetAppliedMigrationsAsync());
+            Assert.Equal(1, await db.Database.SqlQueryRaw<int>(
+                "SELECT COUNT(*) AS [Value] FROM sys.indexes WHERE object_id = OBJECT_ID('RetailCashReturns') " +
+                "AND name = 'IX_RetailCashReturns_ReplacementSaleId' AND is_unique = 1 AND has_filter = 1").SingleAsync());
+            Assert.Equal(1, await db.Database.SqlQueryRaw<int>(
+                "SELECT COUNT(*) AS [Value] FROM sys.foreign_keys WHERE parent_object_id = OBJECT_ID('RetailCashReturns') " +
+                "AND name = 'FK_RetailCashReturns_RetailCashSales_ReplacementSaleId' AND is_disabled = 0").SingleAsync());
+            Assert.Equal(1, await db.Database.SqlQueryRaw<int>(
+                "SELECT COUNT(*) AS [Value] FROM sys.check_constraints WHERE parent_object_id = OBJECT_ID('RetailCashReturns') " +
+                "AND name = 'CK_RetailCashReturns_ExchangeLink' AND is_disabled = 0 AND is_not_trusted = 0").SingleAsync());
             var indexes = await db.Database.SqlQueryRaw<string>(
                 "SELECT name AS [Value] FROM sys.indexes WHERE name IN " +
                 "('IX_RetailProducts_BusinessId_Name_Id', 'IX_RetailCashSales_BusinessId_PostedAtUtc_Id', " +
@@ -950,6 +960,8 @@ public sealed class SqlServerTests(Xunit.Abstractions.ITestOutputHelper output)
             var db = scope.ServiceProvider.GetRequiredService<AppDbContext>();
             Assert.Equal(30m, await db.RetailCashReturns.Where(x => x.SaleId == sale.GetProperty("id").GetInt64()).SumAsync(x => x.Total));
             Assert.Equal(2, await db.RetailCashReturns.CountAsync(x => x.SaleId == sale.GetProperty("id").GetInt64()));
+            Assert.False(await db.RetailCashReturns.AnyAsync(x => x.SaleId == sale.GetProperty("id").GetInt64() &&
+                (x.ReplacementSaleId != null || x.NetCashSettlement != null)));
             Assert.Equal(0.750m, await db.RetailStockBalances.Where(x => x.BusinessId == businessId &&
                 x.LocationId == locationId && x.ProductId == productId).Select(x => x.Quantity).SingleAsync());
             Assert.Single(await db.RetailStockMovements.Where(x => x.BusinessId == businessId &&
