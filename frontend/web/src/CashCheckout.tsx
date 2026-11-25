@@ -1,6 +1,7 @@
 import { useEffect, useRef, useState, type FormEvent } from 'react'
 import { ArrowLeft, ArrowRight, Banknote, Check, Minus, Package, Plus, ReceiptText, Search, ShoppingBag, Trash2 } from 'lucide-react'
 import PosCashPaymentDialog from './PosCashPaymentDialog'
+import LookupDialog from './LookupDialog'
 import { maxExactCents, moneyCents } from './posMoney'
 import { baseQuantity } from './stockQuantity'
 import CashReceipt, { type Receipt } from './CashReceipt'
@@ -122,7 +123,6 @@ export default function CashCheckout({ userId, dashboard, onExit }: {
   const lock = useRef(false)
   const scanLock = useRef(false)
   const searchInput = useRef<HTMLInputElement>(null)
-  const customerInput = useRef<HTMLInputElement>(null)
   const checkoutButton = useRef<HTMLButtonElement>(null)
   const lineAmounts = basket.map(lineAmountCents)
   const totalCents = lineAmounts.reduce((sum, amount) => sum + amount, 0)
@@ -208,6 +208,7 @@ export default function CashCheckout({ userId, dashboard, onExit }: {
       if (event.defaultPrevented || event.repeat || event.isComposing ||
         event.ctrlKey || event.altKey || event.metaKey || event.shiftKey ||
         lock.current || scanLock.current) return
+      if (customerOpen) { if (['F2', 'F4', 'F9'].includes(event.key)) event.preventDefault(); return }
       if (event.key === 'F2') {
         event.preventDefault()
         if (historyPage) setHistoryPage(0)
@@ -217,12 +218,9 @@ export default function CashCheckout({ userId, dashboard, onExit }: {
         }
       } else if (event.key === 'F4') {
         event.preventDefault()
-        if (customerOpen) customerInput.current?.focus()
-        else {
-          setCustomerSearch('')
-          setCustomerResults([])
-          setCustomerOpen(true)
-        }
+        setCustomerSearch('')
+        setCustomerResults([])
+        setCustomerOpen(true)
       } else if (event.key === 'F9') {
         const button = checkoutButton.current
         if (!button || button.disabled) return
@@ -627,25 +625,22 @@ export default function CashCheckout({ userId, dashboard, onExit }: {
         <div className="d-flex align-items-center justify-content-between gap-2 px-2 py-1">
           <span className="small text-truncate">Customer: <strong>{customer?.name ?? 'Walk-in'}</strong></span>
           <button type="button" className="btn btn-outline-secondary btn-sm" disabled={busy || scanBusy || !dashboard.canOperate || !saleAvailable}
-            aria-expanded={customerOpen} aria-keyshortcuts="F4" onClick={() => { setCustomerOpen(v => !v); setCustomerSearch(''); setCustomerResults([]) }}>
+            aria-haspopup="dialog" aria-expanded={customerOpen} aria-keyshortcuts="F4" onClick={() => { setCustomerOpen(v => !v); setCustomerSearch(''); setCustomerResults([]) }}>
             {customerOpen ? 'Close' : 'Select customer'}
           </button>
           {customer && <button type="button" className="btn btn-outline-secondary btn-sm" disabled={busy || scanBusy}
             onClick={() => { setCustomer(null); setCustomerOpen(false); setCustomerSearch('') }}>Walk-in</button>}
         </div>
-        {customerOpen && <div className="px-2 pb-2">
-          <label htmlFor="pos-customer-search" className="visually-hidden">Search customer by name or phone</label>
-          <input ref={customerInput} id="pos-customer-search" autoFocus className="form-control form-control-sm" maxLength={100}
-            placeholder="Customer name or phone" value={customerSearch} disabled={busy || scanBusy}
-            onChange={event => { setCustomerSearch(event.target.value); setCustomerResults([]) }} />
-          {customerStatus && <p className="small mb-1" role="status">{customerStatus}</p>}
-          {customerResults.length > 0 && <div className="list-group overflow-auto" style={{ maxHeight: 150 }}>
-            {customerResults.map(item => <button key={item.id} type="button" className="list-group-item list-group-item-action"
-              disabled={busy || scanBusy} onClick={() => { setCustomer(item); setCustomerOpen(false); setCustomerSearch('') }}>
-              {item.name}{item.phone ? ' · ' + item.phone : ''}
-            </button>)}
-          </div>}
-        </div>}
+        {customerOpen && <LookupDialog title="Search customers" searchId="pos-customer-search"
+          search={customerSearch} placeholder="Customer name or phone" columns={['Customer', 'Phone']}
+          rows={customerResults.map(item => ({ id: item.id, cells: [item.name, item.phone ?? '—'],
+            label: item.name + (item.phone ? ' · ' + item.phone : '') }))}
+          status={customerStatus}
+          onSearch={value => { setCustomerSearch(value); setCustomerResults([]) }}
+          onSelect={id => {
+            const item = customerResults.find(x => x.id === id)
+            if (item) { setCustomer(item); setCustomerOpen(false); setCustomerSearch('') }
+          }} onClose={() => { setCustomerOpen(false); setCustomerSearch('') }} />}
         {!basket.length && <div className="pos-basket-empty">
           <ShoppingBag size={34} /><strong>Your basket is empty</strong>
           <p>Select a product from the catalogue to start this sale.</p>

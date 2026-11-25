@@ -312,10 +312,10 @@
 /* Purchase entry uses a scrollable line table and one lookup field in its next row. */
 .purchase-entry-table { min-width: 680px; }
 .purchase-entry-table input[type="number"] { min-width: 90px; }
-/* Purchase lookup: one editable field with its result dropdown. */
-.purchase-search-select { position: relative; min-width: 0; }
-.purchase-search-options { max-height: 180px; overflow-y: auto; background: #fff;
-  border: 1px solid #ced4da; border-radius: 4px; margin-top: 2px; color: #000; }
-.purchase-search-options [role="option"] { padding: 8px 10px; cursor: pointer; overflow-wrap: anywhere; }
-.purchase-search-options [role="option"]:hover,
-.purchase-search-options [aria-selected="true"] { background: #e9ecef; }
+/* Native lookup dialogs share one table and one search field. */
+.lookup-dialog { width: min(680px, calc(100% - 24px)); max-height: calc(100% - 24px);
+  padding: 18px; border: 1px solid #b8b8b8; border-radius: 8px; background: #fff; color: #000; }
+.lookup-dialog::backdrop { background: rgba(0,0,0,.45); }
+.lookup-results { max-height: min(50vh, 400px); overflow: auto; }
+.lookup-results tbody tr { cursor: pointer; }
+.lookup-results thead { position: sticky; top: 0; background: #fff; }

@@ -1,59 +1,8 @@
-import { Plus } from 'lucide-react'
+import { Plus, Search } from 'lucide-react'
 import { useEffect, useRef, useState, type FormEvent } from 'react'
 import { api, post, operationKey, SessionExpiredError } from './api'
 import { baseQuantity } from './stockQuantity'
-
-// One input for both searching and choosing an existing record.
-function SearchSelect({ id, value, placeholder, options, loading, exactMatchId, disabled, onSearch, onSelect }: {
-  id: string
-  value: string
-  placeholder: string
-  options: { id: number; label: string }[]
-  loading: boolean
-  exactMatchId?: number
-  disabled?: boolean
-  onSearch: (value: string) => void
-  onSelect: (id: number) => void
-}) {
-  const [open, setOpen] = useState(false)
-  const [index, setIndex] = useState(-1)
-  const active = open ? options[index] : undefined
-  function choose(id: number) {
-    onSelect(id)
-    setOpen(false)
-    setIndex(-1)
-  }
-  return <div className="purchase-search-select">
-    <input id={id} className="form-control" role="combobox" autoComplete="off"
-      aria-autocomplete="list" aria-expanded={open && !disabled}
-      aria-controls={open && !disabled ? id + '-options' : undefined}
-      aria-activedescendant={active ? id + '-option-' + active.id : undefined}
-      placeholder={placeholder} value={value} disabled={disabled}
-      onFocus={() => setOpen(true)} onClick={() => setOpen(true)}
-      onBlur={() => { setOpen(false); setIndex(-1) }}
-      onChange={event => { onSearch(event.target.value); setOpen(true); setIndex(-1) }}
-      onKeyDown={event => {
-        if (event.key === 'ArrowDown' || event.key === 'ArrowUp') {
-          event.preventDefault()
-          setOpen(true)
-          setIndex(i => Math.max(0, Math.min(options.length - 1, i + (event.key === 'ArrowDown' ? 1 : -1))))
-        } else if (event.key === 'Enter') {
-          event.preventDefault()
-          if (active) choose(active.id)
-          else if (open && exactMatchId !== undefined) choose(exactMatchId)
-          else if (open && options.length === 1) choose(options[0].id)
-        } else if (event.key === 'Escape') {
-          setOpen(false); setIndex(-1)
-        }
-      }} />
-    {open && !disabled && <div className="purchase-search-options" id={id + '-options'} role="listbox">
-      {options.map((option, i) => <div key={option.id} id={id + '-option-' + option.id}
-        role="option" aria-selected={i === index}
-        onMouseDown={event => event.preventDefault()} onClick={() => choose(option.id)}>{option.label}</div>)}
-      {options.length === 0 && <div className="small p-2" role="status">{loading ? 'Searching…' : 'No matching records'}</div>}
-    </div>}
-  </div>
-}
+import LookupDialog from './LookupDialog'
 
 interface Supplier {
   id: number
@@ -157,6 +106,9 @@ export default function RetailPurchases({ businessId, canOperate, locations, rol
   const [receivingKey, setReceivingKey] = useState(operationKey)
   const [locationId, setLocationId] = useState(locations[0]?.id ?? 0)
   const [supplierSearch, setSupplierSearch] = useState('')
+  const [supplierName, setSupplierName] = useState('')
+  const [lookup, setLookup] = useState<'supplier' | 'product' | null>(null)
+  const [resolving, setResolving] = useState(false)
   const [suppliers, setSuppliers] = useState<Supplier[]>([])
   const [suppliersLoading, setSuppliersLoading] = useState(true)
   const [supplierId, setSupplierId] = useState(0)
@@ -204,8 +156,7 @@ export default function RetailPurchases({ businessId, canOperate, locations, rol
   }, [basePath, page, reload, approvalsOnly])
 
   useEffect(() => {
-    // The order register and approval review do not need create-form catalogs.
-    if (!creating) return
+    if (!creating || lookup !== 'supplier') return
     let active = true
     setSuppliersLoading(true)
     const timer = setTimeout(() => {
@@ -215,10 +166,10 @@ export default function RetailPurchases({ businessId, canOperate, locations, rol
         .finally(() => { if (active) setSuppliersLoading(false) })
     }, 250)
     return () => { active = false; clearTimeout(timer) }
-  }, [businessId, supplierSearch, reload, creating])
+  }, [businessId, supplierSearch, reload, creating, lookup])
 
   useEffect(() => {
-    if (!creating) return
+    if (!creating || lookup !== 'product') return
     let active = true
     setProductsLoading(true)
     const timer = setTimeout(() => {
@@ -228,7 +179,7 @@ export default function RetailPurchases({ businessId, canOperate, locations, rol
         .finally(() => { if (active) setProductsLoading(false) })
     }, 250)
     return () => { active = false; clearTimeout(timer) }
-  }, [businessId, productSearch, reload, creating])
+  }, [businessId, productSearch, reload, creating, lookup])
 
   useEffect(() => {
     if (selectedId === null) return
@@ -262,7 +213,7 @@ export default function RetailPurchases({ businessId, canOperate, locations, rol
       const added = await post<Supplier>(`/businesses/${businessId}/suppliers`, { name, phone, email })
       setSuppliers([added])
       setSupplierId(added.id)
-      setSupplierSearch(added.name)
+      setSupplierName(added.name)
       setSupplierFormOpen(false)
       setNewSupplier({ name: '', phone: '', email: '' })
       setNotice('Supplier added to this order.')
@@ -277,6 +228,8 @@ export default function RetailPurchases({ businessId, canOperate, locations, rol
     setLocationId(locations[0]?.id ?? 0)
     setSupplierId(0)
     setSupplierSearch('')
+    setSupplierName('')
+    setLookup(null)
     setSuppliers([])
     setSuppliersLoading(true)
     setSupplierFormOpen(false)
@@ -287,10 +240,10 @@ export default function RetailPurchases({ businessId, canOperate, locations, rol
     setLines([])
   }
 
-  function addLine(id: number) {
-    const product = products.find(x => x.id === id)
-    if (!product || lines.some(x => x.productId === id) || lines.length >= 50) return
-    focusQuantity.current = id
+  function addLine(product: Product) {
+    if (lines.some(x => x.productId === product.id) || lines.length >= 50) return
+    setLookup(null)
+    focusQuantity.current = product.id
     setLines(value => [...value, {
       productId: product.id, name: product.name, sku: product.sku,
       unitCode: product.unitCode, alternateUnits: (product.conversions ?? []).filter(x => x.isActive && x.unitCode),
@@ -298,6 +251,28 @@ export default function RetailPurchases({ businessId, canOperate, locations, rol
     }])
     if (productSearch) { setProductSearch(''); setProducts([]); setProductsLoading(true) }
     setError('')
+  }
+
+  async function resolveItemCode() {
+    const code = productSearch.trim()
+    if (busy || resolving || lines.length >= 50) return
+    if (!code) { setLookup('product'); return }
+    setResolving(true)
+    setError('')
+    try {
+      const result = await api<Page<Product>>(`/businesses/${businessId}/products?search=${encodeURIComponent(code)}&status=active&page=1`)
+      const match = result.items.find(item => item.isActive && item.sku.toUpperCase() === code.toUpperCase())
+      if (match) {
+        if (lines.some(line => line.productId === match.id)) setError('This item is already in the order.')
+        else addLine(match)
+      } else {
+        setProducts([])
+        setProductsLoading(true)
+        setLookup('product')
+      }
+    } catch (cause) {
+      if (!(cause instanceof SessionExpiredError)) setError(message(cause))
+    } finally { setResolving(false) }
   }
 
   function selectedUnit(line: NewLine) {
@@ -329,7 +304,7 @@ export default function RetailPurchases({ businessId, canOperate, locations, rol
 
   async function createOrder(event: FormEvent<HTMLFormElement>) {
     event.preventDefault()
-    if (!canOperate || busy || addingSupplier || supplierFormOpen) return
+    if (!canOperate || busy || resolving || lookup || addingSupplier || supplierFormOpen) return
     const approveNow = roleCode === 'Owner' &&
       (event.nativeEvent as SubmitEvent).submitter?.getAttribute('data-action') !== 'draft'
     if (!locationId || !supplierId || lines.length === 0 || lines.length > 50 ||
@@ -488,14 +463,15 @@ export default function RetailPurchases({ businessId, canOperate, locations, rol
           </div>
           <div>
             <label className="form-label" htmlFor="purchase-supplier">Supplier *</label>
-            <SearchSelect id="purchase-supplier" value={supplierSearch} placeholder="Search or select supplier"
-              options={suppliers.map(x => ({ id: x.id, label: x.name }))} loading={suppliersLoading}
-              disabled={busy || addingSupplier}
-              onSearch={value => { setSupplierId(0); setSupplierSearch(value); setSuppliers([]); setSuppliersLoading(true) }}
-              onSelect={id => {
-                const supplier = suppliers.find(x => x.id === id)
-                if (supplier) { setSupplierId(id); setSupplierSearch(supplier.name) }
-              }} />
+            <div className="input-group">
+              <input id="purchase-supplier" className="form-control" readOnly value={supplierName}
+                placeholder="Select supplier" disabled={busy || addingSupplier || resolving}
+                onClick={() => { setSupplierSearch(''); setSuppliers([]); setSuppliersLoading(true); setLookup('supplier') }}
+                onKeyDown={event => { if (event.key === 'Enter') { event.preventDefault(); setSupplierSearch(''); setSuppliers([]); setSuppliersLoading(true); setLookup('supplier') } }} />
+              <button type="button" className="btn btn-outline-secondary" aria-label="Search suppliers"
+                disabled={busy || addingSupplier || resolving}
+                onClick={() => { setSupplierSearch(''); setSuppliers([]); setSuppliersLoading(true); setLookup('supplier') }}><Search size={17}/></button>
+            </div>
             <button type="button" className="btn btn-sm btn-outline-secondary mt-2"
               disabled={busy || addingSupplier}
               onClick={() => {
@@ -574,13 +550,16 @@ export default function RetailPurchases({ businessId, canOperate, locations, rol
               {lines.length < 50 && <tr>
                 <td colSpan={2}>
                   <label className="visually-hidden" htmlFor="purchase-product">Item code or name</label>
-                  <SearchSelect id="purchase-product" value={productSearch} placeholder="Search item code or name"
-                    loading={productsLoading} disabled={busy}
-                    options={products.filter(x => !lines.some(line => line.productId === x.id))
-                      .map(x => ({ id: x.id, label: x.name + ' (' + x.sku + (x.unitCode ? ' · ' + x.unitCode : '') + ')' }))}
-                    exactMatchId={products.find(x => x.sku.toLowerCase() === productSearch.trim().toLowerCase() &&
-                      !lines.some(line => line.productId === x.id))?.id}
-                    onSearch={value => { setProductSearch(value); setProducts([]); setProductsLoading(true) }} onSelect={addLine} />
+                  <div className="input-group">
+                    <input id="purchase-product" className="form-control" value={productSearch} autoComplete="off"
+                      placeholder="Item code" disabled={busy || resolving} maxLength={100}
+                      onChange={event => setProductSearch(event.target.value)}
+                      onKeyDown={event => { if (event.key === 'Enter') { event.preventDefault(); void resolveItemCode() } }} />
+                    <button type="button" className="btn btn-outline-secondary" aria-label="Search items"
+                      disabled={busy || resolving} onClick={() => { setProducts([]); setProductsLoading(true); setLookup('product') }}>
+                      <Search size={17}/>
+                    </button>
+                  </div>
                 </td>
                 <td colSpan={5}></td>
               </tr>}
@@ -594,17 +573,34 @@ export default function RetailPurchases({ businessId, canOperate, locations, rol
           </p>}
         </div>
         <div className="form-footer">
-          <button type="button" className="btn btn-outline-secondary" disabled={busy || addingSupplier}
+          <button type="button" className="btn btn-outline-secondary" disabled={busy || resolving || addingSupplier}
             onClick={() => { resetOrderDraft(); setCreating(false) }}>Cancel</button>
           <button type="submit" className="btn btn-primary"
-            disabled={busy || addingSupplier || supplierFormOpen || !supplierId || !validOrderLines}>
+            disabled={busy || resolving || addingSupplier || supplierFormOpen || !supplierId || !validOrderLines}>
             {busy ? 'Saving…' : roleCode === 'Owner' ? 'Save & Approve' : 'Submit for Approval'}
           </button>
           {roleCode === 'Owner' && <button type="submit" data-action="draft"
-            className="btn btn-outline-secondary" disabled={busy || addingSupplier || supplierFormOpen || !supplierId || !validOrderLines}>
+            className="btn btn-outline-secondary" disabled={busy || resolving || addingSupplier || supplierFormOpen || !supplierId || !validOrderLines}>
             Save Draft
           </button>}
         </div>
+        {lookup === 'supplier' && <LookupDialog title="Search suppliers" searchId="purchase-supplier-search"
+          search={supplierSearch} placeholder="Supplier name or phone" columns={['Supplier']}
+          rows={suppliers.map(item => ({ id: item.id, cells: [item.name] }))}
+          status={suppliersLoading ? 'Searching…' : suppliers.length ? '' : 'No matching suppliers'}
+          onSearch={value => { setSupplierSearch(value); setSuppliers([]); setSuppliersLoading(true) }}
+          onSelect={id => {
+            const item = suppliers.find(x => x.id === id)
+            if (item) { setSupplierId(item.id); setSupplierName(item.name); setLookup(null) }
+          }} onClose={() => setLookup(null)} />}
+        {lookup === 'product' && <LookupDialog title="Search items" searchId="purchase-item-search"
+          search={productSearch} placeholder="Item code or name" columns={['Item code', 'Item name', 'Unit']}
+          rows={products.filter(item => !lines.some(line => line.productId === item.id))
+            .map(item => ({ id: item.id, cells: [item.sku, item.name, item.unitCode ?? '—'] }))}
+          status={productsLoading ? 'Searching…' : products.length ? '' : 'No matching items'}
+          onSearch={value => { setProductSearch(value); setProducts([]); setProductsLoading(true) }}
+          onSelect={id => { const item = products.find(x => x.id === id); if (item) addLine(item) }}
+          onClose={() => setLookup(null)} />}
       </form>}
 
       {!creating && selectedId === null && <div className="product-form">
