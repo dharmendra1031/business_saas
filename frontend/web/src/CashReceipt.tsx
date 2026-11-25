@@ -301,7 +301,7 @@ function ExchangeEstimate({ receipt, options }: { receipt: Receipt; options: Ret
   const money = (amount: number) => receipt.currencyCode + ' ' + amount.toFixed(2)
   function invalidate() { setQuote(null); setError('') }
   function changeReturn(id: number, field: 'quantity' | 'condition', value: string) {
-    setReturns(previous => ({ ...previous, [id]: { quantity: '', condition: '', ...previous[id], [field]: value } }))
+    setReturns(previous => ({ ...previous, [id]: { ...(previous[id] ?? { quantity: '', condition: '' }), [field]: value } }))
     invalidate()
   }
   return <section className="border rounded p-2 mb-3" aria-label="Exchange estimate">
