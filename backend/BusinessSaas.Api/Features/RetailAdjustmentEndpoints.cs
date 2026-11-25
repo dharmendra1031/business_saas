@@ -110,7 +110,8 @@ public static class RetailAdjustmentEndpoints
         group.MapPost("/{adjustmentId:long}/review", async (long businessId, long locationId,
             long adjustmentId, ReviewAdjustment request, ClaimsPrincipal user, AppDbContext db) =>
         {
-            var denied = await CheckOwner(db, user, businessId, locationId);
+            var denied = await RetailMasterEndpoints.CheckAccess(db, user, businessId, true,
+                locationId: locationId, ownerOnly: true);
             if (denied is not null) return denied;
 
             var remarks = request.Remarks?.Trim();
@@ -138,7 +139,8 @@ public static class RetailAdjustmentEndpoints
         group.MapPost("/{adjustmentId:long}/post", async (long businessId, long locationId,
             long adjustmentId, ClaimsPrincipal user, AppDbContext db) =>
         {
-            var denied = await CheckOwner(db, user, businessId, locationId);
+            var denied = await RetailMasterEndpoints.CheckAccess(db, user, businessId, true,
+                locationId: locationId, ownerOnly: true);
             if (denied is not null) return denied;
 
             await using var transaction = await db.Database.BeginTransactionAsync(IsolationLevel.Serializable);
@@ -193,16 +195,6 @@ public static class RetailAdjustmentEndpoints
 
     private static long UserId(ClaimsPrincipal user) =>
         long.Parse(user.FindFirstValue(ClaimTypes.NameIdentifier)!);
-
-    private static async Task<IResult?> CheckOwner(
-        AppDbContext db, ClaimsPrincipal user, long businessId, long locationId)
-    {
-        var denied = await RetailStockEndpoints.CheckLocation(db, user, businessId, locationId, true);
-        if (denied is not null) return denied;
-        var owner = await db.BusinessUsers.AsNoTracking()
-            .AnyAsync(x => x.BusinessId == businessId && x.UserId == UserId(user) && x.RoleCode == "Owner");
-        return owner ? null : Results.NotFound();
-    }
 
     private sealed record CreateAdjustment(long ProductId, decimal SystemQuantity,
         decimal CountedQuantity, string? Reason, string? Remarks);

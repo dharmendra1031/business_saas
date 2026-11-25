@@ -244,7 +244,8 @@ public static class RetailPurchaseEndpoints
             var order = await db.RetailPurchaseOrders.AsNoTracking().SingleOrDefaultAsync(x =>
                 x.BusinessId == businessId && x.Id == orderId);
             if (order is null) return Results.NotFound();
-            var denied = await CheckOwner(db, user, businessId, order.LocationId);
+            var denied = await RetailMasterEndpoints.CheckAccess(db, user, businessId, true,
+                locationId: order.LocationId, ownerOnly: true);
             if (denied is not null) return denied;
 
             if (!await db.RetailSuppliers.AsNoTracking().AnyAsync(x =>
@@ -483,16 +484,6 @@ public static class RetailPurchaseEndpoints
 
     private static long UserId(ClaimsPrincipal user) =>
         long.Parse(user.FindFirstValue(ClaimTypes.NameIdentifier)!);
-
-    private static async Task<IResult?> CheckOwner(AppDbContext db,
-        ClaimsPrincipal user, long businessId, long locationId)
-    {
-        var denied = await RetailStockEndpoints.CheckLocation(db, user, businessId, locationId, true);
-        if (denied is not null) return denied;
-        return await db.BusinessUsers.AsNoTracking().AnyAsync(x =>
-            x.BusinessId == businessId && x.UserId == UserId(user) && x.RoleCode == "Owner")
-            ? null : Results.NotFound();
-    }
 
     private sealed record OrderLine(long ProductId, decimal Quantity, decimal UnitCost,
         long? UnitId = null, decimal? ExpectedFactor = null, string? ExpectedBaseUnitCode = null);

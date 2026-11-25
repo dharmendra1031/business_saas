@@ -327,7 +327,7 @@ public static class RetailMasterEndpoints
     }
 
     internal static async Task<IResult?> CheckAccess(AppDbContext db, ClaimsPrincipal user,
-        long businessId, bool write, CancellationToken cancellationToken = default, long? locationId = null)
+        long businessId, bool write, CancellationToken cancellationToken = default, long? locationId = null, bool ownerOnly = false)
     {
         if (!long.TryParse(user.FindFirstValue(ClaimTypes.NameIdentifier), out var userId))
             return Results.NotFound();
@@ -356,7 +356,7 @@ public static class RetailMasterEndpoints
                 (role == "Owner" || x.IsPrimary), cancellationToken))
             return Results.NotFound();
 
-        return null;
+        return ownerOnly && role != "Owner" ? Results.NotFound() : null;
     }
 
     private sealed record CategoryRequest(string? Name, bool? IsActive, long? ParentId = null);

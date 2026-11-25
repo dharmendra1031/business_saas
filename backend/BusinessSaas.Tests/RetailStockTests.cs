@@ -193,6 +193,9 @@ public sealed class RetailStockTests
         Assert.Equal(HttpStatusCode.NotFound,
             (await Send(manager, HttpMethod.Post, adjustments + "/" + adjustmentId + "/review",
                 new { approve = true })).StatusCode);
+        Assert.Equal(HttpStatusCode.NotFound,
+            (await Send(manager, HttpMethod.Post, adjustments + "/" + adjustmentId + "/post",
+                new { })).StatusCode);
         Assert.Equal(HttpStatusCode.Conflict,
             (await Send(owner, HttpMethod.Post, adjustments + "/" + adjustmentId + "/post",
                 new { })).StatusCode);
@@ -291,6 +294,13 @@ public sealed class RetailStockTests
             (await Send(owner, HttpMethod.Post,
                 $"/api/businesses/{businessId}/stock/locations/{secondLocationId}/opening",
                 new { productId = product, quantity = 1m })).StatusCode);
+        Assert.Equal(HttpStatusCode.Forbidden,
+            (await Send(owner, HttpMethod.Post, adjustments + "/" + adjustmentId + "/post", new { })).StatusCode);
+        Assert.Equal(HttpStatusCode.Forbidden,
+            (await Send(manager, HttpMethod.Post, adjustments + "/" + adjustmentId + "/review",
+                new { approve = true })).StatusCode);
+        Assert.Equal(HttpStatusCode.NotFound,
+            (await Send(other, HttpMethod.Post, adjustments + "/" + adjustmentId + "/post", new { })).StatusCode);
         Assert.Equal(HttpStatusCode.OK, (await owner.GetAsync(path)).StatusCode);
     }
 
