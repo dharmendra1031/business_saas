@@ -65,7 +65,7 @@ public static class BusinessEndpoints
         group.MapPost("/businesses", () => Results.Forbid());
 
         group.MapGet("/businesses/{businessId:long}/dashboard", async (
-            long businessId, ClaimsPrincipal principal, AppDbContext db, IWebHostEnvironment environment) =>
+            long businessId, ClaimsPrincipal principal, AppDbContext db, IWebHostEnvironment environment, IConfiguration config) =>
         {
             var userId = CurrentUserId(principal);
             var roleCode = await db.BusinessUsers.AsNoTracking()
@@ -87,6 +87,7 @@ public static class BusinessEndpoints
                                      business.CountryCode,
                                      business.TimeZoneId,
                                      business.CashSalesEnabled,
+                                     business.CreditSalesEnabled,
                                      business.ReceiptAutoOpen,
                                      TypeCode = type.Code,
                                      TypeName = type.Name
@@ -183,6 +184,10 @@ public static class BusinessEndpoints
                 business = details, roleCode, locations, subscription, accessStatus,
                 canOperate, cashSaleEnabled = environment.IsDevelopment(),
                 cashPaymentEnabled = details.CashSalesEnabled,
+                creditPaymentEnabled = environment.IsDevelopment() && roleCode == "Owner" &&
+                    details.TypeCode == "RETAIL" && details.CreditSalesEnabled &&
+                    config.GetValue<bool>("RetailCredit:PostingEnabled") &&
+                    config.GetValue<bool>("RetailCredit:CollectionsEnabled"),
                 receiptAutoOpen = details.ReceiptAutoOpen && environment.IsDevelopment() && OperatingSystem.IsWindows() });
         });
     }

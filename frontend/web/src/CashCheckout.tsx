@@ -17,7 +17,7 @@ interface Line { productId: number; name: string; quantity: number; expectedUnit
   unitId?: number; expectedFactor?: number; baseUnitCode?: string | null; basePrice?: number;
   expectedBaseUnitCode?: string | null;
   conversions?: SaleUnit[] }
-interface SaleRequest { locationId: number; requestKey: string; tendered: number; lines: Line[]; customerId?: number | null }
+interface SaleRequest { locationId: number; requestKey: string; tendered: number; lines: Line[]; customerId?: number | null; dueDate?: string }
 interface SaleCustomer { id: number; name: string; phone: string }
 interface ReceiptHistory {
   items: Pick<Receipt, 'id' | 'total' | 'currencyCode' | 'postedAtUtc'>[]
@@ -64,7 +64,10 @@ function restore(key: string): SaleRequest | null {
       !Number.isFinite(moneyCents(line.expectedUnitPrice))))
       throw new Error('Invalid checkout lines')
     if (saved.customerId != null && (!Number.isSafeInteger(saved.customerId) || saved.customerId < 1)) throw new Error('Invalid checkout customer')
-    return { locationId: saved.locationId, requestKey: saved.requestKey, tendered: saved.tendered, lines, customerId: saved.customerId ?? null }
+    if (saved.dueDate !== undefined && (!/^\d{4}-\d{2}-\d{2}$/.test(saved.dueDate) ||
+      !saved.customerId || saved.tendered !== 0)) throw new Error('Invalid credit checkout')
+    return { locationId: saved.locationId, requestKey: saved.requestKey, tendered: saved.tendered, lines, customerId: saved.customerId ?? null,
+      ...(saved.dueDate ? { dueDate: saved.dueDate } : {}) }
   } catch {
     try { sessionStorage.removeItem(key) } catch { /* Storage may be unavailable. */ }
     return null
@@ -76,9 +79,15 @@ export default function CashCheckout({ userId, dashboard, onExit }: {
 }) {
   const { business, locations } = dashboard
   const cashAvailable = dashboard.cashPaymentEnabled !== false
+  const creditAvailable = dashboard.roleCode === 'Owner' && dashboard.creditPaymentEnabled === true
+  const saleAvailable = cashAvailable || creditAvailable
+  const creditBase = `/businesses/${business.id}/credit-sales`
   const key = `cash-checkout:${userId}:${business.id}`
   const base = `/businesses/${business.id}/cash-sales`
   const [pending, setPending] = useState(() => restore(key))
+  const [method, setMethod] = useState<'Cash' | 'Credit'>(() => pending?.dueDate || (!cashAvailable && creditAvailable) ? 'Credit' : 'Cash')
+  const [dueDate, setDueDate] = useState('')
+  const [creditConfirmed, setCreditConfirmed] = useState(false)
   const [lookupState, setLookupState] = useState<'checking' | 'missing' | 'unknown'>('checking')
   const [refresh, setRefresh] = useState(0)
   const [receipt, setReceipt] = useState<Receipt | null>(null)
@@ -139,14 +148,19 @@ export default function CashCheckout({ userId, dashboard, onExit }: {
     let active = true
     setLookupState('checking')
     const query = new URLSearchParams({ locationId: String(pending.locationId), requestKey: pending.requestKey })
-    api<Receipt>(base + '/receipt?' + query)
-      .then(result => { if (active) { setReceipt(result); setError('') } })
+    api<Receipt>((pending.dueDate ? creditBase : base) + '/receipt?' + query)
+      .then(result => {
+        if (pending.dueDate && (result.paymentMethod !== 'Credit' || result.requestKey !== pending.requestKey ||
+          result.customerId !== pending.customerId || result.creditDueDate !== pending.dueDate))
+          throw new Error('Credit invoice response could not be verified.')
+        if (active) { setReceipt(result); setError('') }
+      })
       .catch(cause => {
         if (!active) return
         setLookupState(cause instanceof ApiResponseError && cause.status === 404 ? 'missing' : 'unknown')
       })
     return () => { active = false }
-  }, [base, pending, refresh, receipt, busy])
+  }, [base, creditBase, pending, refresh, receipt, busy])
 
   useEffect(() => {
     if (!locationId || !dashboard.canOperate || pending || receipt || scanBusy || historyPage) return
@@ -185,7 +199,7 @@ export default function CashCheckout({ userId, dashboard, onExit }: {
   }, [base, customerOpen, customerSearch, locationId, pending, receipt, dashboard.canOperate])
 
   useEffect(() => {
-    if (!dashboard.canOperate || !cashAvailable || busy || scanBusy || pending ||
+    if (!dashboard.canOperate || !saleAvailable || busy || scanBusy || pending ||
       receipt || showPayment || clearArmed || exitArmed) return
     function onKeyDown(event: KeyboardEvent) {
       if (event.defaultPrevented || event.repeat || event.isComposing ||
@@ -217,11 +231,11 @@ export default function CashCheckout({ userId, dashboard, onExit }: {
     }
     document.addEventListener('keydown', onKeyDown)
     return () => document.removeEventListener('keydown', onKeyDown)
-  }, [dashboard.canOperate, cashAvailable, busy, scanBusy, pending, receipt,
+  }, [dashboard.canOperate, saleAvailable, busy, scanBusy, pending, receipt,
     showPayment, clearArmed, exitArmed, historyPage, customerOpen])
 
   function addProduct(item: Product, fromScan = false) {
-    if (!dashboard.canOperate || !cashAvailable || lock.current || busy || pending || receipt ||
+    if (!dashboard.canOperate || !saleAvailable || lock.current || busy || pending || receipt ||
       (scanLock.current && !fromScan)) return
     const existing = basket.find(line => line.productId === item.id)
     if (existing?.unitId != null) {
@@ -259,7 +273,7 @@ export default function CashCheckout({ userId, dashboard, onExit }: {
     event.preventDefault()
     const code = search.trim().toUpperCase()
     if (!code || scanLock.current || lock.current || busy || pending || receipt ||
-      !dashboard.canOperate || !cashAvailable || !locationId) return
+      !dashboard.canOperate || !saleAvailable || !locationId) return
     scanLock.current = true
     setScanBusy(true)
     setError('')
@@ -330,18 +344,21 @@ export default function CashCheckout({ userId, dashboard, onExit }: {
   }
 
   async function recordSale(openPrint = false) {
+    const isCredit = pending ? !!pending.dueDate : method === 'Credit'
     const receivedCents = moneyCents(cash)
-    if (lock.current || scanLock.current || !dashboard.canOperate || needsReview || (!pending && !cashAvailable) ||
+    if (lock.current || scanLock.current || !dashboard.canOperate || needsReview ||
+      (!pending && (isCredit ? !creditAvailable : !cashAvailable)) ||
       (pending && lookupState !== 'missing')) return
     if (!pending && (!locationId || !basket.length || basket.some(line =>
       !fitsStock(line) ||
       !Number.isFinite(line.expectedUnitPrice) || line.expectedUnitPrice < 0) ||
       hasZeroValueLine || !Number.isFinite(total) || total <= 0 ||
-      !Number.isFinite(receivedCents) || receivedCents < totalCents)) {
-      setError('Check basket quantities and enter enough cash before recording the sale.')
+      (isCredit ? !customer || !dueDate || !creditConfirmed : !Number.isFinite(receivedCents) || receivedCents < totalCents))) {
+      setError(isCredit ? 'Select a customer and due date, then confirm the credit sale.' : 'Check basket quantities and enter enough cash before recording the sale.')
       return
     }
-    const request = pending ?? { locationId, lines: basket, tendered: receivedCents / 100, requestKey: operationKey(), customerId: customer?.id ?? null }
+    const request: SaleRequest = pending ?? { locationId, lines: basket, tendered: isCredit ? 0 : receivedCents / 100,
+      requestKey: operationKey(), customerId: customer?.id ?? null, ...(isCredit ? { dueDate } : {}) }
     lock.current = true
     setBusy(true)
     setLookupState('checking')
@@ -365,9 +382,13 @@ export default function CashCheckout({ userId, dashboard, onExit }: {
     }
     let posted: Receipt
     try {
-      try { sessionStorage.setItem(key, JSON.stringify(request)) } catch { /* Keep the request key in memory. */ }
+      if (isCredit) sessionStorage.setItem(key, JSON.stringify(request))
+      else try { sessionStorage.setItem(key, JSON.stringify(request)) } catch { /* Keep the request key in memory. */ }
       setPending(request)
-      posted = await post<Receipt>(base, request)
+      posted = await post<Receipt>(isCredit ? creditBase : base, request)
+      if (isCredit && (posted.paymentMethod !== 'Credit' || posted.requestKey !== request.requestKey ||
+          posted.customerId !== request.customerId || posted.creditDueDate !== request.dueDate))
+        throw new Error('Credit invoice response could not be verified. Check the saved request.')
     } catch (cause) {
       closePrintTab()
       setError(cause instanceof Error ? cause.message : 'Unable to confirm sale.')
@@ -376,7 +397,7 @@ export default function CashCheckout({ userId, dashboard, onExit }: {
       const editableRejection = cause instanceof ApiResponseError && (
         (cause.status === 400 &&
           (cause.code === 'CASH_SALE_BASKET_CHANGED' || cause.code === 'CASH_SALE_ZERO_VALUE_LINE' || cause.code === 'CASH_SALE_CUSTOMER_CHANGED')) ||
-        (cause.status === 409 && cause.code === 'CASH_SALES_DISABLED'))
+        (cause.status === 409 && ['CASH_SALES_DISABLED', 'CREDIT_NOT_RELEASED', 'CREDIT_LIMIT_EXCEEDED', 'CREDIT_OVERDUE'].includes(cause.code ?? '')))
       const initialRejection = !pending && cause instanceof ApiResponseError &&
         [400, 403].includes(cause.status)
       if (initialRejection || editableRejection) {
@@ -400,7 +421,7 @@ export default function CashCheckout({ userId, dashboard, onExit }: {
 
     // The sale is committed. No print/window error may enter sale recovery.
     setReceipt(posted)
-    if (!openPrint) return
+    if (!openPrint || isCredit) return
     if (!posted.printAvailable) {
       closePrintTab()
       setPrintNotice('Sale saved. RDLC printing is unavailable on this host.')
@@ -429,6 +450,21 @@ export default function CashCheckout({ userId, dashboard, onExit }: {
     } finally { lock.current = false; setBusy(false) }
   }
 
+  if (receipt?.paymentMethod === 'Credit') return <section className="content-section" aria-label="Posted credit invoice">
+    <h2>Credit invoice #{receipt.id}</h2>
+    <p>Customer: {receipt.customerName ?? '#' + receipt.customerId} · Due date: {receipt.creditDueDate}</p>
+    <div className="table-responsive"><table className="table table-sm"><thead><tr><th>Product</th><th>Quantity</th><th>Rate</th><th>Amount</th></tr></thead>
+      <tbody>{receipt.lines.map(line => <tr key={line.id}><td>{line.productName}</td><td>{line.quantity} {line.unitCode}</td>
+        <td>{money(line.unitPrice)}</td><td>{money(line.lineTotal ?? line.quantity * line.unitPrice)}</td></tr>)}</tbody></table></div>
+    <p>Invoice total: <strong>{money(receipt.total)}</strong> · Outstanding: <strong>{money(receipt.outstanding ?? receipt.total)}</strong></p>
+    <p>No cash collected at checkout. Credit invoice printing is not released yet.</p>
+    <button className="btn btn-primary" type="button" onClick={() => {
+      try { sessionStorage.removeItem(key) } catch { setError('Unable to clear saved invoice. Reopen POS to recover it.'); return }
+      setPending(null); setReceipt(null); setBasket([]); setCustomer(null); setCustomerOpen(false); setCustomerSearch('')
+      setCash(''); setDueDate(''); setCreditConfirmed(false); setShowPayment(false); setSearch(''); setError('')
+    }}>New sale</button>
+    {error && <p role="alert">{error}</p>}
+  </section>
   if (receipt) return <CashReceipt receipt={receipt} businessName={business.name} timeZone={business.timeZoneId}
     pdfPath={`/api${base}/receipts/${receipt.id}/pdf?locationId=${locationId}`} printNotice={printNotice}
     backLabel={pending ? 'New sale' : 'Back to checkout'} onBack={() => {
@@ -452,8 +488,8 @@ export default function CashCheckout({ userId, dashboard, onExit }: {
         {pending && <p>Check the previous transaction before recording it again.</p>}
       </div>
       <div className="pos-header-actions">
-        {!pending && dashboard.canOperate && cashAvailable && <span className="small text-dark">F2 Search · F4 Customer · F9 Checkout</span>}
-        <span className="pos-mode"><Check size={15} /> Cash checkout · {business.currencyCode}</span>
+        {!pending && dashboard.canOperate && saleAvailable && <span className="small text-dark">F2 Search · F4 Customer · F9 Checkout</span>}
+        <span className="pos-mode"><Check size={15} /> {pending?.dueDate || method === 'Credit' ? 'Credit' : 'Cash'} checkout · {business.currencyCode}</span>
         <button type="button" className="btn btn-outline-secondary btn-sm pos-exit-button"
           disabled={busy || scanBusy || !!pending} onClick={() => basket.length ? setExitArmed(true) : onExit()}>
           <ArrowLeft size={15} /> Exit POS
@@ -467,13 +503,13 @@ export default function CashCheckout({ userId, dashboard, onExit }: {
     </div>}
     {error && !showPayment && <div role="alert" className="alert alert-danger">{error}</div>}
     {!cashAvailable && <div className="alert alert-warning" role="status">
-      Cash checkout is disabled in Business Settings. Existing receipts can still be reviewed.
+      Cash checkout is disabled in Business Settings. {creditAvailable ? 'Credit checkout is available in the owner pilot.' : 'Existing receipts can still be reviewed.'}
     </div>}
     {pending ? <section className="content-section pos-pending" aria-label="Pending sale recovery">
-      <div className="pos-panel-heading"><h2>Pending cash sale</h2><span>Reference held for safe retry</span></div>
+      <div className="pos-panel-heading"><h2>Pending {pending.dueDate ? 'credit' : 'cash'} sale</h2><span>Reference held for safe retry</span></div>
       <ul>{pending.lines.map(line => <li key={line.productId}>{line.name} · {line.quantity}{line.unitCode ? ' ' + line.unitCode : ''} × {money(line.expectedUnitPrice)}</li>)}</ul>
       <p>Customer: {pending.customerId ? `#${pending.customerId}` : 'Walk-in'}</p>
-      <p><strong>Total {money(total)}</strong> · Cash received {money(pending.tendered)}</p>
+      <p><strong>Total {money(total)}</strong> · {pending.dueDate ? 'Credit due ' + pending.dueDate : 'Cash received ' + money(pending.tendered)}</p>
       <p role="status">{busy ? 'Recording sale…' : lookupState === 'missing' ? 'No posted receipt found for this sale.'
         : lookupState === 'unknown' ? 'Receipt status could not be verified. Do not create another sale.' : 'Checking for the posted receipt…'}</p>
       {lookupState === 'missing' && <button type="button" className="btn btn-primary me-2"
@@ -509,7 +545,7 @@ export default function CashCheckout({ userId, dashboard, onExit }: {
             placeholder="Search product, SKU or scan barcode…" maxLength={150} value={search}
             disabled={!dashboard.canOperate || busy} readOnly={scanBusy} onChange={event => setSearch(event.target.value)} />
           <button type="submit" className="btn btn-outline-primary btn-sm"
-            disabled={!search.trim() || scanBusy || busy || !dashboard.canOperate || !cashAvailable} aria-label="Add exact barcode or SKU">
+            disabled={!search.trim() || scanBusy || busy || !dashboard.canOperate || !saleAvailable} aria-label="Add exact barcode or SKU">
             {scanBusy ? 'Checking…' : 'Scan / Enter'}
           </button>
         </form>}
@@ -559,7 +595,7 @@ export default function CashCheckout({ userId, dashboard, onExit }: {
             {products.map(item => {
               const basketLine = basket.find(line => line.productId === item.id)
               const inBasket = basketLine ? stockQuantity(basketLine) ?? 0 : 0
-              const canAdd = dashboard.canOperate && cashAvailable && !busy && !scanBusy &&
+              const canAdd = dashboard.canOperate && saleAvailable && !busy && !scanBusy &&
                 basketLine?.unitId == null && item.available - inBasket >= 0.001 &&
                 (inBasket > 0 || basket.length < 100)
               return <button key={item.id} type="button" className="pos-product-card" disabled={!canAdd}
@@ -600,7 +636,7 @@ export default function CashCheckout({ userId, dashboard, onExit }: {
         </div>
         <div className="d-flex align-items-center justify-content-between gap-2 px-2 py-1">
           <span className="small text-truncate">Customer: <strong>{customer?.name ?? 'Walk-in'}</strong></span>
-          <button type="button" className="btn btn-outline-secondary btn-sm" disabled={busy || scanBusy || !dashboard.canOperate || !cashAvailable}
+          <button type="button" className="btn btn-outline-secondary btn-sm" disabled={busy || scanBusy || !dashboard.canOperate || !saleAvailable}
             aria-expanded={customerOpen} aria-keyshortcuts="F4" onClick={() => { setCustomerOpen(v => !v); setCustomerSearch(''); setCustomerResults([]) }}>
             {customerOpen ? 'Close' : 'Select customer'}
           </button>
@@ -674,12 +710,32 @@ export default function CashCheckout({ userId, dashboard, onExit }: {
           </p>}
           <div className="pos-subtotal-row"><span>Subtotal</span><strong>{money(total)}</strong></div>
           <div className="pos-total-row"><span>Total Payable</span><strong>{money(total)}</strong></div>
+          {creditAvailable && <div className="mb-2">
+            <label htmlFor="pos-payment-method" className="form-label">Payment method</label>
+            <select id="pos-payment-method" className="form-select form-select-sm" value={method}
+              disabled={busy || scanBusy} onChange={event => {
+                setMethod(event.target.value === 'Credit' ? 'Credit' : 'Cash')
+                setCash(''); setCreditConfirmed(false); setError('')
+              }}>
+              {cashAvailable && <option value="Cash">Cash</option>}
+              <option value="Credit">Credit</option>
+            </select>
+            {method === 'Credit' && <>
+              <p className="small mt-1 mb-1">{customer ? 'Credit customer: ' + customer.name : 'Select a customer before recording credit.'}</p>
+              <label htmlFor="pos-credit-due" className="form-label">Due date</label>
+              <input id="pos-credit-due" className="form-control form-control-sm" type="date" value={dueDate}
+                disabled={busy || scanBusy} onChange={event => { setDueDate(event.target.value); setCreditConfirmed(false) }} />
+              <label className="form-check mt-2"><input className="form-check-input" type="checkbox" checked={creditConfirmed}
+                disabled={busy || scanBusy} onChange={event => setCreditConfirmed(event.target.checked)} /> Confirm unpaid credit sale</label>
+            </>}
+          </div>}
           <button ref={checkoutButton} type="button" aria-keyshortcuts="F9" className="btn btn-primary pos-record-button"
-            disabled={!dashboard.canOperate || !cashAvailable || busy || scanBusy || needsReview || hasZeroValueLine ||
+            disabled={!dashboard.canOperate || !saleAvailable || busy || scanBusy || needsReview || hasZeroValueLine ||
               !basket.length || !Number.isFinite(total) || total <= 0 ||
-              basket.some(line => !fitsStock(line))}
-            onClick={() => { setError(''); setShowPayment(true) }}>
-            <Banknote size={19} /> Pay / Checkout <ArrowRight size={18} />
+              basket.some(line => !fitsStock(line)) ||
+              (method === 'Credit' ? !creditAvailable || !customer || !dueDate || !creditConfirmed : !cashAvailable)}
+            onClick={() => { setError(''); if (method === 'Credit') void recordSale(); else setShowPayment(true) }}>
+            <Banknote size={19} /> {method === 'Credit' ? 'Record credit sale' : 'Pay / Checkout'} <ArrowRight size={18} />
           </button>
         </div>
       </section>

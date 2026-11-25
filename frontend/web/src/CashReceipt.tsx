@@ -9,6 +9,10 @@ export interface Receipt {
   currencyCode: string
   postedAtUtc: string
   printAvailable?: boolean
+  paymentMethod?: 'Cash' | 'Credit'
+  creditDueDate?: string | null
+  outstanding?: number
+  requestKey?: string
   businessName?: string | null
   locationName?: string | null
   customerId?: number | null

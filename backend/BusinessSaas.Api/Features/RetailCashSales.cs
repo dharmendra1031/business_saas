@@ -28,7 +28,9 @@ public static class RetailCashSales
         group.MapGet("/daily-report", DailyReport);
         group.MapPost("", Post);
         // Isolated pilot: no cashier credit UI or owner settings activation yet.
-        app.MapPost("/api/businesses/{businessId:long}/credit-sales", PostCredit).RequireAuthorization();
+        var credit = app.MapGroup("/api/businesses/{businessId:long}/credit-sales").RequireAuthorization();
+        credit.MapPost("", PostCredit);
+        credit.MapGet("/receipt", FindCreditReceipt);
     }
 
     private static async Task<Business?> Shop(AppDbContext db, long businessId, long actor, long locationId,
@@ -56,6 +58,20 @@ public static class RetailCashSales
             x.BusinessId == businessId && x.CashierId == actor && x.LocationId == locationId &&
             x.RequestKey == requestKey);
         return sale is null ? Results.NotFound() : Results.Ok(Receipt(sale));
+    }
+
+    private static async Task<IResult> FindCreditReceipt(long businessId, long locationId, string requestKey,
+        ClaimsPrincipal user, AppDbContext db)
+    {
+        if (!long.TryParse(user.FindFirstValue(ClaimTypes.NameIdentifier), out var actor) ||
+            await Shop(db, businessId, actor, locationId, ownerOnly: true) is null) return Results.NotFound();
+        if (string.IsNullOrWhiteSpace(requestKey) || requestKey.Length > 80) return Results.BadRequest();
+        var sale = await db.RetailCashSales.AsNoTracking().Include(x => x.Lines).SingleOrDefaultAsync(x =>
+            x.BusinessId == businessId && x.CashierId == actor && x.LocationId == locationId &&
+            x.RequestKey == requestKey && x.CreditDueDate != null);
+        if (sale is null) return Results.NotFound();
+        var paid = await CreditCollections.PaidAsync(db, businessId, sale.Id) ?? 0m;
+        return Results.Ok(Receipt(sale, creditPaid: paid));
     }
 
     private static async Task<IResult> Latest(long businessId, long locationId, ClaimsPrincipal user, AppDbContext db)
@@ -644,7 +660,7 @@ public static class RetailCashSales
                 if (await creditInvoices.AnyAsync(x => (x.CurrencyCode != shop.CurrencyCode || x.CreditDueDate < today) &&
                     x.Total > (db.RetailCreditPayments.Where(p => p.BusinessId == businessId && p.SaleId == x.Id)
                         .Sum(p => (decimal?)p.Amount) ?? 0m)))
-                    return Results.Conflict(new { message = "Outstanding overdue or different-currency credit must be resolved first." });
+                    return Results.Conflict(new { code = "CREDIT_OVERDUE", message = "Outstanding overdue or different-currency credit must be resolved first." });
                 var billed = await creditInvoices.SumAsync(x => (decimal?)x.Total) ?? 0m;
                 var paid = await CreditCollections.CustomerPayments(db, businessId, customer.Id).SumAsync(x => (decimal?)x.Amount) ?? 0m;
                 var outstanding = billed - paid;
