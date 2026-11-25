@@ -1,6 +1,7 @@
 import { useEffect, useRef, useState } from 'react'
 import { api, ApiResponseError, operationKey, post } from './api'
 import { baseQuantity } from './stockQuantity'
+import LookupDialog from './LookupDialog'
 
 export interface Receipt {
   id: number
@@ -26,7 +27,7 @@ export interface Receipt {
 }
 
 interface ReturnOptions {
-  path: string; locationId: number; userId: number; canOperate: boolean
+  path: string; productSearchPath: string; locationId: number; userId: number; canOperate: boolean
   onRecorded: (id: number, total: number) => void
 }
 interface ReturnRequest {
@@ -256,6 +257,128 @@ function ReturnEstimate({ receipt, options }: { receipt: Receipt; options: Retur
   </section>
 }
 
+interface ExchangeProduct {
+  id: number; name: string; sku: string; unitCode: string | null; salePrice: number; available: number
+  conversions: { unitId: number; unitCode: string; factor: number; salePrice: number }[]
+}
+interface ExchangeQuote {
+  currencyCode: string; returnTotal: number; replacementTotal: number; difference: number
+  settlement: 'Collect' | 'Refund' | 'Even'
+}
+
+function ExchangeEstimate({ receipt, options }: { receipt: Receipt; options: ReturnOptions }) {
+  const [returns, setReturns] = useState<Record<number, { quantity: string; condition: string }>>({})
+  const [replacements, setReplacements] = useState<{ product: ExchangeProduct; quantity: string; unitId: number }[]>([])
+  const [lookup, setLookup] = useState(false)
+  const [search, setSearch] = useState('')
+  const [products, setProducts] = useState<ExchangeProduct[]>([])
+  const [status, setStatus] = useState('')
+  const [quote, setQuote] = useState<ExchangeQuote | null>(null)
+  const [error, setError] = useState('')
+  const [busy, setBusy] = useState(false)
+  const lock = useRef(false)
+  useEffect(() => {
+    if (!lookup) return
+    const controller = new AbortController()
+    setProducts([]); setStatus('Searching…')
+    const timer = setTimeout(() => {
+      api<ExchangeProduct[]>(options.productSearchPath + '?' + new URLSearchParams({
+        locationId: String(options.locationId), search
+      }), { signal: controller.signal }).then(items => {
+        if (!controller.signal.aborted) { setProducts(items); setStatus(items.length ? '' : 'No matching products.') }
+      }).catch(() => { if (!controller.signal.aborted) setStatus('Unable to search. Edit the search to retry.') })
+    }, 200)
+    return () => { clearTimeout(timer); controller.abort() }
+  }, [lookup, search, options.productSearchPath, options.locationId])
+  const selected = receipt.lines.filter(line => Number(returns[line.id]?.quantity ?? '') !== 0)
+  const unit = (line: typeof replacements[number]) => line.product.conversions?.find(x => x.unitId === line.unitId)
+  const valid = selected.length > 0 && selected.every(line =>
+    Number(returns[line.id].quantity) <= (line.remainingQuantity ?? 0) &&
+    baseQuantity(Number(returns[line.id].quantity), line.conversionFactor ?? 1) !== null &&
+    !!returns[line.id].condition) && replacements.length > 0 && replacements.every(line =>
+    baseQuantity(Number(line.quantity), unit(line)?.factor ?? 1) !== null &&
+    Number(line.quantity) <= 1000000)
+  const money = (amount: number) => receipt.currencyCode + ' ' + amount.toFixed(2)
+  function invalidate() { setQuote(null); setError('') }
+  function changeReturn(id: number, field: 'quantity' | 'condition', value: string) {
+    setReturns(previous => ({ ...previous, [id]: { quantity: '', condition: '', ...previous[id], [field]: value } }))
+    invalidate()
+  }
+  return <section className="border rounded p-2 mb-3" aria-label="Exchange estimate">
+    <h3 className="h6">Exchange estimate</h3>
+    <p className="small">Preview only. No sale, refund or stock movement is posted. Do not collect or refund cash from this estimate.</p>
+    <form onSubmit={async event => {
+      event.preventDefault()
+      if (!valid || lock.current) return
+      lock.current = true; setBusy(true); invalidate()
+      try {
+        setQuote(await post<ExchangeQuote>(options.path + '/exchange-estimate', {
+          locationId: options.locationId,
+          returns: selected.map(line => ({ lineId: line.id, quantity: Number(returns[line.id].quantity),
+            restock: returns[line.id].condition === 'restock' })),
+          replacements: replacements.map(line => {
+            const chosen = unit(line)
+            return { productId: line.product.id, quantity: Number(line.quantity),
+              expectedUnitPrice: chosen?.salePrice ?? line.product.salePrice,
+              expectedBaseUnitCode: line.product.unitCode,
+              ...(chosen ? { unitId: chosen.unitId, expectedFactor: chosen.factor } : {}) }
+          })
+        }))
+      } catch (cause) { setError(cause instanceof Error ? cause.message : 'Unable to calculate exchange.') }
+      finally { lock.current = false; setBusy(false) }
+    }}>
+      <div className="table-responsive"><table className="table table-sm align-middle">
+        <thead><tr><th scope="col">Original item</th><th scope="col">Quantity to return</th><th scope="col">Condition</th></tr></thead>
+        <tbody>{receipt.lines.filter(line => (line.remainingQuantity ?? 0) > 0).map(line => <tr key={line.id}>
+          <td>{line.productName}<small className="d-block">Remaining: {line.remainingQuantity} {line.unitCode}</small></td>
+          <td><input className="form-control form-control-sm" type="number" min="0" max={line.remainingQuantity ?? 0}
+            step="0.001" aria-label={'Exchange quantity for ' + line.productName} disabled={busy}
+            value={returns[line.id]?.quantity ?? ''} onChange={e => changeReturn(line.id, 'quantity', e.target.value)} /></td>
+          <td><select className="form-select form-select-sm" aria-label={'Exchange condition for ' + line.productName}
+            disabled={busy} value={returns[line.id]?.condition ?? ''} onChange={e => changeReturn(line.id, 'condition', e.target.value)}>
+            <option value="">Choose condition</option><option value="restock">Sellable</option><option value="no-stock">Damaged / not sellable</option>
+          </select></td>
+        </tr>)}</tbody>
+      </table></div>
+      <h4 className="h6">Replacement items</h4>
+      {replacements.length > 0 && <div className="table-responsive"><table className="table table-sm align-middle">
+        <thead><tr><th scope="col">Product</th><th scope="col">Unit</th><th scope="col">Qty</th><th scope="col">Rate</th><th scope="col">Action</th></tr></thead>
+        <tbody>{replacements.map(line => <tr key={line.product.id}>
+          <td>{line.product.name}<small className="d-block">{line.product.sku}</small></td>
+          <td><select className="form-select form-select-sm" aria-label={'Replacement unit for ' + line.product.name} disabled={busy}
+            value={line.unitId} onChange={e => { const id = Number(e.target.value); setReplacements(items => items.map(x => x.product.id === line.product.id ? { ...x, unitId: id, quantity: '1' } : x)); invalidate() }}>
+            <option value={0}>{line.product.unitCode ?? 'Base unit'}</option>
+            {line.product.conversions?.map(x => <option key={x.unitId} value={x.unitId}>{x.unitCode}</option>)}
+          </select></td>
+          <td><input className="form-control form-control-sm" type="number" min="0.001" max="1000000" step="0.001"
+            aria-label={'Replacement quantity for ' + line.product.name} disabled={busy} value={line.quantity}
+            onChange={e => { const quantity = e.target.value; setReplacements(items => items.map(x => x.product.id === line.product.id ? { ...x, quantity } : x)); invalidate() }} /></td>
+          <td className="text-nowrap">{money(unit(line)?.salePrice ?? line.product.salePrice)}</td>
+          <td><button type="button" className="btn btn-outline-secondary btn-sm" disabled={busy}
+            onClick={() => { setReplacements(items => items.filter(x => x.product.id !== line.product.id)); invalidate() }}>Remove</button></td>
+        </tr>)}</tbody></table></div>}
+      <div className="d-flex gap-2 flex-wrap">
+        <button type="button" className="btn btn-outline-secondary btn-sm" disabled={busy || replacements.length >= 100}
+          onClick={() => { setSearch(''); setLookup(true) }}>Add replacement</button>
+        <button type="submit" className="btn btn-outline-primary btn-sm" disabled={!valid || busy}>{busy ? 'Calculating…' : 'Calculate exchange'}</button>
+      </div>
+      {error && <p role="alert" className="text-danger mt-2">{error}</p>}
+      {quote && <div role="status" className="mt-3">
+        <p className="mb-1">Return value: {quote.currencyCode} {quote.returnTotal.toFixed(2)}</p>
+        <p className="mb-1">Replacement value: {quote.currencyCode} {quote.replacementTotal.toFixed(2)}</p>
+        <strong>{quote.settlement === 'Even' ? 'No balance to settle' : (quote.settlement === 'Collect' ? 'Estimated collection: ' : 'Estimated refund: ') + quote.currencyCode + ' ' + Math.abs(quote.difference).toFixed(2)}</strong>
+      </div>}
+    </form>
+    {lookup && <LookupDialog title="Replacement products" searchId="exchange-product-search" search={search}
+      placeholder="Search product, SKU or barcode" columns={['SKU', 'Product', 'Available stock', 'Rate']}
+      rows={products.map(product => ({ id: product.id, cells: [product.sku, product.name, String(product.available), money(product.salePrice)],
+        disabled: replacements.some(line => line.product.id === product.id) }))}
+      status={status} context={receipt.locationName ?? undefined} onSearch={value => { setProducts([]); setSearch(value) }}
+      onSelect={id => { const product = products.find(x => x.id === id); if (product) { setReplacements(items => [...items, { product, quantity: '1', unitId: 0 }]); invalidate() } setLookup(false) }}
+      onClose={() => setLookup(false)} />}
+  </section>
+}
+
 export default function CashReceipt({ receipt, businessName, timeZone, pdfPath, printNotice, backLabel, onBack, returnEstimate, returnNotice }: {
   receipt: Receipt
   businessName: string
@@ -268,6 +391,7 @@ export default function CashReceipt({ receipt, businessName, timeZone, pdfPath, 
   returnNotice?: string
 }) {
   const [showEstimate, setShowEstimate] = useState(() => !!returnEstimate && !!readPending(returnEstimate).request)
+  const [showExchange, setShowExchange] = useState(false)
   const money = (amount: number) => receipt.currencyCode + ' ' + amount.toFixed(2)
   const credit = receipt.paymentMethod === 'Credit'
   return <section className="content-section" aria-label={credit ? 'Credit invoice' : 'Cash receipt'}>
@@ -303,11 +427,15 @@ export default function CashReceipt({ receipt, businessName, timeZone, pdfPath, 
       ? <a className="btn btn-outline-secondary me-2" href={pdfPath} target="_blank" rel="noopener noreferrer">{credit ? 'Print credit invoice' : 'Print receipt'}</a>
       : <p className="small text-body-secondary" role="status">RDLC printing requires a Windows report host.</p>}
     {returnEstimate && returnEstimate.canOperate && <button type="button" className="btn btn-outline-secondary me-2" aria-expanded={showEstimate}
-      onClick={() => setShowEstimate(value => !value)}>{showEstimate ? 'Close estimate' : 'Estimate return'}</button>}
+      onClick={() => { setShowExchange(false); setShowEstimate(value => !value) }}>{showEstimate ? 'Close estimate' : 'Estimate return'}</button>}
+    {returnEstimate && returnEstimate.canOperate && !credit && receipt.lines.some(line => (line.remainingQuantity ?? 0) > 0) && !showEstimate &&
+      <button type="button" className="btn btn-outline-secondary me-2" aria-expanded={showExchange}
+        onClick={() => setShowExchange(value => !value)}>{showExchange ? 'Close exchange' : 'Estimate exchange'}</button>}
     <button type="button" className="btn btn-primary" onClick={onBack}>{backLabel}</button>
     {returnNotice && <p className="alert alert-success mt-3" role="status">{returnNotice}</p>}
     {returnEstimate && showEstimate && <div className="mt-3"><ReturnEstimate receipt={receipt}
       options={returnEstimate} /></div>}
+    {returnEstimate && showExchange && <div className="mt-3"><ExchangeEstimate receipt={receipt} options={returnEstimate} /></div>}
     {returnEstimate && <ReturnHistory receipt={receipt} options={returnEstimate}
       timeZone={receipt.timeZoneId ?? timeZone} />}
   </section>

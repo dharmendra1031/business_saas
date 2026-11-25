@@ -2435,6 +2435,31 @@ try {
           return response(route, 200, { receiptId: 42, currencyCode: 'INR', total: qty * 96,
             lines: [{ lineId: 1, quantity: qty, amount: qty * 96 }], canPost: true })
         })
+        await t.page.route('**/api/businesses/1/cash-sales/products?*', route => {
+          assert.equal(new URL(route.request().url()).searchParams.get('locationId'), '1')
+          return response(route, 200, [{ id: 99, name: 'Replacement Item', sku: 'REPL-99',
+            salePrice: 20, available: 2, unitCode: 'PCS', conversions: [] }])
+        })
+        await t.page.route('**/api/businesses/1/cash-sales/business-receipts/42/exchange-estimate', route => {
+          assert.equal(route.request().method(), 'POST')
+          assert.deepEqual(route.request().postDataJSON(), { locationId: 1,
+            returns: [{ lineId: 1, quantity: 0.125, restock: true }],
+            replacements: [{ productId: 99, quantity: 1, expectedUnitPrice: 20, expectedBaseUnitCode: 'PCS' }] })
+          return response(route, 200, { currencyCode: 'INR', returnTotal: 12, replacementTotal: 20,
+            difference: 8, settlement: 'Collect', canPost: false })
+        })
+        await receipt.getByRole('button', { name: 'Estimate exchange' }).click()
+        const exchange = receipt.getByRole('region', { name: 'Exchange estimate' })
+        await exchange.getByRole('spinbutton', { name: 'Exchange quantity for Loose Rice' }).fill('0.125')
+        await exchange.getByLabel('Exchange condition for Loose Rice').selectOption('restock')
+        await exchange.getByRole('button', { name: 'Add replacement' }).click()
+        await t.page.getByRole('dialog', { name: 'Replacement products' }).getByRole('button', { name: /Replacement Item/ }).click()
+        await exchange.getByRole('button', { name: 'Calculate exchange' }).click()
+        await exchange.getByText('Estimated collection: INR 8.00').waitFor()
+        assert.equal(returnAttempts, 0, 'Exchange preview must not post a return')
+        await exchange.getByRole('spinbutton', { name: 'Replacement quantity for Replacement Item' }).fill('2')
+        assert.equal(await exchange.getByText('Estimated collection: INR 8.00').count(), 0)
+        await receipt.getByRole('button', { name: 'Close exchange' }).click()
         await receipt.getByRole('button', { name: 'Estimate return' }).click()
         const estimate = receipt.getByRole('region', { name: 'Return estimate' })
         await estimate.getByText('Sold: 0.25 · Returned: 0.05 · Remaining: 0.2 KG', { exact: true }).waitFor()
