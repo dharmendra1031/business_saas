@@ -553,6 +553,7 @@ try {
         if (converted) {
           assert.equal(body.lines[0].unitId, 32)
           assert.equal(body.lines[0].expectedFactor, factor)
+          assert.equal(body.lines[0].expectedBaseUnitCode, 'KG')
         }
         order = { id: 71, status: 'Draft', quantity: 2 }
         return response(route, 201, { id: 71, status: 'Draft' })
@@ -1428,6 +1429,7 @@ try {
       assert.equal(line.productId, 401)
       assert.equal(line.unitId, 41)
       assert.equal(line.expectedFactor, 12)
+      assert.equal(line.expectedBaseUnitCode, 'PCS')
       assert.equal(line.expectedUnitPrice, 120)
       assert.equal(line.quantity, 2)
       return response(route, 200, { id: 701, total: 240, tendered: 240, currencyCode: 'INR',

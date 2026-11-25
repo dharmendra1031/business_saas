@@ -469,7 +469,7 @@ public static class RetailCashSales
         List<Item>? Lines = null, long ProductId = 0, decimal Quantity = 0, decimal ExpectedUnitPrice = 0, long? CustomerId = null);
 
     public sealed record Item(long ProductId, decimal Quantity, decimal ExpectedUnitPrice,
-        long? UnitId = null, decimal? ExpectedFactor = null);
+        long? UnitId = null, decimal? ExpectedFactor = null, string? ExpectedBaseUnitCode = null);
 
     private static decimal SaleUnitPrice(decimal basePrice, decimal factor, decimal? overridePrice = null) =>
         overridePrice ?? decimal.Round(basePrice * factor, 2, MidpointRounding.AwayFromZero);
@@ -483,6 +483,7 @@ public static class RetailCashSales
         var items = request.Lines ?? [new Item(request.ProductId, request.Quantity, request.ExpectedUnitPrice)];
         if (request.CustomerId is <= 0 || items.Count is < 1 or > 100 || items.Any(x => x is null || x.ProductId <= 0 || x.Quantity is < 0.001m or > 1000000m ||
             decimal.Round(x.Quantity, 3) != x.Quantity || x.UnitId is <= 0 ||
+            x.ExpectedBaseUnitCode is { Length: < 1 or > 12 } ||
             (x.UnitId is null) != (x.ExpectedFactor is null) ||
             x.ExpectedFactor is < 0.001m or > 9999999.999m ||
             x.ExpectedFactor.HasValue && decimal.Round(x.ExpectedFactor.Value, 3) != x.ExpectedFactor.Value) ||
@@ -504,7 +505,11 @@ public static class RetailCashSales
                     .Select(x => new Item(x.ProductId, x.Quantity, x.UnitPrice, x.SelectedUnitId, x.ConversionFactor));
                 if (previous.LocationId != request.LocationId || previous.Tendered != request.Tendered ||
                     previous.CustomerId != request.CustomerId ||
-                    !recorded.SequenceEqual(items.OrderBy(x => x.ProductId)))
+                    !recorded.SequenceEqual(items.OrderBy(x => x.ProductId)
+                        .Select(x => x with { ExpectedBaseUnitCode = null })) ||
+                    items.Any(item => item.ExpectedBaseUnitCode is not null &&
+                        !previous.Lines.Any(line => line.ProductId == item.ProductId &&
+                            (line.BaseUnitCode ?? line.UnitCode) == item.ExpectedBaseUnitCode)))
                     return Results.Conflict(new { message = "This receipt key belongs to a different sale." });
                 // Never hide a committed receipt or double-post when settings changed mid-retry.
                 context.Response.Headers["Server-Timing"] = FormattableString.Invariant(
@@ -567,6 +572,9 @@ public static class RetailCashSales
                     return Results.BadRequest(new { code = "CASH_SALE_BASKET_CHANGED", item.ProductId,
                         message = "Product or price changed. Remove and select the affected item again." });
                 var baseCode = unitCode;
+                if (item.ExpectedBaseUnitCode is not null && item.ExpectedBaseUnitCode != baseCode)
+                    return Results.BadRequest(new { code = "CASH_SALE_BASKET_CHANGED", item.ProductId,
+                        message = "Base stock unit changed. Remove and select the affected item again." });
                 decimal? factor = null;
                 decimal? overridePrice = null;
                 if (item.UnitId is long alternateId)

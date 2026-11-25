@@ -15,6 +15,7 @@ interface Product {
 interface Line { productId: number; name: string; quantity: number; expectedUnitPrice: number;
   unitCode?: string | null; available?: number
   unitId?: number; expectedFactor?: number; baseUnitCode?: string | null; basePrice?: number;
+  expectedBaseUnitCode?: string | null;
   conversions?: SaleUnit[] }
 interface SaleRequest { locationId: number; requestKey: string; tendered: number; lines: Line[]; customerId?: number | null }
 interface SaleCustomer { id: number; name: string; phone: string }
@@ -243,7 +244,8 @@ export default function CashCheckout({ userId, dashboard, onExit }: {
     }
     const line = { productId: item.id, name: item.name, quantity: nextQty,
       expectedUnitPrice: item.salePrice, unitCode: item.unitCode, available: item.available,
-      baseUnitCode: item.unitCode, basePrice: item.salePrice, conversions: item.conversions }
+      baseUnitCode: item.unitCode, expectedBaseUnitCode: item.unitCode,
+      basePrice: item.salePrice, conversions: item.conversions }
     setBasket(existing ? basket.map(previous => previous.productId === item.id ? line : previous) : [...basket, line])
     setCash('')
     setError('')

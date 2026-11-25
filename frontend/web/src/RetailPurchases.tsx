@@ -288,6 +288,7 @@ export default function RetailPurchases({ businessId, canOperate, locations, rol
       const result = await post<{ id: number }>(basePath, {
         locationId, supplierId, lines: lines.map(x => ({
           productId: x.productId, quantity: Number(x.quantity), unitCost: Number(x.unitCost),
+          expectedBaseUnitCode: x.unitCode,
           ...(selectedUnit(x) ? { unitId: x.selectedUnitId, expectedFactor: selectedUnit(x)!.factor } : {})
         })), requestKey: orderKey
       })

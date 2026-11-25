@@ -912,6 +912,11 @@ public sealed class SqlServerTests
             lines = new[] { new { productId = packProductId, quantity = 10m, unitCost = 100m,
                 unitId = boxId, expectedFactor = 12m } } };
         var purchasePath = prefix + "/purchase-orders";
+        Assert.Equal(HttpStatusCode.Conflict, (await Post(owner, purchasePath, convertedPurchase with {
+            requestKey = "sql-stale-base-purchase-20261125",
+            lines = new[] { new { productId = packProductId, quantity = 10m, unitCost = 100m,
+                unitId = boxId, expectedFactor = 12m, expectedBaseUnitCode = "KG" } }
+        })).StatusCode);
         var packOrderId = await Created(purchasePath, convertedPurchase);
         var packOrderPath = purchasePath + "/" + packOrderId;
         var packDetail = await owner.GetFromJsonAsync<JsonElement>(packOrderPath);
@@ -977,6 +982,11 @@ public sealed class SqlServerTests
             requestKey = "sql-pack-stale-price-20261125", tendered = 240m,
             lines = new[] { new { productId = packProductId, quantity = 1m, expectedUnitPrice = 240m,
                 unitId = boxId, expectedFactor = 24m } }
+        })).StatusCode);
+        Assert.Equal(HttpStatusCode.BadRequest, (await Post(cashier, packSalePath, convertedSale with {
+            requestKey = "sql-stale-base-sale-20261125",
+            lines = new[] { new { productId = packProductId, quantity = 1m, expectedUnitPrice = 220m,
+                unitId = boxId, expectedFactor = 24m, expectedBaseUnitCode = "KG" } }
         })).StatusCode);
         using var packSaleResponse = await Post(cashier, packSalePath, convertedSale);
         Assert.Equal(HttpStatusCode.OK, packSaleResponse.StatusCode);

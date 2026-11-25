@@ -69,6 +69,7 @@ public static class RetailPurchaseEndpoints
                 request.Lines.Select(x => x.ProductId).Distinct().Count() != request.Lines.Count ||
                 request.Lines.Any(x => x.ProductId <= 0 || !ValidQuantity(x.Quantity) ||
                     !ValidCost(x.UnitCost) || x.UnitId is <= 0 ||
+                    x.ExpectedBaseUnitCode is { Length: < 1 or > 12 } ||
                     (x.UnitId is null) != (x.ExpectedFactor is null) ||
                     x.ExpectedFactor is < 0.001m or > 9999999.999m ||
                     x.ExpectedFactor.HasValue && decimal.Round(x.ExpectedFactor.Value, 3) != x.ExpectedFactor.Value))
@@ -104,6 +105,10 @@ public static class RetailPurchaseEndpoints
                 if (products.Count != ids.Length)
                     return Results.BadRequest(new { message = "Select active products from this business." });
 
+                var baseUnitIds = products.Values.Select(x => x.UnitId).Distinct().ToArray();
+                var baseUnits = await db.RetailUnits.AsNoTracking()
+                    .Where(x => x.BusinessId == businessId && baseUnitIds.Contains(x.Id))
+                    .ToDictionaryAsync(x => x.Id, x => x.Code);
                 var alternateIds = request.Lines.Where(x => x.UnitId.HasValue).Select(x => x.UnitId!.Value).Distinct().ToArray();
                 var alternateUnits = await db.RetailUnits.AsNoTracking()
                     .Where(x => x.BusinessId == businessId && x.IsActive && alternateIds.Contains(x.Id))
@@ -112,6 +117,9 @@ public static class RetailPurchaseEndpoints
                 foreach (var line in request.Lines)
                 {
                     var product = products[line.ProductId];
+                    if (!baseUnits.TryGetValue(product.UnitId, out var baseCode) ||
+                        line.ExpectedBaseUnitCode is not null && line.ExpectedBaseUnitCode != baseCode)
+                        return Results.Conflict(new { message = "Base stock unit changed. Refresh the product and verify its quantity and cost." });
                     decimal? factor = null;
                     string? unitCode = null;
                     if (line.UnitId is long alternateId)
@@ -134,7 +142,7 @@ public static class RetailPurchaseEndpoints
                     });
                 }
 
-                 var order = new RetailPurchaseOrder
+                var order = new RetailPurchaseOrder
                 {
                     BusinessId = businessId,
                     LocationId = request.LocationId,
@@ -430,12 +438,19 @@ public static class RetailPurchaseEndpoints
 
     private static async Task<bool> SameOrderLines(AppDbContext db, long orderId, List<OrderLine> lines)
     {
-        var saved = await db.RetailPurchaseOrderLines.AsNoTracking()
-            .Where(x => x.PurchaseOrderId == orderId).ToDictionaryAsync(x => x.ProductId);
+        // A posted order prevents its product's base unit from changing.
+        var saved = await (from item in db.RetailPurchaseOrderLines.AsNoTracking()
+                           join product in db.RetailProducts on item.ProductId equals product.Id
+                           join unit in db.RetailUnits on product.UnitId equals unit.Id
+                           where item.PurchaseOrderId == orderId
+                           select new { item.ProductId, item.OrderedQuantity, item.UnitCost,
+                               item.SelectedUnitId, item.ConversionFactor, BaseUnitCode = unit.Code })
+            .ToDictionaryAsync(x => x.ProductId);
         return saved.Count == lines.Count && lines.All(line =>
             saved.TryGetValue(line.ProductId, out var item) &&
             item.OrderedQuantity == line.Quantity && item.UnitCost == line.UnitCost &&
-            item.SelectedUnitId == line.UnitId && item.ConversionFactor == line.ExpectedFactor);
+            item.SelectedUnitId == line.UnitId && item.ConversionFactor == line.ExpectedFactor &&
+            (line.ExpectedBaseUnitCode is null || item.BaseUnitCode == line.ExpectedBaseUnitCode));
     }
 
     private static async Task<bool> SameReceivingLines(AppDbContext db, long receivingId, List<ReceivingLine> lines)
@@ -480,7 +495,7 @@ public static class RetailPurchaseEndpoints
     }
 
     private sealed record OrderLine(long ProductId, decimal Quantity, decimal UnitCost,
-        long? UnitId = null, decimal? ExpectedFactor = null);
+        long? UnitId = null, decimal? ExpectedFactor = null, string? ExpectedBaseUnitCode = null);
     private sealed record CreateOrder(long LocationId, long SupplierId, List<OrderLine>? Lines, string? RequestKey);
     private sealed record ReceivingLine(long PurchaseOrderLineId, decimal Quantity);
     private sealed record CreateReceiving(List<ReceivingLine>? Lines, string? RequestKey);
