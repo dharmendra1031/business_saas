@@ -24,6 +24,8 @@ public static class RetailCashSales
         group.MapGet("/business-receipts/{receiptId:long}", BusinessReceiptById);
         group.MapPost("/business-receipts/{receiptId:long}/return-estimate", EstimateReturn);
         group.MapPost("/business-receipts/{receiptId:long}/exchange-estimate", EstimateExchange);
+        group.MapPost("/business-receipts/{receiptId:long}/exchanges", PostExchange);
+        group.MapGet("/business-receipts/{receiptId:long}/exchanges", FindExchange);
         group.MapGet("/business-receipts/{receiptId:long}/returns", ReturnHistory);
         group.MapPost("/business-receipts/{receiptId:long}/returns", PostReturn);
         group.MapGet("/business-receipts/{receiptId:long}/pdf", BusinessReceiptPdf);
@@ -163,6 +165,9 @@ public static class RetailCashSales
                 x.LocationId == locationId && (ownerOnly || x.CashierId == actor), context.RequestAborted);
         var loaded = Stopwatch.GetTimestamp();
         if (sale is null) return Results.NotFound();
+        if (!credit && await db.RetailCashReturns.AnyAsync(x => x.BusinessId == businessId &&
+            x.ReplacementSaleId == sale.Id, context.RequestAborted))
+            return Results.Conflict(new { message = "Exchange invoice printing requires the exchange RDLC layout." });
         if (!OperatingSystem.IsWindows())
             return Results.Problem("RDLC PDF printing requires a Windows report host.", statusCode: 503);
         try
@@ -231,6 +236,8 @@ public static class RetailCashSales
             .SingleOrDefaultAsync(x => x.Id == receiptId && x.BusinessId == businessId &&
                 x.LocationId == request.LocationId);
         if (sale is null) return Results.NotFound();
+        if (await db.RetailCashReturns.AnyAsync(x => x.BusinessId == businessId && x.ReplacementSaleId == receiptId))
+            return Results.Conflict(new { message = "Replacement invoice returns require reconciliation." });
         var requested = request.Lines;
         if (requested is null || requested.Count is < 1 or > 100 ||
             requested.Any(x => x is null || x.LineId <= 0 || x.Quantity <= 0 ||
@@ -262,9 +269,53 @@ public static class RetailCashSales
 
     public sealed record ExchangeEstimateRequest(long LocationId, List<ReturnItem>? Returns, List<Item>? Replacements);
 
-    // Estimate only: never posts a refund, sale, stock movement or cash settlement.
-    private static async Task<IResult> EstimateExchange(long businessId, long receiptId,
-        ExchangeEstimateRequest request, ClaimsPrincipal user, AppDbContext db, IConfiguration config)
+    public sealed record ExchangePostRequest(long LocationId, List<ReturnItem>? Returns, List<Item>? Replacements,
+        string RequestKey, string Reason, decimal ExpectedSettlement, bool SettlementConfirmed);
+
+    private static Task<IResult> EstimateExchange(long businessId, long receiptId,
+        ExchangeEstimateRequest request, ClaimsPrincipal user, AppDbContext db, IConfiguration config) =>
+        Exchange(businessId, receiptId, request, user, db, config, null);
+
+    private static Task<IResult> PostExchange(long businessId, long receiptId,
+        ExchangePostRequest request, ClaimsPrincipal user, AppDbContext db, IConfiguration config) =>
+        Exchange(businessId, receiptId, new ExchangeEstimateRequest(request.LocationId, request.Returns,
+            request.Replacements), user, db, config, request);
+
+    private static object ExchangeReceipt(RetailCashReturn record, RetailCashSale replacement) => new
+    {
+        ReturnId = record.Id, OriginalSaleId = record.SaleId, ReplacementSaleId = replacement.Id,
+        record.RequestKey, record.Reason, replacement.CurrencyCode, ReturnTotal = record.Total,
+        ReplacementTotal = replacement.Total, Difference = record.NetCashSettlement,
+        Settlement = record.NetCashSettlement > 0 ? "Collect" : record.NetCashSettlement < 0 ? "Refund" : "Even"
+    };
+
+    private static async Task<IResult> FindExchange(long businessId, long receiptId, long locationId, string requestKey,
+        ClaimsPrincipal user, AppDbContext db, CancellationToken cancellationToken)
+    {
+        if (!long.TryParse(user.FindFirstValue(ClaimTypes.NameIdentifier), out var actor) ||
+            await Shop(db, businessId, actor, locationId, ownerOnly: true, cancellationToken: cancellationToken) is null)
+            return Results.NotFound();
+        if (string.IsNullOrWhiteSpace(requestKey) || requestKey.Length is < 12 or > 80)
+            return Results.BadRequest();
+        var record = await db.RetailCashReturns.AsNoTracking().SingleOrDefaultAsync(x =>
+            x.BusinessId == businessId && x.SaleId == receiptId && x.RequestKey == requestKey &&
+            x.ReplacementSaleId != null, cancellationToken);
+        if (record is null) return Results.NotFound();
+        var replacement = await CashOnly(db).SingleOrDefaultAsync(x => x.Id == record.ReplacementSaleId &&
+            x.BusinessId == businessId && x.LocationId == locationId, cancellationToken);
+        if (replacement is null || !await CashOnly(db).AnyAsync(x => x.Id == receiptId &&
+            x.BusinessId == businessId && x.LocationId == locationId, cancellationToken))
+            return Results.NotFound();
+        if (record.NetCashSettlement != replacement.Total - record.Total)
+            return Results.Conflict(new { message = "Exchange requires reconciliation." });
+        return Results.Ok(ExchangeReceipt(record, replacement));
+    }
+
+    // Estimate and posting share price, quantity and stock validation. Only the explicit
+    // development posting request writes documents, within this one transaction.
+    private static async Task<IResult> Exchange(long businessId, long receiptId,
+        ExchangeEstimateRequest request, ClaimsPrincipal user, AppDbContext db, IConfiguration config,
+        ExchangePostRequest? posting)
     {
         if (!long.TryParse(user.FindFirstValue(ClaimTypes.NameIdentifier), out var actor))
             return Results.NotFound();
@@ -276,6 +327,12 @@ public static class RetailCashSales
             returns.Select(x => x.LineId).Distinct().Count() != returns.Count ||
             replacements is null || !ValidSaleItems(replacements))
             return Results.BadRequest(new { message = "Select valid return lines and replacement products." });
+        var reason = posting?.Reason?.Trim() ?? "";
+        if (posting is not null && (string.IsNullOrWhiteSpace(posting.RequestKey) ||
+            posting.RequestKey.Length is < 12 or > 80 || reason.Length is < 5 or > 200 ||
+            !posting.SettlementConfirmed || decimal.Round(posting.ExpectedSettlement, 2) != posting.ExpectedSettlement ||
+            Math.Abs(posting.ExpectedSettlement) > 9999999999999999.99m))
+            return Results.BadRequest(new { message = "Confirm the net cash settlement, reason and request key." });
 
         await using var tx = await db.Database.BeginTransactionAsync(IsolationLevel.Serializable);
         try
@@ -285,6 +342,45 @@ public static class RetailCashSales
             var original = await CashOnly(db).Include(x => x.Lines).SingleOrDefaultAsync(x =>
                 x.BusinessId == businessId && x.Id == receiptId && x.LocationId == request.LocationId);
             if (original is null) return Results.NotFound();
+            if (posting is not null)
+            {
+                var prior = await db.RetailCashReturns.AsNoTracking().Include(x => x.Lines)
+                    .SingleOrDefaultAsync(x => x.BusinessId == businessId && x.RequestKey == posting.RequestKey);
+                if (prior is not null)
+                {
+                    var saved = await CashOnly(db).Include(x => x.Lines).SingleOrDefaultAsync(x =>
+                        x.BusinessId == businessId && x.LocationId == request.LocationId &&
+                        x.Id == prior.ReplacementSaleId);
+                    if (saved is null || prior.SaleId != receiptId || prior.ActorUserId != actor ||
+                        saved.CashierId != actor || saved.RequestKey != posting.RequestKey ||
+                        prior.Reason != reason || prior.NetCashSettlement != posting.ExpectedSettlement ||
+                        prior.NetCashSettlement != saved.Total - prior.Total ||
+                        !ReturnLinesMatchSale(original, prior.Lines) ||
+                        !prior.Lines.Select(x => new ReturnItem(x.SaleLineId, x.Quantity, x.Restock))
+                            .OrderBy(x => x.LineId).SequenceEqual(returns.OrderBy(x => x.LineId)) ||
+                        !saved.Lines.OrderBy(x => x.ProductId)
+                            .Select(x => new Item(x.ProductId, x.Quantity, x.UnitPrice, x.SelectedUnitId, x.ConversionFactor))
+                            .SequenceEqual(replacements.OrderBy(x => x.ProductId).Select(x => x with { ExpectedBaseUnitCode = null })) ||
+                        replacements.Any(item => item.ExpectedBaseUnitCode is not null &&
+                            !saved.Lines.Any(line => line.ProductId == item.ProductId &&
+                                (line.BaseUnitCode ?? line.UnitCode) == item.ExpectedBaseUnitCode)))
+                        return Results.Conflict(new { message = "Exchange key belongs to a different transaction." });
+                    return Results.Ok(ExchangeReceipt(prior, saved));
+                }
+                if (!config.GetValue<bool>("RetailExchanges:PostingEnabled") ||
+                    !config.GetValue<bool>("RetailReturns:PostingEnabled") || !shop.CashSalesEnabled)
+                    return Results.Conflict(new { message = "Exchange posting is not enabled on this development host." });
+                var subscription = await db.BusinessSubscriptions.AsNoTracking()
+                    .SingleOrDefaultAsync(x => x.BusinessId == businessId);
+                if (subscription is null || !SubscriptionAccess.CanOperate(subscription, DateTime.UtcNow))
+                    return Results.StatusCode(StatusCodes.Status403Forbidden);
+                if (await db.RetailCashSales.AnyAsync(x => x.BusinessId == businessId &&
+                    x.CashierId == actor && x.RequestKey == posting.RequestKey))
+                    return Results.Conflict(new { message = "Exchange key belongs to an existing sale." });
+            }
+            // Returns of replacement invoices are a separate settlement policy.
+            if (await db.RetailCashReturns.AnyAsync(x => x.BusinessId == businessId && x.ReplacementSaleId == receiptId))
+                return Results.Conflict(new { message = "Replacement invoice returns require reconciliation." });
             if (shop.CurrencyCode != original.CurrencyCode)
                 return Results.Conflict(new { message = "Exchange currency differs from the original invoice." });
             if (original.Lines.Count == 0 || original.Lines.Any(x => x.Quantity <= 0 || OriginalAmount(x) < 0) ||
@@ -297,6 +393,8 @@ public static class RetailCashSales
             var originals = original.Lines.ToDictionary(x => x.Id);
             var restocks = new Dictionary<long, decimal>();
             var returnLines = new List<object>();
+            var record = new RetailCashReturn { BusinessId = businessId, SaleId = receiptId,
+                ActorUserId = actor, Reason = reason, RequestKey = posting?.RequestKey ?? "", PostedAtUtc = DateTime.UtcNow };
             decimal returnTotal = 0;
             foreach (var item in returns)
             {
@@ -308,6 +406,8 @@ public static class RetailCashSales
                 if (item.Restock)
                     restocks[line.ProductId] = restocks.GetValueOrDefault(line.ProductId) + baseQuantity;
                 returnTotal += amount;
+                record.Lines.Add(new RetailCashReturnLine { SaleLineId = item.LineId, Quantity = item.Quantity,
+                    Amount = amount, Restock = item.Restock });
                 returnLines.Add(new { item.LineId, line.ProductName, item.Quantity, line.UnitCode,
                     item.Restock, BaseQuantity = baseQuantity, Amount = amount });
             }
@@ -330,6 +430,53 @@ public static class RetailCashSales
                     return Results.Conflict(new { message = "Insufficient replacement stock.", line.ProductId });
 
             var difference = replacement.Total - returnTotal;
+            if (posting is not null)
+            {
+                if (difference != posting.ExpectedSettlement)
+                    return Results.Conflict(new { message = "Exchange settlement changed. Recalculate before recording." });
+                replacement.BusinessId = businessId;
+                replacement.LocationId = request.LocationId;
+                replacement.CashierId = actor;
+                replacement.RequestKey = posting.RequestKey;
+                replacement.PostedAtUtc = record.PostedAtUtc;
+                replacement.CurrencyCode = original.CurrencyCode;
+                // Preserve original customer attribution; no anonymous/new credit is created.
+                replacement.CustomerId = original.CustomerId;
+                replacement.CustomerName = original.CustomerName;
+                replacement.CustomerPhone = original.CustomerPhone;
+                replacement.CustomerAddress = original.CustomerAddress;
+                replacement.BusinessName = shop.Name;
+                replacement.LocationName = await db.BusinessLocations.AsNoTracking()
+                    .Where(x => x.BusinessId == businessId && x.Id == request.LocationId).Select(x => x.Name).SingleAsync();
+                replacement.TimeZoneId = shop.TimeZoneId;
+                replacement.MerchantLegalName = shop.ReceiptLegalName;
+                replacement.MerchantAddress = shop.ReceiptAddress;
+                replacement.MerchantPhone = shop.ReceiptPhone;
+                replacement.MerchantEmail = shop.ReceiptEmail;
+                replacement.MerchantLogo = shop.ReceiptLogo;
+                // Tendered is actual cash received, never the gross replacement invoice value.
+                replacement.Tendered = Math.Max(0m, difference);
+                db.RetailCashSales.Add(replacement);
+                await db.SaveChangesAsync();
+                record.Total = returnTotal;
+                record.ReplacementSaleId = replacement.Id;
+                record.NetCashSettlement = difference;
+                db.RetailCashReturns.Add(record);
+                await db.SaveChangesAsync();
+                foreach (var line in record.Lines.Where(x => x.Restock).OrderBy(x => originals[x.SaleLineId].ProductId))
+                {
+                    var originalLine = originals[line.SaleLineId];
+                    if (await StockPosting.ApplyAsync(db, businessId, request.LocationId, originalLine.ProductId,
+                        line.Quantity * (originalLine.ConversionFactor ?? 1m), "CashReturnLine", line.Id, actor, reason: reason) is null)
+                        return Results.Conflict(new { message = "Stock restoration failed; exchange was not posted." });
+                }
+                foreach (var line in replacement.Lines.OrderBy(x => x.ProductId))
+                    if (await StockPosting.ApplyAsync(db, businessId, request.LocationId, line.ProductId,
+                        -line.Quantity * (line.ConversionFactor ?? 1m), "CashSaleLine", line.Id, actor) is null)
+                        return Results.Conflict(new { message = "Replacement stock changed; exchange was not posted." });
+                await tx.CommitAsync();
+                return Results.Ok(ExchangeReceipt(record, replacement));
+            }
             await tx.CommitAsync();
             return Results.Ok(new { receiptId, original.CurrencyCode, ReturnTotal = returnTotal,
                 ReplacementTotal = replacement.Total, Difference = difference,
@@ -342,7 +489,7 @@ public static class RetailCashSales
         }
         catch (Exception ex) when (StockPosting.IsSqlConflict(ex))
         {
-            return Results.Conflict(new { message = "Stock or return quantities are changing. Recalculate the exchange." });
+            return Results.Conflict(new { message = posting is null ? "Stock or return quantities are changing. Recalculate the exchange." : "Concurrent exchange or stock update. Verify or retry the same request key." });
         }
     }
 
@@ -509,7 +656,7 @@ public static class RetailCashSales
                 .Where(x => x.BusinessId == businessId && x.RequestKey == request.RequestKey).SingleOrDefaultAsync();
             if (prior is not null)
             {
-                if (prior.SaleId != receiptId || !ReturnLinesMatchSale(sale, prior.Lines) ||
+                if (prior.ReplacementSaleId != null || prior.SaleId != receiptId || !ReturnLinesMatchSale(sale, prior.Lines) ||
                     prior.Total != request.ExpectedRefund || prior.Reason != reason ||
                     !prior.Lines.Select(x => new ReturnItem(x.SaleLineId, x.Quantity, x.Restock)).OrderBy(x => x.LineId)
                         .SequenceEqual(items.OrderBy(x => x.LineId)))
@@ -518,6 +665,8 @@ public static class RetailCashSales
             }
             if (!config.GetValue<bool>("RetailReturns:PostingEnabled"))
                 return Results.Conflict(new { message = "Return posting is not enabled on this development host." });
+            if (await db.RetailCashReturns.AnyAsync(x => x.BusinessId == businessId && x.ReplacementSaleId == receiptId))
+                return Results.Conflict(new { message = "Replacement invoice returns require reconciliation." });
             if (sale.Lines.Count == 0 || sale.Lines.Any(x => x.Quantity <= 0 || OriginalAmount(x) < 0) ||
                 sale.Lines.Sum(OriginalAmount) != sale.Total)
                 return Results.Conflict(new { message = "Original receipt requires reconciliation." });
@@ -897,6 +1046,8 @@ public static class RetailCashSales
                 x.BusinessId == businessId && x.CashierId == actor && x.RequestKey == request.RequestKey);
             if (previous is not null)
             {
+                if (await db.RetailCashReturns.AnyAsync(x => x.BusinessId == businessId && x.ReplacementSaleId == previous.Id))
+                    return Results.Conflict(new { message = "This receipt key belongs to an exchange." });
                 var recorded = previous.Lines.OrderBy(x => x.ProductId)
                     .Select(x => new Item(x.ProductId, x.Quantity, x.UnitPrice, x.SelectedUnitId, x.ConversionFactor));
                 if (previous.LocationId != request.LocationId || previous.Tendered != request.Tendered ||
