@@ -33,7 +33,7 @@ public sealed class RetailReceiptReportTests
         Assert.Equal(2, sets.Count);
         Assert.Equal(new[] { "BusinessName", "ReceiptNumber", "DateText", "TimeText",
             "CurrencyCode", "PaymentMethod", "TotalAmount", "CashReceived",
-            "ChangeAmount", "FooterText", "MerchantLegalName", "MerchantAddress", "MerchantPhone", "MerchantEmail", "CustomerName", "CustomerPhone", "CustomerAddress", "LocationName", "MerchantLogo", "CreditDueDateText" }, sets["InvoiceHeader"]);
+            "ChangeAmount", "FooterText", "MerchantLegalName", "MerchantAddress", "MerchantPhone", "MerchantEmail", "CustomerName", "CustomerPhone", "CustomerAddress", "LocationName", "MerchantLogo", "CreditDueDateText", "OriginalSaleNumber", "ReturnNumber", "ReturnValue", "NetSettlement" }, sets["InvoiceHeader"]);
         Assert.Equal(new[] { "LineNumber", "ProductName", "Quantity", "UnitPrice",
             "LineTotal", "ProductSku", "UnitCode" }, sets["InvoiceLines"]);
         Assert.Equal("InvoiceLines", Assert.Single(r.Descendants(rdl + "Tablix"))
@@ -99,7 +99,7 @@ public sealed class RetailReceiptReportTests
                 .Descendants(xs + "element").Select(f => (string)f.Attribute("name")!).ToArray());
         Assert.Equal(new[] { "BusinessName", "ReceiptNumber", "DateText", "TimeText",
             "CurrencyCode", "PaymentMethod", "TotalAmount", "CashReceived",
-            "ChangeAmount", "FooterText", "MerchantLegalName", "MerchantAddress", "MerchantPhone", "MerchantEmail", "CustomerName", "CustomerPhone", "CustomerAddress", "LocationName", "MerchantLogo", "CreditDueDateText" }, fields["InvoiceHeader"]);
+            "ChangeAmount", "FooterText", "MerchantLegalName", "MerchantAddress", "MerchantPhone", "MerchantEmail", "CustomerName", "CustomerPhone", "CustomerAddress", "LocationName", "MerchantLogo", "CreditDueDateText", "OriginalSaleNumber", "ReturnNumber", "ReturnValue", "NetSettlement" }, fields["InvoiceHeader"]);
         Assert.Equal(new[] { "LineNumber", "ProductName", "Quantity", "UnitPrice",
             "LineTotal", "ProductSku", "UnitCode" }, fields["InvoiceLines"]);
     }
@@ -223,6 +223,51 @@ public sealed class RetailReceiptReportTests
             Directory.CreateDirectory(folder);
             File.WriteAllBytes(Path.Combine(folder, paper + "-credit.pdf"), pdf);
         }
+    }
+
+    [Theory]
+    [InlineData("A4", 150)]
+    [InlineData("A4", -150)]
+    [InlineData("A4", 0)]
+    [InlineData("Thermal80", 150)]
+    [InlineData("Thermal80", -150)]
+    [InlineData("Thermal80", 0)]
+    [Trait("Renderer", "Windows")]
+    public void Exchange_invoice_renders_actual_settlement(string paper, int settlement)
+    {
+        var business = new Business { Id = 42, Name = "Demo Retail Store",
+            ReceiptShowCashReceived = false, ReceiptShowChange = true };
+        var sale = new RetailCashSale { Id = 77, BusinessId = 42, CurrencyCode = "INR",
+            Total = 650m, Tendered = Math.Max(0m, settlement), PostedAtUtc = DateTime.UtcNow,
+            Lines = [new RetailCashSaleLine { Id = 1, ProductName = "Replacement", Quantity = 1m,
+                UnitPrice = 650m, LineTotal = 650m }] };
+        var exchange = new RetailCashReturn { Id = 201, BusinessId = 42, SaleId = 76,
+            ReplacementSaleId = 77, Total = 650m - settlement, NetCashSettlement = settlement };
+        var data = RetailReceiptReportData.FromCashSale(sale, business, TimeZoneInfo.Utc, exchange);
+        Assert.Equal("Exchange", data.Header.PaymentMethod);
+        Assert.Equal("76", data.Header.OriginalSaleNumber);
+        Assert.Equal("201", data.Header.ReturnNumber);
+        Assert.Equal(exchange.Total, data.Header.ReturnValue);
+        Assert.Equal((decimal)settlement, data.Header.NetSettlement);
+        Assert.Equal(0m, data.Header.ChangeAmount);
+        Assert.False(data.Parameters.ShowCashReceived);
+        Assert.False(data.Parameters.ShowChange);
+        if (OperatingSystem.IsWindows())
+        {
+            var pdf = RetailReceiptRenderer.Render(data, paper);
+            Assert.True(pdf.AsSpan().StartsWith("%PDF-"u8));
+            Assert.True(pdf.Length > 1000);
+            var output = Environment.GetEnvironmentVariable("RDLC_TEST_OUTPUT");
+            if (!string.IsNullOrWhiteSpace(output))
+            {
+                var folder = Path.Combine(output, "exchange");
+                Directory.CreateDirectory(folder);
+                File.WriteAllBytes(Path.Combine(folder, paper + "-exchange-" + settlement + ".pdf"), pdf);
+            }
+        }
+        exchange.NetCashSettlement = settlement + 1;
+        Assert.Throws<InvalidOperationException>(() =>
+            RetailReceiptReportData.FromCashSale(sale, business, TimeZoneInfo.Utc, exchange));
     }
 
     [Theory]

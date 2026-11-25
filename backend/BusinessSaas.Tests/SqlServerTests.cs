@@ -1506,8 +1506,9 @@ public sealed class SqlServerTests(Xunit.Abstractions.ITestOutputHelper output)
         var replacementReceipt = await owner.GetFromJsonAsync<JsonElement>(replacementPath + "?locationId=" + locationId);
         Assert.Equal(15m, replacementReceipt.GetProperty("tendered").GetDecimal());
         Assert.Equal(15m, replacementReceipt.GetProperty("exchange").GetProperty("difference").GetDecimal());
-        Assert.False(replacementReceipt.GetProperty("printAvailable").GetBoolean());
-        Assert.Equal(HttpStatusCode.Conflict, (await owner.GetAsync(replacementPath + "/pdf?locationId=" + locationId)).StatusCode);
+        Assert.Equal(OperatingSystem.IsWindows(), replacementReceipt.GetProperty("printAvailable").GetBoolean());
+        using var exchangePdf = await owner.GetAsync(replacementPath + "/pdf?locationId=" + locationId);
+        Assert.Equal(OperatingSystem.IsWindows() ? HttpStatusCode.OK : HttpStatusCode.ServiceUnavailable, exchangePdf.StatusCode);
         using (var scope = factory.Services.CreateScope())
         {
             var db = scope.ServiceProvider.GetRequiredService<AppDbContext>();

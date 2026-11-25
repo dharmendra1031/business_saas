@@ -10,7 +10,8 @@ public sealed record RetailReceiptHeader(
     string CurrencyCode, string PaymentMethod, decimal TotalAmount,
     decimal CashReceived, decimal ChangeAmount, string FooterText, string MerchantLegalName, string MerchantAddress, string MerchantPhone, string MerchantEmail,
     string CustomerName, string CustomerPhone, string CustomerAddress, string LocationName, byte[]? MerchantLogo,
-    string CreditDueDateText = "");
+    string CreditDueDateText = "", string OriginalSaleNumber = "", string ReturnNumber = "",
+    decimal ReturnValue = 0m, decimal NetSettlement = 0m);
 
 public sealed record RetailReceiptLine(
     int LineNumber, string ProductName, decimal Quantity,
@@ -30,7 +31,7 @@ public sealed record RetailReceiptReportData(
     // Only historical transaction values feed the financial rows.
     // Legacy receipts retain the existing merchant-name fallback; missing SKU/unit/location remain blank.
     public static RetailReceiptReportData FromCashSale(
-        RetailCashSale sale, Business business, TimeZoneInfo timeZone)
+        RetailCashSale sale, Business business, TimeZoneInfo timeZone, RetailCashReturn? exchange = null)
     {
         ArgumentNullException.ThrowIfNull(sale);
         ArgumentNullException.ThrowIfNull(business);
@@ -47,9 +48,14 @@ public sealed record RetailReceiptReportData(
                 line.ProductSku ?? "", line.UnitCode ?? ""))
             .ToArray();
         var credit = sale.CreditDueDate.HasValue;
+        if (exchange is not null && (credit || exchange.BusinessId != sale.BusinessId ||
+            exchange.ReplacementSaleId != sale.Id || exchange.SaleId == sale.Id || exchange.Total < 0m ||
+            exchange.NetCashSettlement != sale.Total - exchange.Total ||
+            sale.Tendered != Math.Max(0m, exchange.NetCashSettlement.GetValueOrDefault())))
+            throw new InvalidOperationException("Posted exchange amounts require reconciliation.");
         if (lines.Sum(x => x.LineTotal) != sale.Total ||
             (credit ? sale.Tendered != 0m || !sale.CustomerId.HasValue || string.IsNullOrWhiteSpace(sale.CustomerName)
-                    : sale.Tendered < sale.Total))
+                    : exchange is null && sale.Tendered < sale.Total))
             throw new InvalidOperationException("Posted receipt amounts require reconciliation.");
 
         var receiptZone = sale.TimeZoneId is null
@@ -60,15 +66,19 @@ public sealed record RetailReceiptReportData(
             sale.BusinessName ?? business.Name, sale.Id.ToString(CultureInfo.InvariantCulture),
             local.ToString("dd MMM yyyy", CultureInfo.InvariantCulture),
             local.ToString("hh:mm tt", CultureInfo.InvariantCulture),
-            sale.CurrencyCode, credit ? "Credit" : "Cash", sale.Total, sale.Tendered,
-            credit ? 0m : sale.Tendered - sale.Total, business.ReceiptFooterText,
+            sale.CurrencyCode, credit ? "Credit" : exchange is not null ? "Exchange" : "Cash", sale.Total, sale.Tendered,
+            credit || exchange is not null ? 0m : sale.Tendered - sale.Total, business.ReceiptFooterText,
             sale.MerchantLegalName ?? "", sale.MerchantAddress ?? "", sale.MerchantPhone ?? "", sale.MerchantEmail ?? "",
             sale.CustomerName ?? "", sale.CustomerPhone ?? "", sale.CustomerAddress ?? "", sale.LocationName ?? "", sale.MerchantLogo,
-            sale.CreditDueDate?.ToString("dd MMM yyyy", CultureInfo.InvariantCulture) ?? "");
+            sale.CreditDueDate?.ToString("dd MMM yyyy", CultureInfo.InvariantCulture) ?? "",
+            exchange?.SaleId.ToString(CultureInfo.InvariantCulture) ?? "",
+            exchange?.Id.ToString(CultureInfo.InvariantCulture) ?? "",
+            exchange?.Total ?? 0m, exchange?.NetCashSettlement ?? 0m);
         return new RetailReceiptReportData(header, lines,
             new RetailReceiptParameters(
                 business.ReceiptShowTime, business.ReceiptShowUnitPrice,
-                !credit && business.ReceiptShowCashReceived, !credit && business.ReceiptShowChange,
+                !credit && exchange is null && business.ReceiptShowCashReceived,
+                !credit && exchange is null && business.ReceiptShowChange,
                 business.ReceiptShowFooter, business.ReceiptShowBranch,
                 business.ReceiptShowSku, business.ReceiptShowUnit,
                 business.ReceiptShowLegalName, business.ReceiptShowAddress, business.ReceiptShowPhone, business.ReceiptShowEmail,

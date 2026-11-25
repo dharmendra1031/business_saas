@@ -133,7 +133,7 @@ public static class RetailCashSales
             sale.BusinessName, sale.LocationName, sale.TimeZoneId, sale.CreditDueDate,
             paymentMethod = sale.CreditDueDate.HasValue ? "Credit" : "Cash",
             outstanding = sale.CreditDueDate.HasValue ? sale.Total - creditPaid : 0m,
-            printAvailable = exchange is null && OperatingSystem.IsWindows(),
+            printAvailable = OperatingSystem.IsWindows(),
             Exchange = exchange is null ? null : new { OriginalSaleId = exchange.SaleId, ReturnId = exchange.Id,
                 ReturnTotal = exchange.Total, Difference = exchange.NetCashSettlement },
             PostedAtUtc = DateTime.SpecifyKind(sale.PostedAtUtc, DateTimeKind.Utc),
@@ -177,15 +177,18 @@ public static class RetailCashSales
                 x.LocationId == locationId && (ownerOnly || x.CashierId == actor), context.RequestAborted);
         var loaded = Stopwatch.GetTimestamp();
         if (sale is null) return Results.NotFound();
-        if (!credit && await db.RetailCashReturns.AnyAsync(x => x.BusinessId == businessId &&
-            x.ReplacementSaleId == sale.Id, context.RequestAborted))
-            return Results.Conflict(new { message = "Exchange invoice printing requires the exchange RDLC layout." });
+        var exchange = credit ? null : await db.RetailCashReturns.AsNoTracking().SingleOrDefaultAsync(x =>
+            x.BusinessId == businessId && x.ReplacementSaleId == sale.Id, context.RequestAborted);
+        if (exchange is not null && !await CashOnly(db).AnyAsync(x => x.Id == exchange.SaleId &&
+            x.BusinessId == businessId && x.LocationId == locationId && x.CurrencyCode == sale.CurrencyCode,
+            context.RequestAborted))
+            return Results.Conflict(new { message = "Exchange requires reconciliation." });
         if (!OperatingSystem.IsWindows())
             return Results.Problem("RDLC PDF printing requires a Windows report host.", statusCode: 503);
         try
         {
             var data = RetailReceiptReportData.FromCashSale(sale, business,
-                TimeZoneInfo.FindSystemTimeZoneById(business.TimeZoneId));
+                TimeZoneInfo.FindSystemTimeZoneById(business.TimeZoneId), exchange);
             var mapped = Stopwatch.GetTimestamp();
             var pdf = RetailReceiptRenderer.Render(data, business.ReceiptPaperSize);
             var rendered = Stopwatch.GetTimestamp();
@@ -193,7 +196,7 @@ public static class RetailCashSales
             context.Response.Headers["Server-Timing"] = FormattableString.Invariant(
                 $"receipt-db;dur={Stopwatch.GetElapsedTime(started, loaded).TotalMilliseconds:F1}, receipt-map;dur={Stopwatch.GetElapsedTime(loaded, mapped).TotalMilliseconds:F1}, receipt-render;dur={Stopwatch.GetElapsedTime(mapped, rendered).TotalMilliseconds:F1}");
             context.Response.Headers.CacheControl = "no-store";
-            context.Response.Headers.ContentDisposition = $"inline; filename={(credit ? "credit-invoice" : "receipt")}-{sale.Id}.pdf";
+            context.Response.Headers.ContentDisposition = $"inline; filename={(credit ? "credit-invoice" : exchange is not null ? "exchange-invoice" : "receipt")}-{sale.Id}.pdf";
             return Results.File(pdf, "application/pdf");
         }
         catch (Exception error)
@@ -806,7 +809,6 @@ public static class RetailCashSales
                     where status == "All" || returnStatus == status
                     select new { sale.Id, sale.LocationId, sale.LocationName, sale.CustomerId, sale.CustomerName,
                         sale.CurrencyCode, sale.Total, sale.PostedAtUtc, sale.CreditDueDate,
-                        IsExchange = db.RetailCashReturns.Any(x => x.BusinessId == businessId && x.ReplacementSaleId == sale.Id),
                         Status = returnStatus };
 
         await using var tx = await db.Database.BeginTransactionAsync(IsolationLevel.Serializable, cancellationToken);
@@ -835,7 +837,7 @@ public static class RetailCashSales
                 items = items.Select(x => new { x.Id, x.LocationId, x.LocationName, x.CustomerId, x.CustomerName,
                     x.CurrencyCode, x.Total, PostedAtUtc = DateTime.SpecifyKind(x.PostedAtUtc, DateTimeKind.Utc),
                     x.Status, PaymentMethod = x.CreditDueDate == null ? "Cash" : "Credit",
-                    PrintAvailable = !x.IsExchange && OperatingSystem.IsWindows() }),
+                    PrintAvailable = OperatingSystem.IsWindows() }),
                 hasMore = (long)page * pageSize < total });
         }
         catch (Exception error) when (StockPosting.IsSqlConflict(error))

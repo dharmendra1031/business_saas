@@ -61,7 +61,7 @@ public static class RetailReceiptRenderer
             h.PaymentMethod, h.TotalAmount, h.CashReceived, h.ChangeAmount, h.FooterText,
             h.MerchantLegalName, h.MerchantAddress, h.MerchantPhone, h.MerchantEmail,
             h.CustomerName, h.CustomerPhone, h.CustomerAddress, h.LocationName, (object?)logo ?? DBNull.Value,
-            h.CreditDueDateText);
+            h.CreditDueDateText, h.OriginalSaleNumber, h.ReturnNumber, h.ReturnValue, h.NetSettlement);
         var lines = dataset.Tables["InvoiceLines"]!;
         foreach (var line in data.Lines)
             lines.Rows.Add(line.LineNumber, line.ProductName, line.Quantity, line.UnitPrice,
@@ -114,6 +114,10 @@ public static class RetailReceiptRenderer
         // Top/bottom margins, body allowance, receipt title, ID/date and item headings.
         var height = .24 + .05 + .10 + .19 + .18 + .18 + .19 + .20;
         height += Row(h.BusinessName, title, 2.86, .25);
+        if (h.PaymentMethod == "Exchange")
+            height += Row("Original invoice #" + h.OriginalSaleNumber + "\nReturn #" + h.ReturnNumber, regular, 2.86, .36)
+                + Row(Amount(h.ReturnValue), regular, .91, .18)
+                + Math.Max(Row("Cash collected / refunded", regular, 1.95, .18), Row(Amount(Math.Abs(h.NetSettlement)), regular, .91, .18));
         if (h.PaymentMethod == "Credit") height += Row("Due date: " + h.CreditDueDateText + "\nUnpaid at issue", regular, 2.86, .36);
         if (p.ShowLogo && h.MerchantLogo is not null) height += .48;
         height += Optional(p.ShowLegalName, h.MerchantLegalName)
