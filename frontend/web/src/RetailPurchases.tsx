@@ -502,7 +502,7 @@ export default function RetailPurchases({ businessId, canOperate, locations, rol
               <input id="purchase-supplier" className="form-control" readOnly value={supplierName}
                 placeholder="Select supplier" disabled={busy || addingSupplier || resolving}
                 onClick={() => openLookup('supplier')}
-                onKeyDown={event => { if (event.key === 'Enter') { event.preventDefault(); setSupplierSearch(''); setSuppliers([]); setSuppliersLoading(true); setLookup('supplier') } }} />
+                onKeyDown={event => { if (event.key === 'Enter') { event.preventDefault(); openLookup('supplier') } }} />
               <button type="button" className="btn btn-outline-secondary" aria-label="Search suppliers"
                 disabled={busy || addingSupplier || resolving}
                 onClick={() => openLookup('supplier')}><Search size={17}/></button>

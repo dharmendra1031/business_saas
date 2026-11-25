@@ -186,6 +186,15 @@ async function scenario(name, {
           categoryName: 'General', unitId: 1, unitCode: 'ITEM', salePrice: 220,
           taxClassification: '', reorderLevel: null, isActive: false }
       ]
+      if (params.has('locationId') && params.get('search') === 'Catalog page') {
+        const page = Number(params.get('page') || 1)
+        const catalog = Array.from({ length: 21 }, (_, index) => ({
+          id: 200 + index, name: 'Catalog page item ' + (index + 1), sku: 'CAT-' + (index + 1),
+          unitCode: 'ITEM', isActive: true, availableStock: index
+        }))
+        return response(route, 200, { items: catalog.slice((page - 1) * 20, page * 20),
+          total: catalog.length, page, pageSize: 20 })
+      }
       const code = params.get('code')
       if (code) items = items.filter(item => item.sku === code.toUpperCase())
       if (params.has('locationId')) items = items.map(item => ({ ...item, availableStock: 0 }))
@@ -500,6 +509,15 @@ try {
     await itemLookup.getByRole('searchbox').fill('does not exist')
     await itemLookup.getByText('No selectable items on this page').waitFor()
     assert.equal((await itemLookup.boundingBox()).height, dialogHeight, 'Search results must not resize the popup')
+    await itemLookup.getByRole('searchbox').fill('Catalog page')
+    await itemLookup.getByRole('button', { name: /Catalog page item 20 ·/ }).waitFor()
+    await itemLookup.getByRole('button', { name: 'Next', exact: true }).click()
+    await itemLookup.getByRole('button', { name: /Catalog page item 21 ·/ }).waitFor()
+    assert.equal(await itemLookup.getByRole('button', { name: 'Next', exact: true }).isDisabled(), true)
+    await itemLookup.getByRole('button', { name: 'Previous', exact: true }).click()
+    await itemLookup.getByRole('button', { name: /Catalog page item 20 ·/ }).waitFor()
+    await itemLookup.getByRole('searchbox').fill('')
+    await itemLookup.getByRole('button', { name: /Blue Shirt/ }).waitFor()
     assert.deepEqual(await purchaseLayout(), originalLayout, 'Item lookup must not shift the form or change page height')
     await t.page.keyboard.press('Escape')
     assert.equal(await t.page.getByRole('dialog').count(), 0)
