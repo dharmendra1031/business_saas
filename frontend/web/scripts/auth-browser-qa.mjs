@@ -2499,6 +2499,8 @@ try {
         await t.page.getByRole('button', { name: 'Return #81' }).click()
         await t.page.getByRole('button', { name: 'Invoice #42' }).click()
         await t.page.getByRole('region', { name: 'Cash receipt' }).getByText('Sample Customer', { exact: true }).waitFor()
+        await t.page.getByRole('button', { name: 'Back to return details' }).click()
+        await t.page.getByRole('table', { name: 'Return 81 lines' }).waitFor()
         await t.page.getByRole('button', { name: 'Back to returns' }).click()
         const originalViewport = t.page.viewportSize()
         for (const width of [1366, 768, 360]) {

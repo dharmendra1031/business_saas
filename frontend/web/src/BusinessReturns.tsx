@@ -65,11 +65,11 @@ export default function BusinessReturns({ dashboard }: { dashboard: RetailDashbo
   const closeReceipt = () => { setSelected(null); setReceipt(null); setReceiptError('') }
   if (receipt && selected) return <CashReceipt receipt={receipt} businessName={business.name}
     timeZone={business.timeZoneId} pdfPath={`/api${base}/business-receipts/${receipt.id}/pdf?locationId=${selected.locationId}`}
-    backLabel="Back to returns" onBack={closeReceipt} />
+    backLabel={detail ? 'Back to return details' : 'Back to returns'} onBack={closeReceipt} />
   if (selected) return <>
     {receiptError ? <p role="alert">{receiptError} <button type="button" className="btn btn-sm btn-outline-secondary"
       onClick={() => setReceiptReload(x => x + 1)}>Retry</button></p> : <p role="status">Loading original invoice…</p>}
-    <button type="button" className="btn btn-outline-secondary" onClick={closeReceipt}>Back to returns</button>
+    <button type="button" className="btn btn-outline-secondary" onClick={closeReceipt}>{detail ? 'Back to return details' : 'Back to returns'}</button>
   </>
 
   const money = (currency: string, amount: number) => currency + ' ' + amount.toFixed(2)
@@ -90,7 +90,7 @@ export default function BusinessReturns({ dashboard }: { dashboard: RetailDashbo
               </table></div>
     <div className="d-flex flex-wrap align-items-center justify-content-between gap-2 mt-3">
       <strong>Refund: {money(detail.currencyCode, detail.total)}</strong>
-      <button type="button" className="btn btn-outline-secondary" onClick={() => { setDetail(null); setSelected(detail) }}>Invoice #{detail.saleId}</button>
+      <button type="button" className="btn btn-outline-secondary" onClick={() => setSelected(detail)}>Invoice #{detail.saleId}</button>
     </div>
   </section>
   return <>
