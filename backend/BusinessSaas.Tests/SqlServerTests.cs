@@ -15,7 +15,7 @@ using Xunit;
 
 namespace BusinessSaas.Tests;
 
-public sealed class SqlServerTests
+public sealed class SqlServerTests(Xunit.Abstractions.ITestOutputHelper output)
 {
     [Fact]
     [Trait("Database", "SqlServer")]
@@ -1428,6 +1428,117 @@ public sealed class SqlServerTests
         var foreign = await other.GetFromJsonAsync<JsonElement>($"/api/businesses/{otherId}/products?code=SCALE-05000");
         Assert.Equal(1, foreign.GetProperty("total").GetInt32());
         Assert.Equal(20m, foreign.GetProperty("items")[0].GetProperty("salePrice").GetDecimal());
+    }
+
+    [Fact]
+    [Trait("Database", "SqlServer")]
+    public async Task Large_invoice_register_preserves_totals_dates_and_return_status()
+    {
+        var connectionString = Environment.GetEnvironmentVariable("SQLSERVER_TEST_CONNECTION");
+        if (string.IsNullOrWhiteSpace(connectionString)) return;
+
+        using var factory = new WebApplicationFactory<Program>().WithWebHostBuilder(builder =>
+        {
+            builder.UseEnvironment("Development");
+            builder.ConfigureServices(services =>
+            {
+                services.RemoveAll<DbContextOptions<AppDbContext>>();
+                services.RemoveAll<IDbContextOptionsConfiguration<AppDbContext>>();
+                services.AddDbContext<AppDbContext>(options => options.UseSqlServer(connectionString));
+            });
+        });
+        using var owner = factory.CreateClient();
+        using var stranger = factory.CreateClient();
+        await RegisterAndLogin(owner, "sql-invoice-scale-owner@example.test");
+        await RegisterAndLogin(stranger, "sql-invoice-scale-stranger@example.test");
+        var id = await BusinessFixtures.SeedAsync(factory.Services, owner, "Scale Invoices", "sql-invoice-scale-20261125");
+        const int count = 10000;
+        var firstDay = new DateTime(2026, 11, 1, 6, 0, 0, DateTimeKind.Utc);
+        using (var scope = factory.Services.CreateScope())
+        {
+            var db = scope.ServiceProvider.GetRequiredService<AppDbContext>();
+            var actor = await db.BusinessUsers.Where(x => x.BusinessId == id).Select(x => x.UserId).SingleAsync();
+            var location = await db.BusinessLocations.Where(x => x.BusinessId == id).Select(x => x.Id).SingleAsync();
+            var category = await db.RetailCategories.Where(x => x.BusinessId == id).Select(x => x.Id).SingleAsync();
+            var unit = await db.RetailUnits.Where(x => x.BusinessId == id).Select(x => x.Id).SingleAsync();
+            var product = new RetailProduct
+            {
+                BusinessId = id, CategoryId = category, UnitId = unit,
+                Name = "Scale invoice product", Sku = "SCALE-INVOICE", SalePrice = 10m
+            };
+            db.RetailProducts.Add(product);
+            await db.SaveChangesAsync();
+            var productId = product.Id;
+            // Read-path fixture only: historical synthetic documents, no inventory or ledger writes.
+            for (var offset = 0; offset < count; offset += 500)
+            {
+                db.RetailCashSales.AddRange(Enumerable.Range(offset, 500).Select(n => new RetailCashSale
+                {
+                    BusinessId = id, LocationId = location, CashierId = actor,
+                    RequestKey = $"scale-invoice-{n:D5}", CurrencyCode = "INR",
+                    Total = 10m, Tendered = 10m,
+                    PostedAtUtc = firstDay.AddDays(n < count / 2 ? 0 : 1),
+                    Lines = [new RetailCashSaleLine
+                    {
+                        ProductId = productId, ProductName = "Scale invoice product",
+                        Quantity = 1m, UnitPrice = 10m, LineTotal = 10m
+                    }]
+                }));
+                await db.SaveChangesAsync();
+                db.ChangeTracker.Clear();
+            }
+            var originals = await db.RetailCashSales.AsNoTracking()
+                .Where(x => x.BusinessId == id).OrderBy(x => x.Id).Take(2)
+                .Include(x => x.Lines).ToListAsync();
+            for (var i = 0; i < originals.Count; i++)
+            {
+                var quantity = i == 0 ? 0.5m : 1m;
+                db.RetailCashReturns.Add(new RetailCashReturn
+                {
+                    BusinessId = id, SaleId = originals[i].Id, ActorUserId = actor,
+                    RequestKey = $"scale-refund-{i}", Reason = "Synthetic report fixture",
+                    PostedAtUtc = firstDay.AddDays(2), Total = quantity * 10m,
+                    Lines = [new RetailCashReturnLine
+                    {
+                        SaleLineId = originals[i].Lines.Single().Id,
+                        Quantity = quantity, Amount = quantity * 10m
+                    }]
+                });
+            }
+            await db.SaveChangesAsync();
+        }
+
+        var path = $"/api/businesses/{id}/cash-sales/business-receipts?locationId=0&payment=All";
+        async Task<JsonElement> Read(string label, string filter)
+        {
+            var started = System.Diagnostics.Stopwatch.StartNew();
+            var result = await owner.GetFromJsonAsync<JsonElement>(path + filter);
+            output.WriteLine($"{label}: {started.Elapsed.TotalMilliseconds:F1} ms");
+            return result;
+        }
+        var first = await Read("All invoices first page", "&page=1");
+        Assert.Equal(count, first.GetProperty("total").GetInt32());
+        Assert.Equal(100000m, first.GetProperty("totals")[0].GetProperty("cash").GetDecimal());
+        Assert.Equal(0m, first.GetProperty("totals")[0].GetProperty("credit").GetDecimal());
+        Assert.Equal(10, first.GetProperty("items").GetArrayLength());
+        var last = await Read("All invoices last page", "&page=1000");
+        Assert.Equal(10, last.GetProperty("items").GetArrayLength());
+        Assert.True(first.GetProperty("items")[0].GetProperty("id").GetInt64() >
+            last.GetProperty("items")[0].GetProperty("id").GetInt64());
+        Assert.False(last.GetProperty("hasMore").GetBoolean());
+        Assert.Equal(first.GetProperty("totals").GetRawText(), last.GetProperty("totals").GetRawText());
+        var date = await Read("One day invoices", "&fromDate=2026-11-01&toDate=2026-11-01");
+        Assert.Equal(5000, date.GetProperty("total").GetInt32());
+        Assert.Equal(50000m, date.GetProperty("totals")[0].GetProperty("cash").GetDecimal());
+        var partial = await Read("Partial return filter", "&status=Partial%20return");
+        Assert.Equal(1, partial.GetProperty("total").GetInt32());
+        Assert.Equal("Partial return", partial.GetProperty("items")[0].GetProperty("status").GetString());
+        var returned = await Read("Returned filter", "&status=Returned");
+        Assert.Equal(1, returned.GetProperty("total").GetInt32());
+        Assert.Equal("Returned", returned.GetProperty("items")[0].GetProperty("status").GetString());
+        var posted = await Read("Posted filter", "&status=Posted");
+        Assert.Equal(count - 2, posted.GetProperty("total").GetInt32());
+        Assert.Equal(HttpStatusCode.NotFound, (await stranger.GetAsync(path)).StatusCode);
     }
 
     private static async Task RegisterAndLogin(HttpClient client, string email)

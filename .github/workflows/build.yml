@@ -92,7 +92,7 @@ jobs:
           fi
           echo "SQLSERVER_TEST_CONNECTION=Server=127.0.0.1,14333;Database=BusinessSaasCi;User Id=sa;Password=$password;Encrypt=True;TrustServerCertificate=True;Connect Timeout=15" >> "$GITHUB_ENV"
       - name: SQL Server migration and tenant integration test
-        run: dotnet test backend/BusinessSaas.Tests/BusinessSaas.Tests.csproj --configuration Release --filter "Database=SqlServer"
+        run: dotnet test backend/BusinessSaas.Tests/BusinessSaas.Tests.csproj --configuration Release --filter "Database=SqlServer" --logger "console;verbosity=detailed"
 
   frontend:
     runs-on: ubuntu-latest

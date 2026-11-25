@@ -81,3 +81,22 @@ p95 and conflict/retry rate. Keep posting transactions and request-key constrain
 unchanged. Do not use NOLOCK or downgrade report isolation solely to reduce
 blocking; evaluate transaction-level snapshot isolation only with explicit
 database configuration, version-store capacity and consistency testing.
+
+## 10,000-invoice read baseline
+
+The SQL Server integration suite includes a separate synthetic business with
+10,000 invoice headers, 10,000 lines and two returns. It checks full and daily
+cash totals, first/last pages, return-status filters and tenant access. Fixtures
+are inserted directly in batches of 500; they do not represent checkout,
+inventory posting or accounting throughput. The test records individual
+end-to-end in-process API request durations via xUnit output. These are CI
+observations, not production p95 or a before/after benchmark.
+
+To repeat on disposable SQL Server with the existing test connection configured:
+
+```sh
+dotnet test backend/BusinessSaas.Tests/BusinessSaas.Tests.csproj --configuration Release --filter "FullyQualifiedName~Large_invoice_register" --logger "console;verbosity=detailed"
+```
+
+Actual SQL execution plans, logical reads, lock waits, representative concurrency
+and the 100k/1m invoice targets remain separate measurement work.
