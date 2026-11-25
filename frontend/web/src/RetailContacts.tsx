@@ -124,6 +124,7 @@ export default function RetailContacts({ businessId, canOperate, type, isOwner, 
   const [reload, setReload] = useState(0)
   const [form, setForm] = useState(emptyForm)
   const [editingId, setEditingId] = useState<number | null>(null)
+  const [formOpen, setFormOpen] = useState(false)
   const [ledgerCustomer, setLedgerCustomer] = useState<number | null>(null)
   const [originalLimit, setOriginalLimit] = useState<number | null>(null)
   const [creditLimit, setCreditLimit] = useState('')
@@ -157,7 +158,12 @@ export default function RetailContacts({ businessId, canOperate, type, isOwner, 
     return () => { active = false }
   }, [basePath, page, query, reload])
 
+  useEffect(() => {
+    if (formOpen) nameInput.current?.focus()
+  }, [formOpen, editingId])
+
   function clearForm() {
+    setFormOpen(false)
     setEditingId(null)
     setForm(emptyForm)
     setOriginalLimit(null)
@@ -166,12 +172,12 @@ export default function RetailContacts({ businessId, canOperate, type, isOwner, 
   }
 
   function edit(item: Contact) {
+    setFormOpen(true)
     setEditingId(item.id)
     setOriginalLimit(item.creditLimit ?? null)
     setCreditLimit(item.creditLimit == null ? '' : String(item.creditLimit))
     setCreditReason('')
     setForm({ name: item.name, phone: item.phone, email: item.email, address: item.address ?? '', isActive: item.isActive })
-    nameInput.current?.focus()
   }
 
   const limitCents = moneyCents(creditLimit)
@@ -220,7 +226,6 @@ export default function RetailContacts({ businessId, canOperate, type, isOwner, 
       clearForm()
       setPage(1)
       setReload(value => value + 1)
-      nameInput.current?.focus()
     } catch {
       // Shared failure/unknown popup owns write feedback; keep form values.
     } finally {
@@ -232,6 +237,8 @@ export default function RetailContacts({ businessId, canOperate, type, isOwner, 
     <section className="content-section retail-masters business-module-card" aria-label={type}>
       <div className="masters-heading business-module-heading">
         <h2>{label}s</h2>
+        {canOperate && !formOpen && ledgerCustomer === null && <button type="button" className="btn btn-primary"
+          onClick={() => { clearForm(); setFormOpen(true) }}>Add {label}</button>}
       </div>
 
       {!canOperate && <div className="alert alert-warning" role="status">
@@ -242,7 +249,9 @@ export default function RetailContacts({ businessId, canOperate, type, isOwner, 
           onClick={() => setReload(value => value + 1)}>Retry</button>
       </div>}
 
-      {canOperate && <form className="masters-form" aria-busy={saving} onSubmit={event => void save(event)}>
+      {canOperate && formOpen && <form className="product-form" aria-busy={saving} onSubmit={event => void save(event)}>
+        <h3>{editingId === null ? 'New ' : 'Edit '}{label.toLowerCase()}</h3>
+        <div className="form-grid">
         <div>
           <label className="form-label" htmlFor="contact-name">{label} name *</label>
           <input ref={nameInput} id="contact-name" className="form-control" required disabled={saving}
@@ -274,16 +283,19 @@ export default function RetailContacts({ businessId, canOperate, type, isOwner, 
             <option value="inactive">Inactive</option>
           </select>
         </div>}
-        <ActionButton busy={saving} disabled={supplier && !form.phone.trim() && !form.email.trim()}>
-          {editingId === null ? `Add ${label.toLowerCase()}` : 'Save changes'}
-        </ActionButton>
-        {editingId !== null && <button className="btn btn-outline-secondary" type="button"
-          disabled={saving} onClick={() => { clearForm(); nameInput.current?.focus() }}>Cancel edit</button>}
+        </div>
+        <div className="form-footer">
+          <button className="btn btn-outline-secondary" type="button" disabled={saving} onClick={clearForm}>Cancel</button>
+          <ActionButton busy={saving} disabled={supplier && !form.phone.trim() && !form.email.trim()}>
+            {editingId === null ? `Save ${label.toLowerCase()}` : 'Save changes'}
+          </ActionButton>
+        </div>
       </form>}
 
-      {!supplier && isOwner && canOperate && editingId !== null && originalLimit !== null &&
-        <form className="border rounded p-2 mb-3" onSubmit={event => void saveCredit(event)}>
-          <h3 className="h6">Credit limit — {items.find(x => x.id === editingId)?.name ?? 'Selected customer'}</h3>
+      {!supplier && isOwner && canOperate && formOpen && editingId !== null && originalLimit !== null &&
+        <details className="border rounded p-2 mb-3" key={editingId}>
+          <summary>Credit limit</summary>
+          <form className="mt-2" onSubmit={event => void saveCredit(event)}>
           <p className="small mb-2">Maximum allowed customer credit. Set to zero to prevent new credit sales.</p>
           <div className="row g-2 align-items-end">
             <div className="col-12 col-md-4">
@@ -300,12 +312,14 @@ export default function RetailContacts({ businessId, canOperate, type, isOwner, 
               <ActionButton busy={saving} disabled={!validCredit}>Save credit limit</ActionButton>
             </div>
           </div>
-        </form>}
+          </form>
+        </details>}
 
       {!supplier && isOwner && ledgerCustomer !== null &&
         <CustomerCreditLedger key={basePath + '/' + ledgerCustomer}
           path={basePath + '/' + ledgerCustomer + '/credit-ledger'} userId={userId} onClose={() => setLedgerCustomer(null)} />}
 
+      {!formOpen && ledgerCustomer === null && <>
       <form className="masters-search" onSubmit={event => {
         event.preventDefault()
         setPage(1)
@@ -358,6 +372,7 @@ export default function RetailContacts({ businessId, canOperate, type, isOwner, 
             disabled={page * 20 >= total} onClick={() => setPage(value => value + 1)}>Next</button>
         </div>
       </div>}
+      </>}
     </section>
   )
 }

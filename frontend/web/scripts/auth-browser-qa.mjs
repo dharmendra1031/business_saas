@@ -474,6 +474,8 @@ try {
 
     await t.page.getByRole('button', { name: /New Purchase Order/ }).click()
     await t.page.getByRole('heading', { name: 'New purchase order', level: 3 }).waitFor()
+    assert.equal(await t.page.getByRole('heading', { name: 'Purchase order list' }).count(), 0,
+      'Order entry must not show the unrelated register')
     await t.page.waitForFunction(() =>
       [...document.querySelectorAll('#purchase-supplier option')].some(option =>
         option.textContent?.includes('Wholesaler')))
@@ -629,6 +631,7 @@ try {
     if (converted) await t.page.getByText('25 KG stock', { exact: true }).waitFor()
     await t.page.getByRole('button', { name: 'Save & Approve' }).click()
     await t.page.getByRole('heading', { name: 'Purchase order #71' }).waitFor()
+    assert.equal(await t.page.getByRole('heading', { name: 'Purchase order list' }).count(), 0)
     await t.page.getByRole('button', { name: 'Receive goods' }).waitFor()
     assert.equal(order.status, 'Approved', 'Owner save must approve without a second click')
     assert.equal(stock, 0, 'Approval must not update stock')
@@ -1764,7 +1767,13 @@ try {
     })
     await t.login()
     await t.page.locator('.app-sidebar .nav-entry').filter({ hasText: 'Customers' }).first().click()
+    assert.equal(await t.page.locator('#contact-name').count(), 0, 'Customer register opens without an entry form')
+    await t.page.getByRole('button', { name: 'Add Customer', exact: true }).click()
+    await t.page.getByRole('heading', { name: 'New customer' }).waitFor()
+    assert.equal(await t.page.locator('#contact-search').count(), 0)
+    await t.page.getByRole('button', { name: 'Cancel', exact: true }).click()
     await t.page.getByRole('button', { name: 'Credit ledger for Credit Customer' }).click()
+    assert.equal(await t.page.locator('#contact-search').count(), 0, 'Ledger opens without the customer register')
     await t.page.getByRole('button', { name: 'Receive payment #81' }).click()
     await t.page.getByLabel('Cash received (INR)', { exact: true }).fill('40')
     assert.equal(await t.page.getByRole('button', { name: 'Record payment', exact: true }).isDisabled(), true)
@@ -1910,6 +1919,7 @@ try {
     await t.page.getByRole('button', { name: 'Add Product' }).click()
     await t.page.locator('#product-name').fill('Checked Product')
     await t.page.locator('#product-price').fill('25')
+    await t.page.locator('details summary').filter({ hasText: 'More details' }).click()
     await t.page.getByRole('button', { name: '+ Add brand' }).click()
     const input = t.page.locator('#inline-master-name')
     await input.fill(' ')

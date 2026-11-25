@@ -368,32 +368,30 @@ export default function RetailProducts({ businessId, canOperate, currencyCode }:
               {groups.map(item => <option key={item.id} value={item.id}>{item.name}</option>)}
             </select>
           </div>
-          <div>
+          {selectedGroup > 0 && (subgroups.length > 0 || selectedSubgroup > 0) && <div>
             <label className="form-label" htmlFor="product-subgroup">Subgroup (optional)</label>
             <select id="product-subgroup" className="form-select" value={selectedSubgroup}
-              disabled={!selectedGroup}
               onChange={event => changeForm('categoryId', Number(event.target.value) || selectedGroup)}>
               <option value={0}>No subgroup</option>
               {selectedSubgroup > 0 && !subgroups.some(item => item.id === selectedSubgroup) &&
                 <option value={selectedSubgroup}>Previous subgroup (inactive)</option>}
               {subgroups.map(item => <option key={item.id} value={item.id}>{item.name}</option>)}
             </select>
-          </div>
-          <div>
+          </div>}
+          {selectedSubgroup > 0 && <div>
             <label className="form-label" htmlFor="product-category">Category (optional)</label>
             <select id="product-category" className="form-select" value={selectedCategory}
-              disabled={!selectedSubgroup}
               onChange={event => changeForm('categoryId', Number(event.target.value) || selectedSubgroup)}>
               <option value={0}>No category</option>
               {selectedCategory > 0 && !categories.some(item => item.id === selectedCategory) &&
                 <option value={selectedCategory}>Previous category (inactive)</option>}
               {categories.map(item => <option key={item.id} value={item.id}>{item.name}</option>)}
             </select>
-            {selectedSubgroup > 0 && <button type="button" className="btn btn-sm btn-link"
-              onClick={() => beginInline('categories')}>+ Add category</button>}
-          </div>
+            <button type="button" className="btn btn-sm btn-link"
+              onClick={() => beginInline('categories')}>+ Add category</button>
+          </div>}
           <div>
-            <label className="form-label" htmlFor="product-unit">Base stock unit *</label>
+            <label className="form-label" htmlFor="product-unit">Stock unit *</label>
             <select id="product-unit" className="form-select" required value={form.unitId}
               onChange={event => changeForm('unitId', Number(event.target.value))}>
               <option value={0}>Select unit</option>
@@ -404,17 +402,6 @@ export default function RetailProducts({ businessId, canOperate, currencyCode }:
               </option>)}
             </select>
             <button type="button" className="btn btn-sm btn-link" onClick={() => beginInline('units')}>+ Add unit</button>
-          </div>
-          <div>
-            <label className="form-label" htmlFor="product-brand">Brand (optional)</label>
-            <select id="product-brand" className="form-select" value={form.brandId}
-              onChange={event => changeForm('brandId', Number(event.target.value))}>
-              <option value={0}>No brand</option>
-              {form.brandId > 0 && !options.brands.some(x => x.id === form.brandId) &&
-                <option value={form.brandId}>Previous brand (inactive)</option>}
-              {options.brands.map(item => <option key={item.id} value={item.id}>{item.name}</option>)}
-            </select>
-            <button type="button" className="btn btn-sm btn-link" onClick={() => beginInline('brands')}>+ Add brand</button>
           </div>
           <div className="form-wide">
             <details open={form.conversions.length > 0 || undefined}>
@@ -480,8 +467,19 @@ export default function RetailProducts({ businessId, canOperate, currencyCode }:
             </div>
           </div>}
           <details className="form-wide" key={editingId ?? 'new'} open={editingId !== null}>
-            <summary>More details (SKU, barcode, stock alerts, tax, status)</summary>
+            <summary>More details (optional)</summary>
             <div className="form-grid mt-3">
+          <div>
+            <label className="form-label" htmlFor="product-brand">Brand (optional)</label>
+            <select id="product-brand" className="form-select" value={form.brandId}
+              onChange={event => changeForm('brandId', Number(event.target.value))}>
+              <option value={0}>No brand</option>
+              {form.brandId > 0 && !options.brands.some(x => x.id === form.brandId) &&
+                <option value={form.brandId}>Previous brand (inactive)</option>}
+              {options.brands.map(item => <option key={item.id} value={item.id}>{item.name}</option>)}
+            </select>
+            <button type="button" className="btn btn-sm btn-link" onClick={() => beginInline('brands')}>+ Add brand</button>
+          </div>
           <div>
             <label className="form-label" htmlFor="product-sku">SKU {editingId === null ? '(auto if blank)' : '*'}</label>
             <input id="product-sku" className="form-control" required={editingId !== null} maxLength={50}
@@ -496,15 +494,14 @@ export default function RetailProducts({ businessId, canOperate, currencyCode }:
               autoComplete="off" value={form.barcode}
               aria-describedby="barcode-help"
               onChange={event => changeForm('barcode', event.target.value)} />
-            <div id="barcode-help" className="field-help">Scan a barcode or enter an existing code. No barcode is generated.</div>
+            <div id="barcode-help" className="field-help">Scan or enter an existing barcode.</div>
           </div>
           <div>
             <label className="form-label" htmlFor="product-reorder">Reorder level (optional)</label>
             <input id="product-reorder" className="form-control" type="number" min="0"
               max="9999999999.999" step="0.001" inputMode="decimal"
               value={form.reorderLevel} onChange={event => changeForm('reorderLevel', event.target.value)} />
-            <div className="field-help">Alert when location stock reaches this quantity.
-              Leave blank to disable; stock must be initialized first.</div>
+            <div className="field-help">Low stock alert quantity. Leave blank to disable.</div>
           </div>
           <div>
             <label className="form-label" htmlFor="product-tax">Tax classification (optional)</label>

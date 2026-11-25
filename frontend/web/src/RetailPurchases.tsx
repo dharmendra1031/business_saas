@@ -403,7 +403,7 @@ export default function RetailPurchases({ businessId, canOperate, locations, rol
     <section className="content-section retail-masters business-module-card" aria-label="Purchase orders">
       <div className="masters-heading business-module-heading">
         <h2>Purchase Orders</h2>
-        {canOperate && !creating && <button type="button" className="btn btn-primary"
+        {canOperate && !creating && selectedId === null && <button type="button" className="btn btn-primary"
           onClick={() => { setOrderKey(operationKey()); setCreating(true); setError(''); setNotice('') }}>
           <Plus size={17} /> New Purchase Order</button>}
       </div>
@@ -421,7 +421,7 @@ export default function RetailPurchases({ businessId, canOperate, locations, rol
         <h3>New purchase order</h3>
         <div className="form-grid">
           <div>
-            <label className="form-label" htmlFor="purchase-location">Receiving location *</label>
+            <label className="form-label" htmlFor="purchase-location">Location *</label>
             <select className="form-select" id="purchase-location" value={locationId}
               onChange={event => setLocationId(Number(event.target.value))} required>
               {locations.map(x => <option key={x.id} value={x.id}>{x.name}</option>)}
@@ -504,8 +504,8 @@ export default function RetailPurchases({ businessId, canOperate, locations, rol
           {lines.length >= 50 && <p className="field-help" role="status">Maximum 50 products per purchase order.</p>}
           {lines.length > 0 && <div className="table-responsive">
             <table className="table table-sm align-middle business-record-table">
-              <thead><tr><th>Product</th><th>Order quantity</th>
-                <th>Cost per selected unit ({currencyCode})</th><th></th></tr></thead>
+              <thead><tr><th>Product</th><th>Qty</th>
+                <th>Unit cost ({currencyCode})</th><th></th></tr></thead>
               <tbody>{lines.map(line => <tr key={line.productId}>
                 <td>{line.name}<span className="product-secondary">{line.sku}</span>
                   {line.alternateUnits.length > 0 ? <select className="form-select form-select-sm mt-1"
@@ -555,7 +555,7 @@ export default function RetailPurchases({ businessId, canOperate, locations, rol
         </div>
       </form>}
 
-      <div className="product-form">
+      {!creating && selectedId === null && <div className="product-form">
         <h3>Purchase order list</h3>
         {roleCode === 'Owner' && <label><input type="checkbox" checked={approvalsOnly}
           onChange={e => { setApprovalsOnly(e.target.checked); setPage(1) }} /> Awaiting approval only</label>}
@@ -581,7 +581,7 @@ export default function RetailPurchases({ businessId, canOperate, locations, rol
                   </tr>)}</tbody>
                 </table>
               </div>}
-        {!loading && !loadError && total > 0 && <div className="masters-pages">
+        {!loading && !loadError && (page > 1 || total > 20) && <div className="masters-pages">
           <span className="small text-secondary">Page {page} · {total} orders</span>
           <div className="btn-group">
             <button type="button" className="btn btn-sm btn-outline-secondary"
@@ -590,13 +590,13 @@ export default function RetailPurchases({ businessId, canOperate, locations, rol
               disabled={page * 20 >= total} onClick={() => setPage(x => x + 1)}>Next</button>
           </div>
         </div>}
-      </div>
+      </div>}
 
-      {selectedId !== null && <div className="product-form">
+      {!creating && selectedId !== null && <div className="product-form">
         <div className="masters-heading">
           <h3>Purchase order #{selectedId}</h3>
           <button type="button" className="btn btn-sm btn-outline-secondary"
-            onClick={() => { setSelectedId(null); setDetail(null) }}>Close</button>
+            disabled={busy} onClick={() => { setSelectedId(null); setDetail(null) }}>Back to orders</button>
         </div>
         {detailError && <div className="alert alert-danger">{detailError}</div>}
         {!detail && !detailError && <p role="status">Loading order…</p>}
@@ -643,7 +643,7 @@ export default function RetailPurchases({ businessId, canOperate, locations, rol
                 <button className="btn btn-outline-secondary" type="button" onClick={() => setReceiving(
                   Object.fromEntries(detail.lines.filter(x => x.remainingQuantity > 0).map(x => [x.id, String(x.remainingQuantity)]))
                 )}>Receive all remaining</button>
-                <p className="field-help">Enter delivered quantities in the order unit. Stock is updated in the base unit only when receiving is posted.</p>
+                <p className="field-help">Enter received quantities. Stock updates when you post.</p>
                 <div className="table-responsive">
                   <table className="table table-sm align-middle business-record-table">
                     <thead><tr><th>Product</th><th className="text-end">Remaining</th>
