@@ -2099,6 +2099,29 @@ try {
   }
 
   {
+    const t = await scenario('product-empty-master-setup', { role: 'Owner', productsFixture: true })
+    await t.page.route('**/api/businesses/1/products/options*', route =>
+      response(route, 200, { categories: [], units: [], brands: [] }))
+    await t.login()
+    await t.page.locator('.app-sidebar .nav-entry').filter({ hasText: 'Products' }).click()
+    await t.page.getByRole('button', { name: 'Add Product', exact: true }).click()
+    await t.page.getByRole('heading', { name: 'New product' }).waitFor()
+    await t.page.locator('#product-name').fill('First Product')
+    await t.page.locator('#product-price').fill('10')
+    assert.equal(await t.page.getByRole('button', { name: 'Save product' }).isDisabled(), true)
+    await t.page.getByRole('button', { name: '+ Add group', exact: true }).click()
+    await t.page.getByRole('dialog', { name: 'Add group', exact: true }).waitFor()
+    await t.page.keyboard.press('Escape')
+    await t.page.getByRole('button', { name: '+ Add unit', exact: true }).click()
+    await t.page.getByRole('dialog', { name: 'Add unit', exact: true }).waitFor()
+    await t.page.keyboard.press('Escape')
+    assert.equal(await t.page.locator('#product-name').inputValue(), 'First Product')
+    await t.check()
+    await t.context.close()
+    console.log('PASS empty masters can be created without leaving product entry')
+  }
+
+  {
     const t = await scenario('product-inline-create-refresh-failure', {
       role: 'Owner', hasProducts: true, productsFixture: true
     })
@@ -2239,6 +2262,8 @@ try {
 
   {
     const t = await scenario('business-owner-all-tabs', { role: 'Owner', hasProducts: true })
+    await t.page.route('**/api/businesses/1/staff', route =>
+      response(route, 200, [{ userId: 10, email: 'qa@example.test', roleCode: 'Owner' }]))
     await t.login()
     await t.page.getByRole('heading', { name: 'Business Overview' }).waitFor()
     assert.equal(await t.page.locator('.app-sidebar .nav-entry').filter({ hasText: 'Cash Register' }).count(), 0,
@@ -2266,6 +2291,16 @@ try {
         const headerHeight = await t.page.locator('.business-module-heading').first()
           .evaluate(header => header.getBoundingClientRect().height)
         assert.ok(headerHeight >= 63, label + ': common module header should be 64px minimum')
+      }
+      if (label === 'Staff & Access') {
+        await t.page.getByRole('cell', { name: 'qa@example.test', exact: true }).waitFor()
+        assert.equal(await t.page.locator('#staff-email').count(), 0)
+        await t.page.getByRole('button', { name: 'Add Team Member', exact: true }).click()
+        await t.page.locator('#staff-email').fill('new@example.test')
+        assert.equal(await t.page.getByRole('table').count(), 0)
+        await t.page.getByRole('button', { name: 'Cancel', exact: true }).click()
+        await t.page.getByRole('cell', { name: 'qa@example.test', exact: true }).waitFor()
+        assert.equal(await t.page.locator('#staff-email').count(), 0)
       }
       if (label === 'Sales & Returns') {
         assert.equal(await t.page.getByRole('tab', { name: 'Exchanges' }).count(), 0)

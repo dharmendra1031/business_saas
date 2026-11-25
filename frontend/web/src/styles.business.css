@@ -120,7 +120,6 @@
 .business-location-name { display: inline-flex; align-items: center; gap: 6px; color: #38516b; font-size: .84rem; }
 .business-shell .business-module-card > .alert,
 .business-shell .business-module-card > .product-form,
-.business-shell .business-module-card > .masters-form,
 .business-shell .business-module-card > .masters-search,
 .business-shell .business-module-card > .product-filters,
 .business-shell .business-module-card > .masters-empty,
@@ -164,8 +163,6 @@
     padding: 3px 5px; font-size: .72rem; white-space: nowrap;
   }
 }
-.business-shell .business-module-card .masters-form { padding: 18px; border: 1px solid #e0e7f0; border-radius: 10px;
-  background: #fbfcff; margin-top: 15px; }
 .business-shell .business-master-tabs .btn { min-height: 39px; font-weight: 730; }
 .business-shell .business-module-card .table-responsive { max-width: 100%; }
 .business-shell .business-record-table { margin: 0; border-color: #e9edf4; }
@@ -194,7 +191,6 @@
   .business-location-picker select { width: 100%; }
   .business-shell .business-module-card > .alert,
   .business-shell .business-module-card > .product-form,
-  .business-shell .business-module-card > .masters-form,
   .business-shell .business-module-card > .masters-search,
   .business-shell .business-module-card > .product-filters,
   .business-shell .business-module-card > .masters-empty,
