@@ -163,25 +163,24 @@ export default function CashCheckout({ userId, dashboard, onExit }: {
 
   useEffect(() => {
     if (!pending || receipt || busy) return
-    let active = true
+    const controller = new AbortController()
     setLookupState('checking')
     const query = new URLSearchParams({ locationId: String(pending.locationId), requestKey: pending.requestKey })
-    api<Receipt>((pending.dueDate ? creditBase : base) + '/receipt?' + query)
+    api<Receipt>((pending.dueDate ? creditBase : base) + '/receipt?' + query, { signal: controller.signal })
       .then(result => {
         if (pending.dueDate && !matchesCreditReceipt(result, pending))
           throw new Error('Credit invoice response could not be verified.')
-        if (active) { setReceipt(result); setError('') }
+        if (!controller.signal.aborted) { setReceipt(result); setError('') }
       })
       .catch(cause => {
-        if (!active) return
+        if (controller.signal.aborted) return
         setLookupState(cause instanceof ApiResponseError && cause.status === 404 ? 'missing' : 'unknown')
       })
-    return () => { active = false }
+    return () => controller.abort()
   }, [base, creditBase, pending, refresh, receipt, busy])
 
   useEffect(() => {
     if (!locationId || !dashboard.canOperate || pending || receipt || scanBusy || historyPage) return
-    let active = true
     const controller = new AbortController()
     setProducts([])
     setProductsLoading(true)
@@ -190,13 +189,13 @@ export default function CashCheckout({ userId, dashboard, onExit }: {
       api<Product[]>(`${base}/products?locationId=${locationId}&search=${encodeURIComponent(search)}`,
         { signal: controller.signal })
         .then(items => {
-          if (!active) return
+          if (controller.signal.aborted) return
           setProducts(items)
           setProductsLoading(false)
           setHint(items.length ? '' : 'No eligible products found.')
-        }).catch(cause => { if (active) { setProductsLoading(false); setHint(cause instanceof Error ? cause.message : 'Unable to load products.') } })
+        }).catch(cause => { if (!controller.signal.aborted) { setProductsLoading(false); setHint(cause instanceof Error ? cause.message : 'Unable to load products.') } })
     }, 200)
-    return () => { active = false; clearTimeout(timer); controller.abort() }
+    return () => { clearTimeout(timer); controller.abort() }
   }, [base, search, locationId, dashboard.canOperate, pending, receipt, scanBusy, historyPage])
 
   useEffect(() => {

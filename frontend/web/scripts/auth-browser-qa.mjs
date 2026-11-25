@@ -1301,6 +1301,7 @@ try {
     let posted = null
     let posts = 0
     let originalRequest
+    let recoveryReads = 0
     const receipt = {
       printAvailable: true,
       id: 501, total: 10, tendered: 10, currencyCode: 'INR',
@@ -1309,6 +1310,7 @@ try {
     }
     await t.page.route('**/api/businesses/1/cash-sales/receipt?*', route => {
       assert.equal(new URL(route.request().url()).searchParams.get('requestKey'), originalRequest.requestKey)
+      recoveryReads++
       return posts === 1 ? response(route, 404, {}) : response(route, 200, receipt)
     })
     await t.page.route('**/api/businesses/1/cash-sales/products*', route => {
@@ -1477,7 +1479,16 @@ try {
       console.log('PASS POS-07 rejected recovery returns to editable basket with a new key')
       continue
     }
-    if (recover) await t.page.getByRole('button', { name: 'Record original request' }).click()
+    if (recover) {
+      const retry = t.page.getByRole('button', { name: 'Record original request' })
+      await retry.waitFor()
+      const previousReads = recoveryReads
+      await t.page.getByRole('button', { name: 'Check status again' }).click()
+      await retry.waitFor()
+      assert.equal(recoveryReads, previousReads + 1, 'Manual status check performs one receipt lookup')
+      assert.equal(posts, 1, 'Checking status must never post another sale')
+      await retry.click()
+    }
     await t.page.getByRole('heading', { name: 'Cash receipt #501' }).waitFor()
     assert.equal(posts, recover ? 2 : 1)
     if (mode === 'blocked-print' || mode === 'save-only') {

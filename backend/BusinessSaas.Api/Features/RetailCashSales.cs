@@ -54,27 +54,27 @@ public static class RetailCashSales
         db.RetailCashSales.AsNoTracking().Where(x => x.CreditDueDate == null);
 
     private static async Task<IResult> FindReceipt(long businessId, long locationId, string requestKey,
-        ClaimsPrincipal user, AppDbContext db)
+        ClaimsPrincipal user, AppDbContext db, CancellationToken cancellationToken)
     {
         if (!long.TryParse(user.FindFirstValue(ClaimTypes.NameIdentifier), out var actor) ||
-            await Shop(db, businessId, actor, locationId) is null) return Results.NotFound();
+            await Shop(db, businessId, actor, locationId, cancellationToken: cancellationToken) is null) return Results.NotFound();
         var sale = await CashOnly(db).Include(x => x.Lines).SingleOrDefaultAsync(x =>
             x.BusinessId == businessId && x.CashierId == actor && x.LocationId == locationId &&
-            x.RequestKey == requestKey);
+            x.RequestKey == requestKey, cancellationToken);
         return sale is null ? Results.NotFound() : Results.Ok(Receipt(sale));
     }
 
     private static async Task<IResult> FindCreditReceipt(long businessId, long locationId, string requestKey,
-        ClaimsPrincipal user, AppDbContext db)
+        ClaimsPrincipal user, AppDbContext db, CancellationToken cancellationToken)
     {
         if (!long.TryParse(user.FindFirstValue(ClaimTypes.NameIdentifier), out var actor) ||
-            await Shop(db, businessId, actor, locationId, ownerOnly: true) is null) return Results.NotFound();
+            await Shop(db, businessId, actor, locationId, ownerOnly: true, cancellationToken: cancellationToken) is null) return Results.NotFound();
         if (string.IsNullOrWhiteSpace(requestKey) || requestKey.Length > 80) return Results.BadRequest();
         var sale = await db.RetailCashSales.AsNoTracking().Include(x => x.Lines).SingleOrDefaultAsync(x =>
             x.BusinessId == businessId && x.CashierId == actor && x.LocationId == locationId &&
-            x.RequestKey == requestKey && x.CreditDueDate != null);
+            x.RequestKey == requestKey && x.CreditDueDate != null, cancellationToken);
         if (sale is null) return Results.NotFound();
-        var paid = await CreditCollections.PaidAsync(db, businessId, sale.Id) ?? 0m;
+        var paid = await CreditCollections.PaidAsync(db, businessId, sale.Id, cancellationToken) ?? 0m;
         return Results.Ok(Receipt(sale, creditPaid: paid));
     }
 
