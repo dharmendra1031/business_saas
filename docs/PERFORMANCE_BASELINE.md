@@ -100,3 +100,22 @@ dotnet test backend/BusinessSaas.Tests/BusinessSaas.Tests.csproj --configuration
 
 Actual SQL execution plans, logical reads, lock waits, representative concurrency
 and the 100k/1m invoice targets remain separate measurement work.
+
+## Customer outstanding read baseline
+
+The SQL Server regression seeds 100 synthetic customers, 1,000 credit invoice
+headers and lines, and 1,500 payment records. Half the invoices are fully settled;
+the others have two partial payments and span all five aging categories. It checks
+currency totals, overdue-only and customer filters, inactive customer debt,
+stable pagination and cross-tenant denial. The test logs individual request times.
+These fixtures bypass posting and are not a collections throughput benchmark.
+
+Repeat using the isolated SQL Server test connection:
+
+```sh
+dotnet test backend/BusinessSaas.Tests/BusinessSaas.Tests.csproj --configuration Release --filter "FullyQualifiedName~Large_customer_outstanding_report" --logger "console;verbosity=detailed"
+```
+
+Keep the existing serializable report transaction and financial aggregation until
+representative execution plans, logical reads and concurrent collection tests
+support a specific change. Do not add indexes solely from query shape.

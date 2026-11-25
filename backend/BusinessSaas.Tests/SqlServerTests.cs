@@ -1541,6 +1541,138 @@ public sealed class SqlServerTests(Xunit.Abstractions.ITestOutputHelper output)
         Assert.Equal(HttpStatusCode.NotFound, (await stranger.GetAsync(path)).StatusCode);
     }
 
+    [Fact]
+    [Trait("Database", "SqlServer")]
+    public async Task Large_customer_outstanding_report_preserves_aging_and_pagination()
+    {
+        var connectionString = Environment.GetEnvironmentVariable("SQLSERVER_TEST_CONNECTION");
+        if (string.IsNullOrWhiteSpace(connectionString)) return;
+
+        using var factory = new WebApplicationFactory<Program>().WithWebHostBuilder(builder =>
+        {
+            builder.UseEnvironment("Development");
+            builder.ConfigureServices(services =>
+            {
+                services.RemoveAll<DbContextOptions<AppDbContext>>();
+                services.RemoveAll<IDbContextOptionsConfiguration<AppDbContext>>();
+                services.AddDbContext<AppDbContext>(options => options.UseSqlServer(connectionString));
+            });
+        });
+        using var owner = factory.CreateClient();
+        using var stranger = factory.CreateClient();
+        await RegisterAndLogin(owner, "sql-credit-scale-owner@example.test");
+        await RegisterAndLogin(stranger, "sql-credit-scale-stranger@example.test");
+        var id = await BusinessFixtures.SeedAsync(factory.Services, owner, "Scale Credit", "sql-credit-scale-20261125");
+
+        using (var scope = factory.Services.CreateScope())
+        {
+            var db = scope.ServiceProvider.GetRequiredService<AppDbContext>();
+            var actor = await db.BusinessUsers.Where(x => x.BusinessId == id).Select(x => x.UserId).SingleAsync();
+            var location = await db.BusinessLocations.Where(x => x.BusinessId == id).Select(x => x.Id).SingleAsync();
+            var timeZone = await db.Businesses.Where(x => x.Id == id).Select(x => x.TimeZoneId).SingleAsync();
+            var today = DateOnly.FromDateTime(TimeZoneInfo.ConvertTimeFromUtc(DateTime.UtcNow,
+                TimeZoneInfo.FindSystemTimeZoneById(timeZone)));
+            var dueDates = new[] { today.AddDays(10), today.AddDays(-15), today.AddDays(-45),
+                today.AddDays(-75), today.AddDays(-105) };
+            var category = await db.RetailCategories.Where(x => x.BusinessId == id).Select(x => x.Id).SingleAsync();
+            var unit = await db.RetailUnits.Where(x => x.BusinessId == id).Select(x => x.Id).SingleAsync();
+            var product = new RetailProduct
+            {
+                BusinessId = id, CategoryId = category, UnitId = unit,
+                Name = "Scale credit product", Sku = "SCALE-CREDIT", SalePrice = 10m
+            };
+            var customers = Enumerable.Range(0, 100).Select(n => new RetailCustomer
+            {
+                BusinessId = id, Name = $"Scale Customer {n:D3}", NameKey = $"SCALE CUSTOMER {n:D3}",
+                IsActive = n != 0
+            }).ToArray();
+            db.RetailProducts.Add(product);
+            db.RetailCustomers.AddRange(customers);
+            await db.SaveChangesAsync();
+            var productId = product.Id;
+            var postedAt = DateTime.UtcNow.AddDays(-120);
+
+            // Historical read-path fixtures, not a checkout or collection throughput test.
+            for (var offset = 0; offset < customers.Length; offset += 20)
+            {
+                var sales = customers.Skip(offset).Take(20).SelectMany(customer =>
+                    Enumerable.Range(0, 10).Select(n => new RetailCashSale
+                    {
+                        BusinessId = id, LocationId = location, CashierId = actor,
+                        CustomerId = customer.Id, CustomerName = customer.Name,
+                        RequestKey = $"credit-scale-{customer.Id}-{n}", CurrencyCode = "INR",
+                        CreditDueDate = dueDates[n % 5], Total = 10m, Tendered = 0m,
+                        PostedAtUtc = postedAt,
+                        Lines = [new RetailCashSaleLine
+                        {
+                            ProductId = productId, ProductName = product.Name,
+                            Quantity = 1m, UnitPrice = 10m, LineTotal = 10m
+                        }]
+                    })).ToArray();
+                db.RetailCashSales.AddRange(sales);
+                await db.SaveChangesAsync();
+                for (var i = 0; i < sales.Length; i++)
+                {
+                    var sale = sales[i];
+                    // Five partially paid and five settled invoices per customer.
+                    var amounts = i % 10 < 5 ? new[] { 1m, 3m } : new[] { 10m };
+                    db.RetailCreditPayments.AddRange(amounts.Select((amount, n) => new RetailCreditPayment
+                    {
+                        BusinessId = id, SaleId = sale.Id, ActorUserId = actor,
+                        Amount = amount, RequestKey = $"credit-scale-payment-{sale.Id}-{n}",
+                        PostedAtUtc = postedAt.AddDays(1)
+                    }));
+                }
+                await db.SaveChangesAsync();
+                db.ChangeTracker.Clear();
+            }
+        }
+
+        var path = $"/api/businesses/{id}/customers/outstanding-report";
+        async Task<JsonElement> Read(string label, string filter)
+        {
+            var started = System.Diagnostics.Stopwatch.StartNew();
+            var result = await owner.GetFromJsonAsync<JsonElement>(path + filter);
+            output.WriteLine($"{label}: {started.Elapsed.TotalMilliseconds:F1} ms");
+            return result;
+        }
+
+        var first = await Read("Credit outstanding first page", "?page=1");
+        var totals = first.GetProperty("totals")[0];
+        Assert.Equal(3000m, totals.GetProperty("outstanding").GetDecimal());
+        Assert.Equal(600m, totals.GetProperty("notDue").GetDecimal());
+        Assert.Equal(2400m, totals.GetProperty("overdue").GetDecimal());
+        foreach (var bucket in new[] { "days1To30", "days31To60", "days61To90", "daysOver90" })
+            Assert.Equal(600m, totals.GetProperty(bucket).GetDecimal());
+        Assert.Equal(500, totals.GetProperty("invoiceCount").GetInt32());
+        Assert.Equal(20, first.GetProperty("items").GetArrayLength());
+        Assert.True(first.GetProperty("hasMore").GetBoolean());
+
+        var last = await Read("Credit outstanding last page", "?page=5");
+        Assert.Equal(20, last.GetProperty("items").GetArrayLength());
+        Assert.False(last.GetProperty("hasMore").GetBoolean());
+        Assert.Equal(first.GetProperty("totals").GetRawText(), last.GetProperty("totals").GetRawText());
+        Assert.True(first.GetProperty("items")[19].GetProperty("customerId").GetInt64() <
+            last.GetProperty("items")[0].GetProperty("customerId").GetInt64());
+
+        var filtered = await Read("Credit customer search", "?search=Scale%20Customer%20000");
+        var item = Assert.Single(filtered.GetProperty("items").EnumerateArray());
+        Assert.False(item.GetProperty("isActive").GetBoolean());
+        Assert.Equal(30m, item.GetProperty("outstanding").GetDecimal());
+        Assert.Equal(5, item.GetProperty("invoiceCount").GetInt32());
+        Assert.Equal(30m, filtered.GetProperty("totals")[0].GetProperty("outstanding").GetDecimal());
+
+        var overdue = await Read("Credit overdue only", "?overdueOnly=true");
+        Assert.Equal(2400m, overdue.GetProperty("totals")[0].GetProperty("outstanding").GetDecimal());
+        Assert.Equal(0m, overdue.GetProperty("totals")[0].GetProperty("notDue").GetDecimal());
+        Assert.Equal(400, overdue.GetProperty("totals")[0].GetProperty("invoiceCount").GetInt32());
+
+        var empty = await Read("Credit unmatched search", "?search=NO-SUCH-SCALE-CUSTOMER");
+        Assert.Empty(empty.GetProperty("items").EnumerateArray());
+        Assert.Empty(empty.GetProperty("totals").EnumerateArray());
+        Assert.Equal(HttpStatusCode.NotFound, (await stranger.GetAsync(path)).StatusCode);
+    }
+
     private static async Task RegisterAndLogin(HttpClient client, string email)
     {
         Assert.Equal(HttpStatusCode.OK, (await Post(client, "/api/auth/register",
