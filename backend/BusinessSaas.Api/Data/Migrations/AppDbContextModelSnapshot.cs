@@ -1994,6 +1994,32 @@ namespace BusinessSaas.Api.Data.Migrations
                 });
 
             modelBuilder.Entity("BusinessSaas.Api.Data.RetailProduct", b => b.Navigation("Conversions"));
+            modelBuilder.Entity("BusinessSaas.Api.Data.RetailCreditPayment", b =>
+                {
+                    b.Property<long>("Id").ValueGeneratedOnAdd().HasColumnType("bigint");
+                    SqlServerPropertyBuilderExtensions.UseIdentityColumn(b.Property<long>("Id"));
+                    b.Property<long>("BusinessId").HasColumnType("bigint");
+                    b.Property<long>("SaleId").HasColumnType("bigint");
+                    b.Property<long>("ActorUserId").HasColumnType("bigint");
+                    b.Property<string>("RequestKey").IsRequired().HasMaxLength(80).HasColumnType("nvarchar(80)");
+                    b.Property<decimal>("Amount").HasPrecision(18, 2).HasColumnType("decimal(18,2)");
+                    b.Property<DateTime>("PostedAtUtc").HasColumnType("datetime2");
+                    b.HasKey("Id");
+                    b.HasIndex("ActorUserId");
+                    b.HasIndex("SaleId");
+                    b.HasIndex("BusinessId", "RequestKey").IsUnique();
+                    b.ToTable("RetailCreditPayments");
+                });
+
+            modelBuilder.Entity("BusinessSaas.Api.Data.RetailCreditPayment", b =>
+                {
+                    b.HasOne("BusinessSaas.Api.Data.Business", null).WithMany().HasForeignKey("BusinessId")
+                        .OnDelete(DeleteBehavior.Restrict).IsRequired();
+                    b.HasOne("BusinessSaas.Api.Data.RetailCashSale", null).WithMany().HasForeignKey("SaleId")
+                        .OnDelete(DeleteBehavior.Restrict).IsRequired();
+                    b.HasOne("BusinessSaas.Api.Data.AppUser", null).WithMany().HasForeignKey("ActorUserId")
+                        .OnDelete(DeleteBehavior.Restrict).IsRequired();
+                });
 #pragma warning restore 612, 618
         }
     }

@@ -170,6 +170,7 @@ public static class RetailContactEndpoints
             await db.SaveChangesAsync();
             return Results.Ok(new { customer.Id, customer.Name, customer.Phone, customer.Email, customer.Address, customer.IsActive });
         });
+        CreditCollections.MapCreditCollections(customers);
         customers.MapGet("/{customerId:long}/credit-ledger", async (long businessId, long customerId,
             ClaimsPrincipal user, AppDbContext db, int page = 1) =>
         {
@@ -182,18 +183,29 @@ public static class RetailContactEndpoints
 
             const int size = 20;
             await using var tx = await db.Database.BeginTransactionAsync(IsolationLevel.Serializable);
-            var invoices = db.RetailCashSales.AsNoTracking().Where(x => x.BusinessId == businessId &&
-                x.CustomerId == customerId && x.CreditDueDate != null);
-            var totals = await invoices.GroupBy(x => x.CurrencyCode).Select(x => new {
-                CurrencyCode = x.Key, Outstanding = x.Sum(s => s.Total), InvoiceCount = x.Count()
+            var invoices = CreditCollections.Invoices(db, businessId, customerId);
+            var billed = await invoices.GroupBy(x => x.CurrencyCode).Select(x => new {
+                CurrencyCode = x.Key, Debit = x.Sum(s => s.Total), InvoiceCount = x.Count()
             }).ToListAsync();
+            var collections = await (from payment in CreditCollections.CustomerPayments(db, businessId, customerId)
+                                     join sale in invoices on payment.SaleId equals sale.Id
+                                     group payment by sale.CurrencyCode into amounts
+                                     select new { CurrencyCode = amounts.Key, Paid = amounts.Sum(p => p.Amount) })
+                .ToDictionaryAsync(x => x.CurrencyCode, x => x.Paid);
             var items = await invoices.OrderByDescending(x => x.Id).Skip((page - 1) * size)
                 .Take(size + 1).Select(x => new { x.Id, x.LocationId, x.LocationName, x.CurrencyCode,
-                    Debit = x.Total, x.CreditDueDate, PostedAtUtc = DateTime.SpecifyKind(x.PostedAtUtc, DateTimeKind.Utc)
+                    Debit = x.Total, x.CreditDueDate, PostedAtUtc = DateTime.SpecifyKind(x.PostedAtUtc, DateTimeKind.Utc),
+                    Paid = db.RetailCreditPayments.Where(p => p.BusinessId == businessId && p.SaleId == x.Id)
+                        .Sum(p => (decimal?)p.Amount) ?? 0m
                 }).ToListAsync();
             await tx.CommitAsync();
-            return Results.Ok(new { customerId, customer.Name, customer.CreditLimit, totals,
-                items = items.Take(size), hasMore = items.Count > size });
+            return Results.Ok(new { customerId, customer.Name, customer.CreditLimit,
+                totals = billed.Select(x => new { x.CurrencyCode, x.Debit, x.InvoiceCount,
+                    Paid = collections.GetValueOrDefault(x.CurrencyCode),
+                    Outstanding = x.Debit - collections.GetValueOrDefault(x.CurrencyCode) }),
+                items = items.Take(size).Select(x => new { x.Id, x.LocationId, x.LocationName, x.CurrencyCode,
+                    x.Debit, x.Paid, Outstanding = x.Debit - x.Paid, x.CreditDueDate, x.PostedAtUtc }),
+                hasMore = items.Count > size });
         });
 
         customers.MapPut("/{customerId:long}/credit-limit", async (long businessId, long customerId,

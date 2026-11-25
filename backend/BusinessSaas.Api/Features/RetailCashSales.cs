@@ -79,7 +79,8 @@ public static class RetailCashSales
         return sale is null ? Results.NotFound() : Results.Ok(Receipt(sale));
     }
 
-    private static object Receipt(RetailCashSale sale, IReadOnlyList<RetailCashReturnLine>? returns = null)
+    private static object Receipt(RetailCashSale sale, IReadOnlyList<RetailCashReturnLine>? returns = null,
+        decimal creditPaid = 0m)
     {
         var lines = sale.Lines.OrderBy(x => x.Id).ToArray();
         // Older single-item checkout clients read these four fields from the receipt header.
@@ -88,7 +89,7 @@ public static class RetailCashSales
             sale.Tendered, sale.Total, sale.CurrencyCode, sale.CustomerId, sale.CustomerName,
             sale.BusinessName, sale.LocationName, sale.TimeZoneId, sale.CreditDueDate,
             paymentMethod = sale.CreditDueDate.HasValue ? "Credit" : "Cash",
-            outstanding = sale.CreditDueDate.HasValue ? sale.Total : 0m,
+            outstanding = sale.CreditDueDate.HasValue ? sale.Total - creditPaid : 0m,
             printAvailable = !sale.CreditDueDate.HasValue && OperatingSystem.IsWindows(),
             PostedAtUtc = DateTime.SpecifyKind(sale.PostedAtUtc, DateTimeKind.Utc),
             first.ProductId, first.ProductName, first.UnitPrice, first.Quantity,
@@ -536,7 +537,8 @@ public static class RetailCashSales
                 // Never hide a committed receipt or double-post when settings changed mid-retry.
                 context.Response.Headers["Server-Timing"] = FormattableString.Invariant(
                     $"sale-replay;dur={Stopwatch.GetElapsedTime(started).TotalMilliseconds:F1}");
-                return Results.Ok(Receipt(previous));
+                var creditPaid = isCredit ? await CreditCollections.PaidAsync(db, businessId, previous.Id) ?? 0m : 0m;
+                return Results.Ok(Receipt(previous, creditPaid: creditPaid));
             }
             if (isCredit && (!config.GetValue<bool>("RetailCredit:PostingEnabled") || !shop.CreditSalesEnabled))
                 return Results.Conflict(new { code = "CREDIT_NOT_RELEASED", message = "Credit sales are not enabled." });
@@ -638,11 +640,14 @@ public static class RetailCashSales
                     TimeZoneInfo.FindSystemTimeZoneById(shop.TimeZoneId)));
                 if (dueDate!.Value < today || dueDate.Value > today.AddDays(365))
                     return Results.BadRequest(new { message = "Choose a due date between today and one year from today." });
-                var creditInvoices = db.RetailCashSales.AsNoTracking().Where(x => x.BusinessId == businessId &&
-                    x.CustomerId == customer!.Id && x.CreditDueDate != null);
-                if (await creditInvoices.AnyAsync(x => x.CurrencyCode != shop.CurrencyCode || x.CreditDueDate < today))
+                var creditInvoices = CreditCollections.Invoices(db, businessId, customer!.Id);
+                if (await creditInvoices.AnyAsync(x => (x.CurrencyCode != shop.CurrencyCode || x.CreditDueDate < today) &&
+                    x.Total > (db.RetailCreditPayments.Where(p => p.BusinessId == businessId && p.SaleId == x.Id)
+                        .Sum(p => (decimal?)p.Amount) ?? 0m)))
                     return Results.Conflict(new { message = "Outstanding overdue or different-currency credit must be resolved first." });
-                var outstanding = await creditInvoices.SumAsync(x => (decimal?)x.Total) ?? 0m;
+                var billed = await creditInvoices.SumAsync(x => (decimal?)x.Total) ?? 0m;
+                var paid = await CreditCollections.CustomerPayments(db, businessId, customer.Id).SumAsync(x => (decimal?)x.Amount) ?? 0m;
+                var outstanding = billed - paid;
                 if (customer!.CreditLimit <= 0 || sale.Total > customer.CreditLimit - outstanding)
                     return Results.Conflict(new { code = "CREDIT_LIMIT_EXCEEDED", message = "Customer credit limit would be exceeded." });
             }

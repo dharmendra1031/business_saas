@@ -67,3 +67,15 @@ public sealed class RetailCashReturnLine
     public decimal Amount { get; set; }
     public bool Restock { get; set; }
 }
+
+// Immutable cash collection against one posted credit invoice.
+public sealed class RetailCreditPayment
+{
+    public long Id { get; set; }
+    public long BusinessId { get; set; }
+    public long SaleId { get; set; }
+    public long ActorUserId { get; set; }
+    public string RequestKey { get; set; } = "";
+    public decimal Amount { get; set; }
+    public DateTime PostedAtUtc { get; set; }
+}
