@@ -275,6 +275,16 @@ app.Use(async (context, next) =>
                 .SingleOrDefaultAsync(x => x.BusinessId == businessId);
             if (subscription is not null && !SubscriptionAccess.CanOperate(subscription, DateTime.UtcNow))
             {
+                // Never disclose a tenant's subscription status to a non-member.
+                if (!long.TryParse(context.User.FindFirst(System.Security.Claims.ClaimTypes.NameIdentifier)?.Value,
+                        out var actorId) ||
+                    !await db.BusinessUsers.AsNoTracking().AnyAsync(x =>
+                        x.BusinessId == businessId && x.UserId == actorId, context.RequestAborted))
+                {
+                    context.Response.StatusCode = StatusCodes.Status404NotFound;
+                    return;
+                }
+
                 context.Response.StatusCode = StatusCodes.Status403Forbidden;
                 await context.Response.WriteAsJsonAsync(new
                 {
