@@ -852,6 +852,18 @@ public sealed class SqlServerTests(Xunit.Abstractions.ITestOutputHelper output)
         using var remainingEstimate = await Post(owner, estimatePath, Estimate(0.250m));
         Assert.Equal(HttpStatusCode.OK, remainingEstimate.StatusCode);
         Assert.Equal(20m, (await remainingEstimate.Content.ReadFromJsonAsync<JsonElement>()).GetProperty("total").GetDecimal());
+        async Task<(int Sales, int Returns, int Movements, decimal SalesTotal, decimal ReturnsTotal)> ExchangeBaseline()
+        {
+            using var scope = factory.Services.CreateScope();
+            var db = scope.ServiceProvider.GetRequiredService<AppDbContext>();
+            var sales = db.RetailCashSales.Where(x => x.BusinessId == businessId);
+            var returns = db.RetailCashReturns.Where(x => x.BusinessId == businessId);
+            return (await sales.CountAsync(), await returns.CountAsync(),
+                await db.RetailStockMovements.CountAsync(x => x.BusinessId == businessId),
+                await sales.SumAsync(x => x.Total), await returns.SumAsync(x => x.Total));
+        }
+
+        var beforeExchange = await ExchangeBaseline();
         var exchangePath = returnPath.Replace("/returns", "/exchange-estimate");
         var exchange = new {
             locationId,
@@ -895,12 +907,30 @@ public sealed class SqlServerTests(Xunit.Abstractions.ITestOutputHelper output)
         Assert.Equal(HttpStatusCode.Conflict, (await Post(owner, exchangePath, exchange with {
             returns = new[] { new { lineId, quantity = 0.375m, restock = true } }
         })).StatusCode);
+        // The same product can use returned sellable stock, but damaged goods
+        // must not increase the replacement quantity available to the customer.
+        var sameProduct = exchange with {
+            replacements = new[] { new { productId, quantity = 1m, expectedUnitPrice = 80m } }
+        };
+        using var sameProductQuote = await Post(owner, exchangePath, sameProduct);
+        Assert.Equal(HttpStatusCode.OK, sameProductQuote.StatusCode);
+        var sameProductBody = await sameProductQuote.Content.ReadFromJsonAsync<JsonElement>();
+        Assert.Equal(20m, sameProductBody.GetProperty("returnTotal").GetDecimal());
+        Assert.Equal(80m, sameProductBody.GetProperty("replacementTotal").GetDecimal());
+        Assert.Equal(60m, sameProductBody.GetProperty("difference").GetDecimal());
+        Assert.False(sameProductBody.GetProperty("canPost").GetBoolean());
+        Assert.Equal(HttpStatusCode.Conflict, (await Post(owner, exchangePath, sameProduct with {
+            returns = new[] { new { lineId, quantity = 0.250m, restock = false } }
+        })).StatusCode);
+        Assert.Equal(beforeExchange, await ExchangeBaseline());
         using (var exchangeScope = factory.Services.CreateScope())
         {
             var exchangeDb = exchangeScope.ServiceProvider.GetRequiredService<AppDbContext>();
             Assert.Equal(1, await exchangeDb.RetailCashReturns.CountAsync(x => x.SaleId == sale.GetProperty("id").GetInt64()));
             Assert.Equal(2m, await exchangeDb.RetailStockBalances.Where(x => x.BusinessId == businessId &&
                 x.LocationId == locationId && x.ProductId == unavailableId).Select(x => x.Quantity).SingleAsync());
+            Assert.Equal(0.750m, await exchangeDb.RetailStockBalances.Where(x => x.BusinessId == businessId &&
+                x.LocationId == locationId && x.ProductId == productId).Select(x => x.Quantity).SingleAsync());
         }
         using var remainder = await Post(owner, returnPath, request with {
             requestKey = "sql-return-final-20261125", expectedRefund = 20m,
