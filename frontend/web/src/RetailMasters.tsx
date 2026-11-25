@@ -2,6 +2,7 @@ import { useEffect, useRef, useState, type FormEvent } from 'react'
 import { api, post, SessionExpiredError } from './api'
 import { classificationPath, classificationTrail } from './retailClassification'
 import { ActionButton, useActionFeedback } from './ActionFeedback'
+import { MasterLookup } from './LookupDialog'
 
 type MasterType = 'groups' | 'subgroups' | 'categories' | 'brands' | 'units'
 
@@ -200,14 +201,13 @@ export default function RetailMasters({ businessId, canOperate }: {
           </div>}
           {(type === 'subgroups' || type === 'categories') && <div>
             <label className="form-label" htmlFor="master-parent">{parentLabel} *</label>
-            <select id="master-parent" className="form-select" value={parentId} required disabled={saving}
-              onChange={event => setParentId(Number(event.target.value))}>
-              <option value={0}>Select {parentLabel.toLowerCase()}</option>
-              {parentId > 0 && !candidateParents.some(item => item.id === parentId) &&
-                <option value={parentId}>Previous parent (inactive or moved)</option>}
-              {candidateParents.filter(item => item.id !== editingId).map(item =>
-                <option key={item.id} value={item.id}>{classificationPath(parentOptions, item.id)}</option>)}
-            </select>
+            <MasterLookup id="master-parent" title={'Select ' + parentLabel.toLowerCase()} value={parentId}
+              emptyLabel={'Select ' + parentLabel.toLowerCase()} disabled={saving}
+              options={[...candidateParents.filter(item => item.id !== editingId)
+                .map(item => ({ id: item.id, name: classificationPath(parentOptions, item.id) })),
+                ...(parentId > 0 && !candidateParents.some(item => item.id === parentId)
+                  ? [{ id: parentId, name: 'Previous parent (inactive or moved)' }] : [])]}
+              onChange={setParentId} />
           </div>}
           {editingId !== null && <div className="form-check form-wide">
             <input id="master-status" type="checkbox" className="form-check-input" checked={active} disabled={saving}
@@ -234,13 +234,10 @@ export default function RetailMasters({ businessId, canOperate }: {
           onChange={event => setSearch(event.target.value)} />
         {(type === 'subgroups' || type === 'categories') && <div>
           <label className="visually-hidden" htmlFor="master-filter-parent">Filter by {parentLabel.toLowerCase()}</label>
-          <select id="master-filter-parent" className="form-select" value={filterParent}
-            onChange={event => { setPage(1); setFilterParent(Number(event.target.value)) }}>
-            <option value={0}>All {type}</option>
-            {filterParents.map(item => <option key={item.id} value={item.id}>
-              {classificationPath(parentOptions, item.id)}{item.isActive ? '' : ' (inactive)'}
-            </option>)}
-          </select>
+          <MasterLookup id="master-filter-parent" title={'Filter by ' + parentLabel.toLowerCase()} value={filterParent}
+            emptyLabel={'All ' + type} options={[{ id: 0, name: 'All ' + type },
+              ...filterParents.map(item => ({ id: item.id, name: classificationPath(parentOptions, item.id) + (item.isActive ? '' : ' (inactive)') }))]}
+            onChange={id => { setPage(1); setFilterParent(id) }} />
         </div>}
         <button className="btn btn-outline-secondary" type="submit">Search</button>
       </form>

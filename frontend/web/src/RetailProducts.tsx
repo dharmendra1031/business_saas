@@ -4,6 +4,7 @@ import { Package, Plus, Search } from 'lucide-react'
 import { classificationPath, classificationTrail } from './retailClassification'
 import { ActionButton, useActionFeedback } from './ActionFeedback'
 import { moneyCents } from './posMoney'
+import { MasterLookup } from './LookupDialog'
 
 interface Product {
   id: number
@@ -198,7 +199,7 @@ export default function RetailProducts({ businessId, canOperate, currencyCode }:
 
   async function save(event: FormEvent) {
     event.preventDefault()
-    if (!canOperate || saving || inlineSaving || inlineType || optionsLoading || !conversionValid) return
+    if (!canOperate || saving || inlineSaving || inlineType || optionsLoading || !form.categoryId || !form.unitId || !conversionValid) return
 
     setSaving(true)
     setSkuError('')
@@ -360,33 +361,27 @@ export default function RetailProducts({ businessId, canOperate, currencyCode }:
           </div>
           <div>
             <label className="form-label" htmlFor="product-group">Group *</label>
-            <select id="product-group" className="form-select" required value={selectedGroup}
-              onChange={event => changeForm('categoryId', Number(event.target.value))}>
-              <option value={0}>Select group</option>
-              {selectedGroup > 0 && !groups.some(item => item.id === selectedGroup) &&
-                <option value={selectedGroup}>Previous group (inactive)</option>}
-              {groups.map(item => <option key={item.id} value={item.id}>{item.name}</option>)}
-            </select>
+            <MasterLookup id="product-group" title="Select group" value={selectedGroup} emptyLabel="Select group"
+              options={[...groups,
+                ...(selectedGroup > 0 && !groups.some(item => item.id === selectedGroup)
+                  ? [{ id: selectedGroup, name: 'Previous selection (inactive)' }] : [])]}
+              disabled={saving || inlineSaving} onChange={id => changeForm('categoryId', id)} />
           </div>
           {selectedGroup > 0 && (subgroups.length > 0 || selectedSubgroup > 0) && <div>
             <label className="form-label" htmlFor="product-subgroup">Subgroup (optional)</label>
-            <select id="product-subgroup" className="form-select" value={selectedSubgroup}
-              onChange={event => changeForm('categoryId', Number(event.target.value) || selectedGroup)}>
-              <option value={0}>No subgroup</option>
-              {selectedSubgroup > 0 && !subgroups.some(item => item.id === selectedSubgroup) &&
-                <option value={selectedSubgroup}>Previous subgroup (inactive)</option>}
-              {subgroups.map(item => <option key={item.id} value={item.id}>{item.name}</option>)}
-            </select>
+            <MasterLookup id="product-subgroup" title="Select subgroup" value={selectedSubgroup} emptyLabel="No subgroup"
+              options={[{ id: 0, name: 'No subgroup' }, ...subgroups,
+                ...(selectedSubgroup > 0 && !subgroups.some(item => item.id === selectedSubgroup)
+                  ? [{ id: selectedSubgroup, name: 'Previous selection (inactive)' }] : [])]}
+              disabled={saving || inlineSaving} onChange={id => changeForm('categoryId', id || selectedGroup)} />
           </div>}
           {selectedSubgroup > 0 && <div>
             <label className="form-label" htmlFor="product-category">Category (optional)</label>
-            <select id="product-category" className="form-select" value={selectedCategory}
-              onChange={event => changeForm('categoryId', Number(event.target.value) || selectedSubgroup)}>
-              <option value={0}>No category</option>
-              {selectedCategory > 0 && !categories.some(item => item.id === selectedCategory) &&
-                <option value={selectedCategory}>Previous category (inactive)</option>}
-              {categories.map(item => <option key={item.id} value={item.id}>{item.name}</option>)}
-            </select>
+            <MasterLookup id="product-category" title="Select category" value={selectedCategory} emptyLabel="No category"
+              options={[{ id: 0, name: 'No category' }, ...categories,
+                ...(selectedCategory > 0 && !categories.some(item => item.id === selectedCategory)
+                  ? [{ id: selectedCategory, name: 'Previous selection (inactive)' }] : [])]}
+              disabled={saving || inlineSaving} onChange={id => changeForm('categoryId', id || selectedSubgroup)} />
             <button type="button" className="btn btn-sm btn-link"
               onClick={() => beginInline('categories')}>+ Add category</button>
           </div>}
@@ -405,13 +400,11 @@ export default function RetailProducts({ businessId, canOperate, currencyCode }:
           </div>
           <div>
             <label className="form-label" htmlFor="product-brand">Brand (optional)</label>
-            <select id="product-brand" className="form-select" value={form.brandId}
-              onChange={event => changeForm('brandId', Number(event.target.value))}>
-              <option value={0}>No brand</option>
-              {form.brandId > 0 && !options.brands.some(x => x.id === form.brandId) &&
-                <option value={form.brandId}>Previous brand (inactive)</option>}
-              {options.brands.map(item => <option key={item.id} value={item.id}>{item.name}</option>)}
-            </select>
+            <MasterLookup id="product-brand" title="Select brand" value={form.brandId} emptyLabel="No brand"
+              options={[{ id: 0, name: 'No brand' }, ...options.brands,
+                ...(form.brandId > 0 && !options.brands.some(item => item.id === form.brandId)
+                  ? [{ id: form.brandId, name: 'Previous selection (inactive)' }] : [])]}
+              disabled={saving || inlineSaving} onChange={id => changeForm('brandId', id)} />
             <button type="button" className="btn btn-sm btn-link" onClick={() => beginInline('brands')}>+ Add brand</button>
           </div>
           <div>
@@ -507,7 +500,7 @@ export default function RetailProducts({ businessId, canOperate, currencyCode }:
         <div className="form-footer">
           <button type="button" className="btn btn-outline-secondary" disabled={saving || inlineSaving}
             onClick={() => { setFormOpen(false); setSkuError('') }}>Cancel</button>
-          <ActionButton busy={saving} disabled={optionsLoading || inlineSaving || !!inlineType || !conversionValid}>Save product</ActionButton>
+          <ActionButton busy={saving} disabled={optionsLoading || inlineSaving || !!inlineType || !form.categoryId || !form.unitId || !conversionValid}>Save product</ActionButton>
         </div>
       </form>}
 
@@ -535,30 +528,24 @@ export default function RetailProducts({ businessId, canOperate, currencyCode }:
           </div>
           <div>
             <label className="visually-hidden" htmlFor="product-filter-group">Group</label>
-            <select id="product-filter-group" className="form-select" value={filterGroup}
-              onChange={event => { setPage(1); setCategoryFilter(Number(event.target.value)) }}>
-              <option value={0}>All groups</option>
-              {options.categories.filter(item => item.parentId == null).map(item =>
-                <option key={item.id} value={item.id}>{item.name}{item.isActive ? '' : ' (inactive)'}</option>)}
-            </select>
+            <MasterLookup id="product-filter-group" title="Filter groups" value={filterGroup} emptyLabel="All groups"
+              options={[{ id: 0, name: 'All groups' }, ...options.categories.filter(item => item.parentId == null)
+                .map(item => ({ id: item.id, name: item.name + (item.isActive ? '' : ' (inactive)') }))]}
+              onChange={id => { setPage(1); setCategoryFilter(id) }} />
           </div>
           {filterGroup > 0 && <div>
             <label className="visually-hidden" htmlFor="product-filter-subgroup">Subgroup</label>
-            <select id="product-filter-subgroup" className="form-select" value={filterSubgroup}
-              onChange={event => { setPage(1); setCategoryFilter(Number(event.target.value) || filterGroup) }}>
-              <option value={0}>All subgroups</option>
-              {options.categories.filter(item => item.parentId === filterGroup && filterGroup > 0).map(item =>
-                <option key={item.id} value={item.id}>{item.name}{item.isActive ? '' : ' (inactive)'}</option>)}
-            </select>
+            <MasterLookup id="product-filter-subgroup" title="Filter subgroups" value={filterSubgroup} emptyLabel="All subgroups"
+              options={[{ id: 0, name: 'All subgroups' }, ...options.categories.filter(item => item.parentId === filterGroup && filterGroup > 0)
+                .map(item => ({ id: item.id, name: item.name + (item.isActive ? '' : ' (inactive)') }))]}
+              onChange={id => { setPage(1); setCategoryFilter(id || filterGroup) }} />
           </div>}
           {filterSubgroup > 0 && <div>
             <label className="visually-hidden" htmlFor="product-filter-category">Category</label>
-            <select id="product-filter-category" className="form-select" value={filterCategory}
-              onChange={event => { setPage(1); setCategoryFilter(Number(event.target.value) || filterSubgroup) }}>
-              <option value={0}>All categories</option>
-              {options.categories.filter(item => item.parentId === filterSubgroup && filterSubgroup > 0)
-                .map(item => <option key={item.id} value={item.id}>{item.name}{item.isActive ? '' : ' (inactive)'}</option>)}
-            </select>
+            <MasterLookup id="product-filter-category" title="Filter categories" value={filterCategory} emptyLabel="All categories"
+              options={[{ id: 0, name: 'All categories' }, ...options.categories.filter(item => item.parentId === filterSubgroup && filterSubgroup > 0)
+                .map(item => ({ id: item.id, name: item.name + (item.isActive ? '' : ' (inactive)') }))]}
+              onChange={id => { setPage(1); setCategoryFilter(id || filterSubgroup) }} />
           </div>}
           <button type="submit" className="btn btn-outline-secondary">Search</button>
         </form>

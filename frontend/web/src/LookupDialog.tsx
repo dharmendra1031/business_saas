@@ -1,4 +1,5 @@
-import { useLayoutEffect, useRef } from 'react'
+import { useLayoutEffect, useRef, useState } from 'react'
+import { Search } from 'lucide-react'
 
 export default function LookupDialog({ title, searchId, search, placeholder, columns, rows, status, onSearch, onSelect, onClose }: {
   title: string
@@ -53,4 +54,30 @@ export default function LookupDialog({ title, searchId, search, placeholder, col
     </div>
     {status && <p className="small mt-2 mb-0" role="status">{status}</p>}
   </dialog>
+}
+
+export function MasterLookup({ id, title, value, options, emptyLabel, disabled, onChange }: {
+  id: string
+  title: string
+  value: number
+  options: { id: number; name: string }[]
+  emptyLabel: string
+  disabled?: boolean
+  onChange: (id: number) => void
+}) {
+  const [open, setOpen] = useState(false)
+  const [search, setSearch] = useState('')
+  const selected = options.find(item => item.id === value)
+  function show() { setSearch(''); setOpen(true) }
+  const rows = options.filter(item => item.name.toLowerCase().includes(search.trim().toLowerCase()))
+    .map(item => ({ id: item.id, cells: [item.name] }))
+  return <>
+    <button id={id} type="button" className="btn btn-outline-secondary w-100 text-start d-flex align-items-center justify-content-between gap-2"
+      data-selected-id={value} disabled={disabled} aria-haspopup="dialog" aria-expanded={open} onClick={show}>
+      <span>{selected?.name ?? emptyLabel}</span><Search size={16} aria-hidden="true" />
+    </button>
+    {open && <LookupDialog title={title} searchId={id + '-search'} search={search} placeholder="Search"
+      columns={['Name']} rows={rows} status={rows.length ? '' : 'No matching records'}
+      onSearch={setSearch} onSelect={selectedId => { onChange(selectedId); setOpen(false) }} onClose={() => setOpen(false)} />}
+  </>
 }
