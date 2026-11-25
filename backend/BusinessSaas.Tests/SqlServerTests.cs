@@ -948,6 +948,12 @@ public sealed class SqlServerTests
             lines = new[] { new { productId = packProductId, quantity = 1m, expectedUnitPrice = 240m,
                 unitId = boxId, expectedFactor = 24m } } };
         var packSalePath = prefix + "/cash-sales";
+        var packCatalog = await cashier.GetFromJsonAsync<JsonElement>(packSalePath +
+            "/products?locationId=" + locationId + "&search=SQL-PACK-TEST&exact=true");
+        var packQuote = packCatalog[0].GetProperty("conversions")[0];
+        Assert.Equal(boxId, packQuote.GetProperty("unitId").GetInt64());
+        Assert.Equal(24m, packQuote.GetProperty("factor").GetDecimal());
+        Assert.Equal(240m, packQuote.GetProperty("salePrice").GetDecimal());
         Assert.Equal(HttpStatusCode.BadRequest, (await Post(cashier, packSalePath, convertedSale with {
             requestKey = "sql-pack-stale-sale-20261125",
             lines = new[] { new { productId = packProductId, quantity = 1m, expectedUnitPrice = 120m,

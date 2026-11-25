@@ -408,7 +408,7 @@ public static class RetailCashSales
     }
 
     private static async Task<IResult> Search(long businessId, long locationId, string? search,
-        ClaimsPrincipal user, AppDbContext db, CancellationToken cancellationToken, bool exact = false)
+        ClaimsPrincipal user, AppDbContext db, IConfiguration config, CancellationToken cancellationToken, bool exact = false)
     {
         if (!long.TryParse(user.FindFirstValue(ClaimTypes.NameIdentifier), out var actor) ||
             await Shop(db, businessId, actor, locationId) is null) return Results.NotFound();
@@ -428,14 +428,26 @@ public static class RetailCashSales
                     x.Sku.Contains(term) || x.Barcode == term)
                     .OrderByDescending(x => x.Barcode == term || x.Sku == term)
                     .ThenBy(x => x.Name).ThenBy(x => x.Id).Take(30);
+        var allowAlternates = config.GetValue<bool>("RetailSales:AlternateUnitsEnabled");
         var products = await matches.Select(x => new { x.Id, x.Name, x.Sku, x.Barcode, x.SalePrice,
                 UnitCode = db.RetailUnits.Where(unit =>
                     unit.Id == x.UnitId && unit.BusinessId == businessId)
                     .Select(unit => unit.Code).FirstOrDefault(),
                 Available = db.RetailStockBalances
                 .Where(b => b.BusinessId == businessId && b.LocationId == locationId && b.ProductId == x.Id)
-                .Select(b => (decimal?)b.Quantity).FirstOrDefault() ?? 0 }).ToListAsync(cancellationToken);
-        return Results.Ok(products);
+                .Select(b => (decimal?)b.Quantity).FirstOrDefault() ?? 0,
+                Conversions = (from conversion in x.Conversions
+                    join unit in db.RetailUnits on conversion.UnitId equals unit.Id
+                    where allowAlternates && unit.BusinessId == businessId && unit.IsActive && unit.Id != x.UnitId
+                    orderby unit.Code
+                    select new { conversion.UnitId, conversion.Factor, UnitCode = unit.Code }).ToList()
+            }).ToListAsync(cancellationToken);
+        return Results.Ok(products.Select(x => new {
+            x.Id, x.Name, x.Sku, x.Barcode, x.SalePrice, x.UnitCode, x.Available,
+            Conversions = x.Conversions.Select(unit => new { unit.UnitId, unit.Factor, unit.UnitCode,
+                SalePrice = SaleUnitPrice(x.SalePrice, unit.Factor) })
+                .Where(unit => unit.SalePrice > 0 && unit.SalePrice <= 9999999999999999.99m)
+        }));
     }
 
     private static async Task<IResult> SearchCustomers(long businessId, long locationId, string? search,
@@ -457,6 +469,9 @@ public static class RetailCashSales
 
     public sealed record Item(long ProductId, decimal Quantity, decimal ExpectedUnitPrice,
         long? UnitId = null, decimal? ExpectedFactor = null);
+
+    private static decimal SaleUnitPrice(decimal basePrice, decimal factor) =>
+        decimal.Round(basePrice * factor, 2, MidpointRounding.AwayFromZero);
 
     private static bool ValidBaseQuantity(decimal quantity, decimal factor)
     {
@@ -569,8 +584,7 @@ public static class RetailCashSales
                             message = "Sale unit or conversion changed. Select the affected item again." });
                     factor = conversion.Factor;
                 }
-                var unitPrice = decimal.Round(product.SalePrice * (factor ?? 1m), 2,
-                    MidpointRounding.AwayFromZero);
+                var unitPrice = SaleUnitPrice(product.SalePrice, factor ?? 1m);
                 if (unitPrice <= 0 || unitPrice > 9999999999999999.99m ||
                     unitPrice != item.ExpectedUnitPrice || !ValidBaseQuantity(item.Quantity, factor ?? 1m))
                     return Results.BadRequest(new { code = "CASH_SALE_BASKET_CHANGED", item.ProductId,

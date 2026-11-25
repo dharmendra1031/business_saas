@@ -1409,6 +1409,61 @@ try {
   }
 
   {
+    const t = await scenario('pos-alternate-unit-selection', { role: 'Cashier', hasProducts: true })
+    let salePosts = 0
+    await t.page.route('**/api/businesses/1/cash-sales/products*', route => response(route, 200, [
+      { id: 401, name: 'Packed Water', sku: 'WATER', barcode: '12345', salePrice: 10,
+        available: 30, unitCode: 'PCS', conversions: [
+          { unitId: 41, unitCode: 'BOX', factor: 12, salePrice: 120 },
+          { unitId: 42, unitCode: 'CARTON', factor: 48, salePrice: 480 }
+        ] }
+    ]))
+    await t.page.route('**/api/businesses/1/cash-sales', route => {
+      if (route.request().method() !== 'POST') return response(route, 404, {})
+      const request = route.request().postDataJSON()
+      salePosts++
+      assert.equal(request.tendered, 240)
+      assert.equal(request.lines.length, 1)
+      const line = request.lines[0]
+      assert.equal(line.productId, 401)
+      assert.equal(line.unitId, 41)
+      assert.equal(line.expectedFactor, 12)
+      assert.equal(line.expectedUnitPrice, 120)
+      assert.equal(line.quantity, 2)
+      return response(route, 200, { id: 701, total: 240, tendered: 240, currencyCode: 'INR',
+        postedAtUtc: '2026-11-25T04:00:00Z',
+        lines: [{ id: 702, productName: 'Packed Water', unitCode: 'BOX', quantity: 2, unitPrice: 120, lineTotal: 240 }] })
+    })
+    await t.login()
+    await t.page.getByRole('button', { name: /Add Packed Water/ }).click()
+    const unit = t.page.getByLabel('Sale unit for Packed Water')
+    await unit.selectOption('42')
+    assert.equal(await unit.inputValue(), '0')
+    await unit.selectOption('41')
+    await t.page.getByText('12 PCS stock', { exact: true }).waitFor()
+    assert.match(await t.page.locator('.pos-total-row').innerText(), /₹120\.00/)
+    await t.page.getByRole('button', { name: 'Increase quantity of Packed Water' }).click()
+    await t.page.getByText('24 PCS stock', { exact: true }).waitFor()
+    assert.equal(await t.page.getByRole('button', { name: 'Increase quantity of Packed Water' }).isDisabled(), true)
+    assert.match(await t.page.locator('.pos-total-row').innerText(), /₹240\.00/)
+    const viewport = t.page.viewportSize()
+    for (const width of [768, 360]) {
+      await t.page.setViewportSize({ width, height: 800 })
+      assert.ok(await t.page.evaluate(() => document.documentElement.scrollWidth) <= width + 1)
+      await t.screenshot('POS-unit-selection-' + width)
+    }
+    await t.page.setViewportSize(viewport)
+    await t.page.getByRole('button', { name: /Pay \/ Checkout/ }).click()
+    await t.page.getByLabel('Cash received').fill('240')
+    await t.page.getByRole('button', { name: 'Save Only' }).click()
+    await t.page.getByRole('heading', { name: 'Cash receipt #701' }).waitFor()
+    assert.equal(salePosts, 1)
+    await t.check()
+    await t.context.close()
+    console.log('PASS POS alternate unit selection and base stock limit')
+  }
+
+  {
     const t = await scenario('pos-zero-value-fractional-line', {
       role: 'Cashier', hasProducts: true
     })

@@ -2,15 +2,20 @@ import { useEffect, useRef, useState, type FormEvent } from 'react'
 import { ArrowLeft, ArrowRight, Banknote, Check, Minus, Package, Plus, ReceiptText, Search, ShoppingBag, Trash2 } from 'lucide-react'
 import PosCashPaymentDialog from './PosCashPaymentDialog'
 import { maxExactCents, moneyCents } from './posMoney'
+import { baseQuantity } from './stockQuantity'
 import CashReceipt, { type Receipt } from './CashReceipt'
 import { api, ApiResponseError, operationKey, post, type RetailDashboard } from './api'
 
+interface SaleUnit { unitId: number; unitCode: string; factor: number; salePrice: number }
 interface Product {
   id: number; name: string; sku: string; barcode: string | null; salePrice: number; available: number;
   unitCode?: string | null
+  conversions?: SaleUnit[]
 }
 interface Line { productId: number; name: string; quantity: number; expectedUnitPrice: number;
-  unitCode?: string | null; available?: number }
+  unitCode?: string | null; available?: number
+  unitId?: number; expectedFactor?: number; baseUnitCode?: string | null; basePrice?: number;
+  conversions?: SaleUnit[] }
 interface SaleRequest { locationId: number; requestKey: string; tendered: number; lines: Line[]; customerId?: number | null }
 interface SaleCustomer { id: number; name: string; phone: string }
 interface ReceiptHistory {
@@ -21,6 +26,10 @@ interface ReceiptHistory {
 function validQuantity(value: number): boolean {
   return Number.isFinite(value) && value >= 0.001 && value <= 1000000 &&
     Math.abs(Math.round(value * 1000) - value * 1000) < 0.000001
+}
+
+function stockQuantity(line: Line, quantity = line.quantity): number | null {
+  return validQuantity(quantity) ? baseQuantity(quantity, line.expectedFactor ?? 1) : null
 }
 
 function lineAmountCents(line: Line): number {
@@ -48,7 +57,9 @@ function restore(key: string): SaleRequest | null {
     }]
     if (!lines.length || lines.length > 100 || lines.some((line: Line) =>
       !Number.isSafeInteger(line.productId) || line.productId < 1 ||
-      typeof line.name !== 'string' || !validQuantity(line.quantity) ||
+      typeof line.name !== 'string' || stockQuantity(line) === null ||
+      (line.unitId == null) !== (line.expectedFactor == null) ||
+      (line.unitId != null && (!Number.isSafeInteger(line.unitId) || line.unitId <= 0)) ||
       !Number.isFinite(moneyCents(line.expectedUnitPrice))))
       throw new Error('Invalid checkout lines')
     if (saved.customerId != null && (!Number.isSafeInteger(saved.customerId) || saved.customerId < 1)) throw new Error('Invalid checkout customer')
@@ -212,6 +223,10 @@ export default function CashCheckout({ userId, dashboard, onExit }: {
     if (!dashboard.canOperate || !cashAvailable || lock.current || busy || pending || receipt ||
       (scanLock.current && !fromScan)) return
     const existing = basket.find(line => line.productId === item.id)
+    if (existing?.unitId != null) {
+      setError('This product uses an alternate sale unit. Adjust its basket quantity or switch to the base unit before scanning again.')
+      return
+    }
     if (item.available - (existing?.quantity ?? 0) < 0.001 - 0.0000001) {
       setError('Insufficient available stock for this product.')
       return
@@ -227,7 +242,8 @@ export default function CashCheckout({ userId, dashboard, onExit }: {
       return
     }
     const line = { productId: item.id, name: item.name, quantity: nextQty,
-      expectedUnitPrice: item.salePrice, unitCode: item.unitCode, available: item.available }
+      expectedUnitPrice: item.salePrice, unitCode: item.unitCode, available: item.available,
+      baseUnitCode: item.unitCode, basePrice: item.salePrice, conversions: item.conversions }
     setBasket(existing ? basket.map(previous => previous.productId === item.id ? line : previous) : [...basket, line])
     setCash('')
     setError('')
@@ -264,11 +280,34 @@ export default function CashCheckout({ userId, dashboard, onExit }: {
     return products.find(x => x.id === line.productId)?.available ?? line.available
   }
 
+  function fitsStock(line: Line, quantity = line.quantity) {
+    const converted = stockQuantity(line, quantity)
+    const knownStock = availableStock(line)
+    return converted !== null && (knownStock === undefined || converted <= knownStock)
+  }
+
+  function changeUnit(line: Line, unitId: number) {
+    if (scanLock.current || lock.current || busy || pending || receipt) return
+    const selected = line.conversions?.find(x => x.unitId === unitId)
+    if (unitId !== 0 && !selected) return
+    const next: Line = { ...line, quantity: 1, unitId: selected?.unitId, expectedFactor: selected?.factor,
+      unitCode: selected?.unitCode ?? line.baseUnitCode, expectedUnitPrice: selected?.salePrice ?? line.basePrice ?? line.expectedUnitPrice }
+    if (!fitsStock(next)) {
+      setError('Not enough base stock for one unit. Select another sale unit.')
+      return
+    }
+    if (!Number.isFinite(moneyCents(next.expectedUnitPrice)) || next.expectedUnitPrice <= 0) {
+      setError('Selected unit price is outside the supported billing range.')
+      return
+    }
+    setBasket(previous => previous.map(x => x.productId === line.productId ? next : x))
+    setCash(''); setError('')
+  }
+
   function updateQuantity(line: Line, quantity: number) {
     if (scanLock.current || !validQuantity(quantity)) return
-    const knownStock = availableStock(line)
-    if (knownStock !== undefined && quantity > knownStock) {
-      setError(`Only ${knownStock} ${line.unitCode ?? 'units'} available at this location.`)
+    if (!fitsStock(line, quantity)) {
+      setError('Quantity exceeds available base stock or cannot be converted exactly to three decimals.')
       return
     }
     setBasket(previous => previous.map(x => x.productId === line.productId ? { ...x, quantity } : x))
@@ -277,9 +316,9 @@ export default function CashCheckout({ userId, dashboard, onExit }: {
   }
 
   function stepQuantity(line: Line, direction: -1 | 1) {
-    const step = line.quantity >= 1 ? 1 : line.quantity >= 0.1 ? 0.1 :
+    const step = line.unitId != null || line.quantity >= 1 ? 1 : line.quantity >= 0.1 ? 0.1 :
       line.quantity >= 0.01 ? 0.01 : 0.001
-    const maximum = Math.min(1000000, availableStock(line) ?? 1000000)
+    const maximum = Math.min(1000000, line.unitId != null ? 1000000 : availableStock(line) ?? 1000000)
     const next = Number((direction > 0 ?
       Math.min(maximum, line.quantity + step) :
       Math.max(0.001, line.quantity - step)).toFixed(3))
@@ -291,7 +330,7 @@ export default function CashCheckout({ userId, dashboard, onExit }: {
     if (lock.current || scanLock.current || !dashboard.canOperate || needsReview || (!pending && !cashAvailable) ||
       (pending && lookupState !== 'missing')) return
     if (!pending && (!locationId || !basket.length || basket.some(line =>
-      !validQuantity(line.quantity) ||
+      !fitsStock(line) ||
       !Number.isFinite(line.expectedUnitPrice) || line.expectedUnitPrice < 0) ||
       hasZeroValueLine || !Number.isFinite(total) || total <= 0 ||
       !Number.isFinite(receivedCents) || receivedCents < totalCents)) {
@@ -428,7 +467,7 @@ export default function CashCheckout({ userId, dashboard, onExit }: {
     </div>}
     {pending ? <section className="content-section pos-pending" aria-label="Pending sale recovery">
       <div className="pos-panel-heading"><h2>Pending cash sale</h2><span>Reference held for safe retry</span></div>
-      <ul>{pending.lines.map(line => <li key={line.productId}>{line.name} · {line.quantity} × {money(line.expectedUnitPrice)}</li>)}</ul>
+      <ul>{pending.lines.map(line => <li key={line.productId}>{line.name} · {line.quantity}{line.unitCode ? ' ' + line.unitCode : ''} × {money(line.expectedUnitPrice)}</li>)}</ul>
       <p>Customer: {pending.customerId ? `#${pending.customerId}` : 'Walk-in'}</p>
       <p><strong>Total {money(total)}</strong> · Cash received {money(pending.tendered)}</p>
       <p role="status">{busy ? 'Recording sale…' : lookupState === 'missing' ? 'No posted receipt found for this sale.'
@@ -514,9 +553,10 @@ export default function CashCheckout({ userId, dashboard, onExit }: {
             <p>Checking available products and stock for this location.</p>
           </div> : products.length ? <div className="pos-products-grid">
             {products.map(item => {
-              const inBasket = basket.find(line => line.productId === item.id)?.quantity ?? 0
+              const basketLine = basket.find(line => line.productId === item.id)
+              const inBasket = basketLine ? stockQuantity(basketLine) ?? 0 : 0
               const canAdd = dashboard.canOperate && cashAvailable && !busy && !scanBusy &&
-                item.available - inBasket >= 0.001 &&
+                basketLine?.unitId == null && item.available - inBasket >= 0.001 &&
                 (inBasket > 0 || basket.length < 100)
               return <button key={item.id} type="button" className="pos-product-card" disabled={!canAdd}
                 aria-label={`Add ${item.name}, ${money(item.salePrice)}, ${item.available} ${item.unitCode ?? 'units'} available`}
@@ -588,17 +628,28 @@ export default function CashCheckout({ userId, dashboard, onExit }: {
                 Review required. Remove this item and select it again.
               </span>}
               <small>{money(line.expectedUnitPrice)} / {line.unitCode ?? 'unit'}</small>
+              {!!line.conversions?.length && <select className="form-select form-select-sm"
+                aria-label={`Sale unit for ${line.name}`} disabled={busy || scanBusy || line.productId === reviewProductId}
+                value={line.unitId ?? 0} onChange={event => changeUnit(line, Number(event.target.value))}>
+                <option value={0}>{line.baseUnitCode ?? 'Base unit'}</option>
+                {line.conversions.map(unit => <option key={unit.unitId} value={unit.unitId}>
+                  {unit.unitCode} · {unit.factor} {line.baseUnitCode}
+                </option>)}
+              </select>}
+              {line.unitId != null && <small>{stockQuantity(line)} {line.baseUnitCode} stock</small>}
             </div>
             <div className="pos-quantity-control" aria-label={`Quantity of ${line.name}`}>
               <button type="button" aria-label={`Decrease quantity of ${line.name}`}
-                disabled={busy || scanBusy || line.quantity === 1 || line.quantity <= 0.001}
+                disabled={busy || scanBusy || line.quantity === 1 || line.quantity <= 0.001 ||
+                  (line.unitId != null && (line.quantity <= 1 || !fitsStock(line, Number((line.quantity - 1).toFixed(3)))))}
                 onClick={() => stepQuantity(line, -1)}><Minus size={15} /></button>
               <input className="form-control form-control-sm" aria-label={`Quantity of ${line.name}`}
                 type="number" min="0.001" max="1000000" step="0.001" disabled={busy || scanBusy} value={line.quantity}
                 onChange={event => updateQuantity(line, Number(event.target.value))} />
               <button type="button" aria-label={`Increase quantity of ${line.name}`}
-                disabled={busy || scanBusy || line.quantity + 0.001 >
-                  Math.min(1000000, availableStock(line) ?? 1000000)}
+                disabled={busy || scanBusy || (line.unitId != null
+                  ? !fitsStock(line, Number((line.quantity + 1).toFixed(3)))
+                  : line.quantity + 0.001 > Math.min(1000000, availableStock(line) ?? 1000000))}
                 onClick={() => stepQuantity(line, 1)}><Plus size={15} /></button>
             </div>
             <b className="pos-line-amount">{money(lineAmounts[index] / 100)}</b>
@@ -622,7 +673,7 @@ export default function CashCheckout({ userId, dashboard, onExit }: {
           <button ref={checkoutButton} type="button" aria-keyshortcuts="F9" className="btn btn-primary pos-record-button"
             disabled={!dashboard.canOperate || !cashAvailable || busy || scanBusy || needsReview || hasZeroValueLine ||
               !basket.length || !Number.isFinite(total) || total <= 0 ||
-              basket.some(line => !validQuantity(line.quantity))}
+              basket.some(line => !fitsStock(line))}
             onClick={() => { setError(''); setShowPayment(true) }}>
             <Banknote size={19} /> Pay / Checkout <ArrowRight size={18} />
           </button>
