@@ -299,8 +299,8 @@ export default function CashReceipt({ receipt, businessName, timeZone, pdfPath, 
       <p><strong>Total {money(receipt.total)}</strong><br />Cash received {money(receipt.tendered)}<br />
       Change {money(receipt.tendered - receipt.total)}</p>}
     {printNotice && <p role="status" className="small text-body-secondary">{printNotice}</p>}
-    {credit ? <p className="small" role="status">Credit invoice printing is not released yet.</p> : receipt.printAvailable
-      ? <a className="btn btn-outline-secondary me-2" href={pdfPath} target="_blank" rel="noopener noreferrer">Print receipt</a>
+    {receipt.printAvailable
+      ? <a className="btn btn-outline-secondary me-2" href={pdfPath} target="_blank" rel="noopener noreferrer">{credit ? 'Print credit invoice' : 'Print receipt'}</a>
       : <p className="small text-body-secondary" role="status">RDLC printing requires a Windows report host.</p>}
     {returnEstimate && returnEstimate.canOperate && <button type="button" className="btn btn-outline-secondary me-2" aria-expanded={showEstimate}
       onClick={() => setShowEstimate(value => !value)}>{showEstimate ? 'Close estimate' : 'Estimate return'}</button>}

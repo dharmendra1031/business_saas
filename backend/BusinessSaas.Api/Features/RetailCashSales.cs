@@ -34,6 +34,7 @@ public static class RetailCashSales
         credit.MapPost("", PostCredit);
         credit.MapGet("/receipt", FindCreditReceipt);
         credit.MapGet("/business-invoices/{receiptId:long}", BusinessCreditInvoice);
+        credit.MapGet("/business-invoices/{receiptId:long}/pdf", CreditInvoicePdf);
     }
 
     private static async Task<Business?> Shop(AppDbContext db, long businessId, long actor, long locationId,
@@ -120,7 +121,7 @@ public static class RetailCashSales
             sale.BusinessName, sale.LocationName, sale.TimeZoneId, sale.CreditDueDate,
             paymentMethod = sale.CreditDueDate.HasValue ? "Credit" : "Cash",
             outstanding = sale.CreditDueDate.HasValue ? sale.Total - creditPaid : 0m,
-            printAvailable = !sale.CreditDueDate.HasValue && OperatingSystem.IsWindows(),
+            printAvailable = OperatingSystem.IsWindows(),
             PostedAtUtc = DateTime.SpecifyKind(sale.PostedAtUtc, DateTimeKind.Utc),
             first.ProductId, first.ProductName, first.UnitPrice, first.Quantity,
             Lines = lines.Select(line => new { line.Id, line.SaleId, line.ProductId,
@@ -142,8 +143,12 @@ public static class RetailCashSales
         ClaimsPrincipal user, AppDbContext db, HttpContext context, ILoggerFactory loggerFactory) =>
         PrintPdf(businessId, locationId, receiptId, user, db, context, loggerFactory, ownerOnly: true);
 
+    private static Task<IResult> CreditInvoicePdf(long businessId, long locationId, long receiptId,
+        ClaimsPrincipal user, AppDbContext db, HttpContext context, ILoggerFactory loggerFactory) =>
+        PrintPdf(businessId, locationId, receiptId, user, db, context, loggerFactory, ownerOnly: true, credit: true);
+
     private static async Task<IResult> PrintPdf(long businessId, long locationId, long receiptId,
-        ClaimsPrincipal user, AppDbContext db, HttpContext context, ILoggerFactory loggerFactory, bool ownerOnly)
+        ClaimsPrincipal user, AppDbContext db, HttpContext context, ILoggerFactory loggerFactory, bool ownerOnly, bool credit = false)
     {
         var started = Stopwatch.GetTimestamp();
         if (!long.TryParse(user.FindFirstValue(ClaimTypes.NameIdentifier), out var actor) ||
@@ -152,7 +157,8 @@ public static class RetailCashSales
 
         // Posted receipts are immutable. Split the collection load so the receipt's
         // historical logo and header are not transferred again for every line.
-        var sale = await CashOnly(db).AsSplitQuery().Include(x => x.Lines)
+        var sale = await db.RetailCashSales.AsNoTracking().Where(x => (x.CreditDueDate != null) == credit)
+            .AsSplitQuery().Include(x => x.Lines)
             .SingleOrDefaultAsync(x => x.Id == receiptId && x.BusinessId == businessId &&
                 x.LocationId == locationId && (ownerOnly || x.CashierId == actor), context.RequestAborted);
         var loaded = Stopwatch.GetTimestamp();
@@ -170,7 +176,7 @@ public static class RetailCashSales
             context.Response.Headers["Server-Timing"] = FormattableString.Invariant(
                 $"receipt-db;dur={Stopwatch.GetElapsedTime(started, loaded).TotalMilliseconds:F1}, receipt-map;dur={Stopwatch.GetElapsedTime(loaded, mapped).TotalMilliseconds:F1}, receipt-render;dur={Stopwatch.GetElapsedTime(mapped, rendered).TotalMilliseconds:F1}");
             context.Response.Headers.CacheControl = "no-store";
-            context.Response.Headers.ContentDisposition = $"inline; filename=receipt-{sale.Id}.pdf";
+            context.Response.Headers.ContentDisposition = $"inline; filename={(credit ? "credit-invoice" : "receipt")}-{sale.Id}.pdf";
             return Results.File(pdf, "application/pdf");
         }
         catch (Exception error)
@@ -614,7 +620,7 @@ public static class RetailCashSales
                 items = items.Select(x => new { x.Id, x.LocationId, x.LocationName, x.CustomerId, x.CustomerName,
                     x.CurrencyCode, x.Total, PostedAtUtc = DateTime.SpecifyKind(x.PostedAtUtc, DateTimeKind.Utc),
                     x.Status, PaymentMethod = x.CreditDueDate == null ? "Cash" : "Credit",
-                    PrintAvailable = x.CreditDueDate == null && OperatingSystem.IsWindows() }),
+                    PrintAvailable = OperatingSystem.IsWindows() }),
                 hasMore = (long)page * pageSize < total });
         }
         catch (Exception error) when (StockPosting.IsSqlConflict(error))

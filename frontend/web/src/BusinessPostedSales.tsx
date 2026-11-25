@@ -28,6 +28,9 @@ export default function BusinessPostedSales({ dashboard, userId }: { dashboard: 
   const [returnNotice, setReturnNotice] = useState('')
   const invalidDate = !!filters.fromDate && !!filters.toDate && filters.fromDate > filters.toDate
   const base = `/businesses/${business.id}/cash-sales/business-receipts`
+  const invoicePdf = (invoice: Invoice) => invoice.paymentMethod === 'Credit'
+    ? `/api/businesses/${business.id}/credit-sales/business-invoices/${invoice.id}/pdf?locationId=${invoice.locationId}`
+    : `/api${base}/${invoice.id}/pdf?locationId=${invoice.locationId}`
   const change = <K extends keyof typeof defaults>(field: K, value: (typeof defaults)[K]) =>
     setFilters(previous => ({ ...previous, [field]: value }))
 
@@ -69,7 +72,7 @@ export default function BusinessPostedSales({ dashboard, userId }: { dashboard: 
     setReceipt(null); setReceiptError(''); setReceiptReload(value => value + 1)
   }
   if (receipt && selected) return <CashReceipt receipt={receipt} businessName={business.name}
-    pdfPath={`/api${base}/${receipt.id}/pdf?locationId=${selected.locationId}`}
+    pdfPath={invoicePdf(selected)}
     timeZone={business.timeZoneId} backLabel="Back to receipts" onBack={closeReceipt} returnNotice={returnNotice}
     returnEstimate={selected.paymentMethod === 'Cash' && dashboard.roleCode === 'Owner' ? {
       path: base + '/' + receipt.id, locationId: selected.locationId, userId, canOperate: dashboard.canOperate,
@@ -140,7 +143,7 @@ export default function BusinessPostedSales({ dashboard, userId }: { dashboard: 
               <td><div className="d-flex flex-wrap gap-1">
                 <button type="button" className="btn btn-sm btn-outline-secondary" aria-label={'View invoice ' + item.id} onClick={() => setSelected(item)}>View</button>
                 {item.printAvailable && <a className="btn btn-sm btn-outline-secondary" aria-label={'Print receipt ' + item.id}
-                  href={`/api${base}/${item.id}/pdf?locationId=${item.locationId}`} target="_blank" rel="noopener noreferrer">Print</a>}
+                  href={invoicePdf(item)} target="_blank" rel="noopener noreferrer">Print</a>}
               </div></td>
             </tr>)}</tbody>
           </table>

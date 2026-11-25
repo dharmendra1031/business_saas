@@ -454,30 +454,17 @@ export default function CashCheckout({ userId, dashboard, onExit }: {
     } finally { lock.current = false; setBusy(false) }
   }
 
-  if (receipt?.paymentMethod === 'Credit') return <section className="content-section" aria-label="Posted credit invoice">
-    <h2>Credit invoice #{receipt.id}</h2>
-    <p>Customer: {receipt.customerName ?? '#' + receipt.customerId} · Due date: {receipt.creditDueDate}</p>
-    <div className="table-responsive"><table className="table table-sm"><thead><tr><th>Product</th><th>Quantity</th><th>Rate</th><th>Amount</th></tr></thead>
-      <tbody>{receipt.lines.map(line => <tr key={line.id}><td>{line.productName}</td><td>{line.quantity} {line.unitCode}</td>
-        <td>{money(line.unitPrice)}</td><td>{money(line.lineTotal ?? line.quantity * line.unitPrice)}</td></tr>)}</tbody></table></div>
-    <p>Invoice total: <strong>{money(receipt.total)}</strong> · Outstanding: <strong>{money(receipt.outstanding ?? receipt.total)}</strong></p>
-    <p>No cash collected at checkout. Credit invoice printing is not released yet.</p>
-    <button className="btn btn-primary" type="button" onClick={() => {
-      try { sessionStorage.removeItem(key) } catch { setError('Unable to clear saved invoice. Reopen POS to recover it.'); return }
-      setPending(null); setReceipt(null); setBasket([]); setCustomer(null); setCustomerOpen(false); setCustomerSearch('')
-      setCash(''); setDueDate(''); setCreditConfirmed(false); setShowPayment(false); setSearch(''); setError('')
-    }}>New sale</button>
-    {error && <p role="alert">{error}</p>}
-  </section>
   if (receipt) return <CashReceipt receipt={receipt} businessName={business.name} timeZone={business.timeZoneId}
-    pdfPath={`/api${base}/receipts/${receipt.id}/pdf?locationId=${locationId}`} printNotice={printNotice}
+    pdfPath={receipt.paymentMethod === 'Credit'
+      ? `/api${creditBase}/business-invoices/${receipt.id}/pdf?locationId=${locationId}`
+      : `/api${base}/receipts/${receipt.id}/pdf?locationId=${locationId}`} printNotice={printNotice}
     backLabel={pending ? 'New sale' : 'Back to checkout'} onBack={() => {
       if (pending) {
         try { sessionStorage.removeItem(key) } catch { /* Storage may be unavailable. */ }
         setPending(null)
         setBasket([])
         setCustomer(null); setCustomerOpen(false); setCustomerSearch('')
-        setCash('')
+        setCash(''); setDueDate(''); setCreditConfirmed(false)
       }
       setReceipt(null)
       setPrintNotice('')

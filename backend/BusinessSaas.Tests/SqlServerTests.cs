@@ -1150,7 +1150,7 @@ public sealed class SqlServerTests
         Assert.Equal("Credit", creditInvoice.GetProperty("paymentMethod").GetString());
         Assert.Equal(20m, creditInvoice.GetProperty("outstanding").GetDecimal());
         Assert.Equal(0m, creditInvoice.GetProperty("tendered").GetDecimal());
-        Assert.False(creditInvoice.GetProperty("printAvailable").GetBoolean());
+        Assert.Equal(OperatingSystem.IsWindows(), creditInvoice.GetProperty("printAvailable").GetBoolean());
         using var creditReplay = await Post(owner, creditPath, creditRequest);
         Assert.Equal(HttpStatusCode.OK, creditReplay.StatusCode);
         Assert.Equal(creditId, (await creditReplay.Content.ReadFromJsonAsync<JsonElement>()).GetProperty("id").GetInt64());
@@ -1178,6 +1178,14 @@ public sealed class SqlServerTests
         var creditDetailPath = creditPath + "/business-invoices/" + creditId + "?locationId=" + locationId;
         Assert.Equal(creditId, (await owner.GetFromJsonAsync<JsonElement>(creditDetailPath)).GetProperty("id").GetInt64());
         Assert.Equal(HttpStatusCode.NotFound, (await cashier.GetAsync(creditDetailPath)).StatusCode);
+        var creditPdfPath = creditPath + "/business-invoices/" + creditId + "/pdf?locationId=" + locationId;
+        Assert.Equal(HttpStatusCode.NotFound, (await cashier.GetAsync(creditPdfPath)).StatusCode);
+        Assert.Equal(HttpStatusCode.NotFound, (await stranger.GetAsync(creditPdfPath)).StatusCode);
+        using (var creditPdf = await owner.GetAsync(creditPdfPath))
+        {
+            Assert.Equal(OperatingSystem.IsWindows() ? HttpStatusCode.OK : HttpStatusCode.ServiceUnavailable, creditPdf.StatusCode);
+            if (OperatingSystem.IsWindows()) Assert.Equal("application/pdf", creditPdf.Content.Headers.ContentType?.MediaType);
+        }
         var creditCashPath = packSalePath + "/business-receipts/" + creditId;
         Assert.Equal(HttpStatusCode.NotFound, (await owner.GetAsync(creditCashPath + "?locationId=" + locationId)).StatusCode);
         Assert.Equal(HttpStatusCode.NotFound, (await owner.GetAsync(creditCashPath + "/pdf?locationId=" + locationId)).StatusCode);
