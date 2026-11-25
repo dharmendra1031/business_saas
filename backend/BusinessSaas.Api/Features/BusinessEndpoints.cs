@@ -128,15 +128,16 @@ public static class BusinessEndpoints
                 var today = db.RetailCashSales.AsNoTracking().Where(x =>
                     x.BusinessId == businessId && x.CreditDueDate == null && x.PostedAtUtc >= startUtc &&
                     x.PostedAtUtc < endUtc && x.PostedAtUtc <= nowUtc);
-                var total = await today.SumAsync(x => (decimal?)x.Total) ?? 0m;
-                var bills = await today.CountAsync();
+                var summary = await today.GroupBy(_ => 1)
+                    .Select(g => new { Total = g.Sum(x => x.Total), Bills = g.Count() })
+                    .SingleOrDefaultAsync();
                 var recent = await db.RetailCashSales.AsNoTracking()
                     .Where(x => x.BusinessId == businessId && x.CreditDueDate == null && x.PostedAtUtc <= nowUtc)
                     .OrderByDescending(x => x.PostedAtUtc).ThenByDescending(x => x.Id)
                     .Take(5)
                     .Select(x => new CashReceiptSummary(x.Id, x.LocationId, x.Total, x.PostedAtUtc))
                     .ToListAsync();
-                cashSalesToday = new OwnerCashSalesToday(total, bills, DateOnly.FromDateTime(localDate), recent);
+                cashSalesToday = new OwnerCashSalesToday(summary?.Total ?? 0m, summary?.Bills ?? 0, DateOnly.FromDateTime(localDate), recent);
             }
 
             OwnerStockAlerts? stockAlerts = null;
@@ -166,8 +167,9 @@ public static class BusinessEndpoints
                                  balance.Quantity,
                                  ReorderLevel = product.ReorderLevel.Value
                              };
-                var alertCount = await atRisk.CountAsync();
-                var zeroCount = await atRisk.CountAsync(x => x.Quantity == 0m);
+                var counts = await atRisk.GroupBy(_ => 1)
+                    .Select(g => new { Total = g.Count(), Zero = g.Count(x => x.Quantity == 0m) })
+                    .SingleOrDefaultAsync();
                 var firstFive = await atRisk
                     .OrderBy(x => x.Quantity != 0m)
                     .ThenBy(x => x.ProductName)
@@ -177,7 +179,7 @@ public static class BusinessEndpoints
                 var alertItems = firstFive.Select(x => new LowStockItem(x.ProductId,
                     x.ProductName, x.Sku, x.LocationId, x.LocationName,
                     x.Quantity, x.ReorderLevel)).ToList();
-                stockAlerts = new OwnerStockAlerts(alertCount, zeroCount, alertItems);
+                stockAlerts = new OwnerStockAlerts(counts?.Total ?? 0, counts?.Zero ?? 0, alertItems);
             }
 
             return Results.Ok(new { hasProducts, hasInitializedStock, pendingApprovals, cashSalesToday, stockAlerts,

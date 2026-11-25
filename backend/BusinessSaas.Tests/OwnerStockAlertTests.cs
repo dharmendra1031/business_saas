@@ -83,6 +83,10 @@ public sealed class OwnerStockAlertTests
         var awaitingStock = await owner.GetFromJsonAsync<JsonElement>($"/api/businesses/{id}/dashboard");
         Assert.True(awaitingStock.GetProperty("hasProducts").GetBoolean());
         Assert.False(awaitingStock.GetProperty("hasInitializedStock").GetBoolean());
+        var emptyAlerts = awaitingStock.GetProperty("stockAlerts");
+        Assert.Equal(0, emptyAlerts.GetProperty("count").GetInt32());
+        Assert.Equal(0, emptyAlerts.GetProperty("outOfStockCount").GetInt32());
+        Assert.Equal(0, emptyAlerts.GetProperty("items").GetArrayLength());
 
         var opening = $"/api/businesses/{id}/stock/locations/";
         (await Send(owner, HttpMethod.Post, opening + location + "/opening",

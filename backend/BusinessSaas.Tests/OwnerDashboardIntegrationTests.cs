@@ -44,6 +44,12 @@ public sealed class OwnerDashboardIntegrationTests
         var businessId = await BusinessFixtures.SeedAsync(factory.Services, owner, "Owner Shop", "owner-dashboard-key-2026");
         var otherId = await BusinessFixtures.SeedAsync(factory.Services, outsider, "Other Shop", "other-dashboard-key-2026");
 
+        var emptyDashboard = await owner.GetFromJsonAsync<JsonElement>($"/api/businesses/{businessId}/dashboard");
+        var emptySummary = emptyDashboard.GetProperty("cashSalesToday");
+        Assert.Equal(0m, emptySummary.GetProperty("total").GetDecimal());
+        Assert.Equal(0, emptySummary.GetProperty("billCount").GetInt32());
+        Assert.Equal(0, emptySummary.GetProperty("recentReceipts").GetArrayLength());
+
         long todayId;
         using (var scope = factory.Services.CreateScope())
         {
