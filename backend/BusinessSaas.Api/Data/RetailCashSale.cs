@@ -39,3 +39,26 @@ public sealed class RetailCashSaleLine
     public decimal UnitPrice { get; set; }
     public decimal Quantity { get; set; }
 }
+
+public sealed class RetailCashReturn
+{
+    public long Id { get; set; }
+    public long BusinessId { get; set; }
+    public long SaleId { get; set; }
+    public long ActorUserId { get; set; }
+    public string RequestKey { get; set; } = "";
+    public string Reason { get; set; } = "";
+    public decimal Total { get; set; }
+    public DateTime PostedAtUtc { get; set; }
+    public List<RetailCashReturnLine> Lines { get; set; } = [];
+}
+
+public sealed class RetailCashReturnLine
+{
+    public long Id { get; set; }
+    public long ReturnId { get; set; }
+    public long SaleLineId { get; set; }
+    public decimal Quantity { get; set; }
+    public decimal Amount { get; set; }
+    public bool Restock { get; set; }
+}

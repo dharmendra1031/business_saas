@@ -436,6 +436,7 @@ public sealed class AppDbContext(DbContextOptions<AppDbContext> options)
     public DbSet<RetailBrand> RetailBrands => Set<RetailBrand>();
     public DbSet<RetailUnit> RetailUnits => Set<RetailUnit>();
     public DbSet<RetailCashSale> RetailCashSales => Set<RetailCashSale>();
+    public DbSet<RetailCashReturn> RetailCashReturns => Set<RetailCashReturn>();
     public DbSet<RetailProduct> RetailProducts => Set<RetailProduct>();
     public DbSet<RetailSupplier> RetailSuppliers => Set<RetailSupplier>();
     public DbSet<RetailCustomer> RetailCustomers => Set<RetailCustomer>();
@@ -852,6 +853,28 @@ public sealed class AppDbContext(DbContextOptions<AppDbContext> options)
             entity.Property(x => x.UnitPrice).HasPrecision(18, 2);
             entity.HasOne<RetailProduct>().WithMany().HasForeignKey(x => x.ProductId).OnDelete(DeleteBehavior.Restrict);
             entity.HasOne<RetailCashSale>().WithMany(x => x.Lines).HasForeignKey(x => x.SaleId);
+        });
+
+        builder.Entity<RetailCashReturn>(entity =>
+        {
+            entity.Property(x => x.RequestKey).HasMaxLength(80);
+            entity.Property(x => x.Reason).HasMaxLength(200);
+            entity.Property(x => x.Total).HasPrecision(18, 2);
+            entity.HasIndex(x => new { x.BusinessId, x.RequestKey }).IsUnique();
+            entity.HasOne<Business>().WithMany().HasForeignKey(x => x.BusinessId).OnDelete(DeleteBehavior.Restrict);
+            entity.HasOne<RetailCashSale>().WithMany().HasForeignKey(x => x.SaleId).OnDelete(DeleteBehavior.Restrict);
+            entity.HasOne<AppUser>().WithMany().HasForeignKey(x => x.ActorUserId).OnDelete(DeleteBehavior.Restrict);
+        });
+        builder.Entity<RetailCashReturnLine>(entity =>
+        {
+            entity.ToTable("RetailCashReturnLines");
+            entity.Property(x => x.Quantity).HasPrecision(18, 3);
+            entity.Property(x => x.Amount).HasPrecision(18, 2);
+            entity.HasIndex(x => new { x.ReturnId, x.SaleLineId }).IsUnique();
+            entity.HasOne<RetailCashReturn>().WithMany(x => x.Lines).HasForeignKey(x => x.ReturnId)
+                .OnDelete(DeleteBehavior.Restrict);
+            entity.HasOne<RetailCashSaleLine>().WithMany().HasForeignKey(x => x.SaleLineId)
+                .OnDelete(DeleteBehavior.Restrict);
         });
 
         builder.Entity<RetailStockMovement>(entity =>

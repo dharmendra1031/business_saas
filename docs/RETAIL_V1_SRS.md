@@ -180,3 +180,7 @@ The Development-only Owner receipt detail now offers a read-only full/partial re
 7. Product barcode scanner/label printers supported hardware.
 
 **No claim of functionality until code, DB migrations, end-to-end browser tests and real retailer acceptance run successfully.**
+
+
+### Development return posting pilot (25 Nov 2026)
+Owner-only return POST is gated by RetailReturns:PostingEnabled (default false), and only mapped in Development. Two compensating tables retain original receipt/line links, actor, reason, idempotency key, cumulative allocated amount and restock decision. A confirmed cash refund records the owner's attestation, not an automatic payout. The server compares expected amount, validates the remaining quantity, restores sellable stock within the same serializable transaction and never modifies the original receipt. Non-restocked returns do not enter available stock. The read-only estimate now accounts for earlier posted returns. Keep the switch off outside isolated testing until owner approval/drawer policy, history, net reporting, UI reconciliation/retry and return receipt are accepted. No production refund or physical cash action was performed.

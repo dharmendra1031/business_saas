@@ -22,6 +22,7 @@ public static class RetailCashSales
         group.MapGet("/business-receipts", BusinessReceiptHistory);
         group.MapGet("/business-receipts/{receiptId:long}", BusinessReceiptById);
         group.MapPost("/business-receipts/{receiptId:long}/return-estimate", EstimateReturn);
+        group.MapPost("/business-receipts/{receiptId:long}/returns", PostReturn);
         group.MapGet("/business-receipts/{receiptId:long}/pdf", BusinessReceiptPdf);
         group.MapGet("/daily-report", DailyReport);
         group.MapPost("", Post);
@@ -167,10 +168,11 @@ public static class RetailCashSales
             return Results.BadRequest(new { message = "Choose each return line once and enter a positive quantity with up to three decimals." });
 
         var original = sale.Lines.ToDictionary(x => x.Id);
-        decimal PostedAmount(RetailCashSaleLine line) => line.LineTotal ??
-            decimal.Round(line.Quantity * line.UnitPrice, 2, MidpointRounding.AwayFromZero);
-        if (sale.Lines.Count == 0 || sale.Lines.Any(x => x.Quantity <= 0 || PostedAmount(x) < 0) ||
-            sale.Lines.Sum(PostedAmount) != sale.Total)
+        var earlier = await db.RetailCashReturns.AsNoTracking()
+            .Where(x => x.BusinessId == businessId && x.SaleId == receiptId)
+            .SelectMany(x => x.Lines).ToListAsync();
+        if (sale.Lines.Count == 0 || sale.Lines.Any(x => x.Quantity <= 0 || OriginalAmount(x) < 0) ||
+            sale.Lines.Sum(OriginalAmount) != sale.Total)
             return Results.Conflict(new { message = "Original receipt amounts require reconciliation." });
 
         var estimates = new List<object>();
@@ -179,15 +181,112 @@ public static class RetailCashSales
         {
             if (!original.TryGetValue(item.LineId, out var line) || item.Quantity > line.Quantity)
                 return Results.BadRequest(new { message = "Return quantity cannot exceed the original sold quantity." });
-            // Allocate the immutable posted amount proportionally, rounded to currency cents.
-            // A future posting flow must allocate cumulative amounts against prior returns.
-            var amount = decimal.Round(PostedAmount(line) * (item.Quantity / line.Quantity),
-                2, MidpointRounding.AwayFromZero);
-            if (item.Quantity == line.Quantity) amount = PostedAmount(line);
+            var returned = earlier.Where(x => x.SaleLineId == item.LineId).ToArray();
+            var cumulativeQty = returned.Sum(x => x.Quantity) + item.Quantity;
+            if (cumulativeQty > line.Quantity)
+                return Results.Conflict(new { message = "Return exceeds remaining sold quantity." });
+            var cumulativeAmount = cumulativeQty == line.Quantity ? OriginalAmount(line) :
+                decimal.Round(OriginalAmount(line) * (cumulativeQty / line.Quantity), 2, MidpointRounding.AwayFromZero);
+            var amount = cumulativeAmount - returned.Sum(x => x.Amount);
+            if (amount < 0) return Results.Conflict(new { message = "Prior returns require reconciliation." });
             estimates.Add(new { item.LineId, item.Quantity, Amount = amount });
             total += amount;
         }
         return Results.Ok(new { receiptId, sale.CurrencyCode, total, lines = estimates, canPost = false });
+    }
+
+    public sealed record ReturnItem(long LineId, decimal Quantity, bool Restock);
+    public sealed record ReturnRequest(long LocationId, string RequestKey, string Reason,
+        decimal ExpectedRefund, bool CashRefundConfirmed, List<ReturnItem>? Lines);
+
+    private static decimal OriginalAmount(RetailCashSaleLine line) => line.LineTotal ??
+        decimal.Round(line.Quantity * line.UnitPrice, 2, MidpointRounding.AwayFromZero);
+
+    // Owner-only development pilot. Confirmation records an actual cash refund,
+    // not a provider payout or authorization to dispense cash.
+    private static async Task<IResult> PostReturn(long businessId, long receiptId, ReturnRequest request,
+        ClaimsPrincipal user, AppDbContext db, IConfiguration config)
+    {
+        if (!long.TryParse(user.FindFirstValue(ClaimTypes.NameIdentifier), out var actor))
+            return Results.NotFound();
+        var items = request.Lines;
+        var reason = request.Reason?.Trim() ?? "";
+        if (items is null || items.Count is < 1 or > 100 ||
+            items.Any(x => x is null || x.LineId <= 0 || x.Quantity is < 0.001m or > 1000000m ||
+                decimal.Round(x.Quantity, 3) != x.Quantity) ||
+            items.Select(x => x.LineId).Distinct().Count() != items.Count ||
+            string.IsNullOrWhiteSpace(request.RequestKey) || request.RequestKey.Length is < 12 or > 80 ||
+            reason.Length is < 5 or > 200 || !request.CashRefundConfirmed ||
+            request.ExpectedRefund < 0 || decimal.Round(request.ExpectedRefund, 2) != request.ExpectedRefund)
+            return Results.BadRequest(new { message = "Provide unique lines, valid quantities, reason and confirmed cash refund amount." });
+
+        await using var tx = await db.Database.BeginTransactionAsync(IsolationLevel.Serializable);
+        try
+        {
+            if (await Shop(db, businessId, actor, request.LocationId, ownerOnly: true) is null)
+                return Results.NotFound();
+            var sale = await db.RetailCashSales.AsNoTracking().Include(x => x.Lines)
+                .SingleOrDefaultAsync(x => x.Id == receiptId && x.BusinessId == businessId && x.LocationId == request.LocationId);
+            if (sale is null) return Results.NotFound();
+            var prior = await db.RetailCashReturns.AsNoTracking().Include(x => x.Lines)
+                .Where(x => x.BusinessId == businessId && x.RequestKey == request.RequestKey).SingleOrDefaultAsync();
+            if (prior is not null)
+            {
+                if (prior.SaleId != receiptId || prior.Total != request.ExpectedRefund || prior.Reason != reason ||
+                    !prior.Lines.Select(x => new ReturnItem(x.SaleLineId, x.Quantity, x.Restock)).OrderBy(x => x.LineId)
+                        .SequenceEqual(items.OrderBy(x => x.LineId)))
+                    return Results.Conflict(new { message = "Return key belongs to a different transaction." });
+                return Results.Ok(prior);
+            }
+            if (!config.GetValue<bool>("RetailReturns:PostingEnabled"))
+                return Results.Conflict(new { message = "Return posting is not enabled on this development host." });
+            if (sale.Lines.Count == 0 || sale.Lines.Any(x => x.Quantity <= 0 || OriginalAmount(x) < 0) ||
+                sale.Lines.Sum(OriginalAmount) != sale.Total)
+                return Results.Conflict(new { message = "Original receipt requires reconciliation." });
+
+            var earlier = await db.RetailCashReturns.AsNoTracking()
+                .Where(x => x.BusinessId == businessId && x.SaleId == receiptId)
+                .SelectMany(x => x.Lines).ToListAsync();
+            var original = sale.Lines.ToDictionary(x => x.Id);
+            var record = new RetailCashReturn { BusinessId = businessId, SaleId = receiptId, ActorUserId = actor,
+                Reason = reason, RequestKey = request.RequestKey, PostedAtUtc = DateTime.UtcNow };
+            foreach (var item in items)
+            {
+                if (!original.TryGetValue(item.LineId, out var line))
+                    return Results.BadRequest(new { message = "Return line is not on the original receipt." });
+                var returned = earlier.Where(x => x.SaleLineId == item.LineId).ToArray();
+                var previousQty = returned.Sum(x => x.Quantity);
+                var previousAmount = returned.Sum(x => x.Amount);
+                if (previousQty + item.Quantity > line.Quantity)
+                    return Results.Conflict(new { message = "Return exceeds remaining sold quantity." });
+                var cumulative = previousQty + item.Quantity == line.Quantity ? OriginalAmount(line) :
+                    decimal.Round(OriginalAmount(line) * ((previousQty + item.Quantity) / line.Quantity),
+                        2, MidpointRounding.AwayFromZero);
+                var amount = cumulative - previousAmount;
+                if (amount < 0 || cumulative > OriginalAmount(line))
+                    return Results.Conflict(new { message = "Prior returns require reconciliation." });
+                record.Lines.Add(new RetailCashReturnLine { SaleLineId = line.Id, Quantity = item.Quantity,
+                    Amount = amount, Restock = item.Restock });
+                record.Total += amount;
+            }
+            if (record.Total != request.ExpectedRefund)
+                return Results.Conflict(new { message = "Refund amount changed. Verify remaining return balance." });
+
+            db.RetailCashReturns.Add(record);
+            await db.SaveChangesAsync();
+            foreach (var line in record.Lines.Where(x => x.Restock).OrderBy(x => original[x.SaleLineId].ProductId))
+            {
+                if (await StockPosting.ApplyAsync(db, businessId, sale.LocationId, original[line.SaleLineId].ProductId,
+                    line.Quantity, "CashReturnLine", line.Id, actor, reason: reason) is null)
+                    return Results.Conflict(new { message = "Stock restoration failed; return was not posted." });
+            }
+            await tx.CommitAsync();
+            return Results.Ok(record);
+        }
+        catch (Exception ex) when (StockPosting.IsSqlConflict(ex))
+        {
+            return Results.Conflict(new { message = "Concurrent return or stock update. Retry the same request key." });
+        }
     }
 
     private static async Task<IResult> ReceiptHistory(long businessId, long locationId, ClaimsPrincipal user,

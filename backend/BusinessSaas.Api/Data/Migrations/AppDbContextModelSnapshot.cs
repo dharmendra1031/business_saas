@@ -1908,6 +1908,58 @@ namespace BusinessSaas.Api.Data.Migrations
                 {
                     b.Navigation("Lines");
                 });
+            modelBuilder.Entity("BusinessSaas.Api.Data.RetailCashReturn", b =>
+                {
+                    b.Property<long>("Id").ValueGeneratedOnAdd().HasColumnType("bigint");
+                    SqlServerPropertyBuilderExtensions.UseIdentityColumn(b.Property<long>("Id"));
+                    b.Property<long>("ActorUserId").HasColumnType("bigint");
+                    b.Property<long>("BusinessId").HasColumnType("bigint");
+                    b.Property<DateTime>("PostedAtUtc").HasColumnType("datetime2");
+                    b.Property<string>("Reason").IsRequired().HasMaxLength(200).HasColumnType("nvarchar(200)");
+                    b.Property<string>("RequestKey").IsRequired().HasMaxLength(80).HasColumnType("nvarchar(80)");
+                    b.Property<long>("SaleId").HasColumnType("bigint");
+                    b.Property<decimal>("Total").HasPrecision(18, 2).HasColumnType("decimal(18,2)");
+                    b.HasKey("Id");
+                    b.HasIndex("ActorUserId");
+                    b.HasIndex("SaleId");
+                    b.HasIndex("BusinessId", "RequestKey").IsUnique();
+                    b.ToTable("RetailCashReturns");
+                });
+
+            modelBuilder.Entity("BusinessSaas.Api.Data.RetailCashReturnLine", b =>
+                {
+                    b.Property<long>("Id").ValueGeneratedOnAdd().HasColumnType("bigint");
+                    SqlServerPropertyBuilderExtensions.UseIdentityColumn(b.Property<long>("Id"));
+                    b.Property<decimal>("Amount").HasPrecision(18, 2).HasColumnType("decimal(18,2)");
+                    b.Property<decimal>("Quantity").HasPrecision(18, 3).HasColumnType("decimal(18,3)");
+                    b.Property<bool>("Restock").HasColumnType("bit");
+                    b.Property<long>("ReturnId").HasColumnType("bigint");
+                    b.Property<long>("SaleLineId").HasColumnType("bigint");
+                    b.HasKey("Id");
+                    b.HasIndex("SaleLineId");
+                    b.HasIndex("ReturnId", "SaleLineId").IsUnique();
+                    b.ToTable("RetailCashReturnLines");
+                });
+
+            modelBuilder.Entity("BusinessSaas.Api.Data.RetailCashReturn", b =>
+                {
+                    b.HasOne("BusinessSaas.Api.Data.AppUser", null).WithMany().HasForeignKey("ActorUserId")
+                        .OnDelete(DeleteBehavior.Restrict).IsRequired();
+                    b.HasOne("BusinessSaas.Api.Data.Business", null).WithMany().HasForeignKey("BusinessId")
+                        .OnDelete(DeleteBehavior.Restrict).IsRequired();
+                    b.HasOne("BusinessSaas.Api.Data.RetailCashSale", null).WithMany().HasForeignKey("SaleId")
+                        .OnDelete(DeleteBehavior.Restrict).IsRequired();
+                });
+
+            modelBuilder.Entity("BusinessSaas.Api.Data.RetailCashReturnLine", b =>
+                {
+                    b.HasOne("BusinessSaas.Api.Data.RetailCashReturn", null).WithMany("Lines").HasForeignKey("ReturnId")
+                        .OnDelete(DeleteBehavior.Restrict).IsRequired();
+                    b.HasOne("BusinessSaas.Api.Data.RetailCashSaleLine", null).WithMany().HasForeignKey("SaleLineId")
+                        .OnDelete(DeleteBehavior.Restrict).IsRequired();
+                });
+
+            modelBuilder.Entity("BusinessSaas.Api.Data.RetailCashReturn", b => b.Navigation("Lines"));
 #pragma warning restore 612, 618
         }
     }

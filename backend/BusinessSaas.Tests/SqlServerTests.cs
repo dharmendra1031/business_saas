@@ -344,6 +344,7 @@ public sealed class SqlServerTests
         using var factory = new WebApplicationFactory<Program>().WithWebHostBuilder(builder =>
         {
             builder.UseEnvironment("Development"); // Cash posting is not released outside Development yet.
+            builder.UseSetting("RetailReturns:PostingEnabled", "true");
             builder.ConfigureServices(services =>
             {
                 services.RemoveAll<DbContextOptions<AppDbContext>>();
@@ -797,6 +798,40 @@ public sealed class SqlServerTests
             Assert.Equal(2, await db.PlatformAuditEvents.AsNoTracking().CountAsync(x =>
                 x.TargetType == "Business" && x.TargetId == businessId &&
                 x.Action == "Business.BillingSettingsChanged"));
+        }
+        // Return only after all original sale assertions have completed.
+        var returnPath = prefix + "/cash-sales/business-receipts/" +
+            sale.GetProperty("id").GetInt64() + "/returns";
+        var request = new { locationId, requestKey = "sql-return-partial-20261125",
+            reason = "Customer returned goods", expectedRefund = 10m, cashRefundConfirmed = true,
+            lines = new[] { new { lineId, quantity = 0.125m, restock = true } } };
+        Assert.Equal(HttpStatusCode.NotFound, (await Post(cashier, returnPath, request)).StatusCode);
+        Assert.Equal(HttpStatusCode.NotFound, (await Post(stranger, returnPath, request)).StatusCode);
+        using var returned = await Post(owner, returnPath, request);
+        Assert.Equal(HttpStatusCode.OK, returned.StatusCode);
+        var returnedBody = await returned.Content.ReadFromJsonAsync<JsonElement>();
+        using var replayReturn = await Post(owner, returnPath, request);
+        Assert.Equal(HttpStatusCode.OK, replayReturn.StatusCode);
+        Assert.Equal(returnedBody.GetProperty("id").GetInt64(),
+            (await replayReturn.Content.ReadFromJsonAsync<JsonElement>()).GetProperty("id").GetInt64());
+        Assert.Equal(HttpStatusCode.Conflict, (await Post(owner, returnPath, request with {
+            requestKey = "sql-return-excess-20261125", expectedRefund = 30m,
+            lines = new[] { new { lineId, quantity = 0.375m, restock = true } }
+        })).StatusCode);
+        using var remainder = await Post(owner, returnPath, request with {
+            requestKey = "sql-return-final-20261125", expectedRefund = 20m,
+            lines = new[] { new { lineId, quantity = 0.250m, restock = false } }
+        });
+        Assert.Equal(HttpStatusCode.OK, remainder.StatusCode);
+        using (var scope = factory.Services.CreateScope())
+        {
+            var db = scope.ServiceProvider.GetRequiredService<AppDbContext>();
+            Assert.Equal(30m, await db.RetailCashReturns.Where(x => x.SaleId == sale.GetProperty("id").GetInt64()).SumAsync(x => x.Total));
+            Assert.Equal(2, await db.RetailCashReturns.CountAsync(x => x.SaleId == sale.GetProperty("id").GetInt64()));
+            Assert.Equal(0.750m, await db.RetailStockBalances.Where(x => x.BusinessId == businessId &&
+                x.LocationId == locationId && x.ProductId == productId).Select(x => x.Quantity).SingleAsync());
+            Assert.Single(await db.RetailStockMovements.Where(x => x.BusinessId == businessId &&
+                x.ProductId == productId && x.SourceType == "CashReturnLine").ToListAsync());
         }
     }
 
