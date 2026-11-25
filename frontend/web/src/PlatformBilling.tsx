@@ -105,6 +105,27 @@ function money(amount: number, currency: string) {
   }).format(amount)
 }
 
+// Each register owns its request lifecycle; paging one never reloads the others.
+function readRegister<T>(path: string, setResult: (result: T | null) => void,
+  setError: (error: string) => void, done?: () => void) {
+  const controller = new AbortController()
+  setResult(null)
+  setError('')
+  queueMicrotask(async () => {
+    if (controller.signal.aborted) return
+    try {
+      const result = await api<T>(path, { signal: controller.signal })
+      if (!controller.signal.aborted) setResult(result)
+    } catch (cause) {
+      if (!controller.signal.aborted && !(cause instanceof SessionExpiredError))
+        setError('Unable to load records. Refresh to retry.')
+    } finally {
+      if (!controller.signal.aborted) done?.()
+    }
+  })
+  return () => controller.abort()
+}
+
 export default function PlatformBilling({ business, onChooseBusiness }: { business: { id: number; name: string } | null; onChooseBusiness: () => void }) {
   const businessId = business?.id
   const businessIdRef = useRef(businessId)
@@ -135,6 +156,9 @@ export default function PlatformBilling({ business, onChooseBusiness }: { busine
   const [busy, setBusy] = useState(false)
   const [error, setError] = useState('')
   const [notice, setNotice] = useState('')
+  const [draftLoadError, setDraftLoadError] = useState('')
+  const [paymentLoadError, setPaymentLoadError] = useState('')
+  const [reconciliationLoadError, setReconciliationLoadError] = useState('')
 
   useEffect(() => {
     // A business switch must discard unsubmitted terms from the previous tenant.
@@ -151,30 +175,16 @@ export default function PlatformBilling({ business, onChooseBusiness }: { busine
   }, [businessId])
 
   useEffect(() => {
-    let active = true
     setLoading(true)
-    Promise.all([
-      api<BillingPage>(`/platform/billing/drafts?page=${page}`),
-      api<PaymentPage>(`/platform/billing/payment-requests?page=${paymentPage}`),
-      api<ReconciliationPage>(`/platform/billing/reconciliation?page=${reconciliationPage}`)
-    ])
-      .then(([drafts, requests, summary]) => {
-        if (active) {
-          setRecords(drafts)
-          setPayments(requests)
-          setReconciliation(summary)
-        }
-      })
-      .catch(cause => {
-        if (!active || cause instanceof SessionExpiredError) return
-        setRecords(null)
-        setPayments(null)
-        setReconciliation(null)
-        setError('Unable to load billing records.')
-      })
-      .finally(() => { if (active) setLoading(false) })
-    return () => { active = false }
-  }, [page, paymentPage, reconciliationPage, reload])
+    return readRegister<BillingPage>(`/platform/billing/drafts?page=${page}`,
+      setRecords, setDraftLoadError, () => setLoading(false))
+  }, [page, reload])
+
+  useEffect(() => readRegister<PaymentPage>(`/platform/billing/payment-requests?page=${paymentPage}`,
+    setPayments, setPaymentLoadError), [paymentPage, reload])
+
+  useEffect(() => readRegister<ReconciliationPage>(`/platform/billing/reconciliation?page=${reconciliationPage}`,
+    setReconciliation, setReconciliationLoadError), [reconciliationPage, reload])
 
   function clearPreview() {
     previewGeneration.current++
@@ -185,7 +195,7 @@ export default function PlatformBilling({ business, onChooseBusiness }: { busine
 
   async function loadPreview(event: FormEvent) {
     event.preventDefault()
-    if (!businessId) return
+    if (!businessId || busy) return
     setError('')
     setNotice('')
     setPreview(null)
@@ -215,7 +225,7 @@ export default function PlatformBilling({ business, onChooseBusiness }: { busine
 
   async function createDraft(event: FormEvent) {
     event.preventDefault()
-    if (!preview || !requestKey) return
+    if (!preview || !requestKey || busy) return
     setBusy(true)
     setError('')
     try {
@@ -251,7 +261,7 @@ export default function PlatformBilling({ business, onChooseBusiness }: { busine
 
   async function preparePayment(event: FormEvent) {
     event.preventDefault()
-    if (!selectedDraftId || !paymentKey) return
+    if (!selectedDraftId || !paymentKey || busy) return
     setBusy(true)
     setError('')
     try {
@@ -275,7 +285,7 @@ export default function PlatformBilling({ business, onChooseBusiness }: { busine
 
   async function reconcileOrder(event: FormEvent) {
     event.preventDefault()
-    if (!reconcileRequestId || !reconcileOrderId.trim()) return
+    if (!reconcileRequestId || !reconcileOrderId.trim() || busy) return
     setBusy(true)
     setError('')
     try {
@@ -309,12 +319,12 @@ export default function PlatformBilling({ business, onChooseBusiness }: { busine
         <div className="row g-3 align-items-end">
           <div className="col-12 col-sm-4">
             <p className="mb-1">{business?.name ?? 'Select a business to prepare billing.'}</p>
-            <button className="btn btn-outline-secondary" type="button" onClick={onChooseBusiness}>
+            <button className="btn btn-outline-secondary" type="button" disabled={busy} onClick={onChooseBusiness}>
               {business ? 'Change business' : 'Find business by name'}</button>
           </div>
           <div className="col-12 col-sm-3">
             <label className="form-label" htmlFor="billing-cycle">Billing cycle</label>
-            <select id="billing-cycle" className="form-select" value={cycle}
+            <select id="billing-cycle" className="form-select" value={cycle} disabled={busy}
               onChange={event => { setCycle(event.target.value); clearPreview() }}>
               <option value="Monthly">Monthly</option>
               <option value="Quarterly">Quarterly</option>
@@ -323,7 +333,7 @@ export default function PlatformBilling({ business, onChooseBusiness }: { busine
           </div>
           <div className="col-12 col-sm-3">
             <label className="form-label" htmlFor="billing-period">Period starts</label>
-            <input id="billing-period" className="form-control" type="date" required
+            <input id="billing-period" className="form-control" type="date" required disabled={busy}
               value={periodStart} onChange={event => {
                 setPeriodStart(event.target.value)
                 clearPreview()
@@ -371,7 +381,7 @@ export default function PlatformBilling({ business, onChooseBusiness }: { busine
           Refresh
         </button>
       </div>
-      {loading ? <p role="status" className="text-secondary">Loading billing drafts…</p>
+      {draftLoadError ? <p role="alert" className="text-danger">{draftLoadError}</p> : loading ? <p role="status" className="text-secondary">Loading billing drafts…</p>
         : records?.total === 0 ? <p className="text-secondary">
             No billing drafts have been created.
           </p>
@@ -437,7 +447,9 @@ export default function PlatformBilling({ business, onChooseBusiness }: { busine
     </section>}
     <section className="content-section mt-3">
       <h2>Payment Requests</h2>
-      {payments?.total === 0 ? <p className="text-secondary">No payment requests prepared.</p>
+      {paymentLoadError ? <p role="alert" className="text-danger">{paymentLoadError}</p>
+        : !payments ? <p role="status">Loading payment requests…</p>
+        : payments.total === 0 ? <p className="text-secondary">No payment requests prepared.</p>
         : payments && <div className="table-responsive">
           <table className="table platform-table align-middle">
             <thead><tr><th>Request ID</th><th>Draft</th><th>Business</th>
@@ -473,7 +485,9 @@ export default function PlatformBilling({ business, onChooseBusiness }: { busine
         Recorded captured payments, processed refunds and remaining amounts. These totals
         are not settlement, revenue, or tax invoice totals.
       </p>
-      {reconciliation?.items.length === 0
+      {reconciliationLoadError ? <p role="alert" className="text-danger">{reconciliationLoadError}</p>
+        : !reconciliation ? <p role="status">Loading reconciliation…</p>
+        : reconciliation.items.length === 0
         ? <p className="text-secondary">No verified captures recorded.</p>
         : reconciliation && <div className="table-responsive">
             <table className="table platform-table align-middle">

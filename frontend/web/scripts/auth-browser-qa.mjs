@@ -2797,10 +2797,12 @@ try {
     // only from the first page of the independent payment-request register.
     const t = await scenario('super-admin-billing-status-and-pagination', { role: 'Platform' })
     const requestPages = [], capturePages = []
+    let draftReads = 0
     await t.page.route('**/api/platform/plans', route =>
       response(route, 200, { items: [], unknownPlanAssignments: 0 }))
-    await t.page.route('**/api/platform/billing/drafts?*', route =>
-      response(route, 200, {
+    await t.page.route('**/api/platform/billing/drafts?*', route => {
+      draftReads++
+      return response(route, 200, {
         items: [{
           id: 7, businessId: 11, businessName: 'Paid Retail', publishedPlanVersionId: 5,
           planCode: 'STARTER', billingCycle: 'Monthly', periodStartDate: '2026-11-01',
@@ -2808,7 +2810,8 @@ try {
           createdAtUtc: '2026-11-01T00:00:00Z', status: 'Draft',
           paymentRequestId: 900, paymentStatus: 'Captured'
         }], total: 1, page: 1, pageSize: 20
-      }))
+      })
+    })
     await t.page.route('**/api/platform/billing/payment-requests?*', route => {
       const page = Number(new URL(route.request().url()).searchParams.get('page') ?? '1')
       requestPages.push(page)
@@ -2853,7 +2856,9 @@ try {
     assert.deepEqual(requestPages.slice(-2), [1, 2])
     await t.page.getByRole('button', { name: 'Next captures' }).click()
     await t.page.getByText('Page 2.', { exact: false }).waitFor()
-    assert.deepEqual(capturePages.slice(-2), [1, 2])
+    assert.deepEqual(capturePages, [1, 2])
+    assert.deepEqual(requestPages, [1, 2])
+    assert.equal(draftReads, 1, 'Paging payment and capture registers must not reload draft history')
     await t.screenshot('SA-billing-captured-status-pagination')
     await t.check()
     await t.context.close()

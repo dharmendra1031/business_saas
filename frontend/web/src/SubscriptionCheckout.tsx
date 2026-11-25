@@ -57,18 +57,21 @@ export default function SubscriptionCheckout({ businessId }: { businessId: numbe
   useEffect(() => {
     setError('')
     setPayment(null)
-    let active = true
-    api<CheckoutSummary>(`/businesses/${businessId}/billing/checkout`)
-      .then(result => {
-        if (!active) return
+    const controller = new AbortController()
+    // StrictMode may clean up the first effect before the request starts.
+    queueMicrotask(async () => {
+      if (controller.signal.aborted) return
+      try {
+        const result = await api<CheckoutSummary>(`/businesses/${businessId}/billing/checkout`, { signal: controller.signal })
+        if (controller.signal.aborted) return
         setPayment(result)
         if (result.status === 'Captured') setNotice('Payment verified by the server.')
-      })
-      .catch(cause => {
-        if (active && !(cause instanceof SessionExpiredError))
+      } catch (cause) {
+        if (!controller.signal.aborted && !(cause instanceof SessionExpiredError))
           setError('Unable to load subscription payment details.')
-      })
-    return () => { active = false }
+      }
+    })
+    return () => controller.abort()
   }, [businessId, refresh])
 
   async function pay() {
