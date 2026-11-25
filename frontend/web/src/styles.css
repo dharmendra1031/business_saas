@@ -28,9 +28,8 @@ button:focus-visible, a:focus-visible, input:focus-visible, select:focus-visible
 .btn-outline-secondary { --bs-btn-color: #303030; --bs-btn-hover-bg: #303030; --bs-btn-hover-border-color: #303030; --bs-btn-hover-color: #fff; }
 .page-content .text-secondary, .content-section .text-secondary { color: #383838 !important; }
 .page-content .text-muted, .content-section .text-muted { color: #383838 !important; }
-.form-control, .form-select { color: #000000; background-color: #fff; }
+.form-control, .form-select { color: #000000; background-color: #fff; border-color: #cbd8e4; min-height: 42px; border-radius: 6px; }
 .form-control::placeholder { color: #424242; opacity: 1; }
-.form-control, .form-select { border-color: #cbd8e4; min-height: 42px; border-radius: 6px; }
 .form-control:focus, .form-select:focus { border-color: #77a6cb; box-shadow: 0 0 0 .2rem #175d921c; }
 .form-label { font-size: .91rem; font-weight: 600; margin-bottom: 6px; }
 .center-screen { min-height: 100vh; display: grid; place-items: center; color: var(--muted); }
@@ -233,8 +232,7 @@ button:focus-visible, a:focus-visible, input:focus-visible, select:focus-visible
 .pos-line-description { display: grid; gap: 4px; min-width: 0; overflow-wrap: anywhere; font-size: .88rem; }
 .pos-line-description small { color: var(--muted); font-size: .77rem; }
 .pos-payment { margin-top: 24px; padding-top: 20px; border-top: 1px solid var(--line); }
-.pos-total-row { display: flex; justify-content: space-between; align-items: baseline; gap: 10px; }
-.pos-total-row { color: var(--ink); font-size: .9rem; }
+.pos-total-row { display: flex; justify-content: space-between; align-items: baseline; gap: 10px; color: var(--ink); font-size: .9rem; }
 .pos-total-row strong { font-size: 1.42rem; white-space: nowrap; }
 .pos-record-button { width: 100%; min-height: 48px; }
 @media (max-width: 1090px) {

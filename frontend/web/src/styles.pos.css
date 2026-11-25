@@ -75,10 +75,10 @@
 .pos-product-meta { display: grid; flex: 1; padding: 10px 10px 9px; gap: 4px; align-content: start; }
 .pos-product-meta > strong { color: #000000; font-size: .88rem; font-weight: 770; line-height: 1.32;
   display: -webkit-box; -webkit-box-orient: vertical; -webkit-line-clamp: 2; overflow: hidden; }
-.pos-product-meta > small { color: #47505e; font-size: .7rem; line-height: 1.3; overflow-wrap: anywhere; }
+.pos-product-meta > small { color: #425368; font-size: .76rem; line-height: 1.3; overflow-wrap: anywhere; }
 .pos-product-bottom { display: flex; flex-wrap: wrap; align-items: baseline; justify-content: space-between; gap: 4px; margin-top: auto; padding-right: 30px; }
 .pos-product-bottom b { color: #4e3bb4; font-size: .86rem; font-weight: 820; font-variant-numeric: tabular-nums; }
-.pos-product-bottom > span { color: #475162; font-size: .63rem; }
+.pos-product-bottom > span { color: #415266; font-size: .72rem; }
 .pos-product-plus { position: absolute; bottom: 8px; right: 8px; display: grid; place-items: center;
   width: 27px; height: 27px; border-radius: 50%; background: #5441c7; color: #fff; }
 .pos-product-card:disabled .pos-product-plus { background: #9faac0; }
@@ -196,8 +196,8 @@
   .pos-shell .pos-basket-lines { max-height: 340px; }
 }
 @media (max-width: 620px) {
-  .pos-shell .app-topbar { height: 48px; min-height: 48px; padding: 0 12px; gap: 9px; }
-  .pos-brand-mark { width: 32px; height: 32px; font-size: 1.06rem; }
+  .pos-shell .app-topbar { padding: 0 12px; gap: 9px; }
+  .pos-brand-mark { font-size: 1.06rem; }
   .pos-topbar-brand strong { font-size: .81rem; }
   .pos-topbar-brand small { font-size: .53rem; }
   .pos-topbar-store { justify-content: flex-start; }
@@ -209,7 +209,6 @@
   .pos-shell .pos-header { align-items: flex-start; }
   .pos-shell .pos-header h2 { font-size: 1.3rem; }
   .pos-shell .pos-header p { font-size: .76rem; }
-  .pos-shell .pos-panel-heading { padding: 8px 12px; min-height: 42px; }
   .pos-shell .pos-location-row { padding: 11px 12px 0; flex-wrap: wrap; }
   .pos-shell .pos-location-row .btn { font-size: .71rem; }
   .pos-search { padding: 11px 12px; }
@@ -218,7 +217,6 @@
   .pos-shell .pos-search .btn { font-size: .68rem; padding: 6px 9px; }
   .pos-catalog-results { padding: 0 12px 13px; max-height: 410px; }
   .pos-products-grid { grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 8px; }
-  .pos-product-card { min-height: 116px; }
   .pos-product-bottom { flex-direction: column; gap: 3px; }
   .pos-shell .pos-basket-line { grid-template-columns: minmax(0, 1fr) 110px 24px; }
   .pos-shell .pos-basket-line .pos-line-amount { grid-column: 1; grid-row: 2; text-align: left; }
@@ -242,7 +240,5 @@
   .pos-product-card:hover:not(:disabled) { transform: none; }
 }
 
-/* Equal product tile row height and readable labels; approved POS proportions unchanged. */
+/* Equal product tile row height. */
 .pos-products-grid > .pos-product-card { height: 100%; min-width: 0; }
-.pos-product-meta > small { color: #425368; font-size: .76rem; }
-.pos-product-bottom > span { color: #415266; font-size: .72rem; }
