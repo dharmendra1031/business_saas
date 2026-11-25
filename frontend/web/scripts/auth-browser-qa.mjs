@@ -1900,12 +1900,22 @@ try {
     const t = await scenario('owner-credit-payment-recovery', { role: 'Owner', hasProducts: true })
     let saved = null
     let posts = 0
+    let limit = 500
+    let limitWrites = 0
+    await t.page.route('**/api/businesses/1/customers/61/credit-limit', route => {
+      assert.equal(route.request().method(), 'PUT')
+      assert.deepEqual(route.request().postDataJSON(), { limit: 750, expectedLimit: 500, reason: 'Approved credit increase' })
+      limitWrites++
+      if (limitWrites === 1) return response(route, 409, { message: 'Credit limit update failed.' })
+      limit = 750
+      return response(route, 200, { id: 61, creditLimit: limit })
+    })
     await t.page.route('**/api/businesses/1/customers?*', route => response(route, 200, {
-      items: [{ id: 61, name: 'Credit Customer', phone: '1234567890', email: '', isActive: true, creditLimit: 500 }],
+      items: [{ id: 61, name: 'Credit Customer', phone: '1234567890', email: '', isActive: true, creditLimit: limit }],
       total: 1, page: 1, pageSize: 20
     }))
     await t.page.route('**/api/businesses/1/customers/61/credit-ledger?*', route => response(route, 200, {
-      customerId: 61, name: 'Credit Customer', creditLimit: 500, canCollect: true,
+      customerId: 61, name: 'Credit Customer', creditLimit: limit, canCollect: true,
       totals: [{ currencyCode: 'INR', debit: 100, paid: saved ? 40 : 0, outstanding: saved ? 60 : 100, invoiceCount: 1 }],
       items: [{ id: 81, locationName: 'Main Shop', currencyCode: 'INR', debit: 100, paid: saved ? 40 : 0,
         outstanding: saved ? 60 : 100, creditDueDate: '2026-12-02', postedAtUtc: '2026-11-25T04:00:00Z' }],
@@ -1931,6 +1941,28 @@ try {
     await t.page.getByRole('button', { name: 'Add Customer', exact: true }).click()
     await t.page.getByRole('heading', { name: 'New customer' }).waitFor()
     assert.equal(await t.page.locator('#contact-search').count(), 0)
+    await t.page.getByRole('button', { name: 'Cancel', exact: true }).click()
+    await t.page.getByRole('button', { name: 'Edit Credit Customer' }).click()
+    const contactLayout = () => t.page.locator('form.product-form').evaluate(form => {
+      const rect = form.getBoundingClientRect()
+      return { width: rect.width, height: rect.height, scrollHeight: document.documentElement.scrollHeight }
+    })
+    const originalLayout = await contactLayout()
+    await t.page.getByRole('button', { name: 'Change credit limit' }).click()
+    const dialog = t.page.getByRole('dialog', { name: 'Change credit limit' })
+    await dialog.waitFor()
+    assert.deepEqual(await contactLayout(), originalLayout)
+    await dialog.locator('#customer-credit-limit').fill('750')
+    assert.equal(await dialog.getByRole('button', { name: 'Save credit limit' }).isDisabled(), true)
+    await dialog.locator('#customer-credit-reason').fill('Approved credit increase')
+    await dialog.getByRole('button', { name: 'Save credit limit' }).click()
+    await dialog.getByRole('alert').getByText('Credit limit update failed.').waitFor()
+    assert.equal(await dialog.locator('#customer-credit-limit').inputValue(), '750')
+    await dialog.getByRole('button', { name: 'Save credit limit' }).click()
+    await dialog.waitFor({ state: 'hidden' })
+    await t.page.getByText('INR 750.00', { exact: true }).waitFor()
+    assert.equal(await t.page.locator('#contact-name').inputValue(), 'Credit Customer')
+    assert.equal(limitWrites, 2)
     await t.page.getByRole('button', { name: 'Cancel', exact: true }).click()
     await t.page.getByRole('button', { name: 'Credit ledger for Credit Customer' }).click()
     assert.equal(await t.page.locator('#contact-search').count(), 0, 'Ledger opens without the customer register')
@@ -2597,8 +2629,18 @@ try {
     await t.page.getByRole('heading', { name: 'Inventory', level: 2 }).waitFor()
     assert.equal(await t.page.locator('.workspace-identity').getByText('2 locations').count(), 1,
       'Multi-branch role context must not claim the first branch is active')
+    const layout = () => t.page.locator('.retail-stock-list').evaluate(el => {
+      const rect = el.getBoundingClientRect()
+      return { width: rect.width, height: rect.height, scrollHeight: document.documentElement.scrollHeight }
+    })
+    await t.page.locator('#stock-search').waitFor()
+    const before = await layout()
     await t.page.locator('#stock-location').click()
-    await t.page.getByRole('dialog', { name: 'Select stock location' }).getByRole('columnheader', { name: 'Code' }).waitFor()
+    const locationDialog = t.page.getByRole('dialog', { name: 'Select stock location' })
+    await locationDialog.getByRole('columnheader', { name: 'Code' }).waitFor()
+    assert.deepEqual(await layout(), before, 'Location lookup must not resize inventory')
+    const bounds = await locationDialog.boundingBox()
+    assert.ok(bounds.x >= 0 && bounds.x + bounds.width <= 360 && bounds.y >= 0 && bounds.y + bounds.height <= 780)
     await t.page.locator('#stock-location-search-option-2').click()
     await t.page.waitForFunction(() => document.querySelector('#stock-location')?.getAttribute('data-selected-id') === '2')
     assert.ok(t.stockPaths.some(path => path.endsWith('/locations/2')),
