@@ -584,10 +584,10 @@ public static class RetailCashSales
 
         // Quantity comparison is only a completeness test. Each posted return line is
         // already bounded by its original sale line; never use these sums as stock totals.
-        var sold = db.RetailCashSales.AsNoTracking().Where(x => x.BusinessId == businessId)
-            .SelectMany(x => x.Lines).GroupBy(x => x.SaleId)
+        var sold = sales.SelectMany(x => x.Lines).GroupBy(x => x.SaleId)
             .Select(g => new { SaleId = g.Key, Quantity = g.Sum(x => x.Quantity) });
-        var returned = db.RetailCashReturns.AsNoTracking().Where(x => x.BusinessId == businessId)
+        var returned = db.RetailCashReturns.AsNoTracking()
+            .Where(x => x.BusinessId == businessId && sales.Any(sale => sale.Id == x.SaleId))
             .SelectMany(x => x.Lines, (header, line) => new { header.SaleId, line.Quantity })
             .GroupBy(x => x.SaleId).Select(g => new { SaleId = g.Key, Quantity = (decimal?)g.Sum(x => x.Quantity) });
 

@@ -20,16 +20,11 @@ public static class RetailPurchaseEndpoints
         group.MapGet("", async (long businessId, int? page, bool? draftOnly,
             ClaimsPrincipal user, AppDbContext db, CancellationToken cancellationToken) =>
         {
-            var denied = await RetailMasterEndpoints.CheckAccess(db, user, businessId, false, cancellationToken);
-            if (denied is not null) return denied;
+            var role = await RetailMasterEndpoints.ReadRole(db, user, businessId, cancellationToken);
+            if (role is null) return Results.NotFound();
             var currentPage = page ?? 1;
             if (currentPage is < 1 or > 100000)
                 return Results.BadRequest(new { message = "Invalid page." });
-
-            var userId = UserId(user);
-            var role = await db.BusinessUsers.AsNoTracking()
-                .Where(x => x.BusinessId == businessId && x.UserId == userId)
-                .Select(x => x.RoleCode).SingleAsync(cancellationToken);
 
             var query = from order in db.RetailPurchaseOrders.AsNoTracking()
                         join supplier in db.RetailSuppliers.AsNoTracking()

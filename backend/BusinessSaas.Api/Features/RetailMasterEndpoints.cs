@@ -329,18 +329,8 @@ public static class RetailMasterEndpoints
     internal static async Task<IResult?> CheckAccess(AppDbContext db, ClaimsPrincipal user,
         long businessId, bool write, CancellationToken cancellationToken = default, long? locationId = null, bool ownerOnly = false)
     {
-        if (!long.TryParse(user.FindFirstValue(ClaimTypes.NameIdentifier), out var userId))
-            return Results.NotFound();
-
-        var role = await (from member in db.BusinessUsers.AsNoTracking()
-                          join business in db.Businesses.AsNoTracking()
-                              on member.BusinessId equals business.Id
-                          join type in db.BusinessTypes.AsNoTracking()
-                              on business.BusinessTypeId equals type.Id
-                          where member.BusinessId == businessId && member.UserId == userId
-                              && type.Code == "RETAIL"
-                          select member.RoleCode).SingleOrDefaultAsync(cancellationToken);
-        if (role is not ("Owner" or "Manager"))
+        var role = await ReadRole(db, user, businessId, cancellationToken);
+        if (role is null)
             return Results.NotFound();
 
         if (write && !await db.BusinessSubscriptions.AsNoTracking().AnyAsync(x =>
@@ -357,6 +347,23 @@ public static class RetailMasterEndpoints
             return Results.NotFound();
 
         return ownerOnly && role != "Owner" ? Results.NotFound() : null;
+    }
+
+    internal static async Task<string?> ReadRole(AppDbContext db, ClaimsPrincipal user,
+        long businessId, CancellationToken cancellationToken = default)
+    {
+        if (!long.TryParse(user.FindFirstValue(ClaimTypes.NameIdentifier), out var userId))
+            return null;
+
+        var role = await (from member in db.BusinessUsers.AsNoTracking()
+                          join business in db.Businesses.AsNoTracking()
+                              on member.BusinessId equals business.Id
+                          join type in db.BusinessTypes.AsNoTracking()
+                              on business.BusinessTypeId equals type.Id
+                          where member.BusinessId == businessId && member.UserId == userId
+                              && type.Code == "RETAIL"
+                          select member.RoleCode).SingleOrDefaultAsync(cancellationToken);
+        return role is "Owner" or "Manager" ? role : null;
     }
 
     private sealed record CategoryRequest(string? Name, bool? IsActive, long? ParentId = null);

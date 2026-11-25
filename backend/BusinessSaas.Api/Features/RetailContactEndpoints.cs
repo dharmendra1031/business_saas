@@ -105,14 +105,14 @@ public static class RetailContactEndpoints
         customers.MapGet("", async (long businessId, string? search, int? page,
             ClaimsPrincipal user, AppDbContext db, CancellationToken cancellationToken) =>
         {
-            var denied = await RetailMasterEndpoints.CheckAccess(db, user, businessId, false, cancellationToken);
-            if (denied is not null) return denied;
+            var role = await RetailMasterEndpoints.ReadRole(db, user, businessId, cancellationToken);
+            if (role is null) return Results.NotFound();
             var currentPage = page ?? 1;
             var term = search?.Trim().ToUpperInvariant() ?? "";
             if (currentPage is < 1 or > 100000 || term.Length > 100)
                 return Results.BadRequest(new { message = "Invalid search or page." });
 
-            var isOwner = await RetailBillingSettingsEndpoints.OwnerId(db, businessId, user, cancellationToken) is not null;
+            var isOwner = role == "Owner";
             var query = db.RetailCustomers.AsNoTracking().Where(x => x.BusinessId == businessId);
             if (term.Length > 0) query = query.Where(x =>
                 x.NameKey.Contains(term) || x.Phone.Contains(term) || x.Email.ToUpper().Contains(term));

@@ -1085,6 +1085,14 @@ public sealed class SqlServerTests
             lines = new[] { new { lineId = soldPackLineId, quantity = 0.5m, restock = true } } };
         Assert.Equal(HttpStatusCode.OK, (await Post(owner, packReturnPath + "/returns", packReturn)).StatusCode);
         Assert.Equal(HttpStatusCode.OK, (await Post(owner, packReturnPath + "/returns", packReturn)).StatusCode);
+        var filteredPackRegister = packSalePath + "/business-receipts?locationId=" + locationId + "&receiptId=" + packSaleId;
+        var partialPackRegister = await owner.GetFromJsonAsync<JsonElement>(filteredPackRegister + "&status=Partial%20return");
+        Assert.Equal(1, partialPackRegister.GetProperty("total").GetInt32());
+        Assert.Equal(packSaleId, partialPackRegister.GetProperty("items")[0].GetProperty("id").GetInt64());
+        Assert.Equal("Partial return", partialPackRegister.GetProperty("items")[0].GetProperty("status").GetString());
+        var postedPackRegister = await owner.GetFromJsonAsync<JsonElement>(filteredPackRegister + "&status=Posted");
+        Assert.Equal(0, postedPackRegister.GetProperty("total").GetInt32());
+        Assert.Empty(postedPackRegister.GetProperty("items").EnumerateArray());
         using (var scope = factory.Services.CreateScope())
         {
             var db = scope.ServiceProvider.GetRequiredService<AppDbContext>();
