@@ -107,6 +107,27 @@ public sealed class RetailContactTests
         var customerId = (await customer.Content.ReadFromJsonAsync<JsonElement>())
             .GetProperty("id").GetInt64();
         Assert.True(customerId > 0);
+        var limitPath = customers + "/" + customerId + "/credit-limit";
+        object Limit(decimal value, decimal expected = 0) => new { limit = value, expectedLimit = expected, reason = "Approved credit policy" };
+        Assert.Equal(HttpStatusCode.BadRequest, (await Send(owner, HttpMethod.Put, limitPath, Limit(-1m))).StatusCode);
+        Assert.Equal(HttpStatusCode.BadRequest, (await Send(owner, HttpMethod.Put, limitPath, Limit(1.001m))).StatusCode);
+        Assert.Equal(HttpStatusCode.NotFound, (await Send(manager, HttpMethod.Put, limitPath, Limit(500m))).StatusCode);
+        Assert.Equal(HttpStatusCode.NotFound, (await Send(cashier, HttpMethod.Put, limitPath, Limit(500m))).StatusCode);
+        Assert.Equal(HttpStatusCode.NotFound, (await Send(other, HttpMethod.Put, limitPath, Limit(500m))).StatusCode);
+        Assert.Equal(HttpStatusCode.OK, (await Send(owner, HttpMethod.Put, limitPath, Limit(5000m))).StatusCode);
+        Assert.Equal(HttpStatusCode.Conflict, (await Send(owner, HttpMethod.Put, limitPath, Limit(1000m))).StatusCode);
+        Assert.Equal(HttpStatusCode.OK, (await Send(manager, HttpMethod.Put, customers + "/" + customerId,
+            new { name = "Walk-in Account", phone = "", email = "", isActive = true, creditLimit = 999999m })).StatusCode);
+        var ownerPage = await owner.GetFromJsonAsync<JsonElement>(customers);
+        Assert.Equal(5000m, ownerPage.GetProperty("items")[0].GetProperty("creditLimit").GetDecimal());
+        var managerPage = await manager.GetFromJsonAsync<JsonElement>(customers);
+        Assert.Equal(JsonValueKind.Null, managerPage.GetProperty("items")[0].GetProperty("creditLimit").ValueKind);
+        using (var scope = factory.Services.CreateScope())
+        {
+            var db = scope.ServiceProvider.GetRequiredService<AppDbContext>();
+            Assert.Single(await db.PlatformAuditEvents.Where(x => x.Action == "Customer.CreditLimitChanged" &&
+                x.TargetType == "RetailCustomer" && x.TargetId == customerId).ToListAsync());
+        }
 
         Assert.Equal(HttpStatusCode.Created,
             (await Send(owner, HttpMethod.Post, customers,
@@ -149,6 +170,7 @@ public sealed class RetailContactTests
             (await Send(manager, HttpMethod.Put, customers + "/" + customerId,
                 new { name = "Blocked", phone = "", email = "", isActive = false })).StatusCode);
         Assert.Equal(HttpStatusCode.OK, (await owner.GetAsync(customers)).StatusCode);
+        Assert.Equal(HttpStatusCode.Forbidden, (await Send(owner, HttpMethod.Put, limitPath, Limit(0m, 5000m))).StatusCode);
 
         using (var scope = factory.Services.CreateScope())
         {

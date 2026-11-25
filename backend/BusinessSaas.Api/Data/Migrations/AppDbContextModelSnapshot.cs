@@ -881,6 +881,7 @@ namespace BusinessSaas.Api.Data.Migrations
 
             modelBuilder.Entity("BusinessSaas.Api.Data.RetailCustomer", b =>
                 {
+                    b.Property<decimal>("CreditLimit").HasPrecision(18, 2).HasColumnType("decimal(18,2)");
                     b.Property<string>("Address").HasMaxLength(300).HasColumnType("nvarchar(300)");
                     b.Property<long>("Id")
                         .ValueGeneratedOnAdd()

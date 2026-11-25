@@ -1,3 +1,5 @@
+using System.Data;
+using System.Globalization;
 using System.ComponentModel.DataAnnotations;
 using System.Security.Claims;
 using BusinessSaas.Api.Data;
@@ -109,6 +111,7 @@ public static class RetailContactEndpoints
             if (currentPage is < 1 or > 100000 || term.Length > 100)
                 return Results.BadRequest(new { message = "Invalid search or page." });
 
+            var isOwner = await RetailBillingSettingsEndpoints.OwnerId(db, businessId, user) is not null;
             var query = db.RetailCustomers.AsNoTracking().Where(x => x.BusinessId == businessId);
             if (term.Length > 0) query = query.Where(x =>
                 x.NameKey.Contains(term) || x.Phone.Contains(term) || x.Email.ToUpper().Contains(term));
@@ -116,7 +119,8 @@ public static class RetailContactEndpoints
             var total = await query.CountAsync();
             var items = await query.OrderBy(x => x.NameKey).ThenBy(x => x.Id)
                 .Skip((currentPage - 1) * PageSize).Take(PageSize)
-                .Select(x => new { x.Id, x.Name, x.Phone, x.Email, x.Address, x.IsActive })
+                .Select(x => new { x.Id, x.Name, x.Phone, x.Email, x.Address, x.IsActive,
+                    CreditLimit = isOwner ? (decimal?)x.CreditLimit : null })
                 .ToListAsync();
             return Results.Ok(new { items, total, page = currentPage, pageSize = PageSize });
         });
@@ -166,7 +170,54 @@ public static class RetailContactEndpoints
             await db.SaveChangesAsync();
             return Results.Ok(new { customer.Id, customer.Name, customer.Phone, customer.Email, customer.Address, customer.IsActive });
         });
+        customers.MapPut("/{customerId:long}/credit-limit", async (long businessId, long customerId,
+            CreditLimitRequest request, ClaimsPrincipal user, AppDbContext db) =>
+        {
+            var actor = await RetailBillingSettingsEndpoints.OwnerId(db, businessId, user);
+            if (actor is null) return Results.NotFound();
+            var denied = await RetailMasterEndpoints.CheckAccess(db, user, businessId, true);
+            if (denied is not null) return denied;
+            if (!ValidCreditLimit(request.Limit) || !ValidCreditLimit(request.ExpectedLimit) ||
+                request.Reason?.Trim().Length is not (>= 10 and <= 200))
+                return Results.BadRequest(new { message = "Enter a non-negative credit limit with up to two decimals and a 10–200 character reason." });
+
+            await using var tx = await db.Database.BeginTransactionAsync(IsolationLevel.Serializable);
+            try
+            {
+                var customer = await db.RetailCustomers.SingleOrDefaultAsync(x =>
+                    x.BusinessId == businessId && x.Id == customerId);
+                if (customer is null) return Results.NotFound();
+                if (customer.CreditLimit != request.ExpectedLimit)
+                    return Results.Conflict(new { message = "Credit limit changed. Reload the customer before saving." });
+                if (!customer.IsActive && request.Limit > 0)
+                    return Results.Conflict(new { message = "Activate this customer before setting a positive credit limit." });
+                if (customer.CreditLimit == request.Limit)
+                    return Results.Ok(new { customer.Id, customer.CreditLimit });
+
+                var previous = customer.CreditLimit;
+                customer.CreditLimit = request.Limit;
+                db.PlatformAuditEvents.Add(new PlatformAuditEvent {
+                    ActorUserId = actor.Value, Action = "Customer.CreditLimitChanged",
+                    TargetType = "RetailCustomer", TargetId = customer.Id,
+                    PreviousValue = previous.ToString("0.00", CultureInfo.InvariantCulture),
+                    NewValue = request.Limit.ToString("0.00", CultureInfo.InvariantCulture),
+                    Reason = request.Reason.Trim()
+                });
+                await db.SaveChangesAsync();
+                await tx.CommitAsync();
+                return Results.Ok(new { customer.Id, customer.CreditLimit });
+            }
+            catch (Exception error) when (StockPosting.IsSqlConflict(error))
+            {
+                return Results.Conflict(new { message = "Customer is being updated. Reload and retry." });
+            }
+        });
     }
+
+    private static bool ValidCreditLimit(decimal value) =>
+        value is >= 0 and <= 9999999999.99m && decimal.Round(value, 2) == value;
+
+    private sealed record CreditLimitRequest(decimal Limit, decimal ExpectedLimit, string? Reason);
 
     private static string? Validate(ContactRequest request, bool supplier)
     {

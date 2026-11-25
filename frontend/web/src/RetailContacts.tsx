@@ -1,6 +1,7 @@
 import { useEffect, useRef, useState, type FormEvent } from 'react'
 import { api, post, SessionExpiredError } from './api'
 import { ActionButton, useActionFeedback } from './ActionFeedback'
+import { moneyCents } from './posMoney'
 
 type ContactType = 'suppliers' | 'customers'
 
@@ -10,6 +11,7 @@ interface Contact {
   phone: string
   email: string
   address?: string | null
+  creditLimit?: number | null
   isActive: boolean
 }
 
@@ -22,10 +24,12 @@ interface ContactPage {
 
 const emptyForm = { name: '', phone: '', email: '', address: '', isActive: true }
 
-export default function RetailContacts({ businessId, canOperate, type }: {
+export default function RetailContacts({ businessId, canOperate, type, isOwner, currencyCode }: {
   businessId: number
   canOperate: boolean
   type: ContactType
+  isOwner: boolean
+  currencyCode: string
 }) {
   const { run } = useActionFeedback()
   const [items, setItems] = useState<Contact[]>([])
@@ -36,6 +40,9 @@ export default function RetailContacts({ businessId, canOperate, type }: {
   const [reload, setReload] = useState(0)
   const [form, setForm] = useState(emptyForm)
   const [editingId, setEditingId] = useState<number | null>(null)
+  const [originalLimit, setOriginalLimit] = useState<number | null>(null)
+  const [creditLimit, setCreditLimit] = useState('')
+  const [creditReason, setCreditReason] = useState('')
   const [loading, setLoading] = useState(true)
   const [saving, setSaving] = useState(false)
   const [loadError, setLoadError] = useState('')
@@ -68,12 +75,40 @@ export default function RetailContacts({ businessId, canOperate, type }: {
   function clearForm() {
     setEditingId(null)
     setForm(emptyForm)
+    setOriginalLimit(null)
+    setCreditLimit('')
+    setCreditReason('')
   }
 
   function edit(item: Contact) {
     setEditingId(item.id)
+    setOriginalLimit(item.creditLimit ?? null)
+    setCreditLimit(item.creditLimit == null ? '' : String(item.creditLimit))
+    setCreditReason('')
     setForm({ name: item.name, phone: item.phone, email: item.email, address: item.address ?? '', isActive: item.isActive })
     nameInput.current?.focus()
+  }
+
+  const limitCents = moneyCents(creditLimit)
+  const validCredit = originalLimit !== null && Number.isFinite(limitCents) &&
+    limitCents <= 999999999999 && creditReason.trim().length >= 10 && limitCents / 100 !== originalLimit
+
+  async function saveCredit(event: FormEvent) {
+    event.preventDefault()
+    if (!isOwner || supplier || !canOperate || saving || editingId === null || !validCredit) return
+    setSaving(true)
+    try {
+      await run('Saving credit limit…', 'Credit limit updated.', async () => {
+        const result = await api<{ id: number; creditLimit: number }>(basePath + '/' + editingId + '/credit-limit', {
+          method: 'PUT', body: JSON.stringify({ limit: limitCents / 100, expectedLimit: originalLimit, reason: creditReason.trim() })
+        })
+        setOriginalLimit(result.creditLimit)
+        setCreditLimit(String(result.creditLimit))
+        setCreditReason('')
+      })
+      setReload(value => value + 1)
+    } catch { /* Shared write feedback preserves the input. */ }
+    finally { setSaving(false) }
   }
 
   async function save(event: FormEvent) {
@@ -161,6 +196,27 @@ export default function RetailContacts({ businessId, canOperate, type }: {
           disabled={saving} onClick={() => { clearForm(); nameInput.current?.focus() }}>Cancel edit</button>}
       </form>}
 
+      {!supplier && isOwner && canOperate && editingId !== null && originalLimit !== null &&
+        <form className="border rounded p-2 mb-3" onSubmit={event => void saveCredit(event)}>
+          <h3 className="h6">Credit limit — {items.find(x => x.id === editingId)?.name ?? 'Selected customer'}</h3>
+          <p className="small mb-2">Zero blocks new credit. Credit billing is not released yet. This is a limit, not an outstanding balance.</p>
+          <div className="row g-2 align-items-end">
+            <div className="col-12 col-md-4">
+              <label className="form-label" htmlFor="customer-credit-limit">Credit limit ({currencyCode})</label>
+              <input className="form-control" id="customer-credit-limit" type="number" min="0" max="9999999999.99"
+                step="0.01" required disabled={saving} value={creditLimit} onChange={event => setCreditLimit(event.target.value)} />
+            </div>
+            <div className="col-12 col-md">
+              <label className="form-label" htmlFor="customer-credit-reason">Change reason</label>
+              <input className="form-control" id="customer-credit-reason" required minLength={10} maxLength={200}
+                disabled={saving} value={creditReason} onChange={event => setCreditReason(event.target.value)} />
+            </div>
+            <div className="col-12 col-md-auto">
+              <ActionButton busy={saving} disabled={!validCredit}>Save credit limit</ActionButton>
+            </div>
+          </div>
+        </form>}
+
       <form className="masters-search" onSubmit={event => {
         event.preventDefault()
         setPage(1)
@@ -182,6 +238,7 @@ export default function RetailContacts({ businessId, canOperate, type }: {
               <table className="table table-sm align-middle business-record-table">
                 <thead><tr>
                   <th scope="col">Name</th><th scope="col">Phone</th><th scope="col">Email</th>
+                  {!supplier && isOwner && <th scope="col" className="text-end">Credit limit ({currencyCode})</th>}
                   <th scope="col">Status</th>
                   {canOperate && <th scope="col" className="text-end">Action</th>}
                 </tr></thead>
@@ -189,6 +246,7 @@ export default function RetailContacts({ businessId, canOperate, type }: {
                   <td><strong>{item.name}</strong></td>
                   <td>{item.phone || '—'}</td>
                   <td>{item.email || '—'}</td>
+                  {!supplier && isOwner && <td className="text-end">{item.creditLimit == null ? '—' : item.creditLimit.toFixed(2)}</td>}
                   <td>{item.isActive ? 'Active' : 'Inactive'}</td>
                   {canOperate && <td className="text-end">
                     <button type="button" className="btn btn-sm btn-outline-secondary"

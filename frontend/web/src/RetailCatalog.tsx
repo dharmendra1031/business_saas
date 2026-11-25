@@ -30,6 +30,7 @@ export default function RetailCatalog({ section, businessId, canOperate, currenc
         locations={locations} roleCode={roleCode} currencyCode={currencyCode} />
     case 'suppliers':
     case 'customers':
-      return <RetailContacts type={section} businessId={businessId} canOperate={canOperate} />
+      return <RetailContacts type={section} businessId={businessId} canOperate={canOperate}
+        isOwner={roleCode === 'Owner'} currencyCode={currencyCode} />
   }
 }

@@ -320,6 +320,7 @@ public sealed class RetailSupplier
 
 public sealed class RetailCustomer
 {
+    public decimal CreditLimit { get; set; }
     public string? Address { get; set; }
     public long Id { get; set; }
     public long BusinessId { get; set; }
@@ -817,6 +818,7 @@ public sealed class AppDbContext(DbContextOptions<AppDbContext> options)
 
         builder.Entity<RetailCustomer>(entity =>
         {
+            entity.Property(x => x.CreditLimit).HasPrecision(18, 2);
             entity.Property(x => x.Address).HasMaxLength(300);
             entity.Property(x => x.Name).HasMaxLength(120).IsRequired();
             entity.Property(x => x.NameKey).HasMaxLength(120).IsRequired();

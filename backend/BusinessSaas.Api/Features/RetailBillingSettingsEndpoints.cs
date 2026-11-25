@@ -285,7 +285,7 @@ public static class RetailBillingSettingsEndpoints
         salesPaused = !business.CashSalesEnabled && !business.CreditSalesEnabled
     };
 
-    private static async Task<long?> OwnerId(AppDbContext db, long businessId, ClaimsPrincipal user)
+    internal static async Task<long?> OwnerId(AppDbContext db, long businessId, ClaimsPrincipal user)
     {
         if (!long.TryParse(user.FindFirstValue(ClaimTypes.NameIdentifier), out var actor))
             return null;
