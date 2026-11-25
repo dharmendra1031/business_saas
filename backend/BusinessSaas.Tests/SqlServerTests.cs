@@ -1483,9 +1483,11 @@ public sealed class SqlServerTests(Xunit.Abstractions.ITestOutputHelper output)
         Assert.Equal(20m, foreign.GetProperty("items")[0].GetProperty("salePrice").GetDecimal());
     }
 
-    [Fact]
+    [Theory]
+    [InlineData(10000)]
+    [InlineData(100000)]
     [Trait("Database", "SqlServer")]
-    public async Task Large_invoice_register_preserves_totals_dates_and_return_status()
+    public async Task Large_invoice_register_preserves_totals_dates_and_return_status(int count)
     {
         var connectionString = Environment.GetEnvironmentVariable("SQLSERVER_TEST_CONNECTION");
         if (string.IsNullOrWhiteSpace(connectionString)) return;
@@ -1502,10 +1504,9 @@ public sealed class SqlServerTests(Xunit.Abstractions.ITestOutputHelper output)
         });
         using var owner = factory.CreateClient();
         using var stranger = factory.CreateClient();
-        await RegisterAndLogin(owner, "sql-invoice-scale-owner@example.test");
-        await RegisterAndLogin(stranger, "sql-invoice-scale-stranger@example.test");
-        var id = await BusinessFixtures.SeedAsync(factory.Services, owner, "Scale Invoices", "sql-invoice-scale-20261125");
-        const int count = 10000;
+        await RegisterAndLogin(owner, $"sql-invoice-scale-{count}-owner@example.test");
+        await RegisterAndLogin(stranger, $"sql-invoice-scale-{count}-stranger@example.test");
+        var id = await BusinessFixtures.SeedAsync(factory.Services, owner, $"Scale Invoices {count}", $"sql-invoice-scale-{count}-20261125");
         var firstDay = new DateTime(2026, 11, 1, 6, 0, 0, DateTimeKind.Utc);
         using (var scope = factory.Services.CreateScope())
         {
@@ -1566,23 +1567,24 @@ public sealed class SqlServerTests(Xunit.Abstractions.ITestOutputHelper output)
         {
             var started = System.Diagnostics.Stopwatch.StartNew();
             var result = await owner.GetFromJsonAsync<JsonElement>(path + filter);
-            output.WriteLine($"{label}: {started.Elapsed.TotalMilliseconds:F1} ms");
+            output.WriteLine($"{count} invoices | {label}: {started.Elapsed.TotalMilliseconds:F1} ms");
             return result;
         }
         var first = await Read("All invoices first page", "&page=1");
         Assert.Equal(count, first.GetProperty("total").GetInt32());
-        Assert.Equal(100000m, first.GetProperty("totals")[0].GetProperty("cash").GetDecimal());
+        Assert.Equal(count * 10m, first.GetProperty("totals")[0].GetProperty("cash").GetDecimal());
         Assert.Equal(0m, first.GetProperty("totals")[0].GetProperty("credit").GetDecimal());
         Assert.Equal(10, first.GetProperty("items").GetArrayLength());
-        var last = await Read("All invoices last page", "&page=1000");
+        var last = await Read("All invoices last page", $"&page={count / 10}");
+        Assert.Equal(count, last.GetProperty("total").GetInt32());
         Assert.Equal(10, last.GetProperty("items").GetArrayLength());
         Assert.True(first.GetProperty("items")[0].GetProperty("id").GetInt64() >
             last.GetProperty("items")[0].GetProperty("id").GetInt64());
         Assert.False(last.GetProperty("hasMore").GetBoolean());
         Assert.Equal(first.GetProperty("totals").GetRawText(), last.GetProperty("totals").GetRawText());
         var date = await Read("One day invoices", "&fromDate=2026-11-01&toDate=2026-11-01");
-        Assert.Equal(5000, date.GetProperty("total").GetInt32());
-        Assert.Equal(50000m, date.GetProperty("totals")[0].GetProperty("cash").GetDecimal());
+        Assert.Equal(count / 2, date.GetProperty("total").GetInt32());
+        Assert.Equal(count / 2 * 10m, date.GetProperty("totals")[0].GetProperty("cash").GetDecimal());
         var partial = await Read("Partial return filter", "&status=Partial%20return");
         Assert.Equal(1, partial.GetProperty("total").GetInt32());
         Assert.Equal("Partial return", partial.GetProperty("items")[0].GetProperty("status").GetString());
