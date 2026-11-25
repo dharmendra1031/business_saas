@@ -1,8 +1,9 @@
 import { Plus, Search } from 'lucide-react'
-import { useEffect, useRef, useState, type FormEvent } from 'react'
+import { useEffect, useLayoutEffect, useRef, useState, type FormEvent } from 'react'
 import { api, post, operationKey, SessionExpiredError } from './api'
 import { baseQuantity } from './stockQuantity'
 import LookupDialog from './LookupDialog'
+import { ActionButton } from './ActionFeedback'
 
 interface Supplier {
   id: number
@@ -123,6 +124,18 @@ export default function RetailPurchases({ businessId, canOperate, locations, rol
   const [supplierFormOpen, setSupplierFormOpen] = useState(false)
   const [newSupplier, setNewSupplier] = useState({ name: '', phone: '', email: '' })
   const [addingSupplier, setAddingSupplier] = useState(false)
+  const [supplierError, setSupplierError] = useState('')
+  const supplierDialog = useRef<HTMLDialogElement>(null)
+  const supplierSaving = useRef(false)
+
+  useLayoutEffect(() => {
+    if (!supplierFormOpen) return
+    const dialog = supplierDialog.current
+    if (!dialog) return
+    dialog.showModal()
+    dialog.querySelector<HTMLInputElement>('input')?.focus()
+    return () => { dialog.close() }
+  }, [supplierFormOpen])
   const [productSearch, setProductSearch] = useState('')
   const [products, setProducts] = useState<Product[]>([])
   const [productsLoading, setProductsLoading] = useState(true)
@@ -236,27 +249,36 @@ export default function RetailPurchases({ businessId, canOperate, locations, rol
     return () => { active = false }
   }, [basePath, selectedId, reload])
 
-  async function createSupplier() {
+  function closeSupplierForm() {
+    supplierDialog.current?.close()
+    setSupplierFormOpen(false)
+    setNewSupplier({ name: '', phone: '', email: '' })
+    setSupplierError('')
+  }
+
+  async function createSupplier(event: FormEvent<HTMLFormElement>) {
+    event.preventDefault()
+    if (!canOperate || busy || supplierSaving.current) return
     const name = newSupplier.name.trim()
     const phone = newSupplier.phone.trim()
     const email = newSupplier.email.trim()
-    if (!canOperate || addingSupplier || name.length < 2 || (!phone && !email)) {
-      setError('Enter a supplier name and at least a phone number or email.')
+    if (name.length < 2 || (!phone && !email)) {
+      setSupplierError('Enter a supplier name and a phone number or email.')
       return
     }
+    supplierSaving.current = true
     setAddingSupplier(true)
-    setError('')
+    setSupplierError('')
     try {
       const added = await post<Supplier>(`/businesses/${businessId}/suppliers`, { name, phone, email })
       setSuppliers([added])
       setSupplierId(added.id)
       setSupplierName(added.name)
-      setSupplierFormOpen(false)
-      setNewSupplier({ name: '', phone: '', email: '' })
-      setNotice('Supplier added to this order.')
+      closeSupplierForm()
     } catch (cause) {
-      if (!(cause instanceof SessionExpiredError)) setError(message(cause))
+      if (!(cause instanceof SessionExpiredError)) setSupplierError(message(cause))
     } finally {
+      supplierSaving.current = false
       setAddingSupplier(false)
     }
   }
@@ -269,8 +291,7 @@ export default function RetailPurchases({ businessId, canOperate, locations, rol
     setLookup(null)
     setSuppliers([])
     setSuppliersLoading(true)
-    setSupplierFormOpen(false)
-    setNewSupplier({ name: '', phone: '', email: '' })
+    closeSupplierForm()
     setProductSearch('')
     setProducts([])
     setProductsLoading(true)
@@ -506,45 +527,10 @@ export default function RetailPurchases({ businessId, canOperate, locations, rol
               <button type="button" className="btn btn-outline-secondary" aria-label="Search suppliers"
                 disabled={busy || addingSupplier || resolving}
                 onClick={() => openLookup('supplier')}><Search size={17}/></button>
+              <button type="button" className="btn btn-outline-secondary" aria-label="+ New supplier" title="New supplier"
+                aria-haspopup="dialog" disabled={busy || addingSupplier || resolving}
+                onClick={() => setSupplierFormOpen(true)}><Plus size={17} aria-hidden="true" /></button>
             </div>
-            <button type="button" className="btn btn-sm btn-outline-secondary mt-2"
-              disabled={busy || addingSupplier}
-              onClick={() => {
-                if (supplierFormOpen) setNewSupplier({ name: '', phone: '', email: '' })
-                setSupplierFormOpen(open => !open)
-              }}>
-              {supplierFormOpen ? 'Cancel adding supplier' : '+ New supplier'}
-            </button>
-            {supplierFormOpen && <div className="mt-3" role="group" aria-label="New supplier"
-              onKeyDown={event => {
-                if (event.key === 'Enter' && event.target instanceof HTMLInputElement)
-                  event.preventDefault()
-              }}>
-              <div className="mb-2">
-                <label className="form-label" htmlFor="new-supplier-name">Supplier name *</label>
-                <input className="form-control" id="new-supplier-name" minLength={2} maxLength={120}
-                  value={newSupplier.name} onChange={event =>
-                    setNewSupplier(value => ({ ...value, name: event.target.value }))} />
-              </div>
-              <div className="mb-2">
-                <label className="form-label" htmlFor="new-supplier-phone">Phone (or email)</label>
-                <input className="form-control" id="new-supplier-phone" type="tel" maxLength={25}
-                  value={newSupplier.phone} onChange={event =>
-                    setNewSupplier(value => ({ ...value, phone: event.target.value }))} />
-              </div>
-              <div className="mb-2">
-                <label className="form-label" htmlFor="new-supplier-email">Email (or phone)</label>
-                <input className="form-control" id="new-supplier-email" type="email" maxLength={160}
-                  value={newSupplier.email} onChange={event =>
-                    setNewSupplier(value => ({ ...value, email: event.target.value }))} />
-              </div>
-              <button type="button" className="btn btn-outline-primary"
-                disabled={addingSupplier || newSupplier.name.trim().length < 2 ||
-                  (!newSupplier.phone.trim() && !newSupplier.email.trim())}
-                onClick={() => void createSupplier()}>
-                {addingSupplier ? 'Saving supplier…' : 'Save supplier'}
-              </button>
-            </div>}
           </div>
         </div>
         <div className="mt-3">
@@ -641,6 +627,45 @@ export default function RetailPurchases({ businessId, canOperate, locations, rol
           onSelect={id => { const item = products.find(x => x.id === id); if (item) addLine(item) }}
           onClose={() => setLookup(null)} />}
       </form>}
+
+      {creating && supplierFormOpen && <dialog ref={supplierDialog} className="entry-dialog" aria-labelledby="new-supplier-heading"
+        onCancel={event => { event.preventDefault(); if (!supplierSaving.current) closeSupplierForm() }}
+        onKeyDownCapture={event => {
+          if (event.key === 'Escape') {
+            event.preventDefault()
+            event.stopPropagation()
+            if (!supplierSaving.current) closeSupplierForm()
+          }
+        }}>
+        <h3 id="new-supplier-heading" className="h5 mb-3">New supplier</h3>
+        <form aria-busy={addingSupplier} onSubmit={event => void createSupplier(event)}>
+          <fieldset disabled={addingSupplier}>
+            <div className="mb-3">
+              <label className="form-label" htmlFor="new-supplier-name">Supplier name *</label>
+              <input className="form-control" id="new-supplier-name" required minLength={2} maxLength={120}
+                value={newSupplier.name} onChange={event => setNewSupplier(value => ({ ...value, name: event.target.value }))} />
+            </div>
+            <div className="mb-3">
+              <label className="form-label" htmlFor="new-supplier-phone">Phone</label>
+              <input className="form-control" id="new-supplier-phone" type="tel" maxLength={25}
+                value={newSupplier.phone} onChange={event => setNewSupplier(value => ({ ...value, phone: event.target.value }))} />
+            </div>
+            <div className="mb-2">
+              <label className="form-label" htmlFor="new-supplier-email">Email</label>
+              <input className="form-control" id="new-supplier-email" type="email" maxLength={160}
+                value={newSupplier.email} onChange={event => setNewSupplier(value => ({ ...value, email: event.target.value }))} />
+            </div>
+          </fieldset>
+          <p className="small mb-2">Enter a phone number or email.</p>
+          {supplierError && <p className="text-danger small" role="alert">{supplierError}</p>}
+          <div className="d-flex justify-content-end gap-2 mt-3">
+            <button type="button" className="btn btn-outline-secondary" disabled={addingSupplier}
+              aria-label="Cancel adding supplier" onClick={closeSupplierForm}>Cancel</button>
+            <ActionButton busy={addingSupplier} busyLabel="Saving supplier…"
+              disabled={newSupplier.name.trim().length < 2 || (!newSupplier.phone.trim() && !newSupplier.email.trim())}>Save supplier</ActionButton>
+          </div>
+        </form>
+      </dialog>}
 
       {!creating && selectedId === null && <div className="product-form">
         <h3>Purchase order list</h3>

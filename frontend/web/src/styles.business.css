@@ -312,12 +312,14 @@
 /* Purchase entry uses a scrollable line table and one lookup field in its next row. */
 .purchase-entry-table { min-width: 680px; }
 .purchase-entry-table input[type="number"] { min-width: 90px; }
-/* Native lookup dialogs share one table and one search field. */
-.lookup-dialog { width: min(900px, calc(100vw - 24px)); height: min(680px, calc(100dvh - 24px));
-  max-width: calc(100vw - 24px); max-height: calc(100dvh - 24px); margin: auto;
+/* Native dialogs stay outside the underlying form layout. */
+.lookup-dialog, .entry-dialog { max-width: calc(100vw - 24px); max-height: calc(100dvh - 24px); margin: auto;
   padding: 16px; border: 1px solid #b8b8b8; border-radius: 8px; background: #fff; color: #000; }
-.lookup-dialog[open] { position: fixed; inset: 0; display: flex; flex-direction: column; overflow: hidden; }
-.lookup-dialog::backdrop { background: rgba(0,0,0,.45); }
+.lookup-dialog { width: min(900px, calc(100vw - 24px)); height: min(680px, calc(100dvh - 24px)); }
+.entry-dialog { width: min(440px, calc(100vw - 24px)); overflow: auto; }
+.lookup-dialog[open], .entry-dialog[open] { position: fixed; inset: 0; }
+.lookup-dialog[open] { display: flex; flex-direction: column; overflow: hidden; }
+.lookup-dialog::backdrop, .entry-dialog::backdrop { background: rgba(0,0,0,.45); }
 .lookup-dialog > :not(.lookup-results) { flex-shrink: 0; }
 .lookup-results { flex: 1 1 auto; min-height: 0; overflow: auto; }
 .lookup-status { min-height: 1.25rem; }
