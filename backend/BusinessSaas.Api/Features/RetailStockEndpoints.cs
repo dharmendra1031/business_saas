@@ -1,3 +1,4 @@
+using System.Data;
 using System.Data.Common;
 using System.Security.Claims;
 using BusinessSaas.Api.Data;
@@ -117,45 +118,48 @@ public static class RetailStockEndpoints
                 decimal.Round(request.Quantity, 3) != request.Quantity)
                 return Results.BadRequest(new { message = "Quantity must be 0 or more, with at most 3 decimal places." });
 
-            if (!await db.RetailProducts.AnyAsync(x =>
-                    x.BusinessId == businessId && x.Id == request.ProductId && x.IsActive))
-                return Results.NotFound();
-
-            if (await db.RetailStockBalances.AnyAsync(x => x.BusinessId == businessId &&
-                x.LocationId == locationId && x.ProductId == request.ProductId))
-                return Results.Conflict(new { message = "Stock already exists. Use a reviewed adjustment workflow." });
-
-            var actorUserId = long.Parse(user.FindFirstValue(ClaimTypes.NameIdentifier)!);
-            var balance = new RetailStockBalance
-            {
-                BusinessId = businessId, LocationId = locationId,
-                ProductId = request.ProductId, Quantity = request.Quantity
-            };
-            var movement = new RetailStockMovement
-            {
-                BusinessId = businessId, LocationId = locationId,
-                ProductId = request.ProductId, ActorUserId = actorUserId,
-                SourceType = "Opening", QuantityChange = request.Quantity,
-                BalanceAfter = request.Quantity
-            };
-
-            await using var transaction = await db.Database.BeginTransactionAsync();
-            db.RetailStockBalances.Add(balance);
-            db.RetailStockMovements.Add(movement);
+            await using var transaction = await db.Database.BeginTransactionAsync(
+                db.Database.IsSqlServer() ? IsolationLevel.RepeatableRead : IsolationLevel.Serializable);
             try
             {
+                if (!await db.RetailProducts.AnyAsync(x =>
+                        x.BusinessId == businessId && x.Id == request.ProductId && x.IsActive))
+                    return Results.NotFound();
+
+                if (await db.RetailStockBalances.AnyAsync(x => x.BusinessId == businessId &&
+                    x.LocationId == locationId && x.ProductId == request.ProductId))
+                    return Results.Conflict(new { message = "Stock already exists. Use a reviewed adjustment workflow." });
+
+                var actorUserId = long.Parse(user.FindFirstValue(ClaimTypes.NameIdentifier)!);
+                var balance = new RetailStockBalance
+                {
+                    BusinessId = businessId, LocationId = locationId,
+                    ProductId = request.ProductId, Quantity = request.Quantity
+                };
+                var movement = new RetailStockMovement
+                {
+                    BusinessId = businessId, LocationId = locationId,
+                    ProductId = request.ProductId, ActorUserId = actorUserId,
+                    SourceType = "Opening", QuantityChange = request.Quantity,
+                    BalanceAfter = request.Quantity
+                };
+
+                db.RetailStockBalances.Add(balance);
+                db.RetailStockMovements.Add(movement);
                 await db.SaveChangesAsync();
                 await transaction.CommitAsync();
+                return Results.Created(
+                    $"/api/businesses/{businessId}/stock/locations/{locationId}/movements?productId={request.ProductId}",
+                    new { movement.Id, movement.ProductId, movement.QuantityChange, movement.BalanceAfter });
             }
             catch (DbUpdateException ex) when (RetailModule.IsDuplicateKey(ex) || ex.InnerException is DbException { ErrorCode: 19 })
             {
-                await transaction.RollbackAsync();
                 return Results.Conflict(new { message = "Opening stock already posted." });
             }
-
-            return Results.Created(
-                $"/api/businesses/{businessId}/stock/locations/{locationId}/movements?productId={request.ProductId}",
-                new { movement.Id, movement.ProductId, movement.QuantityChange, movement.BalanceAfter });
+            catch (Exception ex) when (StockPosting.IsSqlConflict(ex))
+            {
+                return Results.Conflict(new { message = "Product or stock is being updated. Refresh and retry." });
+            }
         });
     }
 

@@ -93,60 +93,63 @@ public static class RetailPurchaseEndpoints
                 x.Id == request.SupplierId && x.BusinessId == businessId && x.IsActive))
                 return Results.NotFound();
 
-            var ids = request.Lines.Select(x => x.ProductId).ToArray();
-            var products = await db.RetailProducts.AsNoTracking()
-                .Where(x => x.BusinessId == businessId && x.IsActive && ids.Contains(x.Id))
-                .Include(x => x.Conversions).ToDictionaryAsync(x => x.Id);
-            if (products.Count != ids.Length)
-                return Results.BadRequest(new { message = "Select active products from this business." });
-
-            var alternateIds = request.Lines.Where(x => x.UnitId.HasValue).Select(x => x.UnitId!.Value).Distinct().ToArray();
-            var alternateUnits = await db.RetailUnits.AsNoTracking()
-                .Where(x => x.BusinessId == businessId && x.IsActive && alternateIds.Contains(x.Id))
-                .ToDictionaryAsync(x => x.Id);
-            var orderLines = new List<RetailPurchaseOrderLine>();
-            foreach (var line in request.Lines)
-            {
-                var product = products[line.ProductId];
-                decimal? factor = null;
-                string? unitCode = null;
-                if (line.UnitId is long alternateId)
-                {
-                    var conversion = product.Conversions.SingleOrDefault(x => x.UnitId == alternateId);
-                    if (alternateId == product.UnitId || conversion is null ||
-                        !alternateUnits.TryGetValue(alternateId, out var alternate))
-                        return Results.BadRequest(new { message = "Select an active alternate unit configured for this product." });
-                    if (conversion.Factor != line.ExpectedFactor)
-                        return Results.Conflict(new { message = "Unit conversion changed. Refresh the product and verify its quantity and cost." });
-                    factor = conversion.Factor;
-                    unitCode = alternate.Code;
-                }
-                if (!ValidBaseQuantity(line.Quantity, factor ?? 1m))
-                    return Results.BadRequest(new { message = "Converted stock quantity must be positive, within the stock limit and exact to three decimals." });
-                orderLines.Add(new RetailPurchaseOrderLine
-                {
-                    ProductId = line.ProductId, OrderedQuantity = line.Quantity, UnitCost = line.UnitCost,
-                    SelectedUnitId = line.UnitId, SelectedUnitCode = unitCode, ConversionFactor = factor
-                });
-            }
-
-            await using var transaction = await db.Database.BeginTransactionAsync();
-            var order = new RetailPurchaseOrder
-            {
-                BusinessId = businessId,
-                LocationId = request.LocationId,
-                SupplierId = request.SupplierId,
-                CreatedByUserId = userId,
-                CreationKey = requestKey
-            };
-            db.RetailPurchaseOrders.Add(order);
+            await using var transaction = await db.Database.BeginTransactionAsync(
+                db.Database.IsSqlServer() ? IsolationLevel.RepeatableRead : IsolationLevel.Serializable);
             try
             {
+                var ids = request.Lines.Select(x => x.ProductId).ToArray();
+                var products = await db.RetailProducts.AsNoTracking()
+                    .Where(x => x.BusinessId == businessId && x.IsActive && ids.Contains(x.Id))
+                    .Include(x => x.Conversions).ToDictionaryAsync(x => x.Id);
+                if (products.Count != ids.Length)
+                    return Results.BadRequest(new { message = "Select active products from this business." });
+
+                var alternateIds = request.Lines.Where(x => x.UnitId.HasValue).Select(x => x.UnitId!.Value).Distinct().ToArray();
+                var alternateUnits = await db.RetailUnits.AsNoTracking()
+                    .Where(x => x.BusinessId == businessId && x.IsActive && alternateIds.Contains(x.Id))
+                    .ToDictionaryAsync(x => x.Id);
+                var orderLines = new List<RetailPurchaseOrderLine>();
+                foreach (var line in request.Lines)
+                {
+                    var product = products[line.ProductId];
+                    decimal? factor = null;
+                    string? unitCode = null;
+                    if (line.UnitId is long alternateId)
+                    {
+                        var conversion = product.Conversions.SingleOrDefault(x => x.UnitId == alternateId);
+                        if (alternateId == product.UnitId || conversion is null ||
+                            !alternateUnits.TryGetValue(alternateId, out var alternate))
+                            return Results.BadRequest(new { message = "Select an active alternate unit configured for this product." });
+                        if (conversion.Factor != line.ExpectedFactor)
+                            return Results.Conflict(new { message = "Unit conversion changed. Refresh the product and verify its quantity and cost." });
+                        factor = conversion.Factor;
+                        unitCode = alternate.Code;
+                    }
+                    if (!ValidBaseQuantity(line.Quantity, factor ?? 1m))
+                        return Results.BadRequest(new { message = "Converted stock quantity must be positive, within the stock limit and exact to three decimals." });
+                    orderLines.Add(new RetailPurchaseOrderLine
+                    {
+                        ProductId = line.ProductId, OrderedQuantity = line.Quantity, UnitCost = line.UnitCost,
+                        SelectedUnitId = line.UnitId, SelectedUnitCode = unitCode, ConversionFactor = factor
+                    });
+                }
+
+                 var order = new RetailPurchaseOrder
+                {
+                    BusinessId = businessId,
+                    LocationId = request.LocationId,
+                    SupplierId = request.SupplierId,
+                    CreatedByUserId = userId,
+                    CreationKey = requestKey
+                };
+                db.RetailPurchaseOrders.Add(order);
                 await db.SaveChangesAsync();
                 foreach (var line in orderLines) line.PurchaseOrderId = order.Id;
                 db.RetailPurchaseOrderLines.AddRange(orderLines);
                 await db.SaveChangesAsync();
                 await transaction.CommitAsync();
+                return Results.Created($"/api/businesses/{businessId}/purchase-orders/{order.Id}",
+                    new { order.Id, order.Status });
             }
             catch (DbUpdateException error) when (RetailModule.IsDuplicateKey(error))
             {
@@ -162,8 +165,10 @@ public static class RetailPurchaseEndpoints
 
                 return Results.Conflict(new { message = "Purchase order already exists or the request changed." });
             }
-            return Results.Created($"/api/businesses/{businessId}/purchase-orders/{order.Id}",
-                new { order.Id, order.Status });
+            catch (Exception error) when (StockPosting.IsSqlConflict(error))
+            {
+                return Results.Conflict(new { message = "Product or order is being updated. Retry the same purchase request." });
+            }
         });
 
         group.MapGet("/{orderId:long}", async (long businessId, long orderId,

@@ -1,3 +1,4 @@
+using System.Data;
 using System.Security.Claims;
 using BusinessSaas.Api.Data;
 using Microsoft.EntityFrameworkCore;
@@ -172,66 +173,74 @@ public static class RetailProductEndpoints
             var denied = await RetailMasterEndpoints.CheckAccess(db, user, businessId, true);
             if (denied is not null) return denied;
 
-            var product = await db.RetailProducts.Include(x => x.Conversions).SingleOrDefaultAsync(
-                x => x.BusinessId == businessId && x.Id == productId);
-            if (product is null) return Results.NotFound();
+            await using var transaction = await db.Database.BeginTransactionAsync(IsolationLevel.Serializable);
+            try
+            {
+                var product = await db.RetailProducts.Include(x => x.Conversions).SingleOrDefaultAsync(
+                    x => x.BusinessId == businessId && x.Id == productId);
+                if (product is null) return Results.NotFound();
 
-            var error = Validate(request);
-            if (error is not null || request.IsActive is null)
-                return Results.BadRequest(new { message = error ?? "Select a product status." });
+                var error = Validate(request);
+                if (error is not null || request.IsActive is null)
+                    return Results.BadRequest(new { message = error ?? "Select a product status." });
 
-            var sku = request.Sku!.Trim().ToUpperInvariant();
-            var barcode = NormalizeBarcode(request.Barcode);
-            if (await db.RetailProducts.AnyAsync(x => x.BusinessId == businessId &&
-                x.Id != productId && (x.Sku == sku || barcode != null && x.Barcode == barcode)))
-                return Results.Conflict(new { message = "SKU or barcode is already used in this business." });
+                var sku = request.Sku!.Trim().ToUpperInvariant();
+                var barcode = NormalizeBarcode(request.Barcode);
+                if (await db.RetailProducts.AnyAsync(x => x.BusinessId == businessId &&
+                    x.Id != productId && (x.Sku == sku || barcode != null && x.Barcode == barcode)))
+                    return Results.Conflict(new { message = "SKU or barcode is already used in this business." });
 
-            // Existing active products may retain inactive historical masters when editing.
-            // Newly selected masters (or reactivating a product) must still be active.
-            var retainExisting = product.IsActive && request.IsActive.Value;
-            if (!await ValidReferences(db, businessId, request.CategoryId, request.UnitId,
-                request.BrandId, request.IsActive.Value,
-                retainExisting ? product.CategoryId : null,
-                retainExisting ? product.UnitId : null,
-                retainExisting ? product.BrandId : null))
-                return Results.BadRequest(new { message = "Select a valid category and unit from this business. Active products need active masters." });
+                // Existing active products may retain inactive historical masters when editing.
+                // Newly selected masters (or reactivating a product) must still be active.
+                var retainExisting = product.IsActive && request.IsActive.Value;
+                if (!await ValidReferences(db, businessId, request.CategoryId, request.UnitId,
+                    request.BrandId, request.IsActive.Value,
+                    retainExisting ? product.CategoryId : null,
+                    retainExisting ? product.UnitId : null,
+                    retainExisting ? product.BrandId : null))
+                    return Results.BadRequest(new { message = "Select a valid category and unit from this business. Active products need active masters." });
 
-            if (product.UnitId != request.UnitId && product.Conversions.Count > 0)
-                return Results.Conflict(new { message = "Remove alternate units and save before changing the base stock unit." });
-            if (!await ValidConversions(db, businessId, request.UnitId, request.Conversions, product.Conversions))
-                return Results.BadRequest(new { message = "Choose distinct active alternate units with positive factors of up to three decimals." });
+                if (product.UnitId != request.UnitId && product.Conversions.Count > 0)
+                    return Results.Conflict(new { message = "Remove alternate units and save before changing the base stock unit." });
+                if (!await ValidConversions(db, businessId, request.UnitId, request.Conversions, product.Conversions))
+                    return Results.BadRequest(new { message = "Choose distinct active alternate units with positive factors of up to three decimals." });
 
-            if (product.UnitId != request.UnitId &&
-                (await db.RetailPurchaseOrderLines.AsNoTracking().AnyAsync(x => x.ProductId == productId) ||
-                 await db.RetailStockBalances.AsNoTracking().AnyAsync(x =>
-                     x.BusinessId == businessId && x.ProductId == productId) ||
-                 await db.RetailStockMovements.AsNoTracking().AnyAsync(x =>
-                     x.BusinessId == businessId && x.ProductId == productId) ||
-                 await db.RetailStockAdjustments.AsNoTracking().AnyAsync(x =>
-                     x.BusinessId == businessId && x.ProductId == productId) ||
-                 await db.Set<RetailCashSaleLine>().AsNoTracking().AnyAsync(x => x.ProductId == productId)))
-                return Results.Conflict(new { message =
-                    "Stock unit cannot change after a purchase, stock entry, adjustment or sale. Create a new product for a different base unit." });
+                if (product.UnitId != request.UnitId &&
+                    (await db.RetailPurchaseOrderLines.AsNoTracking().AnyAsync(x => x.ProductId == productId) ||
+                     await db.RetailStockBalances.AsNoTracking().AnyAsync(x =>
+                         x.BusinessId == businessId && x.ProductId == productId) ||
+                     await db.RetailStockMovements.AsNoTracking().AnyAsync(x =>
+                         x.BusinessId == businessId && x.ProductId == productId) ||
+                     await db.RetailStockAdjustments.AsNoTracking().AnyAsync(x =>
+                         x.BusinessId == businessId && x.ProductId == productId) ||
+                     await db.Set<RetailCashSaleLine>().AsNoTracking().AnyAsync(x => x.ProductId == productId)))
+                    return Results.Conflict(new { message =
+                        "Stock unit cannot change after a purchase, stock entry, adjustment or sale. Create a new product for a different base unit." });
 
-            product.Name = request.Name!.Trim();
-            product.Sku = sku;
-            product.Barcode = barcode;
-            product.CategoryId = request.CategoryId;
-            product.UnitId = request.UnitId;
-            product.BrandId = request.BrandId;
-            product.SalePrice = request.SalePrice;
-            product.ReorderLevel = request.ReorderLevel;
-            product.TaxClassification = NormalizeCode(request.TaxClassification);
-            product.IsActive = request.IsActive.Value;
-            ApplyConversions(product, request.Conversions);
+                product.Name = request.Name!.Trim();
+                product.Sku = sku;
+                product.Barcode = barcode;
+                product.CategoryId = request.CategoryId;
+                product.UnitId = request.UnitId;
+                product.BrandId = request.BrandId;
+                product.SalePrice = request.SalePrice;
+                product.ReorderLevel = request.ReorderLevel;
+                product.TaxClassification = NormalizeCode(request.TaxClassification);
+                product.IsActive = request.IsActive.Value;
+                ApplyConversions(product, request.Conversions);
 
-            try { await db.SaveChangesAsync(); }
+                await db.SaveChangesAsync();
+                await transaction.CommitAsync();
+                return Results.Ok(new { product.Id });
+            }
             catch (DbUpdateException exception) when (RetailModule.IsDuplicateKey(exception))
             {
                 return Results.Conflict(new { message = "SKU or barcode is already used in this business." });
             }
-
-            return Results.Ok(new { product.Id });
+            catch (Exception exception) when (StockPosting.IsSqlConflict(exception))
+            {
+                return Results.Conflict(new { message = "Product or stock is being updated. Refresh and retry." });
+            }
         });
     }
 
