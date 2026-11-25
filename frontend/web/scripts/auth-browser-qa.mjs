@@ -186,6 +186,9 @@ async function scenario(name, {
           categoryName: 'General', unitId: 1, unitCode: 'ITEM', salePrice: 220,
           taxClassification: '', reorderLevel: null, isActive: false }
       ]
+      const code = params.get('code')
+      if (code) items = items.filter(item => item.sku === code.toUpperCase())
+      if (params.has('locationId')) items = items.map(item => ({ ...item, availableStock: 0 }))
       const term = (params.get('search') ?? '').toLowerCase()
       if (term) items = items.filter(item =>
         item.name.toLowerCase().includes(term) || item.sku.toLowerCase().includes(term) ||
@@ -488,7 +491,15 @@ try {
     assert.deepEqual(await purchaseLayout(), originalLayout, 'Supplier lookup must not shift the form or change page height')
     await t.page.keyboard.press('Escape')
     await t.page.getByRole('button', { name: 'Search items' }).click()
-    await t.page.getByRole('dialog', { name: 'Search items' }).getByRole('button', { name: /Blue Shirt/ }).waitFor()
+    const itemLookup = t.page.getByRole('dialog', { name: 'Search items' })
+    await itemLookup.getByRole('button', { name: /Blue Shirt/ }).waitFor()
+    await itemLookup.getByRole('columnheader', { name: 'Available stock' }).waitFor()
+    assert.equal(await itemLookup.getByRole('row').filter({ hasText: 'Blue Shirt' }).locator('td').last().innerText(), '0')
+    await itemLookup.getByText('Location: Main Shop').waitFor()
+    const dialogHeight = (await itemLookup.boundingBox()).height
+    await itemLookup.getByRole('searchbox').fill('does not exist')
+    await itemLookup.getByText('No selectable items on this page').waitFor()
+    assert.equal((await itemLookup.boundingBox()).height, dialogHeight, 'Search results must not resize the popup')
     assert.deepEqual(await purchaseLayout(), originalLayout, 'Item lookup must not shift the form or change page height')
     await t.page.keyboard.press('Escape')
     assert.equal(await t.page.getByRole('dialog').count(), 0)

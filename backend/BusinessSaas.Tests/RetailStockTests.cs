@@ -122,6 +122,18 @@ public sealed class RetailStockTests
         Assert.Equal(12.125m, stock.GetProperty("items")[0].GetProperty("quantity").GetDecimal());
         Assert.Equal("PCS", stock.GetProperty("items")[0].GetProperty("unitCode").GetString());
 
+        var lookup = $"/api/businesses/{businessId}/products?code=STOCK-100&status=active&locationId=";
+        var primaryLookup = await manager.GetFromJsonAsync<JsonElement>(lookup + locationId);
+        Assert.Equal(1, primaryLookup.GetProperty("total").GetInt32());
+        Assert.Equal(12.125m, primaryLookup.GetProperty("items")[0].GetProperty("availableStock").GetDecimal());
+        var secondaryLookup = await owner.GetFromJsonAsync<JsonElement>(lookup + secondLocationId);
+        Assert.Equal(0m, secondaryLookup.GetProperty("items")[0].GetProperty("availableStock").GetDecimal());
+        Assert.Equal(HttpStatusCode.NotFound, (await manager.GetAsync(lookup + secondLocationId)).StatusCode);
+        Assert.Equal(HttpStatusCode.NotFound, (await other.GetAsync(lookup + locationId)).StatusCode);
+        Assert.Equal(HttpStatusCode.NotFound, (await cashier.GetAsync(lookup + locationId)).StatusCode);
+        var noLocation = await owner.GetFromJsonAsync<JsonElement>($"/api/businesses/{businessId}/products?code=STOCK-100");
+        Assert.Equal(JsonValueKind.Null, noLocation.GetProperty("items")[0].GetProperty("availableStock").ValueKind);
+
         var history = await owner.GetFromJsonAsync<JsonElement>(
             path + $"/movements?productId={product}&page=1");
         Assert.Equal(1, history.GetProperty("total").GetInt32());

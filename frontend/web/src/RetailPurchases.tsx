@@ -7,6 +7,8 @@ import LookupDialog from './LookupDialog'
 interface Supplier {
   id: number
   name: string
+  phone?: string
+  email?: string
   isActive: boolean
 }
 
@@ -18,12 +20,14 @@ interface Product {
   sku: string
   unitCode?: string
   conversions?: AlternateUnit[]
+  availableStock?: number | null
   isActive: boolean
 }
 
 interface Page<T> {
   items: T[]
   total: number
+  pageSize?: number
 }
 
 interface OrderRow {
@@ -109,6 +113,10 @@ export default function RetailPurchases({ businessId, canOperate, locations, rol
   const [supplierName, setSupplierName] = useState('')
   const [lookup, setLookup] = useState<'supplier' | 'product' | null>(null)
   const [resolving, setResolving] = useState(false)
+  const [lookupPage, setLookupPage] = useState(1)
+  const [lookupTotal, setLookupTotal] = useState(0)
+  const [lookupPageSize, setLookupPageSize] = useState(20)
+  const [lookupError, setLookupError] = useState('')
   const [suppliers, setSuppliers] = useState<Supplier[]>([])
   const [suppliersLoading, setSuppliersLoading] = useState(true)
   const [supplierId, setSupplierId] = useState(0)
@@ -156,30 +164,59 @@ export default function RetailPurchases({ businessId, canOperate, locations, rol
   }, [basePath, page, reload, approvalsOnly])
 
   useEffect(() => {
-    if (!creating || lookup !== 'supplier') return
-    let active = true
-    setSuppliersLoading(true)
-    const timer = setTimeout(() => {
-      api<Page<Supplier>>(`/businesses/${businessId}/suppliers?search=${encodeURIComponent(supplierSearch.trim())}&page=1`)
-        .then(data => { if (active) setSuppliers(data.items.filter(x => x.isActive)) })
-        .catch(cause => { if (active && !(cause instanceof SessionExpiredError)) setError(message(cause)) })
-        .finally(() => { if (active) setSuppliersLoading(false) })
-    }, 250)
-    return () => { active = false; clearTimeout(timer) }
-  }, [businessId, supplierSearch, reload, creating, lookup])
+    if (!creating || !lookup) return
+    const controller = new AbortController()
+    const supplier = lookup === 'supplier'
+    const term = supplier ? supplierSearch : productSearch
+    setLookupError('')
+    setLookupTotal(0)
+    setSuppliers([])
+    setProducts([])
+    setSuppliersLoading(supplier)
+    setProductsLoading(!supplier)
+    const timer = setTimeout(async () => {
+      try {
+        const query = new URLSearchParams({ search: term.trim(), page: String(lookupPage) })
+        if (supplier) {
+          const data = await api<Page<Supplier>>(`/businesses/${businessId}/suppliers?${query}`, { signal: controller.signal })
+          if (controller.signal.aborted) return
+          setSuppliers(data.items.filter(item => item.isActive))
+          setLookupTotal(data.total)
+          setLookupPageSize(data.pageSize ?? 20)
+        } else {
+          query.set('status', 'active')
+          query.set('locationId', String(locationId))
+          const data = await api<Page<Product>>(`/businesses/${businessId}/products?${query}`, { signal: controller.signal })
+          if (controller.signal.aborted) return
+          setProducts(data.items.filter(item => item.isActive))
+          setLookupTotal(data.total)
+          setLookupPageSize(data.pageSize ?? 20)
+        }
+      } catch (cause) {
+        if (!controller.signal.aborted && !(cause instanceof SessionExpiredError)) setLookupError(message(cause))
+      } finally {
+        if (!controller.signal.aborted) { setSuppliersLoading(false); setProductsLoading(false) }
+      }
+    }, 200)
+    return () => { clearTimeout(timer); controller.abort() }
+  }, [businessId, supplierSearch, productSearch, locationId, reload, creating, lookup, lookupPage])
 
-  useEffect(() => {
-    if (!creating || lookup !== 'product') return
-    let active = true
-    setProductsLoading(true)
-    const timer = setTimeout(() => {
-      api<Page<Product>>(`/businesses/${businessId}/products?search=${encodeURIComponent(productSearch.trim())}&page=1`)
-        .then(data => { if (active) setProducts(data.items.filter(x => x.isActive)) })
-        .catch(cause => { if (active && !(cause instanceof SessionExpiredError)) setError(message(cause)) })
-        .finally(() => { if (active) setProductsLoading(false) })
-    }, 250)
-    return () => { active = false; clearTimeout(timer) }
-  }, [businessId, productSearch, reload, creating, lookup])
+  function openLookup(kind: 'supplier' | 'product') {
+    setLookupPage(1)
+    setLookupTotal(0)
+    setLookupError('')
+    if (kind === 'supplier') { setSupplierSearch(''); setSuppliers([]); setSuppliersLoading(true) }
+    else { setProducts([]); setProductsLoading(true) }
+    setLookup(kind)
+  }
+
+  function changeLookupPage(next: number) {
+    setSuppliers([])
+    setProducts([])
+    setSuppliersLoading(lookup === 'supplier')
+    setProductsLoading(lookup === 'product')
+    setLookupPage(next)
+  }
 
   useEffect(() => {
     if (selectedId === null) return
@@ -256,19 +293,17 @@ export default function RetailPurchases({ businessId, canOperate, locations, rol
   async function resolveItemCode() {
     const code = productSearch.trim()
     if (busy || resolving || lines.length >= 50) return
-    if (!code) { setLookup('product'); return }
+    if (!code) { openLookup('product'); return }
     setResolving(true)
     setError('')
     try {
-      const result = await api<Page<Product>>(`/businesses/${businessId}/products?search=${encodeURIComponent(code)}&status=active&page=1`)
+      const result = await api<Page<Product>>(`/businesses/${businessId}/products?code=${encodeURIComponent(code)}&status=active&page=1`)
       const match = result.items.find(item => item.isActive && item.sku.toUpperCase() === code.toUpperCase())
       if (match) {
         if (lines.some(line => line.productId === match.id)) setError('This item is already in the order.')
         else addLine(match)
       } else {
-        setProducts([])
-        setProductsLoading(true)
-        setLookup('product')
+        openLookup('product')
       }
     } catch (cause) {
       if (!(cause instanceof SessionExpiredError)) setError(message(cause))
@@ -466,11 +501,11 @@ export default function RetailPurchases({ businessId, canOperate, locations, rol
             <div className="input-group">
               <input id="purchase-supplier" className="form-control" readOnly value={supplierName}
                 placeholder="Select supplier" disabled={busy || addingSupplier || resolving}
-                onClick={() => { setSupplierSearch(''); setSuppliers([]); setSuppliersLoading(true); setLookup('supplier') }}
+                onClick={() => openLookup('supplier')}
                 onKeyDown={event => { if (event.key === 'Enter') { event.preventDefault(); setSupplierSearch(''); setSuppliers([]); setSuppliersLoading(true); setLookup('supplier') } }} />
               <button type="button" className="btn btn-outline-secondary" aria-label="Search suppliers"
                 disabled={busy || addingSupplier || resolving}
-                onClick={() => { setSupplierSearch(''); setSuppliers([]); setSuppliersLoading(true); setLookup('supplier') }}><Search size={17}/></button>
+                onClick={() => openLookup('supplier')}><Search size={17}/></button>
             </div>
             <button type="button" className="btn btn-sm btn-outline-secondary mt-2"
               disabled={busy || addingSupplier}
@@ -556,7 +591,7 @@ export default function RetailPurchases({ businessId, canOperate, locations, rol
                       onChange={event => setProductSearch(event.target.value)}
                       onKeyDown={event => { if (event.key === 'Enter') { event.preventDefault(); void resolveItemCode() } }} />
                     <button type="button" className="btn btn-outline-secondary" aria-label="Search items"
-                      disabled={busy || resolving} onClick={() => { setProducts([]); setProductsLoading(true); setLookup('product') }}>
+                      disabled={busy || resolving} onClick={() => openLookup('product')}>
                       <Search size={17}/>
                     </button>
                   </div>
@@ -585,20 +620,24 @@ export default function RetailPurchases({ businessId, canOperate, locations, rol
           </button>}
         </div>
         {lookup === 'supplier' && <LookupDialog title="Search suppliers" searchId="purchase-supplier-search"
-          search={supplierSearch} placeholder="Supplier name or phone" columns={['Supplier']}
-          rows={suppliers.map(item => ({ id: item.id, cells: [item.name] }))}
-          status={suppliersLoading ? 'Searching…' : suppliers.length ? '' : 'No matching suppliers'}
-          onSearch={value => { setSupplierSearch(value); setSuppliers([]); setSuppliersLoading(true) }}
+          search={supplierSearch} placeholder="Supplier name, phone or email" columns={['Supplier', 'Phone']}
+          rows={suppliers.map(item => ({ id: item.id, cells: [item.name, item.phone || '—'], label: item.name }))}
+          status={suppliersLoading ? 'Searching…' : lookupError || (suppliers.length ? '' : 'No active suppliers on this page')}
+          pagination={{ page: lookupPage, hasMore: lookupPage * lookupPageSize < lookupTotal, busy: suppliersLoading, onChange: changeLookupPage }}
+          onSearch={value => { setSupplierSearch(value); setLookupPage(1); setSuppliers([]); setSuppliersLoading(true) }}
           onSelect={id => {
             const item = suppliers.find(x => x.id === id)
             if (item) { setSupplierId(item.id); setSupplierName(item.name); setLookup(null) }
           }} onClose={() => setLookup(null)} />}
         {lookup === 'product' && <LookupDialog title="Search items" searchId="purchase-item-search"
-          search={productSearch} placeholder="Item code or name" columns={['Item code', 'Item name', 'Unit']}
+          search={productSearch} placeholder="Item code, name or barcode" columns={['Item code', 'Item name', 'Unit', 'Available stock']}
+          context={locations.find(location => location.id === locationId)?.name}
           rows={products.filter(item => !lines.some(line => line.productId === item.id))
-            .map(item => ({ id: item.id, cells: [item.sku, item.name, item.unitCode ?? '—'] }))}
-          status={productsLoading ? 'Searching…' : products.length ? '' : 'No matching items'}
-          onSearch={value => { setProductSearch(value); setProducts([]); setProductsLoading(true) }}
+            .map(item => ({ id: item.id, cells: [item.sku, item.name, item.unitCode ?? '—',
+              item.availableStock == null ? '—' : new Intl.NumberFormat(undefined, { maximumFractionDigits: 3 }).format(item.availableStock)] }))}
+          status={productsLoading ? 'Searching…' : lookupError || (products.some(item => !lines.some(line => line.productId === item.id)) ? '' : 'No selectable items on this page')}
+          pagination={{ page: lookupPage, hasMore: lookupPage * lookupPageSize < lookupTotal, busy: productsLoading, onChange: changeLookupPage }}
+          onSearch={value => { setProductSearch(value); setLookupPage(1); setProducts([]); setProductsLoading(true) }}
           onSelect={id => { const item = products.find(x => x.id === id); if (item) addLine(item) }}
           onClose={() => setLookup(null)} />}
       </form>}

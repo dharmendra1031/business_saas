@@ -15,21 +15,31 @@ public static class RetailProductEndpoints
             .RequireAuthorization();
 
         group.MapGet("", async (long businessId, string? search, string? status,
-            long? categoryId, int? page, ClaimsPrincipal user, AppDbContext db) =>
+            long? categoryId, int? page, long? locationId, string? code, ClaimsPrincipal user, AppDbContext db) =>
         {
             var denied = await RetailMasterEndpoints.CheckAccess(db, user, businessId, false);
             if (denied is not null) return denied;
+
+            if (locationId is not null)
+            {
+                if (locationId <= 0) return Results.BadRequest(new { message = "Invalid location." });
+                var locationDenied = await RetailStockEndpoints.CheckLocation(db, user, businessId, locationId.Value, false);
+                if (locationDenied is not null) return locationDenied;
+            }
 
             var currentPage = page ?? 1;
             if (currentPage is < 1 or > 100000 || categoryId is <= 0)
                 return Results.BadRequest(new { message = "Invalid page or category." });
 
             var term = search?.Trim().ToUpperInvariant() ?? "";
-            if (term.Length > 150 || status is not (null or "" or "all" or "active" or "inactive"))
+            var exactCode = code?.Trim().ToUpperInvariant() ?? "";
+            if (exactCode.Length > 50 || term.Length > 150 || status is not (null or "" or "all" or "active" or "inactive"))
                 return Results.BadRequest(new { message = "Invalid search or status filter." });
 
             var query = db.RetailProducts.AsNoTracking().Where(x => x.BusinessId == businessId);
-            if (term.Length > 0)
+            if (exactCode.Length > 0)
+                query = query.Where(x => x.Sku == exactCode);
+            else if (term.Length > 0)
                 query = query.Where(x => x.Name.ToUpper().Contains(term) ||
                     x.Sku.Contains(term) || x.Barcode != null && x.Barcode.Contains(term));
             if (categoryId is > 0)
@@ -50,7 +60,7 @@ public static class RetailProductEndpoints
             var total = await query.CountAsync();
             var pageQuery = query.OrderBy(x => x.Name).ThenBy(x => x.Id)
                 .Skip((currentPage - 1) * PageSize).Take(PageSize);
-            var items = await ProductDetails(db, pageQuery, businessId).ToListAsync();
+            var items = await ProductDetails(db, pageQuery, businessId, locationId).ToListAsync();
 
             return Results.Ok(new { items, total, page = currentPage, pageSize = PageSize });
         });
@@ -245,7 +255,7 @@ public static class RetailProductEndpoints
     }
 
     private static IQueryable<ProductItem> ProductDetails(AppDbContext db,
-        IQueryable<RetailProduct> source, long businessId) =>
+        IQueryable<RetailProduct> source, long businessId, long? locationId = null) =>
         from product in source
         join category in db.RetailCategories.AsNoTracking()
             on product.CategoryId equals category.Id
@@ -264,7 +274,10 @@ public static class RetailProductEndpoints
                     db.RetailUnits.Where(u => u.Id == x.UnitId && u.BusinessId == businessId)
                         .Select(u => u.Code).FirstOrDefault(),
                     db.RetailUnits.Any(u => u.Id == x.UnitId && u.BusinessId == businessId && u.IsActive),
-                    x.SalePrice)).ToList());
+                    x.SalePrice)).ToList(),
+             locationId.HasValue ? (db.RetailStockBalances.Where(balance =>
+                 balance.BusinessId == businessId && balance.LocationId == locationId &&
+                 balance.ProductId == product.Id).Select(balance => (decimal?)balance.Quantity).FirstOrDefault() ?? 0m) : null);
 
     private static async Task<bool> ValidReferences(AppDbContext db, long businessId,
         long categoryId, long unitId, long? brandId, bool requireActive,
@@ -372,7 +385,7 @@ public static class RetailProductEndpoints
     private sealed record ProductItem(long Id, string Name, string Sku, string? Barcode,
         long CategoryId, string CategoryName, long UnitId, string UnitCode,
         decimal SalePrice, string TaxClassification, bool IsActive, decimal? ReorderLevel,
-        long? BrandId, string? BrandName, List<ConversionItem> Conversions);
+        long? BrandId, string? BrandName, List<ConversionItem> Conversions, decimal? AvailableStock);
 
     private sealed record ConversionItem(long UnitId, decimal Factor, string? UnitCode, bool IsActive, decimal? SalePrice);
 }

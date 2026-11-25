@@ -1,7 +1,7 @@
 import { useLayoutEffect, useRef, useState } from 'react'
 import { Search } from 'lucide-react'
 
-export default function LookupDialog({ title, searchId, search, placeholder, columns, rows, status, onSearch, onSelect, onClose }: {
+export default function LookupDialog({ title, searchId, search, placeholder, columns, rows, status, context, pagination, onSearch, onSelect, onClose }: {
   title: string
   searchId: string
   search: string
@@ -9,6 +9,8 @@ export default function LookupDialog({ title, searchId, search, placeholder, col
   columns: string[]
   rows: { id: number; cells: string[]; label?: string }[]
   status: string
+  context?: string
+  pagination?: { page: number; hasMore: boolean; busy: boolean; onChange: (page: number) => void }
   onSearch: (value: string) => void
   onSelect: (id: number) => void
   onClose: () => void
@@ -28,6 +30,7 @@ export default function LookupDialog({ title, searchId, search, placeholder, col
       <h2 className="h5 mb-0">{title}</h2>
       <button type="button" className="btn btn-outline-secondary btn-sm" onClick={onClose}>Close</button>
     </div>
+    {context && <p className="small mb-2">Location: {context}</p>}
     <label className="visually-hidden" htmlFor={searchId}>{placeholder}</label>
     <input ref={input} id={searchId} className="form-control mb-3" type="search" autoComplete="off"
       maxLength={100} value={search} placeholder={placeholder} onChange={event => onSearch(event.target.value)}
@@ -52,7 +55,14 @@ export default function LookupDialog({ title, searchId, search, placeholder, col
         </tr>)}</tbody>
       </table>
     </div>
-    {status && <p className="small mt-2 mb-0" role="status">{status}</p>}
+    <p className="lookup-status small mt-2 mb-0" role="status">{status}</p>
+    {pagination && <div className="d-flex justify-content-end align-items-center gap-2 mt-2">
+      <button type="button" className="btn btn-outline-secondary btn-sm" disabled={pagination.busy || pagination.page === 1}
+        onClick={() => pagination.onChange(pagination.page - 1)}>Previous</button>
+      <span className="small">Page {pagination.page}</span>
+      <button type="button" className="btn btn-outline-secondary btn-sm" disabled={pagination.busy || !pagination.hasMore}
+        onClick={() => pagination.onChange(pagination.page + 1)}>Next</button>
+    </div>}
   </dialog>
 }
 
