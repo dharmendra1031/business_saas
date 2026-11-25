@@ -44,6 +44,11 @@ function lineAmountCents(line: Line): number {
   return amount <= BigInt(maxExactCents) ? Number(amount) : NaN
 }
 
+function matchesCreditReceipt(receipt: Receipt, request: SaleRequest): boolean {
+  return receipt.paymentMethod === 'Credit' && receipt.requestKey === request.requestKey &&
+    receipt.customerId === request.customerId && receipt.creditDueDate === request.dueDate
+}
+
 function restore(key: string): SaleRequest | null {
   let raw: string | null
   try { raw = sessionStorage.getItem(key) } catch { return null }
@@ -163,8 +168,7 @@ export default function CashCheckout({ userId, dashboard, onExit }: {
     const query = new URLSearchParams({ locationId: String(pending.locationId), requestKey: pending.requestKey })
     api<Receipt>((pending.dueDate ? creditBase : base) + '/receipt?' + query)
       .then(result => {
-        if (pending.dueDate && (result.paymentMethod !== 'Credit' || result.requestKey !== pending.requestKey ||
-          result.customerId !== pending.customerId || result.creditDueDate !== pending.dueDate))
+        if (pending.dueDate && !matchesCreditReceipt(result, pending))
           throw new Error('Credit invoice response could not be verified.')
         if (active) { setReceipt(result); setError('') }
       })
@@ -377,8 +381,9 @@ export default function CashCheckout({ userId, dashboard, onExit }: {
   function updateQuantity(line: Line, quantity: number) {
     if (scanLock.current || !validQuantity(quantity)) return
     if (!fitsStock(line, quantity)) {
-      setError(line.unitId == null && availableStock(line) !== undefined
-        ? `Only ${availableStock(line)} ${line.unitCode ?? 'units'} available at this location.`
+      const knownStock = availableStock(line)
+      setError(line.unitId == null && knownStock !== undefined
+        ? `Only ${knownStock} ${line.unitCode ?? 'units'} available at this location.`
         : 'Quantity exceeds available base stock or cannot be converted exactly to three decimals.')
       return
     }
@@ -440,8 +445,7 @@ export default function CashCheckout({ userId, dashboard, onExit }: {
       else try { sessionStorage.setItem(key, JSON.stringify(request)) } catch { /* Keep the request key in memory. */ }
       setPending(request)
       posted = await post<Receipt>(isCredit ? creditBase : base, request)
-      if (isCredit && (posted.paymentMethod !== 'Credit' || posted.requestKey !== request.requestKey ||
-          posted.customerId !== request.customerId || posted.creditDueDate !== request.dueDate))
+      if (isCredit && !matchesCreditReceipt(posted, request))
         throw new Error('Credit invoice response could not be verified. Check the saved request.')
     } catch (cause) {
       closePrintTab()
@@ -685,7 +689,7 @@ export default function CashCheckout({ userId, dashboard, onExit }: {
           <span className="pos-count-pill">{basket.length} {basket.length === 1 ? 'product' : 'products'}</span>
         </div>
         {basket.length > 0 && <div className="pos-basket-toolbar">
-          {basket.length > 0 && !clearArmed && <button type="button" className="pos-basket-clear"
+          {!clearArmed && <button type="button" className="pos-basket-clear"
             disabled={busy || scanBusy} onClick={() => setClearArmed(true)}><Trash2 size={15} /> Clear</button>}
           {clearArmed && <div className="pos-clear-confirm">
             <span>Clear this basket?</span>

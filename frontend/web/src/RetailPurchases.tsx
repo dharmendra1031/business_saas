@@ -157,6 +157,7 @@ export default function RetailPurchases({ businessId, canOperate, locations, rol
 
 
   useEffect(() => {
+    if (creating || selectedId !== null) return
     const controller = new AbortController()
     setLoading(true)
     setLoadError('')
@@ -173,7 +174,7 @@ export default function RetailPurchases({ businessId, canOperate, locations, rol
       })
       .finally(() => { if (!controller.signal.aborted) setLoading(false) })
     return () => controller.abort()
-  }, [basePath, page, reload, approvalsOnly])
+  }, [basePath, page, reload, approvalsOnly, creating, selectedId])
 
   useEffect(() => {
     if (!creating || !lookup) return
@@ -369,11 +370,14 @@ export default function RetailPurchases({ businessId, canOperate, locations, rol
     let savedOrderId: number | null = null
     try {
       const result = await post<{ id: number }>(basePath, {
-        locationId, supplierId, lines: lines.map(x => ({
-          productId: x.productId, quantity: Number(x.quantity), unitCost: Number(x.unitCost),
-          expectedBaseUnitCode: x.unitCode,
-          ...(selectedUnit(x) ? { unitId: x.selectedUnitId, expectedFactor: selectedUnit(x)!.factor } : {})
-        })), requestKey: orderKey
+        locationId, supplierId, lines: lines.map(x => {
+          const unit = selectedUnit(x)
+          return {
+            productId: x.productId, quantity: Number(x.quantity), unitCost: Number(x.unitCost),
+            expectedBaseUnitCode: x.unitCode,
+            ...(unit ? { unitId: unit.unitId, expectedFactor: unit.factor } : {})
+          }
+        }), requestKey: orderKey
       })
       savedOrderId = result.id
       if (approveNow) await post(`${basePath}/${result.id}/approve`, {})
@@ -532,7 +536,10 @@ export default function RetailPurchases({ businessId, canOperate, locations, rol
             <table className="table table-sm align-middle business-record-table purchase-entry-table">
               <thead><tr><th>Item code</th><th>Item name</th><th>Unit</th><th>Qty</th>
                 <th>Rate ({currencyCode})</th><th className="text-end">Amount</th><th></th></tr></thead>
-              <tbody>{lines.map(line => <tr key={line.productId}>
+              <tbody>{lines.map(line => {
+                const convertedQuantity = line.selectedUnitId === 0 ? null :
+                  baseQuantity(Number(line.quantity), selectedUnit(line)?.factor ?? 1)
+                return <tr key={line.productId}>
                 <td>{line.sku}</td><td>{line.name}</td>
                 <td>{line.alternateUnits.length > 0 ? <select className="form-select form-select-sm mt-1"
                     aria-label={`Purchase unit for ${line.name}`} value={line.selectedUnitId} disabled={busy}
@@ -548,9 +555,9 @@ export default function RetailPurchases({ businessId, canOperate, locations, rol
                   onChange={event => setLines(values => values.map(x =>
                     x.productId === line.productId ? { ...x, quantity: event.target.value } : x))}/>
                   {line.selectedUnitId !== 0 && <small className="d-block mt-1">
-                    {baseQuantity(Number(line.quantity), selectedUnit(line)?.factor ?? 1) === null
+                    {convertedQuantity === null
                       ? 'Enter an exact base stock quantity.'
-                      : `${baseQuantity(Number(line.quantity), selectedUnit(line)?.factor ?? 1)} ${line.unitCode} stock`}
+                      : `${convertedQuantity} ${line.unitCode} stock`}
                   </small>}</td>
                 <td><input type="number" className="form-control" aria-label={`${line.name} unit cost`}
                   min="0" max="99999999.99" step="0.01" required disabled={busy} value={line.unitCost}
@@ -560,7 +567,8 @@ export default function RetailPurchases({ businessId, canOperate, locations, rol
                 <td><button className="btn btn-sm btn-outline-secondary" type="button" disabled={busy}
                   onClick={() => setLines(values => values.filter(x =>
                     x.productId !== line.productId))}>Remove</button></td>
-              </tr>)}
+              </tr>
+              })}
               {lines.length < 50 && <tr>
                 <td colSpan={2}>
                   <label className="visually-hidden" htmlFor="purchase-product">Item code or name</label>
