@@ -119,7 +119,7 @@ export default function RetailPurchases({ businessId, canOperate, locations, rol
   const [lookupPageSize, setLookupPageSize] = useState(20)
   const [lookupError, setLookupError] = useState('')
   const [suppliers, setSuppliers] = useState<Supplier[]>([])
-  const [suppliersLoading, setSuppliersLoading] = useState(true)
+  const [lookupLoading, setLookupLoading] = useState(true)
   const [supplierId, setSupplierId] = useState(0)
   const [supplierFormOpen, setSupplierFormOpen] = useState(false)
   const [newSupplier, setNewSupplier] = useState({ name: '', phone: '', email: '' })
@@ -138,7 +138,6 @@ export default function RetailPurchases({ businessId, canOperate, locations, rol
   }, [supplierFormOpen])
   const [productSearch, setProductSearch] = useState('')
   const [products, setProducts] = useState<Product[]>([])
-  const [productsLoading, setProductsLoading] = useState(true)
   const [lines, setLines] = useState<NewLine[]>([])
   const focusQuantity = useRef<number | null>(null)
 
@@ -185,8 +184,7 @@ export default function RetailPurchases({ businessId, canOperate, locations, rol
     setLookupTotal(0)
     setSuppliers([])
     setProducts([])
-    setSuppliersLoading(supplier)
-    setProductsLoading(!supplier)
+    setLookupLoading(true)
     const timer = setTimeout(async () => {
       try {
         const query = new URLSearchParams({ search: term.trim(), page: String(lookupPage) })
@@ -209,7 +207,7 @@ export default function RetailPurchases({ businessId, canOperate, locations, rol
       } catch (cause) {
         if (!controller.signal.aborted && !(cause instanceof SessionExpiredError)) setLookupError(message(cause))
       } finally {
-        if (!controller.signal.aborted) { setSuppliersLoading(false); setProductsLoading(false) }
+        if (!controller.signal.aborted) setLookupLoading(false)
       }
     }, 200)
     return () => { clearTimeout(timer); controller.abort() }
@@ -219,16 +217,16 @@ export default function RetailPurchases({ businessId, canOperate, locations, rol
     setLookupPage(1)
     setLookupTotal(0)
     setLookupError('')
-    if (kind === 'supplier') { setSupplierSearch(''); setSuppliers([]); setSuppliersLoading(true) }
-    else { setProducts([]); setProductsLoading(true) }
+    if (kind === 'supplier') { setSupplierSearch(''); setSuppliers([]) }
+    else setProducts([])
+    setLookupLoading(true)
     setLookup(kind)
   }
 
   function changeLookupPage(next: number) {
     setSuppliers([])
     setProducts([])
-    setSuppliersLoading(lookup === 'supplier')
-    setProductsLoading(lookup === 'product')
+    setLookupLoading(true)
     setLookupPage(next)
   }
 
@@ -291,11 +289,10 @@ export default function RetailPurchases({ businessId, canOperate, locations, rol
     setSupplierName('')
     setLookup(null)
     setSuppliers([])
-    setSuppliersLoading(true)
+    setLookupLoading(true)
     closeSupplierForm()
     setProductSearch('')
     setProducts([])
-    setProductsLoading(true)
     setLines([])
   }
 
@@ -308,7 +305,7 @@ export default function RetailPurchases({ businessId, canOperate, locations, rol
       unitCode: product.unitCode, alternateUnits: (product.conversions ?? []).filter(x => x.isActive && x.unitCode),
       selectedUnitId: 0, quantity: '1', unitCost: ''
     }])
-    if (productSearch) { setProductSearch(''); setProducts([]); setProductsLoading(true) }
+    if (productSearch) { setProductSearch(''); setProducts([]); setLookupLoading(true) }
     setError('')
   }
 
@@ -604,9 +601,9 @@ export default function RetailPurchases({ businessId, canOperate, locations, rol
         {lookup === 'supplier' && <LookupDialog title="Search suppliers" searchId="purchase-supplier-search"
           search={supplierSearch} placeholder="Supplier name, phone or email" columns={['Supplier', 'Phone']}
           rows={suppliers.map(item => ({ id: item.id, cells: [item.name, item.phone || '—'], label: item.name }))}
-          status={suppliersLoading ? 'Searching…' : lookupError || (suppliers.length ? '' : 'No matching active suppliers')}
-          pagination={{ page: lookupPage, hasMore: lookupPage * lookupPageSize < lookupTotal, busy: suppliersLoading, onChange: changeLookupPage }}
-          onSearch={value => { setSupplierSearch(value); setLookupPage(1); setSuppliers([]); setSuppliersLoading(true) }}
+          status={lookupLoading ? 'Searching…' : lookupError || (suppliers.length ? '' : 'No matching active suppliers')}
+          pagination={{ page: lookupPage, hasMore: lookupPage * lookupPageSize < lookupTotal, busy: lookupLoading, onChange: changeLookupPage }}
+          onSearch={value => { setSupplierSearch(value); setLookupPage(1); setSuppliers([]); setLookupLoading(true) }}
           onSelect={id => {
             const item = suppliers.find(x => x.id === id)
             if (item) { setSupplierId(item.id); setSupplierName(item.name); setLookup(null) }
@@ -617,9 +614,9 @@ export default function RetailPurchases({ businessId, canOperate, locations, rol
           rows={products.filter(item => !lines.some(line => line.productId === item.id))
             .map(item => ({ id: item.id, cells: [item.sku, item.name, item.unitCode ?? '—',
               item.availableStock == null ? '—' : new Intl.NumberFormat(undefined, { maximumFractionDigits: 3 }).format(item.availableStock)] }))}
-          status={productsLoading ? 'Searching…' : lookupError || (products.some(item => !lines.some(line => line.productId === item.id)) ? '' : 'No selectable items on this page')}
-          pagination={{ page: lookupPage, hasMore: lookupPage * lookupPageSize < lookupTotal, busy: productsLoading, onChange: changeLookupPage }}
-          onSearch={value => { setProductSearch(value); setLookupPage(1); setProducts([]); setProductsLoading(true) }}
+          status={lookupLoading ? 'Searching…' : lookupError || (products.some(item => !lines.some(line => line.productId === item.id)) ? '' : 'No selectable items on this page')}
+          pagination={{ page: lookupPage, hasMore: lookupPage * lookupPageSize < lookupTotal, busy: lookupLoading, onChange: changeLookupPage }}
+          onSearch={value => { setProductSearch(value); setLookupPage(1); setProducts([]); setLookupLoading(true) }}
           onSelect={id => { const item = products.find(x => x.id === id); if (item) addLine(item) }}
           onClose={() => setLookup(null)} />}
       </form>}

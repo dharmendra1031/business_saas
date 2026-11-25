@@ -240,7 +240,7 @@ export default function RetailStock({ businessId, locations, canOperate, isOwner
       </form>}
 
       {!opening && !adjustmentsOpen && historyProductId === null && <>
-      <div className="d-flex justify-content-end px-3 mt-2"><button type="button" className="btn btn-outline-secondary btn-sm" onClick={() => setAdjustmentsOpen(true)}>Stock adjustments</button></div>
+      <div className="d-flex justify-content-end px-3 mt-2"><button type="button" className="btn btn-outline-secondary btn-sm" onClick={() => { setAdjusting(null); setAdjustmentsOpen(true) }}>Stock adjustments</button></div>
       <form className="masters-search business-stock-search" onSubmit={event => {
         event.preventDefault()
         setPage(1)
@@ -325,7 +325,8 @@ export default function RetailStock({ businessId, locations, canOperate, isOwner
       </>}
       {adjustmentsOpen && <RetailStockAdjustments key={locationId}
         businessId={businessId} locationId={locationId} canOperate={canOperate} isOwner={isOwner}
-        selected={adjusting} onCancel={() => setAdjusting(null)} onClose={() => setAdjustmentsOpen(false)}
+        selected={adjusting} onCancel={() => setAdjusting(null)}
+         onClose={() => { setAdjusting(null); setAdjustmentsOpen(false) }}
         onPosted={() => setReload(value => value + 1)} />}
 
       {historyProductId !== null && <div className="product-form">
