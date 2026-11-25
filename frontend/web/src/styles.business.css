@@ -308,3 +308,11 @@
 @media (max-width: 600px) {
   .business-shell .retail-masters .masters-search > button { flex: 1 1 100%; }
 }
+
+/* Purchase lookup: one editable field with its result dropdown. */
+.purchase-search-select { position: relative; min-width: 0; }
+.purchase-search-options { max-height: 180px; overflow-y: auto; background: #fff;
+  border: 1px solid #ced4da; border-radius: 4px; margin-top: 2px; color: #000; }
+.purchase-search-options [role="option"] { padding: 8px 10px; cursor: pointer; overflow-wrap: anywhere; }
+.purchase-search-options [role="option"]:hover,
+.purchase-search-options [aria-selected="true"] { background: #e9ecef; }

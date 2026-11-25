@@ -476,12 +476,14 @@ try {
     await t.page.getByRole('heading', { name: 'New purchase order', level: 3 }).waitFor()
     assert.equal(await t.page.getByRole('heading', { name: 'Purchase order list' }).count(), 0,
       'Order entry must not show the unrelated register')
-    await t.page.waitForFunction(() =>
-      [...document.querySelectorAll('#purchase-supplier option')].some(option =>
-        option.textContent?.includes('Wholesaler')))
-    await t.page.waitForFunction(() =>
-      [...document.querySelectorAll('#purchase-product option')].some(option =>
-        option.textContent?.includes('Blue Shirt')))
+    await t.page.locator('#purchase-supplier').click()
+    await t.page.getByRole('option', { name: /Wholesaler/ }).waitFor()
+    await t.page.locator('#purchase-product').click()
+    await t.page.getByRole('option', { name: /Blue Shirt/ }).waitFor()
+    assert.equal(await t.page.getByRole('combobox', { name: 'Supplier *' }).count(), 1)
+    assert.equal(await t.page.locator('select#purchase-supplier, select#purchase-product').count(), 0)
+    assert.equal(await t.page.getByLabel('Find supplier').count(), 0)
+    assert.equal(await t.page.getByLabel('Find product').count(), 0)
     assert.ok(catalogReads.some(path => path.endsWith('/suppliers')),
       'Supplier lookup should load when the draft form opens')
     assert.ok(catalogReads.some(path => path.endsWith('/products')),
@@ -495,14 +497,19 @@ try {
       'Cancel adding supplier must discard the inline supplier draft')
     assert.equal(await t.page.locator('#new-supplier-phone').inputValue(), '')
     await t.page.getByRole('button', { name: 'Cancel adding supplier' }).click()
-    await t.page.locator('#purchase-supplier').selectOption('21')
-    await t.page.locator('#purchase-product').selectOption('11')
+    await t.page.locator('#purchase-supplier').fill('Wholesaler')
+    await t.page.locator('#purchase-supplier-option-21').waitFor()
+    await t.page.locator('#purchase-supplier').press('ArrowDown')
+    await t.page.locator('#purchase-supplier').press('Enter')
+    assert.match(await t.page.locator('#purchase-supplier').inputValue(), /Wholesaler/)
+    await t.page.locator('#purchase-product').fill('Blue')
+    await t.page.locator('#purchase-product-option-11').click()
     await t.page.getByRole('spinbutton', { name: 'Blue Shirt quantity' }).fill('4')
     await t.page.getByRole('button', { name: 'Cancel', exact: true }).click()
     await t.page.getByRole('heading', { name: 'New purchase order', level: 3 }).waitFor({ state: 'hidden' })
     await t.page.getByRole('button', { name: 'New Purchase Order' }).click()
     await t.page.getByRole('heading', { name: 'New purchase order', level: 3 }).waitFor()
-    assert.equal(await t.page.locator('#purchase-supplier').inputValue(), '0',
+    assert.equal(await t.page.locator('#purchase-supplier').inputValue(), '',
       'Canceled order must not keep the previous supplier')
     assert.equal(await t.page.getByRole('spinbutton', { name: 'Blue Shirt quantity' }).count(), 0,
       'Canceled order must not keep previously selected product lines')
@@ -612,12 +619,10 @@ try {
     await t.page.getByRole('heading', { name: 'Business Overview' }).waitFor()
     await t.page.locator('.app-sidebar .nav-entry').filter({ hasText: 'Purchase Orders' }).click()
     await t.page.getByRole('button', { name: 'New Purchase Order' }).click()
-    await t.page.waitForFunction(() =>
-      [...document.querySelectorAll('#purchase-supplier option')].some(option => option.value === '21'))
-    await t.page.waitForFunction(() =>
-      [...document.querySelectorAll('#purchase-product option')].some(option => option.value === '11'))
-    await t.page.locator('#purchase-supplier').selectOption('21')
-    await t.page.locator('#purchase-product').selectOption('11')
+    await t.page.locator('#purchase-supplier').click()
+    await t.page.locator('#purchase-supplier-option-21').click()
+    await t.page.locator('#purchase-product').click()
+    await t.page.locator('#purchase-product-option-11').click()
     if (converted) {
       await t.page.getByLabel('Purchase unit for Blue Shirt').selectOption('32')
       await t.page.getByRole('spinbutton', { name: 'Blue Shirt quantity' }).fill('0.001')
@@ -712,12 +717,10 @@ try {
     await t.login()
     await t.page.locator('.app-sidebar .nav-entry').filter({ hasText: 'Purchase Orders' }).click()
     await t.page.getByRole('button', { name: 'New Purchase Order' }).click()
-    await t.page.waitForFunction(() =>
-      [...document.querySelectorAll('#purchase-supplier option')].some(option => option.value === '21'))
-    await t.page.waitForFunction(() =>
-      [...document.querySelectorAll('#purchase-product option')].some(option => option.value === '11'))
-    await t.page.locator('#purchase-supplier').selectOption('21')
-    await t.page.locator('#purchase-product').selectOption('11')
+    await t.page.locator('#purchase-supplier').click()
+    await t.page.locator('#purchase-supplier-option-21').click()
+    await t.page.locator('#purchase-product').click()
+    await t.page.locator('#purchase-product-option-11').click()
     await t.page.getByRole('button', { name: 'Save Draft', exact: true }).click()
     await t.page.getByRole('heading', { name: 'Purchase order #82' }).waitFor()
     await t.page.getByRole('button', { name: 'Approve purchase order' }).waitFor()
@@ -759,12 +762,10 @@ try {
     await t.login()
     await t.page.locator('.app-sidebar .nav-entry').filter({ hasText: 'Purchase Orders' }).click()
     await t.page.getByRole('button', { name: 'New Purchase Order' }).click()
-    await t.page.waitForFunction(() =>
-      [...document.querySelectorAll('#purchase-supplier option')].some(option => option.value === '21'))
-    await t.page.waitForFunction(() =>
-      [...document.querySelectorAll('#purchase-product option')].some(option => option.value === '11'))
-    await t.page.locator('#purchase-supplier').selectOption('21')
-    await t.page.locator('#purchase-product').selectOption('11')
+    await t.page.locator('#purchase-supplier').click()
+    await t.page.locator('#purchase-supplier-option-21').click()
+    await t.page.locator('#purchase-product').click()
+    await t.page.locator('#purchase-product-option-11').click()
     await t.page.getByRole('button', { name: 'Submit for Approval' }).click()
     await t.page.getByRole('heading', { name: 'Purchase order #81' }).waitFor()
     await t.page.getByText('Awaiting owner approval').waitFor()
