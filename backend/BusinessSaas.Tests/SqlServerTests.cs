@@ -84,6 +84,12 @@ public sealed class SqlServerTests
             Assert.Contains(await db.Database.GetAppliedMigrationsAsync(),
                 name => name.EndsWith("_AddBillingTaxDocumentDrafts"));
             Assert.Contains("20261118210000_RetailCashBasket", await db.Database.GetAppliedMigrationsAsync());
+            Assert.Contains("20261125170000_RetailReadIndexes", await db.Database.GetAppliedMigrationsAsync());
+            var indexes = await db.Database.SqlQueryRaw<string>(
+                "SELECT name AS [Value] FROM sys.indexes WHERE name IN " +
+                "('IX_RetailProducts_BusinessId_Name_Id', 'IX_RetailCashSales_BusinessId_PostedAtUtc_Id', " +
+                "'IX_RetailCashReturns_BusinessId_PostedAtUtc_Id')").ToListAsync();
+            Assert.Equal(3, indexes.Count);
             Assert.True(await db.Database.CanConnectAsync());
             Assert.True(await db.BusinessTypes.AnyAsync(x => x.Code == "RETAIL" && x.IsSupported));
         }
@@ -1287,6 +1293,70 @@ public sealed class SqlServerTests
         }
         var finalCashReport = await owner.GetFromJsonAsync<JsonElement>(dailyPath + creditDate.ToString("yyyy-MM-dd"));
         Assert.Equal(cashReportBefore.GetProperty("totals").GetRawText(), finalCashReport.GetProperty("totals").GetRawText());
+    }
+
+    [Fact]
+    [Trait("Database", "SqlServer")]
+    public async Task Large_catalog_reads_preserve_order_pagination_and_tenant_isolation()
+    {
+        var connectionString = Environment.GetEnvironmentVariable("SQLSERVER_TEST_CONNECTION");
+        if (string.IsNullOrWhiteSpace(connectionString))
+            return;
+
+        using var factory = new WebApplicationFactory<Program>().WithWebHostBuilder(builder =>
+        {
+            builder.UseEnvironment("Development");
+            builder.ConfigureServices(services =>
+            {
+                services.RemoveAll<DbContextOptions<AppDbContext>>();
+                services.RemoveAll<IDbContextOptionsConfiguration<AppDbContext>>();
+                services.AddDbContext<AppDbContext>(options => options.UseSqlServer(connectionString));
+            });
+        });
+        using var owner = factory.CreateClient();
+        using var other = factory.CreateClient();
+        await RegisterAndLogin(owner, "sql-catalog-scale-owner@example.test");
+        await RegisterAndLogin(other, "sql-catalog-scale-other@example.test");
+        var id = await BusinessFixtures.SeedAsync(factory.Services, owner, "Scale Catalog", "sql-catalog-scale-20261125");
+        var otherId = await BusinessFixtures.SeedAsync(factory.Services, other, "Other Catalog", "sql-catalog-scale-other-20261125");
+        const int count = 5000;
+        using (var scope = factory.Services.CreateScope())
+        {
+            var db = scope.ServiceProvider.GetRequiredService<AppDbContext>();
+            var categoryId = await db.RetailCategories.Where(x => x.BusinessId == id).Select(x => x.Id).SingleAsync();
+            var unitId = await db.RetailUnits.Where(x => x.BusinessId == id).Select(x => x.Id).SingleAsync();
+            var otherCategory = await db.RetailCategories.Where(x => x.BusinessId == otherId).Select(x => x.Id).SingleAsync();
+            var otherUnit = await db.RetailUnits.Where(x => x.BusinessId == otherId).Select(x => x.Id).SingleAsync();
+            // Synthetic test data only; no sales or stock are posted.
+            db.RetailProducts.AddRange(Enumerable.Range(1, count).Select(n => new RetailProduct
+            {
+                BusinessId = id, CategoryId = categoryId, UnitId = unitId,
+                Name = $"Catalog item {n:D5}", Sku = $"SCALE-{n:D5}", SalePrice = 10m
+            }));
+            db.RetailProducts.Add(new RetailProduct
+            {
+                BusinessId = otherId, CategoryId = otherCategory, UnitId = otherUnit,
+                Name = "Foreign item", Sku = "SCALE-05000", SalePrice = 20m
+            });
+            await db.SaveChangesAsync();
+        }
+        var path = $"/api/businesses/{id}/products";
+        var first = await owner.GetFromJsonAsync<JsonElement>(path + "?page=1");
+        Assert.Equal(count, first.GetProperty("total").GetInt32());
+        Assert.Equal(20, first.GetProperty("items").GetArrayLength());
+        Assert.Equal("SCALE-00001", first.GetProperty("items")[0].GetProperty("sku").GetString());
+        var last = await owner.GetFromJsonAsync<JsonElement>(path + "?page=250");
+        Assert.Equal("SCALE-04981", last.GetProperty("items")[0].GetProperty("sku").GetString());
+        Assert.Equal("SCALE-05000", last.GetProperty("items")[19].GetProperty("sku").GetString());
+        var beyond = await owner.GetFromJsonAsync<JsonElement>(path + "?page=251");
+        Assert.Empty(beyond.GetProperty("items").EnumerateArray());
+        var exact = await owner.GetFromJsonAsync<JsonElement>(path + "?code=SCALE-05000&status=active");
+        Assert.Equal(1, exact.GetProperty("total").GetInt32());
+        Assert.Equal(10m, exact.GetProperty("items")[0].GetProperty("salePrice").GetDecimal());
+        Assert.Equal(HttpStatusCode.NotFound, (await other.GetAsync(path)).StatusCode);
+        var foreign = await other.GetFromJsonAsync<JsonElement>($"/api/businesses/{otherId}/products?code=SCALE-05000");
+        Assert.Equal(1, foreign.GetProperty("total").GetInt32());
+        Assert.Equal(20m, foreign.GetProperty("items")[0].GetProperty("salePrice").GetDecimal());
     }
 
     private static async Task RegisterAndLogin(HttpClient client, string email)

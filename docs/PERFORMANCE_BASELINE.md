@@ -39,3 +39,28 @@ The script refuses remote targets by default. For a **controlled HTTPS staging e
 The tool obtains an antiforgery token, signs in once, and sends `GET` requests only for the measured endpoint. It measures p50/p95, failures and observed throughput, with hard limits of **200 requests and 10 concurrent workers**. It performs no database writes beyond normal login bookkeeping (such as login activity or lockout reset). The API and test business must already be provisioned.
 
 The CI test uses a local fake HTTP server to verify cookie and CSRF handling, read-only access and input safety. It does **not** measure real database speed or production capacity.
+
+## Retail index review — 25 November 2026
+
+Migration `20261125170000_RetailReadIndexes` adds three narrow, non-unique
+indexes for existing tenant-scoped queries:
+
+| Table | Key columns | Query pattern |
+| --- | --- | --- |
+| RetailProducts | BusinessId, Name, Id | Product and stock list name ordering |
+| RetailCashSales | BusinessId, PostedAtUtc, Id | Dashboard and date-range sales/report filters |
+| RetailCashReturns | BusinessId, PostedAtUtc, Id | Return register and daily refund date filters |
+
+Existing unique SKU/barcode, stock balance and request-key indexes are retained.
+The new product index does not make arbitrary substring searches index seeks.
+Do not add further overlapping indexes or drop existing uniqueness constraints
+without representative execution plans, logical reads and write-cost measurements.
+The migration can be rolled back by dropping only these three indexes.
+
+SQL Server CI includes a 5,000-product synthetic catalog with first/last/out-of-range
+pages, exact SKU lookup and tenant isolation. This is a correctness regression test,
+not a latency benchmark. Existing SQL integration tests exercise posted sales and
+returns. Compare actual plans, logical reads, CPU, p50/p95 and write throughput on
+disposable staging data (e.g. 10k/100k products and 100k/1m sales), with the same
+data and filters before/after the migration. Do not infer a production capacity
+or speedup from passing CI.

@@ -821,6 +821,8 @@ namespace BusinessSaas.Api.Data.Migrations
                         .IsUnique()
                         .HasFilter("[Barcode] IS NOT NULL");
 
+                    b.HasIndex("BusinessId", "Name", "Id");
+
                     b.HasIndex("BusinessId", "Sku")
                         .IsUnique();
 
@@ -1817,6 +1819,8 @@ namespace BusinessSaas.Api.Data.Migrations
 
                     b.HasIndex("LocationId");
 
+                    b.HasIndex("BusinessId", "PostedAtUtc", "Id");
+
                     b.HasIndex("BusinessId", "CustomerId", "CreditDueDate");
 
                     b.HasIndex("BusinessId", "CashierId", "RequestKey")
@@ -1935,6 +1939,8 @@ namespace BusinessSaas.Api.Data.Migrations
                     b.HasKey("Id");
                     b.HasIndex("ActorUserId");
                     b.HasIndex("SaleId");
+                    b.HasIndex("BusinessId", "PostedAtUtc", "Id");
+
                     b.HasIndex("BusinessId", "RequestKey").IsUnique();
                     b.ToTable("RetailCashReturns");
                 });

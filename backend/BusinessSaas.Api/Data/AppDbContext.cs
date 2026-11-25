@@ -781,6 +781,7 @@ public sealed class AppDbContext(DbContextOptions<AppDbContext> options)
             entity.Property(x => x.Barcode).HasMaxLength(64);
             entity.Property(x => x.SalePrice).HasPrecision(18, 2);
             entity.Property(x => x.TaxClassification).HasMaxLength(30).IsRequired();
+            entity.HasIndex(x => new { x.BusinessId, x.Name, x.Id });
             entity.HasIndex(x => new { x.BusinessId, x.Sku }).IsUnique();
             entity.HasIndex(x => new { x.BusinessId, x.Barcode })
                 .IsUnique().HasFilter("[Barcode] IS NOT NULL");
@@ -859,6 +860,7 @@ public sealed class AppDbContext(DbContextOptions<AppDbContext> options)
             entity.Property(x => x.CurrencyCode).HasMaxLength(3);
             entity.Property(x => x.Total).HasPrecision(18, 2);
             entity.Property(x => x.Tendered).HasPrecision(18, 2);
+            entity.HasIndex(x => new { x.BusinessId, x.PostedAtUtc, x.Id });
             entity.HasIndex(x => new { x.BusinessId, x.CustomerId, x.CreditDueDate });
             entity.HasIndex(x => new { x.BusinessId, x.CashierId, x.RequestKey }).IsUnique();
             entity.HasOne<Business>().WithMany().HasForeignKey(x => x.BusinessId).OnDelete(DeleteBehavior.Restrict);
@@ -900,6 +902,7 @@ public sealed class AppDbContext(DbContextOptions<AppDbContext> options)
             entity.Property(x => x.RequestKey).HasMaxLength(80);
             entity.Property(x => x.Reason).HasMaxLength(200);
             entity.Property(x => x.Total).HasPrecision(18, 2);
+            entity.HasIndex(x => new { x.BusinessId, x.PostedAtUtc, x.Id });
             entity.HasIndex(x => new { x.BusinessId, x.RequestKey }).IsUnique();
             entity.HasOne<Business>().WithMany().HasForeignKey(x => x.BusinessId).OnDelete(DeleteBehavior.Restrict);
             entity.HasOne<RetailCashSale>().WithMany().HasForeignKey(x => x.SaleId).OnDelete(DeleteBehavior.Restrict);
