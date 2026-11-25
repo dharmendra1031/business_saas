@@ -9,7 +9,8 @@ public static class CreditCollections
 {
     internal static IQueryable<RetailCashSale> Invoices(AppDbContext db, long businessId, long customerId) =>
         db.RetailCashSales.AsNoTracking().Where(x => x.BusinessId == businessId &&
-            x.CustomerId == customerId && x.CreditDueDate != null);
+            x.CustomerId == customerId && x.CreditDueDate != null &&
+            db.RetailCustomers.Any(customer => customer.Id == customerId && customer.BusinessId == businessId));
 
     internal static IQueryable<RetailCreditPayment> Payments(AppDbContext db, long businessId, long saleId) =>
         db.RetailCreditPayments.AsNoTracking().Where(x => x.BusinessId == businessId && x.SaleId == saleId);

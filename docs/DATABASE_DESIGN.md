@@ -1231,3 +1231,7 @@ Remaining DB-05/06 work: exhaustive table/column references across frontend, API
 ## DB-07 — Document-line tenant integrity (application layer)
 
 Purchase detail rejects receiving lines outside the scoped order (commit 0fffbc1). Cash receipt detail, return history, return/exchange estimation and return posting/replay reject return lines outside the original sale. Tests deliberately introduce cross-business line references via existing independent FKs, verify conflict and absence of new refund/stock posting, and restore fixture integrity. These are application guards, not database constraints. CI and database-level integrity/migration validation remain outstanding. Register aggregate queries and other tenant relationships require separate review.
+
+### DB-07 — Register and credit collection guards
+
+Invoice and return registers now reject invalid original-sale line references within their filtered scope before computing totals (one additional existence query in each existing serializable transaction). Credit collection invoice scope requires an existing customer of the same business; inactive historical customers remain eligible. Tests extend the corrupt-document fixture to register and foreign-customer collection paths. Daily report, other aggregate paths, migration constraints, existing database reconciliation and CI remain unverified.

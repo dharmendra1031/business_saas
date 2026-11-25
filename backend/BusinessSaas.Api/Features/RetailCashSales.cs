@@ -205,6 +205,11 @@ public static class RetailCashSales
             .Where(x => x.BusinessId == businessId && x.SaleId == receiptId)
             .SelectMany(x => x.Lines).ToListAsync(cancellationToken);
 
+    private static IQueryable<RetailCashReturn> ReturnsWithInvalidLines(AppDbContext db, long businessId) =>
+        db.RetailCashReturns.AsNoTracking().Where(refund => refund.BusinessId == businessId &&
+            refund.Lines.Any(line => !db.Set<RetailCashSaleLine>().Any(original =>
+                original.Id == line.SaleLineId && original.SaleId == refund.SaleId)));
+
     private static bool ReturnLinesMatchSale(RetailCashSale sale, IEnumerable<RetailCashReturnLine> returns)
     {
         var ids = sale.Lines.Select(x => x.Id).ToHashSet();
@@ -387,6 +392,9 @@ public static class RetailCashSales
         await using var tx = await db.Database.BeginTransactionAsync(IsolationLevel.Serializable, cancellationToken);
         try
         {
+            if (await ReturnsWithInvalidLines(db, businessId)
+                .AnyAsync(refund => query.Any(item => item.Id == refund.Id), cancellationToken))
+                return Results.Conflict(new { message = "Return lines require reconciliation." });
             const int pageSize = 10;
             var totals = await query.GroupBy(x => x.CurrencyCode).Select(g => new {
                 CurrencyCode = g.Key, RefundTotal = g.Sum(x => x.Total), ReturnCount = g.Count()
@@ -636,6 +644,9 @@ public static class RetailCashSales
         await using var tx = await db.Database.BeginTransactionAsync(IsolationLevel.Serializable, cancellationToken);
         try
         {
+            if (await ReturnsWithInvalidLines(db, businessId)
+                .AnyAsync(refund => sales.Any(sale => sale.Id == refund.SaleId), cancellationToken))
+                return Results.Conflict(new { message = "Return lines require reconciliation." });
             // Without a return-status filter, header totals do not need line quantity aggregates.
             // Keep the original requirement that a receipt has at least one sale line.
             var totalsSource = status == "All"

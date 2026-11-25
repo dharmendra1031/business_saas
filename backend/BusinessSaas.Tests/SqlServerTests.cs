@@ -1561,6 +1561,9 @@ public sealed class SqlServerTests(Xunit.Abstractions.ITestOutputHelper output)
             Assert.Equal(HttpStatusCode.Conflict, badDetail.StatusCode);
             using var badHistory = await owner.GetAsync(salePath + "/returns" + locationQuery);
             Assert.Equal(HttpStatusCode.Conflict, badHistory.StatusCode);
+            var register = $"/api/businesses/{businessId}/cash-sales";
+            Assert.Equal(HttpStatusCode.Conflict, (await owner.GetAsync(register + "/business-returns?locationId=0")).StatusCode);
+            Assert.Equal(HttpStatusCode.Conflict, (await owner.GetAsync(register + "/business-receipts?locationId=0")).StatusCode);
             using var estimate = await Post(owner, salePath + "/return-estimate", new
             {
                 locationId = ownSale.LocationId,
@@ -1579,6 +1582,37 @@ public sealed class SqlServerTests(Xunit.Abstractions.ITestOutputHelper output)
         finally
         {
             refundLine.SaleLineId = ownSale.Lines.Single().Id;
+            await db.SaveChangesAsync();
+        }
+
+        var foreignCustomer = new RetailCustomer
+        {
+            BusinessId = otherId, Name = "Foreign customer", NameKey = "FOREIGN CUSTOMER"
+        };
+        db.RetailCustomers.Add(foreignCustomer);
+        await db.SaveChangesAsync();
+        // A credit document with a foreign customer must not authorize collection.
+        ownSale.CustomerId = foreignCustomer.Id;
+        ownSale.CreditDueDate = DateOnly.FromDateTime(DateTime.UtcNow.AddDays(7));
+        ownSale.Tendered = 0m;
+        await db.SaveChangesAsync();
+        try
+        {
+            var paymentPath = $"/api/businesses/{businessId}/customers/{foreignCustomer.Id}/credit-invoices/{ownSale.Id}/payments";
+            Assert.Equal(HttpStatusCode.NotFound, (await owner.GetAsync(paymentPath)).StatusCode);
+            using var collection = await Post(owner, paymentPath, new
+            {
+                requestKey = "sql-isolation-credit-collection", amount = 5m,
+                expectedOutstanding = 10m, cashReceivedConfirmed = true
+            });
+            Assert.Equal(HttpStatusCode.NotFound, collection.StatusCode);
+            Assert.False(await db.RetailCreditPayments.AnyAsync(x => x.SaleId == ownSale.Id));
+        }
+        finally
+        {
+            ownSale.CustomerId = null;
+            ownSale.CreditDueDate = null;
+            ownSale.Tendered = 10m;
             await db.SaveChangesAsync();
         }
     }
