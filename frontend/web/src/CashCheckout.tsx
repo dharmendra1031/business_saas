@@ -97,6 +97,7 @@ export default function CashCheckout({ userId, dashboard, onExit }: {
   const [customer, setCustomer] = useState<SaleCustomer | null>(() => pending?.customerId
     ? { id: pending.customerId, name: `Customer #${pending.customerId}`, phone: '' } : null)
   const [customerOpen, setCustomerOpen] = useState(false)
+  const [productOpen, setProductOpen] = useState(false)
   const [customerSearch, setCustomerSearch] = useState('')
   const [customerResults, setCustomerResults] = useState<SaleCustomer[]>([])
   const [customerStatus, setCustomerStatus] = useState('')
@@ -187,18 +188,18 @@ export default function CashCheckout({ userId, dashboard, onExit }: {
 
   useEffect(() => {
     if (!customerOpen || pending || receipt || !locationId || !dashboard.canOperate) return
-    let active = true
+    const controller = new AbortController()
     setCustomerResults([])
     const term = customerSearch.trim()
     if (term.length < 2) { setCustomerStatus('Enter at least two characters.'); return }
     setCustomerStatus('Searching customers…')
     const timer = setTimeout(() => {
-      api<SaleCustomer[]>(base + '/customers?' + new URLSearchParams({ locationId: String(locationId), search: term }))
+      api<SaleCustomer[]>(base + '/customers?' + new URLSearchParams({ locationId: String(locationId), search: term }), { signal: controller.signal })
         .then(result => {
-          if (active) { setCustomerResults(result); setCustomerStatus(result.length ? '' : 'No matching active customer.') }
-        }).catch(() => { if (active) setCustomerStatus('Unable to search customers. Edit the search to retry.') })
+          if (!controller.signal.aborted) { setCustomerResults(result); setCustomerStatus(result.length ? '' : 'No matching active customer.') }
+        }).catch(() => { if (!controller.signal.aborted) setCustomerStatus('Unable to search customers. Edit the search to retry.') })
     }, 200)
-    return () => { active = false; clearTimeout(timer) }
+    return () => { clearTimeout(timer); controller.abort() }
   }, [base, customerOpen, customerSearch, locationId, pending, receipt, dashboard.canOperate])
 
   useEffect(() => {
@@ -208,7 +209,7 @@ export default function CashCheckout({ userId, dashboard, onExit }: {
       if (event.defaultPrevented || event.repeat || event.isComposing ||
         event.ctrlKey || event.altKey || event.metaKey || event.shiftKey ||
         lock.current || scanLock.current) return
-      if (customerOpen) { if (['F2', 'F4', 'F9'].includes(event.key)) event.preventDefault(); return }
+      if (customerOpen || productOpen) { if (['F2', 'F4', 'F9'].includes(event.key)) event.preventDefault(); return }
       if (event.key === 'F2') {
         event.preventDefault()
         if (historyPage) setHistoryPage(0)
@@ -233,7 +234,7 @@ export default function CashCheckout({ userId, dashboard, onExit }: {
     document.addEventListener('keydown', onKeyDown)
     return () => document.removeEventListener('keydown', onKeyDown)
   }, [dashboard.canOperate, saleAvailable, busy, scanBusy, pending, receipt,
-    showPayment, clearArmed, exitArmed, historyPage, customerOpen])
+    showPayment, clearArmed, exitArmed, historyPage, customerOpen, productOpen])
 
   function addProduct(item: Product, fromScan = false) {
     if (!dashboard.canOperate || !saleAvailable || lock.current || busy || pending || receipt ||
@@ -529,7 +530,10 @@ export default function CashCheckout({ userId, dashboard, onExit }: {
         </div>
         {!historyPage && <form className="pos-search" role="search" onSubmit={event => void submitBarcode(event)}>
           <label className="visually-hidden" htmlFor="pos-product-search">Search product or scan barcode</label>
-          <Search size={19} aria-hidden="true" />
+          <button type="button" className="btn btn-outline-secondary btn-sm" aria-label="Search items"
+            aria-haspopup="dialog" aria-expanded={productOpen}
+            disabled={busy || scanBusy || !dashboard.canOperate || !saleAvailable}
+            onClick={() => setProductOpen(true)}><Search size={19} aria-hidden="true" /></button>
           <input ref={searchInput} id="pos-product-search" aria-keyshortcuts="F2" autoFocus className="form-control" type="search"
             placeholder="Search product, SKU or scan barcode…" maxLength={150} value={search}
             disabled={!dashboard.canOperate || busy} readOnly={scanBusy} onChange={event => setSearch(event.target.value)} />
@@ -538,6 +542,24 @@ export default function CashCheckout({ userId, dashboard, onExit }: {
             {scanBusy ? 'Checking…' : 'Scan / Enter'}
           </button>
         </form>}
+        {productOpen && <LookupDialog title="Search items" searchId="pos-item-lookup-search"
+          search={search} placeholder="Item code, name or barcode"
+          columns={['Item code', 'Item name', 'Unit', 'Available stock', 'Sale price']}
+          context={locations.find(location => location.id === locationId)?.name}
+          rows={products.map(item => {
+            const line = basket.find(entry => entry.productId === item.id)
+            const remaining = item.available - (line ? stockQuantity(line) ?? 0 : 0)
+            return { id: item.id, cells: [item.sku, item.name, item.unitCode ?? '—',
+              new Intl.NumberFormat(undefined, { maximumFractionDigits: 3 }).format(item.available), money(item.salePrice)],
+              disabled: remaining < 0.001 || line?.unitId != null || (!line && basket.length >= 100) }
+          })}
+          status={productsLoading ? 'Searching…' : hint}
+          onSearch={value => { setProducts([]); setProductsLoading(true); setSearch(value) }}
+          onSelect={id => {
+            const item = products.find(entry => entry.id === id)
+            setProductOpen(false)
+            if (item) addProduct(item)
+          }} onClose={() => setProductOpen(false)} />}
         {!historyPage && hint && <p className="pos-field-status" role="status">{hint}</p>}
         {!dashboard.canOperate && <p className="alert alert-warning" role="status">
           Your business is not enabled for checkout. Product selection is read-only.

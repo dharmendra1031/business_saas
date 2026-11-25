@@ -7,7 +7,7 @@ export default function LookupDialog({ title, searchId, search, placeholder, col
   search: string
   placeholder: string
   columns: string[]
-  rows: { id: number; cells: string[]; label?: string }[]
+  rows: { id: number; cells: string[]; label?: string; disabled?: boolean }[]
   status: string
   context?: string
   pagination?: { page: number; hasMore: boolean; busy: boolean; onChange: (page: number) => void }
@@ -24,11 +24,23 @@ export default function LookupDialog({ title, searchId, search, placeholder, col
     input.current?.focus()
     return () => { element.close() }
   }, [])
+  function close() {
+    dialog.current?.close()
+    onClose()
+  }
+  function choose(id: number) {
+    if (!rows.some(row => row.id === id && !row.disabled)) return
+    dialog.current?.close()
+    onSelect(id)
+  }
   return <dialog ref={dialog} className="lookup-dialog" aria-label={title}
-    onCancel={event => { event.preventDefault(); onClose() }}>
+    onKeyDownCapture={event => {
+      if (event.key === 'Escape') { event.preventDefault(); event.stopPropagation(); close() }
+    }}
+    onCancel={event => { event.preventDefault(); close() }}>
     <div className="d-flex align-items-center justify-content-between gap-2 mb-3">
       <h2 className="h5 mb-0">{title}</h2>
-      <button type="button" className="btn btn-outline-secondary btn-sm" onClick={onClose}>Close</button>
+      <button type="button" className="btn btn-outline-secondary btn-sm" onClick={close}>Close</button>
     </div>
     {context && <p className="small mb-2">Location: {context}</p>}
     <label className="visually-hidden" htmlFor={searchId}>{placeholder}</label>
@@ -37,20 +49,29 @@ export default function LookupDialog({ title, searchId, search, placeholder, col
       onKeyDown={event => {
         if (event.key === 'Enter') {
           event.preventDefault()
-          if (rows.length === 1) onSelect(rows[0].id)
+          if (rows.length === 1) choose(rows[0].id)
         }
         if (event.key === 'ArrowDown') {
           event.preventDefault()
-          dialog.current?.querySelector<HTMLButtonElement>('tbody button')?.focus()
+          dialog.current?.querySelector<HTMLButtonElement>('tbody button:not(:disabled)')?.focus()
         }
       }} />
     <div className="lookup-results table-responsive">
       <table className="table table-hover table-sm align-middle mb-0">
         <thead><tr>{columns.map(column => <th key={column} scope="col">{column}</th>)}</tr></thead>
-        <tbody>{rows.map(row => <tr key={row.id} onClick={() => onSelect(row.id)}>
+        <tbody>{rows.map(row => <tr key={row.id} onClick={() => choose(row.id)}>
           <td><button type="button" className="btn btn-link text-dark p-0 text-start"
-            id={searchId + '-option-' + row.id} aria-label={row.label ?? row.cells.join(' · ')}
-            onClick={event => { event.stopPropagation(); onSelect(row.id) }}>{row.cells[0]}</button></td>
+            id={searchId + '-option-' + row.id} aria-label={row.label ?? row.cells.join(' · ')} disabled={row.disabled}
+            onClick={event => { event.stopPropagation(); choose(row.id) }}
+            onKeyDown={event => {
+              if (event.key !== 'ArrowDown' && event.key !== 'ArrowUp') return
+              event.preventDefault()
+              const buttons = Array.from(dialog.current?.querySelectorAll<HTMLButtonElement>('tbody button:not(:disabled)') ?? [])
+              const index = buttons.indexOf(event.currentTarget)
+              const next = index + (event.key === 'ArrowDown' ? 1 : -1)
+              if (next < 0) input.current?.focus()
+              else buttons[next]?.focus()
+            }}>{row.cells[0]}</button></td>
           {row.cells.slice(1).map((cell, index) => <td key={index}>{cell}</td>)}
         </tr>)}</tbody>
       </table>
