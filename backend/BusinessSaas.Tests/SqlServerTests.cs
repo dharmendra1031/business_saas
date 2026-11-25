@@ -346,6 +346,7 @@ public sealed class SqlServerTests
             builder.UseEnvironment("Development"); // Cash posting is not released outside Development yet.
             builder.UseSetting("RetailReturns:PostingEnabled", "true");
             builder.UseSetting("RetailSales:AlternateUnitsEnabled", "true");
+            builder.UseSetting("RetailCredit:PostingEnabled", "true");
             builder.ConfigureServices(services =>
             {
                 services.RemoveAll<DbContextOptions<AppDbContext>>();
@@ -1054,6 +1055,69 @@ public sealed class SqlServerTests
             Assert.False(await db.RetailCashReturns.AnyAsync(x => x.BusinessId == businessId &&
                 x.RequestKey == "sql-invalid-fraction-return-20261125"));
         }
+        // The credit pilot requires both gates; enable the business setting only
+        // inside this disposable test database, never through public billing settings.
+        var creditCustomerId = await Created(prefix + "/customers", new { name = "SQL Credit Customer", phone = "1234567890", email = "" });
+        var creditPath = prefix + "/credit-sales";
+        var creditLedgerPath = prefix + "/customers/" + creditCustomerId + "/credit-ledger";
+        var creditDate = DateOnly.FromDateTime(TimeZoneInfo.ConvertTimeFromUtc(DateTime.UtcNow, zone));
+        var creditRequest = new { locationId, customerId = creditCustomerId, requestKey = "sql-credit-pilot-20261125",
+            dueDate = creditDate.AddDays(7),
+            lines = new[] { new { productId = packProductId, quantity = 2m, expectedUnitPrice = 10m, expectedBaseUnitCode = "SQPCS" } } };
+        Assert.Equal(HttpStatusCode.Conflict, (await Post(owner, creditPath, creditRequest)).StatusCode);
+        using (var scope = factory.Services.CreateScope())
+        {
+            var db = scope.ServiceProvider.GetRequiredService<AppDbContext>();
+            await db.Businesses.Where(x => x.Id == businessId).ExecuteUpdateAsync(x =>
+                x.SetProperty(b => b.CreditSalesEnabled, true));
+        }
+        Assert.Equal(HttpStatusCode.Conflict, (await Post(owner, creditPath, creditRequest)).StatusCode);
+        Assert.Equal(HttpStatusCode.OK, (await Put(owner, prefix + "/customers/" + creditCustomerId + "/credit-limit",
+            new { limit = 25m, expectedLimit = 0m, reason = "Approved test credit limit" })).StatusCode);
+        Assert.Equal(HttpStatusCode.NotFound, (await Post(cashier, creditPath, creditRequest)).StatusCode);
+        Assert.Equal(HttpStatusCode.BadRequest, (await Post(owner, creditPath, creditRequest with { customerId = 0L })).StatusCode);
+        Assert.Equal(HttpStatusCode.BadRequest, (await Post(owner, creditPath, creditRequest with { dueDate = creditDate.AddDays(-1) })).StatusCode);
+        var cashReportBefore = await owner.GetFromJsonAsync<JsonElement>(dailyPath + creditDate.ToString("yyyy-MM-dd"));
+        using var creditResponse = await Post(owner, creditPath, creditRequest);
+        Assert.Equal(HttpStatusCode.OK, creditResponse.StatusCode);
+        var creditInvoice = await creditResponse.Content.ReadFromJsonAsync<JsonElement>();
+        var creditId = creditInvoice.GetProperty("id").GetInt64();
+        Assert.Equal("Credit", creditInvoice.GetProperty("paymentMethod").GetString());
+        Assert.Equal(20m, creditInvoice.GetProperty("outstanding").GetDecimal());
+        Assert.Equal(0m, creditInvoice.GetProperty("tendered").GetDecimal());
+        Assert.False(creditInvoice.GetProperty("printAvailable").GetBoolean());
+        using var creditReplay = await Post(owner, creditPath, creditRequest);
+        Assert.Equal(HttpStatusCode.OK, creditReplay.StatusCode);
+        Assert.Equal(creditId, (await creditReplay.Content.ReadFromJsonAsync<JsonElement>()).GetProperty("id").GetInt64());
+        Assert.Equal(HttpStatusCode.Conflict, (await Post(owner, creditPath,
+            creditRequest with { requestKey = "sql-credit-over-limit-20261125" })).StatusCode);
+        var ledger = await owner.GetFromJsonAsync<JsonElement>(creditLedgerPath);
+        Assert.Equal(20m, ledger.GetProperty("totals")[0].GetProperty("outstanding").GetDecimal());
+        Assert.Equal(creditId, ledger.GetProperty("items")[0].GetProperty("id").GetInt64());
+        Assert.Equal(HttpStatusCode.NotFound, (await cashier.GetAsync(creditLedgerPath)).StatusCode);
+        Assert.Equal(HttpStatusCode.NotFound, (await stranger.GetAsync(creditLedgerPath)).StatusCode);
+        var creditCashPath = packSalePath + "/business-receipts/" + creditId;
+        Assert.Equal(HttpStatusCode.NotFound, (await owner.GetAsync(creditCashPath + "?locationId=" + locationId)).StatusCode);
+        Assert.Equal(HttpStatusCode.NotFound, (await owner.GetAsync(creditCashPath + "/pdf?locationId=" + locationId)).StatusCode);
+        Assert.Equal(HttpStatusCode.NotFound, (await Post(owner, creditCashPath + "/return-estimate",
+            new { locationId, lines = new[] { new { lineId = creditInvoice.GetProperty("lines")[0].GetProperty("id").GetInt64(), quantity = 1m } } })).StatusCode);
+        var cashReportAfter = await owner.GetFromJsonAsync<JsonElement>(dailyPath + creditDate.ToString("yyyy-MM-dd"));
+        Assert.Equal(cashReportBefore.GetProperty("totals").GetRawText(), cashReportAfter.GetProperty("totals").GetRawText());
+        using (var scope = factory.Services.CreateScope())
+        {
+            var db = scope.ServiceProvider.GetRequiredService<AppDbContext>();
+            Assert.Equal(3.5m, await db.RetailStockBalances.Where(x => x.BusinessId == businessId &&
+                x.LocationId == locationId && x.ProductId == packProductId).Select(x => x.Quantity).SingleAsync());
+            Assert.Single(await db.RetailCashSales.Where(x => x.BusinessId == businessId && x.CreditDueDate != null).ToListAsync());
+            Assert.Single(await db.RetailStockMovements.Where(x => x.BusinessId == businessId &&
+                x.ProductId == packProductId && x.SourceType == "CreditSaleLine").ToListAsync());
+            await db.Businesses.Where(x => x.Id == businessId).ExecuteUpdateAsync(x =>
+                x.SetProperty(b => b.CreditSalesEnabled, false));
+        }
+        Assert.Equal(HttpStatusCode.OK, (await owner.GetAsync(creditLedgerPath)).StatusCode);
+        Assert.Equal(HttpStatusCode.OK, (await Post(owner, creditPath, creditRequest)).StatusCode);
+        Assert.Equal(HttpStatusCode.Conflict, (await Post(owner, creditPath,
+            creditRequest with { requestKey = "sql-credit-disabled-20261125" })).StatusCode);
     }
 
     private static async Task RegisterAndLogin(HttpClient client, string email)

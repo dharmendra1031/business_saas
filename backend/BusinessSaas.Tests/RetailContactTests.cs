@@ -107,6 +107,12 @@ public sealed class RetailContactTests
         var customerId = (await customer.Content.ReadFromJsonAsync<JsonElement>())
             .GetProperty("id").GetInt64();
         Assert.True(customerId > 0);
+        var ledgerPath = customers + "/" + customerId + "/credit-ledger";
+        var emptyLedger = await owner.GetFromJsonAsync<JsonElement>(ledgerPath);
+        Assert.Empty(emptyLedger.GetProperty("items").EnumerateArray());
+        Assert.Empty(emptyLedger.GetProperty("totals").EnumerateArray());
+        Assert.Equal(HttpStatusCode.NotFound, (await manager.GetAsync(ledgerPath)).StatusCode);
+        Assert.Equal(HttpStatusCode.NotFound, (await other.GetAsync(ledgerPath)).StatusCode);
         var limitPath = customers + "/" + customerId + "/credit-limit";
         object Limit(decimal value, decimal expected = 0) => new { limit = value, expectedLimit = expected, reason = "Approved credit policy" };
         Assert.Equal(HttpStatusCode.BadRequest, (await Send(owner, HttpMethod.Put, limitPath, Limit(-1m))).StatusCode);

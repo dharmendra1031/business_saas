@@ -24,6 +24,62 @@ interface ContactPage {
 
 const emptyForm = { name: '', phone: '', email: '', address: '', isActive: true }
 
+interface CreditLedger {
+  customerId: number
+  name: string
+  creditLimit: number
+  totals: { currencyCode: string; outstanding: number; invoiceCount: number }[]
+  items: { id: number; locationName?: string | null; currencyCode: string; debit: number;
+    creditDueDate: string; postedAtUtc: string }[]
+  hasMore: boolean
+}
+
+function CustomerCreditLedger({ path, onClose }: { path: string; onClose: () => void }) {
+  const [page, setPage] = useState(1)
+  const [reload, setReload] = useState(0)
+  const [ledger, setLedger] = useState<CreditLedger | null>(null)
+  const [error, setError] = useState('')
+  useEffect(() => {
+    let active = true
+    setLedger(null); setError('')
+    api<CreditLedger>(path + '?page=' + page).then(value => {
+      if (active) setLedger(value)
+    }).catch(cause => {
+      if (active && !(cause instanceof SessionExpiredError))
+        setError(cause instanceof Error ? cause.message : 'Unable to load credit ledger.')
+    })
+    return () => { active = false }
+  }, [path, page, reload])
+  return <section className="border rounded p-2 mb-3" aria-label="Customer credit ledger">
+    <div className="d-flex flex-wrap justify-content-between align-items-center gap-2">
+      <h3 className="h6 mb-0">Credit ledger{ledger ? ' — ' + ledger.name : ''}</h3>
+      <button type="button" className="btn btn-sm btn-outline-secondary" onClick={onClose}>Close ledger</button>
+    </div>
+    {error ? <p role="alert" className="mt-2">{error} <button type="button" className="btn btn-sm btn-outline-secondary"
+      onClick={() => setReload(x => x + 1)}>Retry</button></p> : !ledger ? <p role="status" className="mt-2">Loading credit ledger…</p> :
+      <>
+        {ledger.totals.length === 0 ? <p className="mt-2 mb-1">No posted credit invoices.</p> :
+          <>{ledger.totals.map(total => <p key={total.currencyCode} className="mt-2 mb-1">
+            Outstanding: <strong>{total.currencyCode} {total.outstanding.toFixed(2)}</strong> · {total.invoiceCount} invoices
+          </p>)}
+          <div className="table-responsive"><table className="table table-sm align-middle">
+            <thead><tr><th>Invoice</th><th>Location</th><th>Due date</th><th className="text-end">Unpaid amount</th></tr></thead>
+            <tbody>{ledger.items.map(invoice => <tr key={invoice.id}>
+              <td>#{invoice.id}</td><td>{invoice.locationName ?? '—'}</td><td>{invoice.creditDueDate}</td>
+              <td className="text-end">{invoice.currencyCode} {invoice.debit.toFixed(2)}</td>
+            </tr>)}</tbody>
+          </table></div>
+          <div className="btn-group">
+            <button type="button" className="btn btn-sm btn-outline-secondary" disabled={page === 1}
+              onClick={() => setPage(x => x - 1)}>Previous</button>
+            <button type="button" className="btn btn-sm btn-outline-secondary" disabled={!ledger.hasMore}
+              onClick={() => setPage(x => x + 1)}>Next</button>
+          </div></>}
+        <p className="small mb-0 mt-2">Credit invoice pilot. Collections are not available yet.</p>
+      </>}
+  </section>
+}
+
 export default function RetailContacts({ businessId, canOperate, type, isOwner, currencyCode }: {
   businessId: number
   canOperate: boolean
@@ -40,6 +96,7 @@ export default function RetailContacts({ businessId, canOperate, type, isOwner, 
   const [reload, setReload] = useState(0)
   const [form, setForm] = useState(emptyForm)
   const [editingId, setEditingId] = useState<number | null>(null)
+  const [ledgerCustomer, setLedgerCustomer] = useState<number | null>(null)
   const [originalLimit, setOriginalLimit] = useState<number | null>(null)
   const [creditLimit, setCreditLimit] = useState('')
   const [creditReason, setCreditReason] = useState('')
@@ -217,6 +274,10 @@ export default function RetailContacts({ businessId, canOperate, type, isOwner, 
           </div>
         </form>}
 
+      {!supplier && isOwner && ledgerCustomer !== null &&
+        <CustomerCreditLedger key={basePath + '/' + ledgerCustomer}
+          path={basePath + '/' + ledgerCustomer + '/credit-ledger'} onClose={() => setLedgerCustomer(null)} />}
+
       <form className="masters-search" onSubmit={event => {
         event.preventDefault()
         setPage(1)
@@ -240,7 +301,7 @@ export default function RetailContacts({ businessId, canOperate, type, isOwner, 
                   <th scope="col">Name</th><th scope="col">Phone</th><th scope="col">Email</th>
                   {!supplier && isOwner && <th scope="col" className="text-end">Credit limit ({currencyCode})</th>}
                   <th scope="col">Status</th>
-                  {canOperate && <th scope="col" className="text-end">Action</th>}
+                  {(canOperate || (!supplier && isOwner)) && <th scope="col" className="text-end">Action</th>}
                 </tr></thead>
                 <tbody>{items.map(item => <tr key={item.id}>
                   <td><strong>{item.name}</strong></td>
@@ -248,9 +309,13 @@ export default function RetailContacts({ businessId, canOperate, type, isOwner, 
                   <td>{item.email || '—'}</td>
                   {!supplier && isOwner && <td className="text-end">{item.creditLimit == null ? '—' : item.creditLimit.toFixed(2)}</td>}
                   <td>{item.isActive ? 'Active' : 'Inactive'}</td>
-                  {canOperate && <td className="text-end">
-                    <button type="button" className="btn btn-sm btn-outline-secondary"
-                      disabled={saving} onClick={() => edit(item)} aria-label={`Edit ${item.name}`}>Edit</button>
+                  {(canOperate || (!supplier && isOwner)) && <td className="text-end">
+                    <div className="d-flex flex-wrap justify-content-end gap-1">
+                      {canOperate && <button type="button" className="btn btn-sm btn-outline-secondary"
+                        disabled={saving} onClick={() => edit(item)} aria-label={`Edit ${item.name}`}>Edit</button>}
+                      {!supplier && isOwner && <button type="button" className="btn btn-sm btn-outline-secondary"
+                        onClick={() => setLedgerCustomer(item.id)} aria-label={`Credit ledger for ${item.name}`}>Ledger</button>}
+                    </div>
                   </td>}
                 </tr>)}</tbody>
               </table>
