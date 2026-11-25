@@ -48,14 +48,14 @@ export default function CreditPayment({ customerPath, invoice, storageKey, pendi
   const path = customerPath + '/credit-invoices/' + invoice.id + '/payments'
   useEffect(() => { mounted.current = true; return () => { mounted.current = false } }, [])
   useEffect(() => {
-    let active = true
+    const controller = new AbortController()
     setHistory(null); setHistoryError('')
-    api<History>(path + '?page=' + page).then(value => {
-      if (active) setHistory(value)
+    api<History>(path + '?page=' + page, { signal: controller.signal }).then(value => {
+      if (!controller.signal.aborted) setHistory(value)
     }).catch(cause => {
-      if (active) setHistoryError(cause instanceof Error ? cause.message : 'Unable to load payments.')
+      if (!controller.signal.aborted) setHistoryError(cause instanceof Error ? cause.message : 'Unable to load payments.')
     })
-    return () => { active = false }
+    return () => controller.abort()
   }, [path, page, reload])
 
   const cents = moneyCents(amount)

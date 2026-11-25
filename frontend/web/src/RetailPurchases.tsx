@@ -158,22 +158,22 @@ export default function RetailPurchases({ businessId, canOperate, locations, rol
 
 
   useEffect(() => {
-    let active = true
+    const controller = new AbortController()
     setLoading(true)
     setLoadError('')
     setOrders([])
     setTotal(0)
-    api<Page<OrderRow>>(basePath + '?page=' + page + (approvalsOnly ? '&draftOnly=true' : ''))
+    api<Page<OrderRow>>(basePath + '?page=' + page + (approvalsOnly ? '&draftOnly=true' : ''), { signal: controller.signal })
       .then(data => {
-        if (!active) return
+        if (controller.signal.aborted) return
         setOrders(data.items)
         setTotal(data.total)
       })
       .catch(cause => {
-        if (active && !(cause instanceof SessionExpiredError)) setLoadError(message(cause))
+        if (!controller.signal.aborted && !(cause instanceof SessionExpiredError)) setLoadError(message(cause))
       })
-      .finally(() => { if (active) setLoading(false) })
-    return () => { active = false }
+      .finally(() => { if (!controller.signal.aborted) setLoading(false) })
+    return () => controller.abort()
   }, [basePath, page, reload, approvalsOnly])
 
   useEffect(() => {
@@ -234,20 +234,20 @@ export default function RetailPurchases({ businessId, canOperate, locations, rol
 
   useEffect(() => {
     if (selectedId === null) return
-    let active = true
+    const controller = new AbortController()
     setDetail(null)
     setDetailError('')
-    api<OrderDetail>(basePath + '/' + selectedId)
+    api<OrderDetail>(basePath + '/' + selectedId, { signal: controller.signal })
       .then(value => {
-        if (!active) return
+        if (controller.signal.aborted) return
         setDetail(value)
         setReceiving({})
         setReceivingOpen(false)
       })
       .catch(cause => {
-        if (active && !(cause instanceof SessionExpiredError)) setDetailError(message(cause))
+        if (!controller.signal.aborted && !(cause instanceof SessionExpiredError)) setDetailError(message(cause))
       })
-    return () => { active = false }
+    return () => controller.abort()
   }, [basePath, selectedId, reload])
 
   function closeSupplierForm() {

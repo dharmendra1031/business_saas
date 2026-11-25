@@ -49,15 +49,15 @@ function CustomerCreditLedger({ path, userId, onClose }: { path: string; userId:
   const [ledger, setLedger] = useState<CreditLedger | null>(null)
   const [error, setError] = useState('')
   useEffect(() => {
-    let active = true
+    const controller = new AbortController()
     setLedger(null); setError('')
-    api<CreditLedger>(path + '?page=' + page).then(value => {
-      if (active) setLedger(value)
+    api<CreditLedger>(path + '?page=' + page, { signal: controller.signal }).then(value => {
+      if (!controller.signal.aborted) setLedger(value)
     }).catch(cause => {
-      if (active && !(cause instanceof SessionExpiredError))
+      if (!controller.signal.aborted && !(cause instanceof SessionExpiredError))
         setError(cause instanceof Error ? cause.message : 'Unable to load credit ledger.')
     })
-    return () => { active = false }
+    return () => controller.abort()
   }, [path, page, reload])
   return <section className="border rounded p-2 mb-3" aria-label="Customer credit ledger">
     <div className="d-flex flex-wrap justify-content-between align-items-center gap-2">
@@ -142,24 +142,24 @@ export default function RetailContacts({ businessId, canOperate, type, isOwner, 
   const label = supplier ? 'Supplier' : 'Customer'
 
   useEffect(() => {
-    let active = true
+    const controller = new AbortController()
     setLoading(true)
     setLoadError('')
     const params = new URLSearchParams({ search: query, page: String(page) })
-    api<ContactPage>(basePath + '?' + params)
+    api<ContactPage>(basePath + '?' + params, { signal: controller.signal })
       .then(value => {
-        if (!active) return
+        if (controller.signal.aborted) return
         setItems(value.items)
         setTotal(value.total)
       })
       .catch(cause => {
-        if (!active || cause instanceof SessionExpiredError) return
+        if (controller.signal.aborted || cause instanceof SessionExpiredError) return
         setItems([])
         setTotal(0)
         setLoadError(cause instanceof Error ? cause.message : 'Unable to load records.')
       })
-      .finally(() => { if (active) setLoading(false) })
-    return () => { active = false }
+      .finally(() => { if (!controller.signal.aborted) setLoading(false) })
+    return () => controller.abort()
   }, [basePath, page, query, reload])
 
   useEffect(() => {

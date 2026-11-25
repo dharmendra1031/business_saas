@@ -54,12 +54,12 @@ export default function BusinessReturns({ dashboard }: { dashboard: RetailDashbo
 
   useEffect(() => {
     if (!selected) return
-    let active = true
+    const controller = new AbortController()
     setReceipt(null); setReceiptError('')
-    api<Receipt>(base + '/business-receipts/' + selected.saleId + '?locationId=' + selected.locationId)
-      .then(value => { if (active) setReceipt(value) })
-      .catch(cause => { if (active && !(cause instanceof SessionExpiredError)) setReceiptError('Unable to open original invoice.') })
-    return () => { active = false }
+    api<Receipt>(base + '/business-receipts/' + selected.saleId + '?locationId=' + selected.locationId, { signal: controller.signal })
+      .then(value => { if (!controller.signal.aborted) setReceipt(value) })
+      .catch(cause => { if (!controller.signal.aborted && !(cause instanceof SessionExpiredError)) setReceiptError('Unable to open original invoice.') })
+    return () => controller.abort()
   }, [base, selected, receiptReload])
 
   const closeReceipt = () => { setSelected(null); setReceipt(null); setReceiptError('') }

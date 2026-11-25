@@ -78,22 +78,22 @@ export default function RetailStockAdjustments({ businessId, locationId, canOper
 
   useEffect(() => {
     if (selected) return
-    let active = true
+    const controller = new AbortController()
     setLoading(true)
     setLoadError('')
     setItems([])
     setTotal(0)
-    api<AdjustmentPage>(basePath + '?page=' + page)
+    api<AdjustmentPage>(basePath + '?page=' + page, { signal: controller.signal })
       .then(data => {
-        if (!active) return
+        if (controller.signal.aborted) return
         setItems(data.items)
         setTotal(data.total)
       })
       .catch(cause => {
-        if (active && !(cause instanceof SessionExpiredError)) setLoadError(errorMessage(cause))
+        if (!controller.signal.aborted && !(cause instanceof SessionExpiredError)) setLoadError(errorMessage(cause))
       })
-      .finally(() => { if (active) setLoading(false) })
-    return () => { active = false }
+      .finally(() => { if (!controller.signal.aborted) setLoading(false) })
+    return () => controller.abort()
   }, [basePath, page, reload, selected])
 
   async function create(event: FormEvent) {

@@ -79,14 +79,14 @@ public static class RetailCashSales
     }
 
     private static async Task<IResult> BusinessCreditInvoice(long businessId, long receiptId, long locationId,
-        ClaimsPrincipal user, AppDbContext db)
+        ClaimsPrincipal user, AppDbContext db, CancellationToken cancellationToken)
     {
-        if (await RetailBillingSettingsEndpoints.OwnerId(db, businessId, user) is null)
+        if (await RetailBillingSettingsEndpoints.OwnerId(db, businessId, user, cancellationToken) is null)
             return Results.NotFound();
         var sale = await db.RetailCashSales.AsNoTracking().Include(x => x.Lines).SingleOrDefaultAsync(x =>
-            x.BusinessId == businessId && x.Id == receiptId && x.LocationId == locationId && x.CreditDueDate != null);
+            x.BusinessId == businessId && x.Id == receiptId && x.LocationId == locationId && x.CreditDueDate != null, cancellationToken);
         if (sale is null) return Results.NotFound();
-        return Results.Ok(Receipt(sale, creditPaid: await CreditCollections.PaidAsync(db, businessId, sale.Id) ?? 0m));
+        return Results.Ok(Receipt(sale, creditPaid: await CreditCollections.PaidAsync(db, businessId, sale.Id, cancellationToken) ?? 0m));
     }
 
     private static async Task<IResult> Latest(long businessId, long locationId, ClaimsPrincipal user, AppDbContext db)
@@ -187,20 +187,20 @@ public static class RetailCashSales
     }
 
     private static async Task<IResult> BusinessReceiptById(long businessId, long locationId, long receiptId,
-        ClaimsPrincipal user, AppDbContext db)
+        ClaimsPrincipal user, AppDbContext db, CancellationToken cancellationToken)
     {
         if (!long.TryParse(user.FindFirstValue(ClaimTypes.NameIdentifier), out var actor) ||
-            await Shop(db, businessId, actor, locationId, ownerOnly: true) is null) return Results.NotFound();
+            await Shop(db, businessId, actor, locationId, ownerOnly: true, cancellationToken: cancellationToken) is null) return Results.NotFound();
         var sale = await CashOnly(db).Include(x => x.Lines)
-            .SingleOrDefaultAsync(x => x.Id == receiptId && x.BusinessId == businessId && x.LocationId == locationId);
+            .SingleOrDefaultAsync(x => x.Id == receiptId && x.BusinessId == businessId && x.LocationId == locationId, cancellationToken);
         if (sale is null) return Results.NotFound();
-        return Results.Ok(Receipt(sale, await ReturnedLines(db, businessId, receiptId)));
+        return Results.Ok(Receipt(sale, await ReturnedLines(db, businessId, receiptId, cancellationToken)));
     }
 
-    private static Task<List<RetailCashReturnLine>> ReturnedLines(AppDbContext db, long businessId, long receiptId) =>
+    private static Task<List<RetailCashReturnLine>> ReturnedLines(AppDbContext db, long businessId, long receiptId, CancellationToken cancellationToken = default) =>
         db.RetailCashReturns.AsNoTracking()
             .Where(x => x.BusinessId == businessId && x.SaleId == receiptId)
-            .SelectMany(x => x.Lines).ToListAsync();
+            .SelectMany(x => x.Lines).ToListAsync(cancellationToken);
 
     public sealed record ReturnEstimateLine(long LineId, decimal Quantity);
     public sealed record ReturnEstimateRequest(long LocationId, List<ReturnEstimateLine>? Lines);

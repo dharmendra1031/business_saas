@@ -147,13 +147,13 @@ export default function CashCheckout({ userId, dashboard, onExit }: {
 
   useEffect(() => {
     if (!historyPage || !locationId || pending || receipt) return
-    let active = true
+    const controller = new AbortController()
     setHistory(null)
     setHistoryError(false)
-    api<ReceiptHistory>(`${base}/receipts?locationId=${locationId}&page=${historyPage}`)
-      .then(result => { if (active) setHistory(result) })
-      .catch(() => { if (active) setHistoryError(true) })
-    return () => { active = false }
+    api<ReceiptHistory>(`${base}/receipts?locationId=${locationId}&page=${historyPage}`, { signal: controller.signal })
+      .then(result => { if (!controller.signal.aborted) setHistory(result) })
+      .catch(() => { if (!controller.signal.aborted) setHistoryError(true) })
+    return () => controller.abort()
   }, [base, historyPage, historyRetry, locationId, pending, receipt])
 
   useEffect(() => {

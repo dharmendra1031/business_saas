@@ -54,15 +54,15 @@ export default function BusinessPostedSales({ dashboard, userId }: { dashboard: 
 
   useEffect(() => {
     if (!selected) return
-    let active = true
+    const controller = new AbortController()
     const path = selected.paymentMethod === 'Credit'
       ? `/businesses/${business.id}/credit-sales/business-invoices/${selected.id}` : base + '/' + selected.id
-    api<Receipt>(path + '?locationId=' + selected.locationId)
-      .then(value => { if (active) setReceipt(value) })
+    api<Receipt>(path + '?locationId=' + selected.locationId, { signal: controller.signal })
+      .then(value => { if (!controller.signal.aborted) setReceipt(value) })
       .catch(cause => {
-        if (active && !(cause instanceof SessionExpiredError)) setReceiptError('Unable to open this invoice.')
+        if (!controller.signal.aborted && !(cause instanceof SessionExpiredError)) setReceiptError('Unable to open this invoice.')
       })
-    return () => { active = false }
+    return () => controller.abort()
   }, [base, business.id, selected, receiptReload])
 
   function closeReceipt() {

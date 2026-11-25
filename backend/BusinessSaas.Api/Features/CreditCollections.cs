@@ -20,8 +20,8 @@ public static class CreditCollections
         where payment.BusinessId == businessId
         select payment;
 
-    internal static Task<decimal?> PaidAsync(AppDbContext db, long businessId, long saleId) =>
-        Payments(db, businessId, saleId).SumAsync(x => (decimal?)x.Amount);
+    internal static Task<decimal?> PaidAsync(AppDbContext db, long businessId, long saleId, CancellationToken cancellationToken = default) =>
+        Payments(db, businessId, saleId).SumAsync(x => (decimal?)x.Amount, cancellationToken);
 
     private sealed record PaymentRequest(string RequestKey, decimal Amount, decimal ExpectedOutstanding,
         bool CashReceivedConfirmed);
