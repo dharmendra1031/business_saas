@@ -2457,6 +2457,7 @@ try {
         await exchange.getByRole('button', { name: 'Calculate exchange' }).click()
         await exchange.getByText('Estimated collection: INR 8.00').waitFor()
         assert.equal(returnAttempts, 0, 'Exchange preview must not post a return')
+        assert.equal(await exchange.getByRole('button', { name: 'Record exchange' }).count(), 0)
         await exchange.getByRole('spinbutton', { name: 'Replacement quantity for Replacement Item' }).fill('2')
         assert.equal(await exchange.getByText('Estimated collection: INR 8.00').count(), 0)
         await receipt.getByRole('button', { name: 'Close exchange' }).click()
@@ -2501,6 +2502,45 @@ try {
         await history.getByText(/Not restocked/).waitFor()
         await receipt.getByRole('button', { name: 'Estimate return' }).click()
         await receipt.getByText('Sold: 0.25 · Returned: 0.175 · Remaining: 0.075 KG', { exact: true }).waitFor()
+        await receipt.getByRole('button', { name: 'Close estimate' }).click()
+        let exchangePosts = 0
+        let savedExchange
+        await t.page.route('**/api/businesses/1/cash-sales/business-receipts/42/exchange-estimate', route =>
+          response(route, 200, { currencyCode: 'INR', returnTotal: 7.2, replacementTotal: 20,
+            difference: 12.8, settlement: 'Collect', canPost: true }))
+        await t.page.route('**/api/businesses/1/cash-sales/business-receipts/42/exchanges', route => {
+          exchangePosts++
+          const request = route.request().postDataJSON()
+          assert.equal(request.expectedSettlement, 12.8)
+          assert.equal(request.settlementConfirmed, true)
+          savedExchange = { returnId: 82, originalSaleId: 42, replacementSaleId: 43,
+            requestKey: request.requestKey, reason: request.reason, currencyCode: 'INR',
+            returnTotal: 7.2, replacementTotal: 20, difference: 12.8, settlement: 'Collect' }
+          return route.abort()
+        })
+        await t.page.route('**/api/businesses/1/cash-sales/business-receipts/42/exchanges?*', route => {
+          assert.equal(route.request().method(), 'GET')
+          assert.equal(new URL(route.request().url()).searchParams.get('requestKey'), savedExchange.requestKey)
+          return response(route, 200, savedExchange)
+        })
+        await receipt.getByRole('button', { name: 'Estimate exchange' }).click()
+        await exchange.getByRole('spinbutton', { name: 'Exchange quantity for Loose Rice' }).fill('0.075')
+        await exchange.getByLabel('Exchange condition for Loose Rice').selectOption('restock')
+        await exchange.getByRole('button', { name: 'Add replacement' }).click()
+        await t.page.getByRole('dialog', { name: 'Replacement products' }).getByRole('button', { name: /Replacement Item/ }).click()
+        await exchange.getByRole('button', { name: 'Calculate exchange' }).click()
+        await exchange.getByText('Estimated collection: INR 12.80').waitFor()
+        const postExchange = exchange.getByRole('button', { name: 'Record exchange' })
+        assert.equal(await postExchange.isDisabled(), true)
+        await exchange.getByLabel('Exchange reason').fill('Customer exchange')
+        await exchange.getByRole('checkbox').check()
+        await postExchange.click()
+        const exchangeRecovery = receipt.getByRole('region', { name: 'Exchange recovery' })
+        await exchangeRecovery.getByRole('alert').waitFor()
+        assert.equal(await receipt.getByRole('button', { name: 'Estimate return' }).count(), 0)
+        await exchangeRecovery.getByRole('button', { name: 'Check posted exchange' }).click()
+        await receipt.getByText('Exchange recorded: Return #82, replacement invoice #43.').waitFor()
+        assert.equal(exchangePosts, 1, 'Lookup-only recovery must not post another exchange')
         await receipt.getByRole('button', { name: 'Back to receipts' }).click()
         assert.equal(await t.page.getByLabel('Invoice / customer').inputValue(), '42')
         assert.equal(await t.page.getByLabel('From date').inputValue(), '2026-11-23')
