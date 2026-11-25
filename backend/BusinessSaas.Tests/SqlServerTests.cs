@@ -910,7 +910,7 @@ public sealed class SqlServerTests
         var packProductId = await Created(prefix + "/products", convertedProduct);
         var convertedPurchase = new { locationId, supplierId, requestKey = "sql-converted-purchase-20261125",
             lines = new[] { new { productId = packProductId, quantity = 10m, unitCost = 100m,
-                unitId = boxId, expectedFactor = 12m } } };
+                unitId = boxId, expectedFactor = 12m, expectedBaseUnitCode = "SQPCS" } } };
         var purchasePath = prefix + "/purchase-orders";
         Assert.Equal(HttpStatusCode.Conflict, (await Post(owner, purchasePath, convertedPurchase with {
             requestKey = "sql-stale-base-purchase-20261125",
@@ -961,7 +961,7 @@ public sealed class SqlServerTests
                 taxClassification = "", isActive = true, conversions = new[] { new { unitId = boxId, factor = 24m, salePrice = 220m } } })).StatusCode);
         var convertedSale = new { locationId, requestKey = "sql-pack-sale-20261125", tendered = 220m,
             lines = new[] { new { productId = packProductId, quantity = 1m, expectedUnitPrice = 220m,
-                unitId = boxId, expectedFactor = 24m } } };
+                unitId = boxId, expectedFactor = 24m, expectedBaseUnitCode = "SQPCS" } } };
         var packCatalog = await cashier.GetFromJsonAsync<JsonElement>(packSalePath +
             "/products?locationId=" + locationId + "&search=SQL-PACK-TEST&exact=true");
         var packQuote = packCatalog[0].GetProperty("conversions")[0];
@@ -971,17 +971,17 @@ public sealed class SqlServerTests
         Assert.Equal(HttpStatusCode.BadRequest, (await Post(cashier, packSalePath, convertedSale with {
             requestKey = "sql-pack-stale-sale-20261125",
             lines = new[] { new { productId = packProductId, quantity = 1m, expectedUnitPrice = 120m,
-                unitId = boxId, expectedFactor = 12m } }
+                unitId = boxId, expectedFactor = 12m, expectedBaseUnitCode = "SQPCS" } }
         })).StatusCode);
         Assert.Equal(HttpStatusCode.BadRequest, (await Post(cashier, packSalePath, convertedSale with {
             requestKey = "sql-pack-oversell-20261125", tendered = 440m,
             lines = new[] { new { productId = packProductId, quantity = 2m, expectedUnitPrice = 220m,
-                unitId = boxId, expectedFactor = 24m } }
+                unitId = boxId, expectedFactor = 24m, expectedBaseUnitCode = "SQPCS" } }
         })).StatusCode);
         Assert.Equal(HttpStatusCode.BadRequest, (await Post(cashier, packSalePath, convertedSale with {
             requestKey = "sql-pack-stale-price-20261125", tendered = 240m,
             lines = new[] { new { productId = packProductId, quantity = 1m, expectedUnitPrice = 240m,
-                unitId = boxId, expectedFactor = 24m } }
+                unitId = boxId, expectedFactor = 24m, expectedBaseUnitCode = "SQPCS" } }
         })).StatusCode);
         Assert.Equal(HttpStatusCode.BadRequest, (await Post(cashier, packSalePath, convertedSale with {
             requestKey = "sql-stale-base-sale-20261125",
