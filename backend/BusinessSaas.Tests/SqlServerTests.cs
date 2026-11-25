@@ -818,11 +818,22 @@ public sealed class SqlServerTests
             requestKey = "sql-return-excess-20261125", expectedRefund = 30m,
             lines = new[] { new { lineId, quantity = 0.375m, restock = true } }
         })).StatusCode);
+        var partialDetail = await owner.GetFromJsonAsync<JsonElement>(originalReceiptPath);
+        Assert.Equal(0.125m, partialDetail.GetProperty("lines")[0].GetProperty("returnedQuantity").GetDecimal());
+        Assert.Equal(0.250m, partialDetail.GetProperty("lines")[0].GetProperty("remainingQuantity").GetDecimal());
+        Assert.Equal(20m, partialDetail.GetProperty("lines")[0].GetProperty("remainingAmount").GetDecimal());
+        using var remainingEstimate = await Post(owner, estimatePath, Estimate(0.250m));
+        Assert.Equal(HttpStatusCode.OK, remainingEstimate.StatusCode);
+        Assert.Equal(20m, (await remainingEstimate.Content.ReadFromJsonAsync<JsonElement>()).GetProperty("total").GetDecimal());
         using var remainder = await Post(owner, returnPath, request with {
             requestKey = "sql-return-final-20261125", expectedRefund = 20m,
             lines = new[] { new { lineId, quantity = 0.250m, restock = false } }
         });
         Assert.Equal(HttpStatusCode.OK, remainder.StatusCode);
+        var fullDetail = await owner.GetFromJsonAsync<JsonElement>(originalReceiptPath);
+        Assert.Equal(0m, fullDetail.GetProperty("lines")[0].GetProperty("remainingQuantity").GetDecimal());
+        Assert.Equal(0m, fullDetail.GetProperty("lines")[0].GetProperty("remainingAmount").GetDecimal());
+        Assert.Equal(HttpStatusCode.Conflict, (await Post(owner, estimatePath, Estimate(0.001m))).StatusCode);
         using (var scope = factory.Services.CreateScope())
         {
             var db = scope.ServiceProvider.GetRequiredService<AppDbContext>();
@@ -833,6 +844,54 @@ public sealed class SqlServerTests
             Assert.Single(await db.RetailStockMovements.Where(x => x.BusinessId == businessId &&
                 x.ProductId == productId && x.SourceType == "CashReturnLine").ToListAsync());
         }
+        // Two competing returns of one original line must produce exactly one compensating transaction.
+        var finalSale = await resumedCheckout.Content.ReadFromJsonAsync<JsonElement>();
+        var raceSaleId = finalSale.GetProperty("id").GetInt64();
+        var raceLineId = finalSale.GetProperty("lines")[0].GetProperty("id").GetInt64();
+        var raceReturnPath = prefix + "/cash-sales/business-receipts/" + raceSaleId + "/returns";
+        var returnRace = request with { expectedRefund = 15m,
+            lines = new[] { new { lineId = raceLineId, quantity = 1m, restock = true } } };
+        var returnResponses = await Task.WhenAll(
+            Post(owner, raceReturnPath, returnRace with { requestKey = "sql-return-race-a-20261125" }),
+            Post(owner, raceReturnPath, returnRace with { requestKey = "sql-return-race-b-20261125" }));
+        using var returnA = returnResponses[0];
+        using var returnB = returnResponses[1];
+        Assert.Single(returnResponses.Where(x => x.StatusCode == HttpStatusCode.OK));
+        Assert.Single(returnResponses.Where(x => x.StatusCode == HttpStatusCode.Conflict));
+        using (var scope = factory.Services.CreateScope())
+        {
+            var db = scope.ServiceProvider.GetRequiredService<AppDbContext>();
+            Assert.Equal(1, await db.RetailCashReturns.CountAsync(x => x.SaleId == raceSaleId));
+            Assert.Equal(1m, await db.RetailStockBalances.Where(x => x.BusinessId == businessId &&
+                x.LocationId == locationId && x.ProductId == retriedId).Select(x => x.Quantity).SingleAsync());
+            Assert.Single(await db.RetailStockMovements.Where(x => x.BusinessId == businessId &&
+                x.ProductId == retriedId && x.SourceType == "CashReturnLine").ToListAsync());
+        }
+        // Put only the synthetic original sale on an earlier date: refunds must
+        // still appear on their own posting date, not the original invoice date.
+        var returnUtc = DateTime.SpecifyKind(returnedBody.GetProperty("postedAtUtc").GetDateTime(), DateTimeKind.Utc);
+        var zone = TimeZoneInfo.FindSystemTimeZoneById(sale.GetProperty("timeZoneId").GetString()!);
+        var reportDate = DateOnly.FromDateTime(TimeZoneInfo.ConvertTimeFromUtc(returnUtc, zone));
+        var earlierUtc = returnUtc.AddDays(-2);
+        using (var scope = factory.Services.CreateScope())
+        {
+            var db = scope.ServiceProvider.GetRequiredService<AppDbContext>();
+            await db.RetailCashSales.Where(x => x.Id == sale.GetProperty("id").GetInt64())
+                .ExecuteUpdateAsync(set => set.SetProperty(x => x.PostedAtUtc, earlierUtc));
+        }
+        var dailyPath = prefix + "/cash-sales/daily-report?locationId=" + locationId + "&date=";
+        var earlierDate = DateOnly.FromDateTime(TimeZoneInfo.ConvertTimeFromUtc(earlierUtc, zone));
+        var earlierReport = await owner.GetFromJsonAsync<JsonElement>(dailyPath + earlierDate.ToString("yyyy-MM-dd"));
+        var earlierTotal = earlierReport.GetProperty("totals")[0];
+        Assert.Equal(30m, earlierTotal.GetProperty("salesTotal").GetDecimal());
+        Assert.Equal(0m, earlierTotal.GetProperty("refundTotal").GetDecimal());
+        Assert.Equal(30m, earlierTotal.GetProperty("netSales").GetDecimal());
+        var dailyReport = await owner.GetFromJsonAsync<JsonElement>(dailyPath + reportDate.ToString("yyyy-MM-dd"));
+        var todayTotal = dailyReport.GetProperty("totals")[0];
+        Assert.True(todayTotal.GetProperty("refundTotal").GetDecimal() >= 10m);
+        Assert.Equal(todayTotal.GetProperty("salesTotal").GetDecimal() - todayTotal.GetProperty("refundTotal").GetDecimal(),
+            todayTotal.GetProperty("netSales").GetDecimal());
+        Assert.Equal(HttpStatusCode.NotFound, (await cashier.GetAsync(dailyPath + reportDate.ToString("yyyy-MM-dd"))).StatusCode);
     }
 
     private static async Task RegisterAndLogin(HttpClient client, string email)

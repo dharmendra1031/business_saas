@@ -14,7 +14,9 @@ export interface Receipt {
   customerName?: string | null
   timeZoneId?: string | null
   lines: { id: number; productName: string; unitPrice: number; quantity: number;
-    productSku?: string | null; unitCode?: string | null; lineTotal?: number | null }[]
+    productSku?: string | null; unitCode?: string | null; lineTotal?: number | null;
+    returnedQuantity?: number | null; remainingQuantity?: number | null;
+    returnedAmount?: number | null; remainingAmount?: number | null }[]
 }
 
 function ReturnEstimate({ receipt, path, locationId }: { receipt: Receipt; path: string; locationId: number }) {
@@ -25,18 +27,19 @@ function ReturnEstimate({ receipt, path, locationId }: { receipt: Receipt; path:
   function change(next: Record<number, string>) {
     setQuantities(next); setEstimate(null); setError('')
   }
+  const available = (line: Receipt['lines'][number]) => Math.max(0, line.remainingQuantity ?? 0)
   const selected = receipt.lines.filter(line => (quantities[line.id] ?? '') !== '' && Number(quantities[line.id]) !== 0)
   const valid = selected.length > 0 && selected.every(line => {
     const value = Number(quantities[line.id])
-    return Number.isFinite(value) && value > 0 && value <= line.quantity &&
+    return Number.isFinite(value) && value > 0 && value <= available(line) &&
       Math.abs(Math.round(value * 1000) - value * 1000) < 0.000001
   })
   return <section className="border rounded p-2 mb-3" aria-label="Return estimate">
     <h3 className="h6">Return estimate</h3>
     <p className="small mb-2">Preview only. No refund or stock change is recorded.</p>
-    <button type="button" className="btn btn-outline-secondary btn-sm mb-2" disabled={busy}
-      onClick={() => change(Object.fromEntries(receipt.lines.map(line => [line.id, String(line.quantity)])))}>
-      Select full quantity
+    <button type="button" className="btn btn-outline-secondary btn-sm mb-2" disabled={busy || !receipt.lines.some(line => available(line) > 0)}
+      onClick={() => change(Object.fromEntries(receipt.lines.map(line => [line.id, String(available(line))])))}>
+      Select remaining quantity
     </button>
     <form onSubmit={async event => {
       event.preventDefault()
@@ -53,9 +56,10 @@ function ReturnEstimate({ receipt, path, locationId }: { receipt: Receipt; path:
       <div className="table-responsive"><table className="table table-sm align-middle">
         <thead><tr><th scope="col">Product</th><th scope="col">Return quantity</th><th scope="col">Estimated amount</th></tr></thead>
         <tbody>{receipt.lines.map(line => <tr key={line.id}>
-          <td>{line.productName} <small className="d-block">Sold: {line.quantity} {line.unitCode}</small></td>
-          <td><input type="number" className="form-control form-control-sm" min="0" max={line.quantity} step="0.001"
-            aria-label={`Return quantity for ${line.productName}`} disabled={busy} value={quantities[line.id] ?? ''}
+          <td>{line.productName}
+            <small className="d-block">Sold: {line.quantity} · Returned: {line.returnedQuantity ?? '—'} · Remaining: {line.remainingQuantity ?? '—'} {line.unitCode}</small></td>
+          <td><input type="number" className="form-control form-control-sm" min="0" max={available(line)} step="0.001"
+            aria-label={`Return quantity for ${line.productName}`} disabled={busy || available(line) === 0} value={quantities[line.id] ?? ''}
             onChange={event => change({ ...quantities, [line.id]: event.target.value })} /></td>
           <td>{estimate?.lines.some(item => item.lineId === line.id)
             ? estimate.currencyCode + ' ' + estimate.lines.find(item => item.lineId === line.id)!.amount.toFixed(2) : '—'}</td>

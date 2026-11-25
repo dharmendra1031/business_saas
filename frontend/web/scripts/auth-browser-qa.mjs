@@ -1803,7 +1803,8 @@ try {
             postedAtUtc: '2026-11-23T06:00:00Z',
             locationName: 'Main Shop', customerName: 'Sample Customer', customerId: 9,
             lines: [{ id: 1, productName: 'Loose Rice', productSku: 'RICE-KG', unitCode: 'KG',
-              unitPrice: 96, quantity: 0.25, lineTotal: 24 }] })
+              unitPrice: 96, quantity: 0.25, lineTotal: 24,
+              returnedQuantity: 0.05, remainingQuantity: 0.2, returnedAmount: 4.8, remainingAmount: 19.2 }] })
         })
         await t.page.getByRole('button', { name: 'Receipt #42' }).click()
         const receipt = t.page.getByRole('region', { name: 'Cash receipt' })
@@ -1828,11 +1829,12 @@ try {
         })
         await receipt.getByRole('button', { name: 'Estimate return' }).click()
         const estimate = receipt.getByRole('region', { name: 'Return estimate' })
-        await estimate.getByRole('button', { name: 'Select full quantity' }).click()
+        await estimate.getByText('Sold: 0.25 · Returned: 0.05 · Remaining: 0.2 KG', { exact: true }).waitFor()
+        await estimate.getByRole('button', { name: 'Select remaining quantity' }).click()
         await estimate.getByRole('button', { name: 'Calculate estimate' }).click()
-        await estimate.getByText('Estimated return amount: INR 24.00', { exact: true }).waitFor()
+        await estimate.getByText('Estimated return amount: INR 19.20', { exact: true }).waitFor()
         const quantity = estimate.getByRole('spinbutton', { name: 'Return quantity for Loose Rice' })
-        await quantity.fill('0.3')
+        await quantity.fill('0.225')
         assert.equal(await estimate.getByRole('button', { name: 'Calculate estimate' }).isDisabled(), true)
         await quantity.fill('0.125')
         await estimate.getByRole('button', { name: 'Calculate estimate' }).click()
@@ -1847,12 +1849,15 @@ try {
           assert.equal(params.get('locationId'), '1')
           return response(route, 200, { date: params.get('date'), timeZoneId: 'Asia/Kolkata',
             totals: params.get('date') === '2026-11-23'
-              ? [{ currencyCode: 'INR', receiptCount: 1, salesTotal: 24 }] : [] })
+              ? [{ currencyCode: 'INR', receiptCount: 1, salesTotal: 24, returnCount: 1, refundTotal: 4.8, netSales: 19.2 }] : [] })
         })
         await t.page.getByLabel('Business date').fill('2026-11-22')
-        await t.page.getByText('No posted cash receipts for this date and location.').waitFor()
+        await t.page.getByText('No posted cash receipts or returns for this date and location.').waitFor()
         await t.page.getByLabel('Business date').fill('2026-11-23')
-        await t.page.getByRole('row').filter({ hasText: 'INR' }).getByText('24.00').waitFor()
+        const reportRow = t.page.getByRole('row').filter({ hasText: 'INR' })
+        await reportRow.getByText('24.00', { exact: true }).waitFor()
+        await reportRow.getByText('4.80', { exact: true }).waitFor()
+        await reportRow.getByText('19.20', { exact: true }).waitFor()
       }
       if (shot) await t.screenshot(shot)
     }
