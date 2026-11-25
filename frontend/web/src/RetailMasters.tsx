@@ -70,14 +70,15 @@ export default function RetailMasters({ businessId, canOperate }: {
     return () => { mounted = false }
   }, [businessId, endpoint, classification, level, page, query, filterParent, reload])
 
+  const needsParents = type === 'subgroups' || type === 'categories'
   useEffect(() => {
-    if (!classification) return
+    if (!needsParents) return
     let active = true
     api<{ categories: MasterItem[] }>(`/businesses/${businessId}/products/options?includeInactiveCategories=true`)
       .then(data => { if (active) setParentOptions(data.categories) })
       .catch(() => { if (active) setParentOptions([]) })
     return () => { active = false }
-  }, [businessId, classification, reload])
+  }, [businessId, needsParents, reload])
 
   function clearForm() {
     setEditingId(null)
@@ -253,7 +254,7 @@ export default function RetailMasters({ businessId, canOperate }: {
               </tr>)}</tbody>
             </table>
           </div>}
-      {!loading && !loadError && total > 0 && <div className="masters-pages">
+      {!loading && !loadError && (page > 1 || total > 20) && <div className="masters-pages">
         <span className="small text-secondary">Page {page} · {total} {type}</span>
         <div className="btn-group">
           <button className="btn btn-sm btn-outline-secondary" disabled={page === 1}

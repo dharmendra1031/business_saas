@@ -419,7 +419,7 @@ export default function RetailProducts({ businessId, canOperate, currencyCode }:
           <div className="form-wide">
             <details open={form.conversions.length > 0 || undefined}>
               <summary>Alternate units (optional)</summary>
-              <p className="field-help">Define the base units per pack. Leave selling price blank to use the base price × factor. POS alternate units require host activation.</p>
+              <p className="field-help">Example: 1 box = 12 pieces. Leave the pack price blank to calculate it from the base price. Alternate units in POS must be enabled.</p>
               {form.conversions.length > 0 && <div className="table-responsive">
                 <table className="table table-sm align-middle">
                   <thead><tr><th>Alternate unit</th><th>Base units per unit</th><th>Selling price (optional)</th><th>Action</th></tr></thead>
@@ -562,26 +562,24 @@ export default function RetailProducts({ businessId, canOperate, currencyCode }:
                 <option key={item.id} value={item.id}>{item.name}{item.isActive ? '' : ' (inactive)'}</option>)}
             </select>
           </div>
-          <div>
+          {filterGroup > 0 && <div>
             <label className="visually-hidden" htmlFor="product-filter-subgroup">Subgroup</label>
             <select id="product-filter-subgroup" className="form-select" value={filterSubgroup}
-              disabled={!filterGroup}
               onChange={event => { setPage(1); setCategoryFilter(Number(event.target.value) || filterGroup) }}>
               <option value={0}>All subgroups</option>
               {options.categories.filter(item => item.parentId === filterGroup && filterGroup > 0).map(item =>
                 <option key={item.id} value={item.id}>{item.name}{item.isActive ? '' : ' (inactive)'}</option>)}
             </select>
-          </div>
-          <div>
+          </div>}
+          {filterSubgroup > 0 && <div>
             <label className="visually-hidden" htmlFor="product-filter-category">Category</label>
             <select id="product-filter-category" className="form-select" value={filterCategory}
-              disabled={!filterSubgroup}
               onChange={event => { setPage(1); setCategoryFilter(Number(event.target.value) || filterSubgroup) }}>
               <option value={0}>All categories</option>
               {options.categories.filter(item => item.parentId === filterSubgroup && filterSubgroup > 0)
                 .map(item => <option key={item.id} value={item.id}>{item.name}{item.isActive ? '' : ' (inactive)'}</option>)}
             </select>
-          </div>
+          </div>}
           <button type="submit" className="btn btn-outline-secondary">Search</button>
         </form>
 

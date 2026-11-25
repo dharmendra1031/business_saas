@@ -2364,6 +2364,10 @@ try {
     assert.equal(await t.page.locator('.business-record-table tbody tr').count(), 2)
     assert.equal(await t.page.locator('.masters-pages').count(), 0,
       'Do not display a pagination bar when all products fit one page')
+    assert.equal(await t.page.locator('#product-filter-subgroup').count(), 0,
+      'Do not render subgroup before a group is selected')
+    assert.equal(await t.page.locator('#product-filter-category').count(), 0,
+      'Do not render category before a subgroup is selected')
     await t.screenshot('BUS-06-products-list-desktop')
     await t.page.locator('#product-filter-status').selectOption('inactive')
     await t.page.waitForFunction(() => {
@@ -2380,7 +2384,10 @@ try {
     })
     assert.equal(await t.page.locator('.business-record-table tbody tr').count(), 1,
       'Category selection must filter records')
+    assert.equal(await t.page.locator('#product-filter-subgroup').count(), 1,
+      'Subgroup selection becomes available after group selection')
     await t.page.locator('#product-filter-group').selectOption('0')
+    assert.equal(await t.page.locator('#product-filter-subgroup').count(), 0)
     await t.page.locator('#product-search').fill('BLUE-11')
     await t.page.getByRole('button', { name: 'Search', exact: true }).click()
     await t.page.waitForFunction(() => {

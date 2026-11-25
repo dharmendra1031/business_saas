@@ -96,13 +96,13 @@ function CustomerCreditLedger({ path, userId, onClose }: { path: string; userId:
               </button></td>
             </tr>)}</tbody>
           </table></div>
-          <div className="btn-group">
+          {(page > 1 || ledger.hasMore) && <div className="btn-group">
             <button type="button" className="btn btn-sm btn-outline-secondary" disabled={page === 1}
               onClick={() => setPage(x => x - 1)}>Previous</button>
             <button type="button" className="btn btn-sm btn-outline-secondary" disabled={!ledger.hasMore}
               onClick={() => setPage(x => x + 1)}>Next</button>
-          </div></>}
-        <p className="small mb-0 mt-2">Credit collection pilot. Payments are recorded against the original invoice; no cash drawer or printable payment receipt is connected yet.</p>
+          </div>}</>}
+        <p className="small mb-0 mt-2">Payments reduce the original invoice balance. Cash drawer updates and payment receipt printing are not available yet.</p>
       </>}
   </section>
 }
@@ -250,13 +250,13 @@ export default function RetailContacts({ businessId, canOperate, type, isOwner, 
             onChange={event => setForm(current => ({ ...current, name: event.target.value }))} />
         </div>
         <div>
-          <label className="form-label" htmlFor="contact-phone">Phone {supplier ? '(or email) *' : '(optional)'}</label>
+          <label className="form-label" htmlFor="contact-phone">Phone {supplier ? '(or email required)' : '(optional)'}</label>
           <input id="contact-phone" className="form-control" type="tel" maxLength={25} disabled={saving}
             pattern="[0-9+() -]*" value={form.phone}
             onChange={event => setForm(current => ({ ...current, phone: event.target.value }))} />
         </div>
         <div>
-          <label className="form-label" htmlFor="contact-email">Email {supplier ? '(or phone) *' : '(optional)'}</label>
+          <label className="form-label" htmlFor="contact-email">Email {supplier ? '(or phone required)' : '(optional)'}</label>
           <input id="contact-email" className="form-control" type="email" maxLength={160} disabled={saving}
             value={form.email} onChange={event =>
               setForm(current => ({ ...current, email: event.target.value }))} />
@@ -284,7 +284,7 @@ export default function RetailContacts({ businessId, canOperate, type, isOwner, 
       {!supplier && isOwner && canOperate && editingId !== null && originalLimit !== null &&
         <form className="border rounded p-2 mb-3" onSubmit={event => void saveCredit(event)}>
           <h3 className="h6">Credit limit — {items.find(x => x.id === editingId)?.name ?? 'Selected customer'}</h3>
-          <p className="small mb-2">Zero blocks new credit. Credit billing is not released yet. This is a limit, not an outstanding balance.</p>
+          <p className="small mb-2">Maximum allowed customer credit. Set to zero to prevent new credit sales.</p>
           <div className="row g-2 align-items-end">
             <div className="col-12 col-md-4">
               <label className="form-label" htmlFor="customer-credit-limit">Credit limit ({currencyCode})</label>
@@ -349,7 +349,7 @@ export default function RetailContacts({ businessId, canOperate, type, isOwner, 
               </table>
             </div>}
 
-      {!loading && !loadError && total > 0 && <div className="masters-pages">
+      {!loading && !loadError && (page > 1 || total > 20) && <div className="masters-pages">
         <span className="small text-secondary">Page {page} · {total} records</span>
         <div className="btn-group">
           <button type="button" className="btn btn-sm btn-outline-secondary"
