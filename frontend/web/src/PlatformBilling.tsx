@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState, type FormEvent } from 'react'
+import { useEffect, useLayoutEffect, useRef, useState, type FormEvent } from 'react'
 import { api, operationKey, post, SessionExpiredError } from './api'
 
 interface BillingPreview {
@@ -159,6 +159,17 @@ export default function PlatformBilling({ business, onChooseBusiness }: { busine
   const [draftLoadError, setDraftLoadError] = useState('')
   const [paymentLoadError, setPaymentLoadError] = useState('')
   const [reconciliationLoadError, setReconciliationLoadError] = useState('')
+  const actionDialog = useRef<HTMLDialogElement>(null)
+  const actionOpen = preview !== null || selectedDraftId !== null || reconcileRequestId !== null
+
+  useLayoutEffect(() => {
+    if (!actionOpen) return
+    const dialog = actionDialog.current
+    if (!dialog) return
+    dialog.showModal()
+    dialog.querySelector<HTMLElement>('input, textarea')?.focus()
+    return () => { dialog.close() }
+  }, [actionOpen])
 
   useEffect(() => {
     // A business switch must discard unsubmitted terms from the previous tenant.
@@ -169,6 +180,9 @@ export default function PlatformBilling({ business, onChooseBusiness }: { busine
     setSelectedDraftId(null)
     setPaymentReason('')
     setPaymentKey('')
+    setReconcileRequestId(null)
+    setReconcileOrderId('')
+    setReconcileReason('')
     setBusy(false)
     setError('')
     setNotice('')
@@ -191,6 +205,20 @@ export default function PlatformBilling({ business, onChooseBusiness }: { busine
     setPreview(null)
     setRequestKey('')
     setNotice('')
+  }
+
+  function cancelAction() {
+    if (busy) return
+    actionDialog.current?.close()
+    clearPreview()
+    setReason('')
+    setSelectedDraftId(null)
+    setPaymentReason('')
+    setPaymentKey('')
+    setReconcileRequestId(null)
+    setReconcileOrderId('')
+    setReconcileReason('')
+    setError('')
   }
 
   async function loadPreview(event: FormEvent) {
@@ -314,7 +342,7 @@ export default function PlatformBilling({ business, onChooseBusiness }: { busine
         payable demand, or verified payment. It does not activate subscriptions.
       </p>
       {notice && <div className="alert alert-success" role="status">{notice}</div>}
-      {error && <div className="alert alert-danger" role="alert">{error}</div>}
+      {!actionOpen && error && <div className="alert alert-danger" role="alert">{error}</div>}
       <form onSubmit={event => void loadPreview(event)}>
         <div className="row g-3 align-items-end">
           <div className="col-12 col-sm-4">
@@ -346,31 +374,7 @@ export default function PlatformBilling({ business, onChooseBusiness }: { busine
           </div>
         </div>
       </form>
-      {preview && <section className="border rounded p-3 mt-3" aria-label="Billing draft preview">
-        <h3 className="h6">Review: {preview.businessName} (#{preview.businessId})</h3>
-        <dl className="detail-list">
-          <div><dt>Plan</dt><dd>{preview.planCode}, published v{preview.version}</dd></div>
-          <div><dt>Cycle</dt><dd>{preview.billingCycle}</dd></div>
-          <div><dt>Period</dt><dd>{preview.periodStartDate} – {preview.periodEndDate} (end exclusive)</dd></div>
-          <div><dt>Price snapshot</dt><dd>{money(preview.amount, preview.currencyCode)}</dd></div>
-          <div><dt>Payment</dt><dd>Not collected</dd></div>
-        </dl>
-        <form onSubmit={event => void createDraft(event)}>
-          <label htmlFor="billing-reason" className="form-label">Reason</label>
-          <textarea id="billing-reason" className="form-control" rows={2}
-            minLength={10} maxLength={200} required value={reason}
-            onChange={event => setReason(event.target.value)}
-            placeholder="Why is this internal billing draft being prepared?" />
-          <div className="form-footer">
-            <button className="btn btn-outline-secondary" type="button" disabled={busy}
-              onClick={() => { clearPreview(); setError('') }}>Cancel</button>
-            <button className="btn btn-primary" type="submit"
-              disabled={busy || reason.trim().length < 10}>
-              {busy ? 'Saving…' : 'Confirm Draft'}
-            </button>
-          </div>
-        </form>
-      </section>}
+
     </section>
 
     <section className="content-section mt-3">
@@ -426,25 +430,7 @@ export default function PlatformBilling({ business, onChooseBusiness }: { busine
             </div>
           </>}
     </section>
-    {selectedDraftId !== null && <section className="content-section mt-3">
-      <h2>Prepare Payment Request for Draft #{selectedDraftId}</h2>
-      <p className="text-secondary small">
-        Internal unpaid request only. No gateway order, tax invoice or activation.
-      </p>
-      <form onSubmit={event => void preparePayment(event)}>
-        <label className="form-label" htmlFor="payment-preparation-reason">Reason</label>
-        <textarea id="payment-preparation-reason" className="form-control" rows={2}
-          minLength={10} maxLength={200} required value={paymentReason}
-          onChange={event => setPaymentReason(event.target.value)} />
-        <div className="form-footer">
-          <button type="button" className="btn btn-outline-secondary" disabled={busy}
-            onClick={() => setSelectedDraftId(null)}>Cancel</button>
-          <button className="btn btn-primary" disabled={busy || paymentReason.trim().length < 10}>
-            {busy ? 'Preparing…' : 'Confirm Preparation'}
-          </button>
-        </div>
-      </form>
-    </section>}
+
     <section className="content-section mt-3">
       <h2>Payment Requests</h2>
       {paymentLoadError ? <p role="alert" className="text-danger">{paymentLoadError}</p>
@@ -527,29 +513,81 @@ export default function PlatformBilling({ business, onChooseBusiness }: { busine
                 setReconcileReason('')
               }}>Verify Order</button>
           </div>)}
-      {reconcileRequestId !== null && <form className="border rounded p-3 mt-3"
+
+    </section>
+    {actionOpen && <dialog ref={actionDialog} className="entry-dialog" aria-labelledby="billing-action-title"
+      onCancel={event => { event.preventDefault(); cancelAction() }}
+      onKeyDownCapture={event => {
+        if (event.key === 'Escape') { event.preventDefault(); event.stopPropagation(); cancelAction() }
+      }}>
+      {error && <p className="text-danger small" role="alert">{error}</p>}
+      {preview && <>
+        <h3 id="billing-action-title" className="h5">Review: {preview.businessName} (#{preview.businessId})</h3>
+        <dl className="detail-list">
+          <div><dt>Plan</dt><dd>{preview.planCode}, published v{preview.version}</dd></div>
+          <div><dt>Cycle</dt><dd>{preview.billingCycle}</dd></div>
+          <div><dt>Period</dt><dd>{preview.periodStartDate} – {preview.periodEndDate} (end exclusive)</dd></div>
+          <div><dt>Price snapshot</dt><dd>{money(preview.amount, preview.currencyCode)}</dd></div>
+          <div><dt>Payment</dt><dd>Not collected</dd></div>
+        </dl>
+        <form onSubmit={event => void createDraft(event)}>
+          <label htmlFor="billing-reason" className="form-label">Reason</label>
+          <textarea id="billing-reason" className="form-control" rows={2}
+            minLength={10} maxLength={200} required disabled={busy} value={reason}
+            onChange={event => setReason(event.target.value)}
+            placeholder="Why is this internal billing draft being prepared?" />
+          <div className="form-footer">
+            <button className="btn btn-outline-secondary" type="button" disabled={busy}
+              onClick={cancelAction}>Cancel</button>
+            <button className="btn btn-primary" type="submit"
+              disabled={busy || reason.trim().length < 10}>
+              {busy ? 'Saving…' : 'Confirm Draft'}
+            </button>
+          </div>
+        </form>
+      </>}
+      {selectedDraftId !== null && <>
+      <h3 id="billing-action-title" className="h5">Prepare Payment Request for Draft #{selectedDraftId}</h3>
+      <p className="text-secondary small">
+        Internal unpaid request only. No gateway order, tax invoice or activation.
+      </p>
+      <form onSubmit={event => void preparePayment(event)}>
+        <label className="form-label" htmlFor="payment-preparation-reason">Reason</label>
+        <textarea id="payment-preparation-reason" className="form-control" rows={2}
+          minLength={10} maxLength={200} required disabled={busy} value={paymentReason}
+          onChange={event => setPaymentReason(event.target.value)} />
+        <div className="form-footer">
+          <button type="button" className="btn btn-outline-secondary" disabled={busy}
+            onClick={cancelAction}>Cancel</button>
+          <button className="btn btn-primary" disabled={busy || paymentReason.trim().length < 10}>
+            {busy ? 'Preparing…' : 'Confirm Preparation'}
+          </button>
+        </div>
+      </form>
+    </>}
+      {reconcileRequestId !== null && <form
         onSubmit={event => void reconcileOrder(event)}>
-        <h3 className="h6">Verify existing order for request #{reconcileRequestId}</h3>
+        <h3 id="billing-action-title" className="h5">Verify existing order for request #{reconcileRequestId}</h3>
         <p className="small text-secondary">
           Find the existing order in Razorpay by receipt bs_{reconcileRequestId}.
           This checks the provider; it never creates another order or captures money.
         </p>
         <label htmlFor="reconcile-order-id" className="form-label">Razorpay Order ID</label>
-        <input id="reconcile-order-id" className="form-control" required
+        <input id="reconcile-order-id" className="form-control" required disabled={busy}
           placeholder="order_..." value={reconcileOrderId}
           onChange={event => setReconcileOrderId(event.target.value)} />
         <label htmlFor="reconcile-reason" className="form-label mt-2">Reason</label>
-        <textarea id="reconcile-reason" className="form-control" required
+        <textarea id="reconcile-reason" className="form-control" required disabled={busy}
           minLength={10} maxLength={200} rows={2} value={reconcileReason}
           onChange={event => setReconcileReason(event.target.value)} />
         <div className="form-footer">
           <button type="button" className="btn btn-outline-secondary" disabled={busy}
-            onClick={() => setReconcileRequestId(null)}>Cancel</button>
+            onClick={cancelAction}>Cancel</button>
           <button type="submit" className="btn btn-primary"
             disabled={busy || reconcileReason.trim().length < 10}>Verify with Razorpay</button>
         </div>
       </form>}
-    </section>
+    </dialog>}
     <p className="small text-secondary mt-3">
       Billing periods remain immutable. Gateway checkout requires configuration;
       refunds are only recorded after independent provider verification.

@@ -2809,7 +2809,13 @@ try {
           periodEndDate: '2026-12-01', currencyCode: 'INR', amount: 1099,
           createdAtUtc: '2026-11-01T00:00:00Z', status: 'Draft',
           paymentRequestId: 900, paymentStatus: 'Captured'
-        }], total: 1, page: 1, pageSize: 20
+        }, {
+          id: 8, businessId: 11, businessName: 'Paid Retail', publishedPlanVersionId: 5,
+          planCode: 'STARTER', billingCycle: 'Monthly', periodStartDate: '2026-12-01',
+          periodEndDate: '2027-01-01', currencyCode: 'INR', amount: 1099,
+          createdAtUtc: '2026-11-01T00:00:00Z', status: 'Draft',
+          paymentRequestId: null, paymentStatus: null
+        }], total: 2, page: 1, pageSize: 20
       })
     })
     await t.page.route('**/api/platform/billing/payment-requests?*', route => {
@@ -2849,8 +2855,27 @@ try {
     await t.page.getByRole('heading', { name: 'Billing Draft History' }).waitFor()
     await t.page.getByText('Captured — verified').waitFor()
     await t.page.getByText('Request #900').waitFor()
-    assert.equal(await t.page.getByRole('button', { name: 'Prepare Payment', exact: true }).count(),
+    const capturedDraft = t.page.getByRole('row').filter({ hasText: 'Captured — verified' })
+    assert.equal(await capturedDraft.getByRole('button', { name: 'Prepare Payment' }).count(),
       0, 'Existing captured draft may never expose a duplicate payment preparation action')
+    await t.page.getByText('21 payment requests · Page 1').waitFor()
+    await t.page.getByText('Page 1.', { exact: false }).waitFor()
+    const historyLayout = () => t.page.getByRole('heading', { name: 'Billing Draft History' }).evaluate(el => {
+      const rect = el.closest('section').getBoundingClientRect()
+      return { width: rect.width, height: rect.height, scrollHeight: document.documentElement.scrollHeight }
+    })
+    const before = await historyLayout()
+    await t.page.getByRole('button', { name: 'Prepare Payment', exact: true }).click()
+    const modal = t.page.getByRole('dialog', { name: 'Prepare Payment Request for Draft #8' })
+    await modal.waitFor()
+    assert.deepEqual(await historyLayout(), before, 'Payment preparation must not expand billing history')
+    await modal.getByLabel('Reason').fill('Discard this reason')
+    await t.page.keyboard.press('Escape')
+    await modal.waitFor({ state: 'hidden' })
+    await t.page.getByRole('button', { name: 'Prepare Payment', exact: true }).click()
+    assert.equal(await modal.getByLabel('Reason').inputValue(), '')
+    await modal.getByRole('button', { name: 'Cancel' }).click()
+    await modal.waitFor({ state: 'hidden' })
     await t.page.getByRole('button', { name: 'Next requests' }).click()
     await t.page.getByText('21 payment requests · Page 2').waitFor()
     assert.deepEqual(requestPages.slice(-2), [1, 2])
