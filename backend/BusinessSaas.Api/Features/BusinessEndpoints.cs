@@ -125,12 +125,12 @@ public static class BusinessEndpoints
                 var startUtc = TimeZoneInfo.ConvertTimeToUtc(localDate, zone);
                 var endUtc = TimeZoneInfo.ConvertTimeToUtc(localDate.AddDays(1), zone);
                 var today = db.RetailCashSales.AsNoTracking().Where(x =>
-                    x.BusinessId == businessId && x.PostedAtUtc >= startUtc &&
+                    x.BusinessId == businessId && x.CreditDueDate == null && x.PostedAtUtc >= startUtc &&
                     x.PostedAtUtc < endUtc && x.PostedAtUtc <= nowUtc);
                 var total = await today.SumAsync(x => (decimal?)x.Total) ?? 0m;
                 var bills = await today.CountAsync();
                 var recent = await db.RetailCashSales.AsNoTracking()
-                    .Where(x => x.BusinessId == businessId && x.PostedAtUtc <= nowUtc)
+                    .Where(x => x.BusinessId == businessId && x.CreditDueDate == null && x.PostedAtUtc <= nowUtc)
                     .OrderByDescending(x => x.PostedAtUtc).ThenByDescending(x => x.Id)
                     .Take(5)
                     .Select(x => new CashReceiptSummary(x.Id, x.LocationId, x.Total, x.PostedAtUtc))

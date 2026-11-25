@@ -858,6 +858,7 @@ public sealed class AppDbContext(DbContextOptions<AppDbContext> options)
             entity.Property(x => x.CurrencyCode).HasMaxLength(3);
             entity.Property(x => x.Total).HasPrecision(18, 2);
             entity.Property(x => x.Tendered).HasPrecision(18, 2);
+            entity.HasIndex(x => new { x.BusinessId, x.CustomerId, x.CreditDueDate });
             entity.HasIndex(x => new { x.BusinessId, x.CashierId, x.RequestKey }).IsUnique();
             entity.HasOne<Business>().WithMany().HasForeignKey(x => x.BusinessId).OnDelete(DeleteBehavior.Restrict);
             entity.HasOne<BusinessLocation>().WithMany().HasForeignKey(x => x.LocationId).OnDelete(DeleteBehavior.Restrict);

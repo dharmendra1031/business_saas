@@ -1801,6 +1801,8 @@ namespace BusinessSaas.Api.Data.Migrations
                         .HasMaxLength(80)
                         .HasColumnType("nvarchar(80)");
 
+                    b.Property<DateOnly?>("CreditDueDate").HasColumnType("date");
+
                     b.Property<decimal>("Tendered")
                         .HasPrecision(18, 2)
                         .HasColumnType("decimal(18,2)");
@@ -1814,6 +1816,8 @@ namespace BusinessSaas.Api.Data.Migrations
                     b.HasIndex("CashierId");
 
                     b.HasIndex("LocationId");
+
+                    b.HasIndex("BusinessId", "CustomerId", "CreditDueDate");
 
                     b.HasIndex("BusinessId", "CashierId", "RequestKey")
                         .IsUnique();

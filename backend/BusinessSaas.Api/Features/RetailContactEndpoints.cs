@@ -170,6 +170,32 @@ public static class RetailContactEndpoints
             await db.SaveChangesAsync();
             return Results.Ok(new { customer.Id, customer.Name, customer.Phone, customer.Email, customer.Address, customer.IsActive });
         });
+        customers.MapGet("/{customerId:long}/credit-ledger", async (long businessId, long customerId,
+            ClaimsPrincipal user, AppDbContext db, int page = 1) =>
+        {
+            if (await RetailBillingSettingsEndpoints.OwnerId(db, businessId, user) is null)
+                return Results.NotFound();
+            if (page is < 1 or > 100000) return Results.BadRequest(new { message = "Choose a valid ledger page." });
+            var customer = await db.RetailCustomers.AsNoTracking().SingleOrDefaultAsync(x =>
+                x.BusinessId == businessId && x.Id == customerId);
+            if (customer is null) return Results.NotFound();
+
+            const int size = 20;
+            await using var tx = await db.Database.BeginTransactionAsync(IsolationLevel.Serializable);
+            var invoices = db.RetailCashSales.AsNoTracking().Where(x => x.BusinessId == businessId &&
+                x.CustomerId == customerId && x.CreditDueDate != null);
+            var totals = await invoices.GroupBy(x => x.CurrencyCode).Select(x => new {
+                CurrencyCode = x.Key, Outstanding = x.Sum(s => s.Total), InvoiceCount = x.Count()
+            }).ToListAsync();
+            var items = await invoices.OrderByDescending(x => x.Id).Skip((page - 1) * size)
+                .Take(size + 1).Select(x => new { x.Id, x.LocationId, x.LocationName, x.CurrencyCode,
+                    Debit = x.Total, x.CreditDueDate, PostedAtUtc = DateTime.SpecifyKind(x.PostedAtUtc, DateTimeKind.Utc)
+                }).ToListAsync();
+            await tx.CommitAsync();
+            return Results.Ok(new { customerId, customer.Name, customer.CreditLimit, totals,
+                items = items.Take(size), hasMore = items.Count > size });
+        });
+
         customers.MapPut("/{customerId:long}/credit-limit", async (long businessId, long customerId,
             CreditLimitRequest request, ClaimsPrincipal user, AppDbContext db) =>
         {

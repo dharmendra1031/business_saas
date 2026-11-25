@@ -27,6 +27,8 @@ public static class RetailCashSales
         group.MapGet("/business-receipts/{receiptId:long}/pdf", BusinessReceiptPdf);
         group.MapGet("/daily-report", DailyReport);
         group.MapPost("", Post);
+        // Isolated pilot: no cashier credit UI or owner settings activation yet.
+        app.MapPost("/api/businesses/{businessId:long}/credit-sales", PostCredit).RequireAuthorization();
     }
 
     private static async Task<Business?> Shop(AppDbContext db, long businessId, long actor, long locationId,
@@ -42,12 +44,15 @@ public static class RetailCashSales
                       select b).SingleOrDefaultAsync();
     }
 
+    private static IQueryable<RetailCashSale> CashOnly(AppDbContext db) =>
+        db.RetailCashSales.AsNoTracking().Where(x => x.CreditDueDate == null);
+
     private static async Task<IResult> FindReceipt(long businessId, long locationId, string requestKey,
         ClaimsPrincipal user, AppDbContext db)
     {
         if (!long.TryParse(user.FindFirstValue(ClaimTypes.NameIdentifier), out var actor) ||
             await Shop(db, businessId, actor, locationId) is null) return Results.NotFound();
-        var sale = await db.RetailCashSales.AsNoTracking().Include(x => x.Lines).SingleOrDefaultAsync(x =>
+        var sale = await CashOnly(db).Include(x => x.Lines).SingleOrDefaultAsync(x =>
             x.BusinessId == businessId && x.CashierId == actor && x.LocationId == locationId &&
             x.RequestKey == requestKey);
         return sale is null ? Results.NotFound() : Results.Ok(Receipt(sale));
@@ -57,7 +62,7 @@ public static class RetailCashSales
     {
         if (!long.TryParse(user.FindFirstValue(ClaimTypes.NameIdentifier), out var actor) ||
             await Shop(db, businessId, actor, locationId) is null) return Results.NotFound();
-        var sale = await db.RetailCashSales.AsNoTracking().Include(x => x.Lines)
+        var sale = await CashOnly(db).Include(x => x.Lines)
             .Where(x => x.BusinessId == businessId && x.CashierId == actor && x.LocationId == locationId)
             .OrderByDescending(x => x.Id).FirstOrDefaultAsync();
         return sale is null ? Results.NotFound() : Results.Ok(Receipt(sale));
@@ -68,7 +73,7 @@ public static class RetailCashSales
     {
         if (!long.TryParse(user.FindFirstValue(ClaimTypes.NameIdentifier), out var actor) ||
             await Shop(db, businessId, actor, locationId) is null) return Results.NotFound();
-        var sale = await db.RetailCashSales.AsNoTracking().Include(x => x.Lines)
+        var sale = await CashOnly(db).Include(x => x.Lines)
             .SingleOrDefaultAsync(x => x.Id == receiptId && x.BusinessId == businessId &&
                 x.CashierId == actor && x.LocationId == locationId);
         return sale is null ? Results.NotFound() : Results.Ok(Receipt(sale));
@@ -81,7 +86,10 @@ public static class RetailCashSales
         var first = lines.First();
         return new { sale.Id, sale.BusinessId, sale.LocationId, sale.CashierId, sale.RequestKey,
             sale.Tendered, sale.Total, sale.CurrencyCode, sale.CustomerId, sale.CustomerName,
-            sale.BusinessName, sale.LocationName, sale.TimeZoneId, printAvailable = OperatingSystem.IsWindows(),
+            sale.BusinessName, sale.LocationName, sale.TimeZoneId, sale.CreditDueDate,
+            paymentMethod = sale.CreditDueDate.HasValue ? "Credit" : "Cash",
+            outstanding = sale.CreditDueDate.HasValue ? sale.Total : 0m,
+            printAvailable = !sale.CreditDueDate.HasValue && OperatingSystem.IsWindows(),
             PostedAtUtc = DateTime.SpecifyKind(sale.PostedAtUtc, DateTimeKind.Utc),
             first.ProductId, first.ProductName, first.UnitPrice, first.Quantity,
             Lines = lines.Select(line => new { line.Id, line.SaleId, line.ProductId,
@@ -113,7 +121,7 @@ public static class RetailCashSales
 
         // Posted receipts are immutable. Split the collection load so the receipt's
         // historical logo and header are not transferred again for every line.
-        var sale = await db.RetailCashSales.AsNoTracking().AsSplitQuery().Include(x => x.Lines)
+        var sale = await CashOnly(db).AsSplitQuery().Include(x => x.Lines)
             .SingleOrDefaultAsync(x => x.Id == receiptId && x.BusinessId == businessId &&
                 x.LocationId == locationId && (ownerOnly || x.CashierId == actor), context.RequestAborted);
         var loaded = Stopwatch.GetTimestamp();
@@ -146,7 +154,7 @@ public static class RetailCashSales
     {
         if (!long.TryParse(user.FindFirstValue(ClaimTypes.NameIdentifier), out var actor) ||
             await Shop(db, businessId, actor, locationId, ownerOnly: true) is null) return Results.NotFound();
-        var sale = await db.RetailCashSales.AsNoTracking().Include(x => x.Lines)
+        var sale = await CashOnly(db).Include(x => x.Lines)
             .SingleOrDefaultAsync(x => x.Id == receiptId && x.BusinessId == businessId && x.LocationId == locationId);
         if (sale is null) return Results.NotFound();
         return Results.Ok(Receipt(sale, await ReturnedLines(db, businessId, receiptId)));
@@ -168,7 +176,7 @@ public static class RetailCashSales
             await Shop(db, businessId, actor, request.LocationId, ownerOnly: true) is null)
             return Results.NotFound();
 
-        var sale = await db.RetailCashSales.AsNoTracking().Include(x => x.Lines)
+        var sale = await CashOnly(db).Include(x => x.Lines)
             .SingleOrDefaultAsync(x => x.Id == receiptId && x.BusinessId == businessId &&
                 x.LocationId == request.LocationId);
         if (sale is null) return Results.NotFound();
@@ -204,7 +212,7 @@ public static class RetailCashSales
     {
         if (!long.TryParse(user.FindFirstValue(ClaimTypes.NameIdentifier), out var actor) ||
             await Shop(db, businessId, actor, locationId, ownerOnly: true) is null ||
-            !await db.RetailCashSales.AnyAsync(x => x.Id == receiptId && x.BusinessId == businessId &&
+            !await CashOnly(db).AnyAsync(x => x.Id == receiptId && x.BusinessId == businessId &&
                 x.LocationId == locationId))
             return Results.NotFound();
         if (page is < 1 or > 100000 || requestKey is { Length: > 80 })
@@ -268,7 +276,7 @@ public static class RetailCashSales
         {
             if (await Shop(db, businessId, actor, request.LocationId, ownerOnly: true) is null)
                 return Results.NotFound();
-            var sale = await db.RetailCashSales.AsNoTracking().Include(x => x.Lines)
+            var sale = await CashOnly(db).Include(x => x.Lines)
                 .SingleOrDefaultAsync(x => x.Id == receiptId && x.BusinessId == businessId && x.LocationId == request.LocationId);
             if (sale is null) return Results.NotFound();
             var prior = await db.RetailCashReturns.AsNoTracking().Include(x => x.Lines)
@@ -364,13 +372,13 @@ public static class RetailCashSales
         var zone = TimeZoneInfo.FindSystemTimeZoneById(business.TimeZoneId);
         var start = LocalDateStart(date, zone);
         var end = LocalDateStart(date.AddDays(1), zone);
-        var sales = db.RetailCashSales.AsNoTracking()
+        var sales = CashOnly(db)
             .Where(x => x.BusinessId == businessId && x.LocationId == locationId &&
                 x.PostedAtUtc >= start && x.PostedAtUtc < end)
             .Select(x => new { x.CurrencyCode, Amount = x.Total, IsReturn = false });
         // Refunds belong to their own posting date, including returns of older sales.
         var refunds = from r in db.RetailCashReturns.AsNoTracking()
-                      join sale in db.RetailCashSales.AsNoTracking() on r.SaleId equals sale.Id
+                      join sale in CashOnly(db) on r.SaleId equals sale.Id
                       where r.BusinessId == businessId && sale.BusinessId == businessId &&
                           sale.LocationId == locationId && r.PostedAtUtc >= start && r.PostedAtUtc < end
                       select new { sale.CurrencyCode, Amount = r.Total, IsReturn = true };
@@ -394,7 +402,7 @@ public static class RetailCashSales
         if (receiptId is <= 0) return Results.BadRequest(new { message = "Choose a valid receipt number." });
 
         const int pageSize = 10;
-        var query = db.RetailCashSales.AsNoTracking()
+        var query = CashOnly(db)
             .Where(x => x.BusinessId == businessId && x.LocationId == locationId);
         if (cashierId.HasValue) query = query.Where(x => x.CashierId == cashierId.Value);
         if (receiptId.HasValue) query = query.Where(x => x.Id == receiptId.Value);
@@ -474,28 +482,41 @@ public static class RetailCashSales
     private static decimal SaleUnitPrice(decimal basePrice, decimal factor, decimal? overridePrice = null) =>
         overridePrice ?? decimal.Round(basePrice * factor, 2, MidpointRounding.AwayFromZero);
 
-    private static async Task<IResult> Post(long businessId, CashRequest request,
+    public sealed record CreditRequest(long LocationId, long CustomerId, string RequestKey,
+        DateOnly DueDate, List<Item>? Lines);
+
+    private static Task<IResult> Post(long businessId, CashRequest request,
+        ClaimsPrincipal user, AppDbContext db, HttpContext context, IConfiguration config) =>
+        PostSale(businessId, request, null, user, db, context, config);
+
+    private static Task<IResult> PostCredit(long businessId, CreditRequest request,
+        ClaimsPrincipal user, AppDbContext db, HttpContext context, IConfiguration config) =>
+        PostSale(businessId, new CashRequest(request.LocationId, 0m, request.RequestKey,
+            request.Lines, CustomerId: request.CustomerId), request.DueDate, user, db, context, config);
+
+    private static async Task<IResult> PostSale(long businessId, CashRequest request, DateOnly? dueDate,
         ClaimsPrincipal user, AppDbContext db, HttpContext context, IConfiguration config)
     {
+        var isCredit = dueDate.HasValue;
         var started = Stopwatch.GetTimestamp();
         if (!long.TryParse(user.FindFirstValue(ClaimTypes.NameIdentifier), out var actor))
             return Results.NotFound();
         var items = request.Lines ?? [new Item(request.ProductId, request.Quantity, request.ExpectedUnitPrice)];
-        if (request.CustomerId is <= 0 || items.Count is < 1 or > 100 || items.Any(x => x is null || x.ProductId <= 0 || x.Quantity is < 0.001m or > 1000000m ||
+        if (request.CustomerId is <= 0 || (isCredit && request.CustomerId is null) || items.Count is < 1 or > 100 || items.Any(x => x is null || x.ProductId <= 0 || x.Quantity is < 0.001m or > 1000000m ||
             decimal.Round(x.Quantity, 3) != x.Quantity || x.UnitId is <= 0 ||
             x.ExpectedBaseUnitCode is { Length: < 1 or > 12 } ||
             (x.UnitId is null) != (x.ExpectedFactor is null) ||
             x.ExpectedFactor is < 0.001m or > 9999999.999m ||
             x.ExpectedFactor.HasValue && decimal.Round(x.ExpectedFactor.Value, 3) != x.ExpectedFactor.Value) ||
             items.Select(x => x.ProductId).Distinct().Count() != items.Count || string.IsNullOrWhiteSpace(request.RequestKey) || request.RequestKey.Length is < 12 or > 80 ||
-            request.Tendered is <= 0 or > 9999999999999999.99m ||
+            (!isCredit && request.Tendered <= 0) || request.Tendered > 9999999999999999.99m ||
             decimal.Round(request.Tendered, 2) != request.Tendered)
             return Results.BadRequest(new { message = "Check the quantity and cash received." });
 
         await using var tx = await db.Database.BeginTransactionAsync(IsolationLevel.Serializable);
         try
         {
-            var shop = await Shop(db, businessId, actor, request.LocationId);
+            var shop = await Shop(db, businessId, actor, request.LocationId, ownerOnly: isCredit);
             if (shop is null) return Results.NotFound();
             var previous = await db.RetailCashSales.AsNoTracking().Include(x => x.Lines).SingleOrDefaultAsync(x =>
                 x.BusinessId == businessId && x.CashierId == actor && x.RequestKey == request.RequestKey);
@@ -504,6 +525,7 @@ public static class RetailCashSales
                 var recorded = previous.Lines.OrderBy(x => x.ProductId)
                     .Select(x => new Item(x.ProductId, x.Quantity, x.UnitPrice, x.SelectedUnitId, x.ConversionFactor));
                 if (previous.LocationId != request.LocationId || previous.Tendered != request.Tendered ||
+                    previous.CreditDueDate != dueDate ||
                     previous.CustomerId != request.CustomerId ||
                     !recorded.SequenceEqual(items.OrderBy(x => x.ProductId)
                         .Select(x => x with { ExpectedBaseUnitCode = null })) ||
@@ -516,7 +538,9 @@ public static class RetailCashSales
                     $"sale-replay;dur={Stopwatch.GetElapsedTime(started).TotalMilliseconds:F1}");
                 return Results.Ok(Receipt(previous));
             }
-            if (!shop.CashSalesEnabled)
+            if (isCredit && (!config.GetValue<bool>("RetailCredit:PostingEnabled") || !shop.CreditSalesEnabled))
+                return Results.Conflict(new { code = "CREDIT_NOT_RELEASED", message = "Credit sales are not enabled." });
+            if (!isCredit && !shop.CashSalesEnabled)
                 return Results.Conflict(new { code = "CASH_SALES_DISABLED",
                     message = "Cash sales are disabled by the business owner." });
 
@@ -555,7 +579,7 @@ public static class RetailCashSales
                 BusinessId = businessId, CashierId = actor, LocationId = request.LocationId,
                 CustomerId = customer?.Id, CustomerName = customer?.Name,
                 CustomerPhone = customer?.Phone, CustomerAddress = customer?.Address,
-                Tendered = request.Tendered, CurrencyCode = shop.CurrencyCode,
+                Tendered = request.Tendered, CreditDueDate = dueDate, CurrencyCode = shop.CurrencyCode,
                 MerchantLogo = shop.ReceiptLogo,
                 MerchantLegalName = shop.ReceiptLegalName,
                 MerchantAddress = shop.ReceiptAddress,
@@ -606,7 +630,23 @@ public static class RetailCashSales
                     ProductSku = product.Sku, UnitCode = unitCode, LineTotal = lineTotal });
                 sale.Total += lineTotal;
             }
-            if (request.Tendered < sale.Total)
+            if (isCredit)
+            {
+                // Conservative isolated pilot: fully unpaid, positive explicit limit,
+                // no overdue credit, and a due date within one year of the business day.
+                var today = DateOnly.FromDateTime(TimeZoneInfo.ConvertTimeFromUtc(DateTime.UtcNow,
+                    TimeZoneInfo.FindSystemTimeZoneById(shop.TimeZoneId)));
+                if (dueDate!.Value < today || dueDate.Value > today.AddDays(365))
+                    return Results.BadRequest(new { message = "Choose a due date between today and one year from today." });
+                var creditInvoices = db.RetailCashSales.AsNoTracking().Where(x => x.BusinessId == businessId &&
+                    x.CustomerId == customer!.Id && x.CreditDueDate != null);
+                if (await creditInvoices.AnyAsync(x => x.CurrencyCode != shop.CurrencyCode || x.CreditDueDate < today))
+                    return Results.Conflict(new { message = "Outstanding overdue or different-currency credit must be resolved first." });
+                var outstanding = await creditInvoices.SumAsync(x => (decimal?)x.Total) ?? 0m;
+                if (customer!.CreditLimit <= 0 || sale.Total > customer.CreditLimit - outstanding)
+                    return Results.Conflict(new { code = "CREDIT_LIMIT_EXCEEDED", message = "Customer credit limit would be exceeded." });
+            }
+            else if (request.Tendered < sale.Total)
                 return Results.BadRequest(new { message = "Cash received is less than the basket total." });
             var validated = Stopwatch.GetTimestamp();
             db.RetailCashSales.Add(sale);
@@ -615,7 +655,7 @@ public static class RetailCashSales
             foreach (var line in sale.Lines.OrderBy(x => x.ProductId))
             {
                 if (await StockPosting.ApplyAsync(db, businessId, sale.LocationId, line.ProductId,
-                        -line.Quantity * (line.ConversionFactor ?? 1m), "CashSaleLine", line.Id, actor) is null)
+                        -line.Quantity * (line.ConversionFactor ?? 1m), isCredit ? "CreditSaleLine" : "CashSaleLine", line.Id, actor) is null)
                     return Results.BadRequest(new { code = "CASH_SALE_BASKET_CHANGED", line.ProductId,
                         message = $"Insufficient stock for {line.ProductName} at this location. Remove it and select it again if stock is available." });
             }

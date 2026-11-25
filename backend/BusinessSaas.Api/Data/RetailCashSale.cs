@@ -23,6 +23,8 @@ public sealed class RetailCashSale
     public string CurrencyCode { get; set; } = "";
     public decimal Total { get; set; }
     public decimal Tendered { get; set; }
+    // Null identifies an immediately settled cash sale; credit is a separate receivable.
+    public DateOnly? CreditDueDate { get; set; }
     public DateTime PostedAtUtc { get; set; }
     public List<RetailCashSaleLine> Lines { get; set; } = [];
 }
