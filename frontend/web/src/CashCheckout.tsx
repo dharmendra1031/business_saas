@@ -613,8 +613,7 @@ export default function CashCheckout({ userId, dashboard, onExit }: {
           <h2>Current Sale</h2>
           <span className="pos-count-pill">{basket.length} {basket.length === 1 ? 'product' : 'products'}</span>
         </div>
-        <div className="pos-basket-toolbar">
-          <span><ShoppingBag size={16} /> {basket.length} {basket.length === 1 ? 'product' : 'products'}</span>
+        {basket.length > 0 && <div className="pos-basket-toolbar">
           {basket.length > 0 && !clearArmed && <button type="button" className="pos-basket-clear"
             disabled={busy || scanBusy} onClick={() => setClearArmed(true)}><Trash2 size={15} /> Clear</button>}
           {clearArmed && <div className="pos-clear-confirm">
@@ -624,7 +623,7 @@ export default function CashCheckout({ userId, dashboard, onExit }: {
             }}>Yes, clear</button>
             <button type="button" onClick={() => setClearArmed(false)}>Cancel</button>
           </div>}
-        </div>
+        </div>}
         <div className="d-flex align-items-center justify-content-between gap-2 px-2 py-1">
           <span className="small text-truncate">Customer: <strong>{customer?.name ?? 'Walk-in'}</strong></span>
           <button type="button" className="btn btn-outline-secondary btn-sm" disabled={busy || scanBusy || !dashboard.canOperate || !saleAvailable}
@@ -699,7 +698,6 @@ export default function CashCheckout({ userId, dashboard, onExit }: {
           {hasZeroValueLine && <p role="status" className="pos-field-status">
             A product line rounds to {money(0)}. Increase its quantity or remove it.
           </p>}
-          <div className="pos-subtotal-row"><span>Subtotal</span><strong>{money(total)}</strong></div>
           <div className="pos-total-row"><span>Total Payable</span><strong>{money(total)}</strong></div>
           {creditAvailable && <div className="mb-2">
             <label htmlFor="pos-payment-method" className="form-label">Payment method</label>

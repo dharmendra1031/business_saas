@@ -89,9 +89,9 @@
 .pos-products-empty strong { font-weight: 770; color: #000000; font-size: .87rem; }
 .pos-products-empty p { font-size: .76rem; max-width: 360px; line-height: 1.5; margin: 0; }
 .pos-shell .pos-basket { position: static; display: flex; flex-direction: column; min-height: 300px; }
-.pos-basket-toolbar { display: flex; align-items: center; justify-content: space-between; gap: 9px;
+.pos-basket-toolbar { display: flex; align-items: center; justify-content: flex-end; gap: 9px;
   padding: 7px 12px; color: #273244; font-size: .74rem; font-weight: 710; }
-.pos-basket-toolbar > span { display: inline-flex; align-items: center; gap: 7px; }
+
 .pos-basket-clear, .pos-clear-confirm button { display: inline-flex; align-items: center; gap: 5px; background: none;
   border: 0; color: #7d3f48; font-size: .72rem; font-weight: 740; padding: 4px; }
 .pos-basket-clear:hover, .pos-clear-confirm button:hover { text-decoration: underline; }
@@ -126,9 +126,9 @@
 .pos-remove-item:focus-visible, .pos-quantity-control button:focus-visible { outline: 2px solid #715bd6; outline-offset: -2px; }
 .pos-basket-checkout { margin-top: auto; padding: 10px 12px 12px; border-top: 1px solid #e6eaf1;
   background: #fafbfe; }
-.pos-subtotal-row, .pos-total-row { display: flex; align-items: baseline; justify-content: space-between; gap: 9px; }
-.pos-subtotal-row { color: #445164; font-size: .82rem; padding-bottom: 7px; }
-.pos-subtotal-row strong { font-size: .85rem; color: #000000; }
+.pos-total-row { display: flex; align-items: baseline; justify-content: space-between; gap: 9px; }
+
+
 .pos-shell .pos-total-row { color: #1d2e4e; border-top: 1px solid #e5eaf3; padding: 8px 0; font-weight: 800; }
 .pos-shell .pos-total-row strong { font-size: clamp(1.25rem, 2vw, 1.65rem); color: #000000;
   font-weight: 850; letter-spacing: -.03em; font-variant-numeric: tabular-nums; }
@@ -144,7 +144,7 @@
   border-radius: 15px; background: #fff; box-shadow: 0 23px 65px #08152d4f; color: #233654; }
 .pos-dialog-heading { display: flex; justify-content: space-between; align-items: flex-start; gap: 14px;
   padding: 22px 24px 18px; border-bottom: 1px solid #e7ebf4; }
-.pos-dialog-kicker { font-size: .67rem; color: #513eaa; letter-spacing: .1em; font-weight: 830; }
+
 .pos-dialog-heading h2 { font-size: 1.28rem; font-weight: 820; margin: 5px 0 7px; color: #000000; }
 .pos-dialog-heading p { font-size: .77rem; line-height: 1.5; color: #475160; margin: 0; }
 .pos-dialog-close { display: grid; place-items: center; flex: 0 0 32px; width: 32px; height: 32px;
@@ -156,10 +156,9 @@
 .pos-dialog-total strong { font-size: clamp(1.7rem, 5vw, 2.35rem); color: #000000;
   font-weight: 850; font-variant-numeric: tabular-nums; letter-spacing: -.035em; }
 .pos-dialog-total small { font-size: .71rem; color: #50476f; }
-.pos-dialog-method { display: flex; align-items: center; justify-content: space-between; gap: 10px;
-  border: 1px solid #b9b1ed; border-radius: 9px; background: #f9f8ff; padding: 12px 14px; margin-bottom: 19px; }
-.pos-dialog-method span { display: flex; align-items: center; gap: 9px; color: #4835ad; font-weight: 750; font-size: .86rem; }
-.pos-dialog-method strong { font-size: .72rem; color: #000000; }
+
+
+
 .pos-dialog-body .form-label { font-size: .83rem; font-weight: 760; color: #2c3d5c; }
 .pos-dialog-body .pos-dialog-cash { min-height: 48px; font-size: 1.03rem; font-weight: 760; color: #243753;
   border: 1px solid #cfd9e9; border-radius: 8px; }
@@ -167,9 +166,8 @@
 .pos-dialog-change { display: flex; justify-content: space-between; gap: 9px; align-items: baseline; padding: 13px 0;
   border-top: 1px solid #e7eaf3; font-size: .85rem; color: #445166; }
 .pos-dialog-change strong { color: #115a3d; font-size: 1.25rem; font-weight: 800; font-variant-numeric: tabular-nums; }
-.pos-dialog-security { display: flex; gap: 7px; align-items: center; color: #4a5059;
-  font-size: .7rem; line-height: 1.5; margin: 12px 0 0; }
-.pos-dialog-security svg { flex: 0 0 auto; }
+
+
 .pos-dialog-footer { display: flex; flex-wrap: wrap; justify-content: flex-end; gap: 10px; padding: 17px 24px 21px;
   border-top: 1px solid #e7ebf3; }
 .pos-dialog-footer .btn { display: inline-flex; justify-content: center; align-items: center; min-height: 43px;

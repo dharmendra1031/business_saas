@@ -38,13 +38,14 @@ function errorMessage(error: unknown): string {
 }
 
 export default function RetailStockAdjustments({ businessId, locationId, canOperate,
-  isOwner, selected, onCancel, onPosted }: {
+  isOwner, selected, onCancel, onClose, onPosted }: {
   businessId: number
   locationId: number
   canOperate: boolean
   isOwner: boolean
   selected: StockSelection | null
   onCancel: () => void
+  onClose: () => void
   onPosted: () => void
 }) {
   const [items, setItems] = useState<Adjustment[]>([])
@@ -76,6 +77,7 @@ export default function RetailStockAdjustments({ businessId, locationId, canOper
   }, [selected])
 
   useEffect(() => {
+    if (selected) return
     let active = true
     setLoading(true)
     setLoadError('')
@@ -92,7 +94,7 @@ export default function RetailStockAdjustments({ businessId, locationId, canOper
       })
       .finally(() => { if (active) setLoading(false) })
     return () => { active = false }
-  }, [basePath, page, reload])
+  }, [basePath, page, reload, selected])
 
   async function create(event: FormEvent) {
     event.preventDefault()
@@ -185,13 +187,11 @@ export default function RetailStockAdjustments({ businessId, locationId, canOper
 
   return (
     <div className="product-form" aria-label="Stock adjustments">
-      <div className="masters-heading">
-        <div>
-          <h3>Stock adjustments</h3>
-          <p>Submit a physical count. Only the owner can approve and post stock changes.</p>
-        </div>
-      </div>
-      {loadError && <div className="alert alert-danger" role="alert">
+      {!selected && <div className="masters-heading">
+        <h3>Stock adjustments</h3>
+        <button type="button" className="btn btn-outline-secondary btn-sm" disabled={saving || busyId !== null} onClick={onClose}>Back to inventory</button>
+      </div>}
+      {!selected && loadError && <div className="alert alert-danger" role="alert">
         {loadError}
         <button type="button" className="btn btn-sm btn-outline-secondary ms-2"
           onClick={() => setReload(value => value + 1)}>Retry</button>
@@ -204,7 +204,7 @@ export default function RetailStockAdjustments({ businessId, locationId, canOper
         <div className="form-grid">
           <div>
             <label className="form-label">Current system stock</label>
-            <div className="form-control bg-light" aria-label="Current system stock">
+            <div className="fw-semibold" aria-label="Current system stock">
               {selected.quantity.toFixed(3)}
             </div>
           </div>
@@ -212,17 +212,17 @@ export default function RetailStockAdjustments({ businessId, locationId, canOper
             <label className="form-label" htmlFor="stock-counted">Physical count *</label>
             <input ref={countedInput} className="form-control" id="stock-counted"
               type="number" min="0" max="9999999999.999" step="0.001" required
-              value={counted} onChange={event => setCounted(event.target.value)} />
+              value={counted} disabled={saving} onChange={event => setCounted(event.target.value)} />
           </div>
           <div>
             <label className="form-label">Difference</label>
-            <div className="form-control bg-light" aria-live="polite">
+            <div className="fw-semibold" aria-live="polite">
               {difference > 0 ? '+' : ''}{difference.toFixed(3)}
             </div>
           </div>
           <div>
             <label className="form-label" htmlFor="stock-reason">Reason *</label>
-            <select className="form-select" id="stock-reason" required value={reason}
+            <select className="form-select" id="stock-reason" required value={reason} disabled={saving}
               onChange={event => setReason(event.target.value)}>
               <option value="">Select a reason</option>
               {reasons.map(item => <option key={item} value={item}>{item}</option>)}
@@ -231,13 +231,13 @@ export default function RetailStockAdjustments({ businessId, locationId, canOper
           <div className="form-wide">
             <label className="form-label" htmlFor="stock-remarks">Remarks (optional)</label>
             <textarea id="stock-remarks" className="form-control" rows={2}
-              maxLength={500} value={remarks}
+              maxLength={500} value={remarks} disabled={saving}
               onChange={event => setRemarks(event.target.value)} />
           </div>
         </div>
         <div className="form-footer">
           <button type="button" className="btn btn-outline-secondary"
-            onClick={onCancel}>Cancel</button>
+            disabled={saving} onClick={onCancel}>Cancel</button>
           <button type="submit" className="btn btn-primary"
             disabled={saving || !reason || difference === 0}>
             {saving ? 'Submitting…' : 'Submit for approval'}
@@ -245,6 +245,7 @@ export default function RetailStockAdjustments({ businessId, locationId, canOper
         </div>
       </form>}
 
+      {!selected && <>
       {loading ? <p role="status" className="text-secondary">Loading adjustments…</p>
         : loadError ? null
           : items.length === 0 ? <p className="masters-empty">No stock adjustments yet.</p>
@@ -315,7 +316,7 @@ export default function RetailStockAdjustments({ businessId, locationId, canOper
               </table>
             </div>}
 
-      {!loading && !loadError && total > 0 && <div className="masters-pages">
+      {!loading && !loadError && (page > 1 || total > 20) && <div className="masters-pages">
         <span className="small text-secondary">Page {page} · {total} adjustment requests</span>
         <div className="btn-group">
           <button type="button" className="btn btn-sm btn-outline-secondary"
@@ -324,6 +325,7 @@ export default function RetailStockAdjustments({ businessId, locationId, canOper
             disabled={page * 20 >= total} onClick={() => setPage(value => value + 1)}>Next</button>
         </div>
       </div>}
+      </>}
     </div>
   )
 }

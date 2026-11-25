@@ -1,5 +1,5 @@
 import { useEffect, useRef, type FormEvent } from 'react'
-import { Banknote, LockKeyhole, X } from 'lucide-react'
+import { X } from 'lucide-react'
 import { moneyCents } from './posMoney'
 
 interface PosCashPaymentDialogProps {
@@ -75,32 +75,25 @@ export default function PosCashPaymentDialog({
     <div ref={dialogRef} className="pos-payment-dialog" role="dialog" aria-modal="true"
       aria-labelledby="pos-payment-heading" aria-describedby="pos-payment-description">
       <div className="pos-dialog-heading">
-        <div><span className="pos-dialog-kicker">NEW SALE · CASH</span>
-          <h2 id="pos-payment-heading">Complete Payment</h2>
-          <p id="pos-payment-description">{lineCount} {lineCount === 1 ? 'item' : 'items'} in this draft sale.
-            Payment is only recorded after confirmation.</p></div>
+        <div><h2 id="pos-payment-heading">Complete Payment</h2>
+          <p id="pos-payment-description">Cash · {lineCount} {lineCount === 1 ? 'item' : 'items'}</p></div>
         <button type="button" className="pos-dialog-close" onClick={onCancel}
           disabled={busy} aria-label="Close payment and return to basket"><X size={20} /></button>
       </div>
       <form onSubmit={submit}>
         <div className="pos-dialog-body">
           {error && <div className="alert alert-danger" role="alert">{error}</div>}
-          <div className="pos-dialog-total"><span>Total Payable</span><strong>{money(amount)}</strong>
-            <small>Cash-only checkout · {currency}</small></div>
-          <div className="pos-dialog-method"><span><Banknote size={21} /> Cash</span>
-            <strong>Selected</strong></div>
+          <div className="pos-dialog-total"><span>Total Payable</span><strong>{money(amount)}</strong></div>
           <label className="form-label" htmlFor="pos-cash-received">Cash received</label>
           <input ref={cashRef} id="pos-cash-received" className="form-control pos-dialog-cash"
             type="number" min={amount} step="0.01" inputMode="decimal" required
             value={cash} onChange={event => onCashChange(event.target.value)} disabled={busy}
             aria-describedby="pos-cash-help" />
-          <p id="pos-cash-help" className="pos-dialog-hint">Enter the exact amount handed over by the customer.
-            Use at most two decimal places. Insufficient payment cannot be confirmed.</p>
+          <p id="pos-cash-help" className="pos-dialog-hint">Enter cash received (up to 2 decimals).</p>
           {cash !== '' && !Number.isFinite(receivedCents) &&
             <p className="text-danger small" role="alert">Enter a valid cash amount within the supported range.</p>}
           <div className="pos-dialog-change"><span>Change to return</span><strong>{money(change)}</strong></div>
-          <p className="pos-dialog-security"><LockKeyhole size={15} /> Final price and stock are checked by the server before posting.</p>
-          {autoOpen && <p className="pos-dialog-hint">Save &amp; Print opens the RDLC receipt. Confirm printing in the PDF viewer.</p>}
+          {autoOpen && <p className="pos-dialog-hint">Save &amp; Print opens the receipt for printing.</p>}
         </div>
         <div className="pos-dialog-footer">
           <button type="button" className="btn btn-outline-secondary" disabled={busy} onClick={onCancel}>Back to Cart</button>

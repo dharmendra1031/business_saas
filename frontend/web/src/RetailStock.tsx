@@ -73,6 +73,7 @@ export default function RetailStock({ businessId, locations, canOperate, isOwner
   const [reload, setReload] = useState(0)
   const [opening, setOpening] = useState<StockItem | null>(null)
   const [adjusting, setAdjusting] = useState<StockItem | null>(null)
+  const [adjustmentsOpen, setAdjustmentsOpen] = useState(false)
   const [quantity, setQuantity] = useState('')
   const [saving, setSaving] = useState(false)
   const [saveError, setSaveError] = useState('')
@@ -93,6 +94,7 @@ export default function RetailStock({ businessId, locations, canOperate, isOwner
     setQuery('')
     setOpening(null)
     setAdjusting(null)
+    setAdjustmentsOpen(false)
     setHistoryProductId(null)
     setNotice('')
   }, [locationId])
@@ -149,7 +151,7 @@ export default function RetailStock({ businessId, locations, canOperate, isOwner
   function chooseOpening(item: StockItem) {
     setOpening(item)
     setAdjusting(null)
-    setQuantity('0')
+    setQuantity('')
     setSaveError('')
     setNotice('')
   }
@@ -196,6 +198,7 @@ export default function RetailStock({ businessId, locations, canOperate, isOwner
             : <>
               <label className="form-label" htmlFor="stock-location"><MapPin size={16} /> Stock location</label>
               <select id="stock-location" className="form-select" value={locationId}
+                disabled={saving || opening !== null || adjustmentsOpen}
                 onChange={event => setLocationId(Number(event.target.value))}>
                 {locations.map(location => <option key={location.id} value={location.id}>
                   {location.name} ({location.code})
@@ -217,7 +220,7 @@ export default function RetailStock({ businessId, locations, canOperate, isOwner
       {opening && canOperate && <form className="product-form" onSubmit={event => void postOpening(event)}>
         <h3>Opening stock — {opening.name}</h3>
         <p className="field-help">
-          This is an initial quantity, not a stock adjustment. It can only be posted once.
+          Opening stock can only be posted once.
         </p>
         {saveError && <div className="alert alert-danger" role="alert">{saveError}</div>}
         <div className="form-grid">
@@ -225,18 +228,20 @@ export default function RetailStock({ businessId, locations, canOperate, isOwner
             <label className="form-label" htmlFor="stock-opening-quantity">Opening quantity *</label>
             <input ref={quantityInput} id="stock-opening-quantity" className="form-control"
               type="number" min="0" max="9999999999.999" step="0.001" required
-              value={quantity} onChange={event => setQuantity(event.target.value)} />
+              value={quantity} disabled={saving} onChange={event => setQuantity(event.target.value)} />
           </div>
         </div>
         <div className="form-footer">
           <button type="button" className="btn btn-outline-secondary"
-            onClick={() => { setOpening(null); setSaveError('') }}>Cancel</button>
+            disabled={saving} onClick={() => { setOpening(null); setSaveError('') }}>Cancel</button>
           <button type="submit" className="btn btn-primary" disabled={saving}>
             {saving ? 'Posting…' : 'Post opening stock'}
           </button>
         </div>
       </form>}
 
+      {!opening && !adjustmentsOpen && historyProductId === null && <>
+      <div className="d-flex justify-content-end px-3 mt-2"><button type="button" className="btn btn-outline-secondary btn-sm" onClick={() => setAdjustmentsOpen(true)}>Stock adjustments</button></div>
       <form className="masters-search business-stock-search" onSubmit={event => {
         event.preventDefault()
         setPage(1)
@@ -296,7 +301,7 @@ export default function RetailStock({ businessId, locations, canOperate, isOwner
                         onClick={() => chooseOpening(item)}>Set opening</button>}
                     {canOperate && item.isActive && item.hasStockRecord &&
                       <button type="button" className="btn btn-sm btn-outline-secondary me-2"
-                        onClick={() => { setAdjusting(item); setOpening(null) }}>Adjust</button>}
+                        onClick={() => { setAdjusting(item); setAdjustmentsOpen(true); setOpening(null) }}>Adjust</button>}
                     {item.hasStockRecord &&
                       <button type="button" className="btn btn-sm btn-outline-secondary"
                         onClick={() => {
@@ -318,16 +323,17 @@ export default function RetailStock({ businessId, locations, canOperate, isOwner
         </div>
       </div>}
 
-      {(!alertsOnly || adjusting !== null) && <RetailStockAdjustments key={locationId}
+      </>}
+      {adjustmentsOpen && <RetailStockAdjustments key={locationId}
         businessId={businessId} locationId={locationId} canOperate={canOperate} isOwner={isOwner}
-        selected={adjusting} onCancel={() => setAdjusting(null)}
+        selected={adjusting} onCancel={() => setAdjusting(null)} onClose={() => setAdjustmentsOpen(false)}
         onPosted={() => setReload(value => value + 1)} />}
 
       {historyProductId !== null && <div className="product-form">
         <div className="masters-heading">
           <h3>Stock movement history</h3>
           <button type="button" className="btn btn-sm btn-outline-secondary"
-            onClick={() => setHistoryProductId(null)}>Close</button>
+            onClick={() => setHistoryProductId(null)}>Back to inventory</button>
         </div>
         {historyError && <div className="alert alert-danger" role="alert">{historyError}</div>}
         {historyLoading ? <p role="status">Loading movements…</p>
@@ -357,7 +363,7 @@ export default function RetailStock({ businessId, locations, canOperate, isOwner
                   </tr>)}</tbody>
                 </table>
               </div>}
-        {!historyLoading && !historyError && historyTotal > 0 && <div className="masters-pages">
+        {!historyLoading && !historyError && (historyPage > 1 || historyTotal > 20) && <div className="masters-pages">
           <span className="small text-secondary">Page {historyPage} · {historyTotal} movements</span>
           <div className="btn-group">
             <button type="button" className="btn btn-sm btn-outline-secondary" disabled={historyPage === 1}
