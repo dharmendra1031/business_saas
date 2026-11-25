@@ -510,11 +510,20 @@ try {
     console.log('PASS Purchase catalogs load on demand; canceled drafts reopen empty')
   }
 
-  for (const retryPosting of [false, true]) {
+  for (const { retryPosting, converted } of [
+    { retryPosting: false, converted: false },
+    { retryPosting: true, converted: false },
+    { retryPosting: false, converted: true }
+  ]) {
     // The same UI path must work normally and after a draft was saved but posting failed.
-    const t = await scenario(retryPosting ? 'purchase-post-recovery' : 'purchase-to-stock-browser-flow', {
+    const t = await scenario(converted ? 'purchase-alternate-unit' : retryPosting ? 'purchase-post-recovery' : 'purchase-to-stock-browser-flow', {
       role: 'Owner', hasProducts: true, productsFixture: true
     })
+    if (converted) await t.page.route('**/api/businesses/1/products?*', route =>
+      response(route, 200, { items: [{ id: 11, name: 'Blue Shirt', sku: 'BLUE-11',
+        unitCode: 'KG', isActive: true, conversions: [{ unitId: 32, unitCode: 'BOX', factor: 12.5, isActive: true }] }],
+        total: 1, page: 1, pageSize: 20 }))
+    const factor = converted ? 12.5 : 1
     let order = null
     let receiving = null
     let stock = 0
@@ -541,6 +550,10 @@ try {
         assert.equal(body.supplierId, 21)
         assert.deepEqual(body.lines.map(({ productId, quantity, unitCost }) =>
           ({ productId, quantity, unitCost })), [{ productId: 11, quantity: 2, unitCost: 40 }])
+        if (converted) {
+          assert.equal(body.lines[0].unitId, 32)
+          assert.equal(body.lines[0].expectedFactor, factor)
+        }
         order = { id: 71, status: 'Draft', quantity: 2 }
         return response(route, 201, { id: 71, status: 'Draft' })
       }
@@ -549,6 +562,8 @@ try {
         return response(route, 200, { id: 71, locationId: 1, supplierId: 21,
           status: order.status, createdAtUtc: '2026-11-23T02:00:00Z', approvedAtUtc: null,
           lines: [{ id: 72, productId: 11, name: 'Blue Shirt', sku: 'BLUE-11',
+            ...(converted ? { unitCode: 'BOX', baseUnitCode: 'KG', conversionFactor: factor,
+              baseOrderedQuantity: 2 * factor, baseReceivedQuantity: posted * factor } : {}),
             orderedQuantity: 2, unitCost: 40, receivedQuantity: posted,
             remainingQuantity: 2 - posted }],
           receivings: receiving ? [{
@@ -576,7 +591,7 @@ try {
           return response(route, 503, { message: 'Temporary posting outage' })
         assert.equal(receiving.status, 'Draft')
         receiving.status = 'Posted'
-        stock += receiving.quantity
+        stock += receiving.quantity * factor
         order.status = 'Closed'
         receivingPosts++
         return response(route, 200, { id: 91, status: 'Posted', orderClosed: true })
@@ -600,10 +615,17 @@ try {
       [...document.querySelectorAll('#purchase-product option')].some(option => option.value === '11'))
     await t.page.locator('#purchase-supplier').selectOption('21')
     await t.page.locator('#purchase-product').selectOption('11')
+    if (converted) {
+      await t.page.getByLabel('Purchase unit for Blue Shirt').selectOption('32')
+      await t.page.getByRole('spinbutton', { name: 'Blue Shirt quantity' }).fill('0.001')
+      await t.page.getByRole('spinbutton', { name: 'Blue Shirt unit cost' }).fill('40')
+      assert.equal(await t.page.getByRole('button', { name: 'Save & Approve' }).isDisabled(), true)
+    }
     await t.page.getByRole('spinbutton', { name: 'Blue Shirt quantity' }).fill('2')
     await t.page.getByRole('spinbutton', { name: 'Blue Shirt unit cost' }).fill('40')
     assert.equal(await t.page.getByRole('button', { name: 'Save Draft', exact: true }).count(), 1,
       'Owner can still save unfinished purchase orders as Draft')
+    if (converted) await t.page.getByText('25 KG stock', { exact: true }).waitFor()
     await t.page.getByRole('button', { name: 'Save & Approve' }).click()
     await t.page.getByRole('heading', { name: 'Purchase order #71' }).waitFor()
     await t.page.getByRole('button', { name: 'Receive goods' }).waitFor()
@@ -611,7 +633,12 @@ try {
     assert.equal(stock, 0, 'Approval must not update stock')
     assert.equal(await t.page.getByRole('button', { name: 'Approve purchase order' }).count(), 0)
     await t.page.getByRole('button', { name: 'Receive goods' }).click()
+    if (converted) {
+      await t.page.getByRole('spinbutton', { name: 'Receive Blue Shirt' }).fill('0.001')
+      assert.equal(await t.page.getByRole('button', { name: 'Receive & Post Stock' }).isDisabled(), true)
+    }
     await t.page.getByRole('button', { name: 'Receive all remaining' }).click()
+    if (converted) await t.page.getByText('25 KG stock', { exact: true }).waitFor()
     assert.equal(await t.page.getByRole('button', { name: 'Save Draft', exact: true }).count(), 1,
       'Unfinished receivings can still be saved as Draft')
     await t.page.getByRole('button', { name: 'Receive & Post Stock' }).click()
@@ -627,7 +654,7 @@ try {
       await t.page.getByRole('button', { name: 'Post stock' }).click()
     }
     await t.page.getByText('Receiving #91 posted.', { exact: false }).waitFor()
-    await t.page.getByText('Blue Shirt · 2.000', { exact: true }).waitFor()
+    await t.page.getByText(converted ? 'Blue Shirt · 2.000 BOX' : 'Blue Shirt · 2.000', { exact: true }).waitFor()
     assert.equal(await t.page.locator('tbody tr').filter({ hasText: '#91' })
       .getByRole('button', { name: 'Post stock' }).count(), 0,
       'Posted receipts must not offer another stock posting')
@@ -636,14 +663,14 @@ try {
       'Do not reopen a redundant confirmation step after posting')
     assert.equal(receivingPosts, 1, 'Stock posting must only submit once')
     assert.equal(order.status, 'Closed')
-    assert.equal(stock, 2)
+    assert.equal(stock, 2 * factor)
     await t.page.locator('.app-sidebar .nav-entry').filter({ hasText: 'Inventory' }).click()
     const stockRow = t.page.locator('.retail-stock-list tbody tr').filter({ hasText: 'Blue Shirt' })
-    await stockRow.getByText('2.000').waitFor()
-    assert.equal(await stockRow.locator('td').nth(2).innerText(), '2.000')
+    await stockRow.getByText((2 * factor).toFixed(3)).waitFor()
+    assert.equal(await stockRow.locator('td').nth(2).innerText(), (2 * factor).toFixed(3))
     await t.check()
     await t.context.close()
-    console.log(retryPosting
+    console.log(converted ? 'PASS converted purchase and receiving validates exact base quantity' : retryPosting
       ? 'PASS saved receiving draft recovers from failed post without duplicate stock'
       : 'PASS one-click Owner save+approve, receive+post and inventory refresh')
   }

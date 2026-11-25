@@ -77,6 +77,17 @@ interface NewLine {
   unitCost: string
 }
 
+// Keep converted quantities exact to the same three decimals as the stock ledger.
+function baseQuantity(quantity: number, factor: number): number | null {
+  if (!Number.isFinite(quantity) || quantity <= 0 || quantity > 9999999.999 ||
+    !Number.isFinite(factor) || factor < 0.001 || factor > 9999999.999 ||
+    Math.round(quantity * 1000) / 1000 !== quantity ||
+    Math.round(factor * 1000) / 1000 !== factor) return null
+  const scaled = BigInt(Math.round(quantity * 1000)) * BigInt(Math.round(factor * 1000))
+  if (scaled % 1000n !== 0n || scaled / 1000n > 9999999999999n) return null
+  return Number(scaled / 1000n) / 1000
+}
+
 function message(error: unknown): string {
   return error instanceof Error ? error.message : 'Unable to complete the request.'
 }
@@ -245,6 +256,18 @@ export default function RetailPurchases({ businessId, canOperate, locations, rol
     return line.alternateUnits.find(x => x.unitId === line.selectedUnitId)
   }
 
+  const validOrderLines = lines.length > 0 && lines.every(line =>
+    baseQuantity(Number(line.quantity), selectedUnit(line)?.factor ?? 1) !== null &&
+    line.unitCost.trim() !== '' && Number.isFinite(Number(line.unitCost)) &&
+    Number(line.unitCost) >= 0 && Number(line.unitCost) <= 99999999.99 &&
+    Math.round(Number(line.unitCost) * 100) / 100 === Number(line.unitCost))
+  const validReceiving = !!detail && detail.lines.some(line => Number(receiving[line.id] ?? '') > 0) &&
+    detail.lines.every(line => {
+      const quantity = Number(receiving[line.id] ?? '')
+      return quantity === 0 || (quantity <= line.remainingQuantity &&
+        baseQuantity(quantity, line.conversionFactor ?? 1) !== null)
+    })
+
   function toggleReceiving() {
     if (!detail) return
     if (receivingOpen) {
@@ -262,7 +285,7 @@ export default function RetailPurchases({ businessId, canOperate, locations, rol
     const approveNow = roleCode === 'Owner' &&
       (event.nativeEvent as SubmitEvent).submitter?.getAttribute('data-action') !== 'draft'
     if (!locationId || !supplierId || lines.length === 0 || lines.length > 50 ||
-        lines.some(x => Number(x.quantity) <= 0 || Number(x.unitCost) < 0)) {
+        !validOrderLines) {
       setError('Select location, supplier and 1–50 valid product lines.')
       return
     }
@@ -328,13 +351,7 @@ export default function RetailPurchases({ businessId, canOperate, locations, rol
       .map(line => ({
         purchaseOrderLineId: line.id, quantity: Number(receiving[line.id])
       }))
-    if (!receivingLines.length || Object.values(receiving).some(value =>
-        value.trim() !== '' && (!Number.isFinite(Number(value)) || Number(value) < 0 ||
-          Math.round(Number(value) * 1000) / 1000 !== Number(value))) ||
-        receivingLines.some(line => {
-          const item = detail.lines.find(x => x.id === line.purchaseOrderLineId)
-          return !item || line.quantity > item.remainingQuantity
-        })) {
+    if (!validReceiving) {
       setError('Enter valid quantities within the remaining ordered amounts.')
       return
     }
@@ -503,7 +520,7 @@ export default function RetailPurchases({ businessId, canOperate, locations, rol
                   {line.alternateUnits.length > 0 ? <select className="form-select form-select-sm mt-1"
                     aria-label={`Purchase unit for ${line.name}`} value={line.selectedUnitId}
                     onChange={event => setLines(values => values.map(x => x.productId === line.productId
-                      ? { ...x, selectedUnitId: Number(event.target.value), unitCost: '0' } : x))}>
+                      ? { ...x, selectedUnitId: Number(event.target.value), quantity: '1', unitCost: '' } : x))}>
                     <option value={0}>{line.unitCode ?? 'Base unit'}</option>
                     {line.alternateUnits.map(unit => <option key={unit.unitId} value={unit.unitId}>
                       {unit.unitCode} = {unit.factor} {line.unitCode}
@@ -512,7 +529,12 @@ export default function RetailPurchases({ businessId, canOperate, locations, rol
                 <td><input type="number" className="form-control" aria-label={`${line.name} quantity`}
                   min="0.001" max="9999999.999" step="0.001" required value={line.quantity}
                   onChange={event => setLines(values => values.map(x =>
-                    x.productId === line.productId ? { ...x, quantity: event.target.value } : x))}/></td>
+                    x.productId === line.productId ? { ...x, quantity: event.target.value } : x))}/>
+                  {line.selectedUnitId !== 0 && <small className="d-block mt-1">
+                    {baseQuantity(Number(line.quantity), selectedUnit(line)?.factor ?? 1) === null
+                      ? 'Enter an exact base stock quantity.'
+                      : `${baseQuantity(Number(line.quantity), selectedUnit(line)?.factor ?? 1)} ${line.unitCode} stock`}
+                  </small>}</td>
                 <td><input type="number" className="form-control" aria-label={`${line.name} unit cost`}
                   min="0" max="99999999.99" step="0.01" required value={line.unitCost}
                   onChange={event => setLines(values => values.map(x =>
@@ -532,11 +554,11 @@ export default function RetailPurchases({ businessId, canOperate, locations, rol
           <button type="button" className="btn btn-outline-secondary" disabled={busy || addingSupplier}
             onClick={() => { resetOrderDraft(); setCreating(false) }}>Cancel</button>
           <button type="submit" className="btn btn-primary"
-            disabled={busy || !supplierId || !lines.length}>
+            disabled={busy || !supplierId || !validOrderLines}>
             {busy ? 'Saving…' : roleCode === 'Owner' ? 'Save & Approve' : 'Submit for Approval'}
           </button>
           {roleCode === 'Owner' && <button type="submit" data-action="draft"
-            className="btn btn-outline-secondary" disabled={busy || !supplierId || !lines.length}>
+            className="btn btn-outline-secondary" disabled={busy || !supplierId || !validOrderLines}>
             Save Draft
           </button>}
         </div>
@@ -642,16 +664,22 @@ export default function RetailPurchases({ businessId, canOperate, locations, rol
                         max={line.remainingQuantity} aria-label={`Receive ${line.name}`}
                         value={receiving[line.id] ?? ''}
                         onChange={event => setReceiving(value =>
-                          ({ ...value, [line.id]: event.target.value }))} /></td>
+                          ({ ...value, [line.id]: event.target.value }))} />
+                        {line.conversionFactor != null && line.conversionFactor !== 1 && Number(receiving[line.id] ?? '') !== 0 &&
+                          <small className="d-block mt-1">
+                            {baseQuantity(Number(receiving[line.id]), line.conversionFactor) === null
+                              ? 'Enter an exact base stock quantity.'
+                              : `${baseQuantity(Number(receiving[line.id]), line.conversionFactor)} ${line.baseUnitCode} stock`}
+                          </small>}</td>
                     </tr>)}</tbody>
                   </table>
                 </div>
                 <div className="form-footer">
-                  <button className="btn btn-primary" type="submit" disabled={busy}>
+                  <button className="btn btn-primary" type="submit" disabled={busy || !validReceiving}>
                     {busy ? 'Processing…' : 'Receive & Post Stock'}
                   </button>
                   <button className="btn btn-outline-secondary" type="submit"
-                    data-action="draft" disabled={busy}>Save Draft</button>
+                    data-action="draft" disabled={busy || !validReceiving}>Save Draft</button>
                 </div>
               </form>}
             </>}
@@ -665,7 +693,8 @@ export default function RetailPurchases({ businessId, canOperate, locations, rol
                     const validLines = receipt.lines.length > 0 && receipt.lines.every(item => {
                       const ordered = detail.lines.find(x => x.id === item.purchaseOrderLineId)
                       return !!ordered && Number.isFinite(item.quantity) && item.quantity > 0 &&
-                        item.quantity <= ordered.remainingQuantity
+                        item.quantity <= ordered.remainingQuantity &&
+                        baseQuantity(item.quantity, ordered.conversionFactor ?? 1) !== null
                     })
                     return <tr key={receipt.id}>
                       <td>#{receipt.id}</td>
