@@ -1,5 +1,6 @@
 import { useEffect, useRef, type FormEvent } from 'react'
 import { Banknote, LockKeyhole, X } from 'lucide-react'
+import { moneyCents } from './posMoney'
 
 interface PosCashPaymentDialogProps {
   amount: number
@@ -23,10 +24,11 @@ export default function PosCashPaymentDialog({
   const busyRef = useRef(busy)
   cancelRef.current = onCancel
   busyRef.current = busy
-  const received = Number(cash)
-  const validCash = cash.trim() !== '' && Number.isFinite(received) && received >= amount &&
-    Math.abs(Math.round(received * 100) - received * 100) < 0.000001
-  const change = validCash ? Math.round((received - amount) * 100) / 100 : 0
+  const receivedCents = moneyCents(cash)
+  const amountCents = moneyCents(amount)
+  const validCash = Number.isFinite(receivedCents) && Number.isFinite(amountCents) &&
+    receivedCents >= amountCents
+  const change = validCash ? (receivedCents - amountCents) / 100 : 0
   const money = (value: number) => currency + ' ' + value.toFixed(2)
 
   useEffect(() => {
@@ -93,7 +95,9 @@ export default function PosCashPaymentDialog({
             value={cash} onChange={event => onCashChange(event.target.value)} disabled={busy}
             aria-describedby="pos-cash-help" />
           <p id="pos-cash-help" className="pos-dialog-hint">Enter the exact amount handed over by the customer.
-            Insufficient payment cannot be confirmed.</p>
+            Use at most two decimal places. Insufficient payment cannot be confirmed.</p>
+          {cash !== '' && !Number.isFinite(receivedCents) &&
+            <p className="text-danger small" role="alert">Enter a valid cash amount within the supported range.</p>}
           <div className="pos-dialog-change"><span>Change to return</span><strong>{money(change)}</strong></div>
           <p className="pos-dialog-security"><LockKeyhole size={15} /> Final price and stock are checked by the server before posting.</p>
           {autoOpen && <p className="pos-dialog-hint">Save &amp; Print opens the RDLC receipt. Confirm printing in the PDF viewer.</p>}

@@ -1,6 +1,7 @@
 import { useEffect, useRef, useState, type FormEvent } from 'react'
 import { ArrowLeft, ArrowRight, Banknote, Check, Minus, Package, Plus, ReceiptText, Search, ShoppingBag, Trash2 } from 'lucide-react'
 import PosCashPaymentDialog from './PosCashPaymentDialog'
+import { maxExactCents, moneyCents } from './posMoney'
 import CashReceipt, { type Receipt } from './CashReceipt'
 import { api, ApiResponseError, operationKey, post, type RetailDashboard } from './api'
 
@@ -22,14 +23,9 @@ function validQuantity(value: number): boolean {
     Math.abs(Math.round(value * 1000) - value * 1000) < 0.000001
 }
 
-// Keep integer cents within a range where conversion back to a number retains
-// cent precision. SQL decimal supports larger values than the browser can display.
-const maxExactCents = 2 ** 52 - 1
-
 function lineAmountCents(line: Line): number {
-  const cents = Math.round(line.expectedUnitPrice * 100)
-  if (!validQuantity(line.quantity) || !Number.isSafeInteger(cents) || cents < 0 ||
-    Math.abs(cents - line.expectedUnitPrice * 100) > 0.000001) return NaN
+  const cents = moneyCents(line.expectedUnitPrice)
+  if (!validQuantity(line.quantity) || !Number.isFinite(cents)) return NaN
   // Quantity has at most three decimals. Integer arithmetic matches the server's
   // positive decimal midpoint rounding without a floating-point half-cent error.
   const amount = (BigInt(cents) * BigInt(Math.round(line.quantity * 1000)) + 500n) / 1000n
@@ -53,9 +49,7 @@ function restore(key: string): SaleRequest | null {
     if (!lines.length || lines.length > 100 || lines.some((line: Line) =>
       !Number.isSafeInteger(line.productId) || line.productId < 1 ||
       typeof line.name !== 'string' || !validQuantity(line.quantity) ||
-      !Number.isFinite(line.expectedUnitPrice) || line.expectedUnitPrice < 0 ||
-      Math.round(line.expectedUnitPrice * 100) !== line.expectedUnitPrice * 100 &&
-      Math.abs(Math.round(line.expectedUnitPrice * 100) - line.expectedUnitPrice * 100) > 0.000001))
+      !Number.isFinite(moneyCents(line.expectedUnitPrice))))
       throw new Error('Invalid checkout lines')
     if (saved.customerId != null && (!Number.isSafeInteger(saved.customerId) || saved.customerId < 1)) throw new Error('Invalid checkout customer')
     return { locationId: saved.locationId, requestKey: saved.requestKey, tendered: saved.tendered, lines, customerId: saved.customerId ?? null }
@@ -293,18 +287,18 @@ export default function CashCheckout({ userId, dashboard, onExit }: {
   }
 
   async function recordSale(openPrint = false) {
-    const received = Number(cash)
+    const receivedCents = moneyCents(cash)
     if (lock.current || scanLock.current || !dashboard.canOperate || needsReview || (!pending && !cashAvailable) ||
       (pending && lookupState !== 'missing')) return
     if (!pending && (!locationId || !basket.length || basket.some(line =>
       !validQuantity(line.quantity) ||
       !Number.isFinite(line.expectedUnitPrice) || line.expectedUnitPrice < 0) ||
-      hasZeroValueLine || !Number.isFinite(total) || total <= 0 || !Number.isFinite(received) ||
-      Math.abs(Math.round(received * 100) - received * 100) > 0.000001 || received < total)) {
+      hasZeroValueLine || !Number.isFinite(total) || total <= 0 ||
+      !Number.isFinite(receivedCents) || receivedCents < totalCents)) {
       setError('Check basket quantities and enter enough cash before recording the sale.')
       return
     }
-    const request = pending ?? { locationId, lines: basket, tendered: received, requestKey: operationKey(), customerId: customer?.id ?? null }
+    const request = pending ?? { locationId, lines: basket, tendered: receivedCents / 100, requestKey: operationKey(), customerId: customer?.id ?? null }
     lock.current = true
     setBusy(true)
     setLookupState('checking')

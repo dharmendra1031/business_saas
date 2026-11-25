@@ -1390,7 +1390,9 @@ try {
       { id: 301, name: 'Regular Item', sku: 'REG-301', barcode: null,
         salePrice: 2, available: 3, unitCode: 'PCS' },
       { id: 302, name: 'Tiny Item', sku: 'TINY-302', barcode: null,
-        salePrice: 0.50, available: 3, unitCode: 'KG' }
+        salePrice: 0.50, available: 3, unitCode: 'KG' },
+      { id: 303, name: 'High Price Item', sku: 'HIGH-303', barcode: null,
+        salePrice: 9999999999.03, available: 1, unitCode: 'PCS' }
     ]))
     await t.page.route('**/api/businesses/1/cash-sales', route => {
       if (route.request().method() !== 'POST') return response(route, 404, {})
@@ -1409,6 +1411,15 @@ try {
       })
     })
     await t.login()
+    await t.page.getByRole('button', { name: /Add High Price Item/ }).click()
+    assert.match(await t.page.locator('.pos-total-row').innerText(), /₹9999999999\.03/)
+    await t.page.getByRole('button', { name: /Pay \/ Checkout/ }).click()
+    await t.page.getByLabel('Cash received').fill('9999999999.04')
+    const highDialog = t.page.getByRole('dialog')
+    await highDialog.locator('.pos-dialog-change').getByText('INR 0.01', { exact: true }).waitFor()
+    assert.equal(await highDialog.getByRole('button', { name: 'Save Only' }).isEnabled(), true)
+    await highDialog.getByRole('button', { name: 'Back to Cart' }).click()
+    await t.page.getByRole('button', { name: 'Remove High Price Item' }).click()
     await t.page.getByRole('button', { name: /Add Regular Item/ }).click()
     await t.page.getByRole('button', { name: /Add Tiny Item/ }).click()
     const tinyQuantity = t.page.getByRole('spinbutton', { name: 'Quantity of Tiny Item' })
@@ -1429,6 +1440,10 @@ try {
     const dialog = t.page.getByRole('dialog')
     await dialog.getByText('INR 2.15', { exact: true }).waitFor()
     await t.page.getByLabel('Cash received').fill('2.14')
+    assert.equal(await dialog.getByRole('button', { name: 'Save Only' }).isDisabled(), true)
+    await t.page.getByLabel('Cash received').fill('2.151')
+    assert.equal(await dialog.getByRole('button', { name: 'Save Only' }).isDisabled(), true)
+    await t.page.getByLabel('Cash received').fill('45035996273704.92')
     assert.equal(await dialog.getByRole('button', { name: 'Save Only' }).isDisabled(), true)
     await t.page.getByLabel('Cash received').fill('2.15')
     await t.page.getByRole('button', { name: 'Save Only' }).click()
