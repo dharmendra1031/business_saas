@@ -347,6 +347,7 @@ public sealed class SqlServerTests
             builder.UseSetting("RetailReturns:PostingEnabled", "true");
             builder.UseSetting("RetailSales:AlternateUnitsEnabled", "true");
             builder.UseSetting("RetailCredit:PostingEnabled", "true");
+            builder.UseSetting("RetailCredit:CollectionsEnabled", "true");
             builder.ConfigureServices(services =>
             {
                 services.RemoveAll<DbContextOptions<AppDbContext>>();
@@ -1118,6 +1119,57 @@ public sealed class SqlServerTests
         Assert.Equal(HttpStatusCode.OK, (await Post(owner, creditPath, creditRequest)).StatusCode);
         Assert.Equal(HttpStatusCode.Conflict, (await Post(owner, creditPath,
             creditRequest with { requestKey = "sql-credit-disabled-20261125" })).StatusCode);
+
+        // Collections stay available for existing debt when new credit is disabled.
+        var paymentsPath = prefix + "/customers/" + creditCustomerId + "/credit-invoices/" + creditId + "/payments";
+        var payment = new { requestKey = "sql-credit-payment-20261125", amount = 8m,
+            expectedOutstanding = 20m, cashReceivedConfirmed = true };
+        Assert.Equal(HttpStatusCode.NotFound, (await Post(cashier, paymentsPath, payment)).StatusCode);
+        Assert.Equal(HttpStatusCode.NotFound, (await Post(stranger, paymentsPath, payment)).StatusCode);
+        Assert.Equal(HttpStatusCode.BadRequest, (await Post(owner, paymentsPath, payment with { amount = 0m })).StatusCode);
+        Assert.Equal(HttpStatusCode.BadRequest, (await Post(owner, paymentsPath, payment with { amount = 8.001m })).StatusCode);
+        Assert.Equal(HttpStatusCode.BadRequest, (await Post(owner, paymentsPath, payment with { cashReceivedConfirmed = false })).StatusCode);
+        using var collectionResponse = await Post(owner, paymentsPath, payment);
+        Assert.Equal(HttpStatusCode.OK, collectionResponse.StatusCode);
+        var collection = await collectionResponse.Content.ReadFromJsonAsync<JsonElement>();
+        var collectionId = collection.GetProperty("id").GetInt64();
+        using var collectionReplay = await Post(owner, paymentsPath, payment);
+        Assert.Equal(HttpStatusCode.OK, collectionReplay.StatusCode);
+        Assert.Equal(collectionId, (await collectionReplay.Content.ReadFromJsonAsync<JsonElement>()).GetProperty("id").GetInt64());
+        Assert.Equal(HttpStatusCode.Conflict, (await Post(owner, paymentsPath, payment with { amount = 9m })).StatusCode);
+        Assert.Equal(HttpStatusCode.Conflict, (await Post(owner, paymentsPath, payment with {
+            requestKey = "sql-stale-collection-20261125" })).StatusCode);
+        var partialLedger = await owner.GetFromJsonAsync<JsonElement>(creditLedgerPath);
+        Assert.Equal(8m, partialLedger.GetProperty("totals")[0].GetProperty("paid").GetDecimal());
+        Assert.Equal(12m, partialLedger.GetProperty("totals")[0].GetProperty("outstanding").GetDecimal());
+        Assert.Equal(12m, partialLedger.GetProperty("items")[0].GetProperty("outstanding").GetDecimal());
+        var history = await owner.GetFromJsonAsync<JsonElement>(paymentsPath + "?requestKey=" + payment.requestKey);
+        Assert.Equal(collectionId, history.GetProperty("items")[0].GetProperty("id").GetInt64());
+        Assert.Equal(HttpStatusCode.NotFound, (await cashier.GetAsync(paymentsPath)).StatusCode);
+        // Independent requests competing for the exact remaining balance.
+        var finalPayment = payment with { requestKey = "sql-final-collection-a-20261125",
+            amount = 12m, expectedOutstanding = 12m };
+        var competing = await Task.WhenAll(Post(owner, paymentsPath, finalPayment),
+            Post(owner, paymentsPath, finalPayment with { requestKey = "sql-final-collection-b-20261125" }));
+        Assert.Single(competing.Where(x => x.StatusCode == HttpStatusCode.OK));
+        Assert.Single(competing.Where(x => x.StatusCode == HttpStatusCode.Conflict));
+        var settledLedger = await owner.GetFromJsonAsync<JsonElement>(creditLedgerPath);
+        Assert.Equal(20m, settledLedger.GetProperty("totals")[0].GetProperty("paid").GetDecimal());
+        Assert.Equal(0m, settledLedger.GetProperty("totals")[0].GetProperty("outstanding").GetDecimal());
+        using var settledReplay = await Post(owner, creditPath, creditRequest);
+        Assert.Equal(HttpStatusCode.OK, settledReplay.StatusCode);
+        Assert.Equal(0m, (await settledReplay.Content.ReadFromJsonAsync<JsonElement>()).GetProperty("outstanding").GetDecimal());
+        using (var scope = factory.Services.CreateScope())
+        {
+            var db = scope.ServiceProvider.GetRequiredService<AppDbContext>();
+            Assert.Equal(2, await db.RetailCreditPayments.CountAsync(x => x.BusinessId == businessId && x.SaleId == creditId));
+            Assert.Equal(20m, await db.RetailCreditPayments.Where(x => x.SaleId == creditId).SumAsync(x => x.Amount));
+            Assert.Equal(20m, await db.RetailCashSales.Where(x => x.Id == creditId).Select(x => x.Total).SingleAsync());
+            Assert.Equal(3.5m, await db.RetailStockBalances.Where(x => x.BusinessId == businessId &&
+                x.LocationId == locationId && x.ProductId == packProductId).Select(x => x.Quantity).SingleAsync());
+        }
+        var finalCashReport = await owner.GetFromJsonAsync<JsonElement>(dailyPath + creditDate.ToString("yyyy-MM-dd"));
+        Assert.Equal(cashReportBefore.GetProperty("totals").GetRawText(), finalCashReport.GetProperty("totals").GetRawText());
     }
 
     private static async Task RegisterAndLogin(HttpClient client, string email)
