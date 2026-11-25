@@ -225,6 +225,10 @@ public static class RetailPurchaseEndpoints
                     Lines = db.RetailReceivingLines.Where(l => l.ReceivingId == x.Id)
                         .OrderBy(l => l.Id).Select(l => new { l.PurchaseOrderLineId, l.Quantity }).ToList() })
                 .ToListAsync(cancellationToken);
+            var validLineIds = lines.Select(line => line.Id).ToHashSet();
+            if (receipts.Any(receipt => receipt.Lines.Any(line => !validLineIds.Contains(line.PurchaseOrderLineId))))
+                return Results.Conflict(new { message = "Receiving lines require reconciliation." });
+
             return Results.Ok(new
             {
                 order.Id, order.BusinessId, order.LocationId, order.SupplierId,

@@ -1421,6 +1421,104 @@ public sealed class SqlServerTests(Xunit.Abstractions.ITestOutputHelper output)
 
     [Fact]
     [Trait("Database", "SqlServer")]
+    public async Task Purchase_detail_rejects_receiving_line_from_another_business()
+    {
+        var connectionString = Environment.GetEnvironmentVariable("SQLSERVER_TEST_CONNECTION");
+        if (string.IsNullOrWhiteSpace(connectionString)) return;
+
+        using var factory = new WebApplicationFactory<Program>().WithWebHostBuilder(builder =>
+        {
+            builder.UseEnvironment("Development");
+            builder.ConfigureServices(services =>
+            {
+                services.RemoveAll<DbContextOptions<AppDbContext>>();
+                services.RemoveAll<IDbContextOptionsConfiguration<AppDbContext>>();
+                services.AddDbContext<AppDbContext>(options => options.UseSqlServer(connectionString));
+            });
+        });
+        using var owner = factory.CreateClient();
+        using var other = factory.CreateClient();
+        await RegisterAndLogin(owner, "sql-receiving-isolation-owner@example.test");
+        await RegisterAndLogin(other, "sql-receiving-isolation-other@example.test");
+        var businessId = await BusinessFixtures.SeedAsync(factory.Services, owner,
+            "Receiving Isolation", "sql-receiving-isolation-owner");
+        var otherId = await BusinessFixtures.SeedAsync(factory.Services, other,
+            "Foreign Receiving", "sql-receiving-isolation-other");
+
+        using var scope = factory.Services.CreateScope();
+        var db = scope.ServiceProvider.GetRequiredService<AppDbContext>();
+        async Task<RetailPurchaseOrderLine> CreateOrderLine(long id, string email)
+        {
+            var supplier = new RetailSupplier { BusinessId = id, Name = "Supplier", NameKey = "SUPPLIER" };
+            var product = new RetailProduct
+            {
+                BusinessId = id, Name = "Item", Sku = "ISOLATION-ITEM", SalePrice = 10m,
+                CategoryId = await db.RetailCategories.Where(x => x.BusinessId == id).Select(x => x.Id).SingleAsync(),
+                UnitId = await db.RetailUnits.Where(x => x.BusinessId == id).Select(x => x.Id).SingleAsync()
+            };
+            db.AddRange(supplier, product);
+            await db.SaveChangesAsync();
+            var order = new RetailPurchaseOrder
+            {
+                BusinessId = id, SupplierId = supplier.Id, Status = "Approved",
+                LocationId = await db.BusinessLocations.Where(x => x.BusinessId == id).Select(x => x.Id).SingleAsync(),
+                CreatedByUserId = await db.Users.Where(x => x.Email == email).Select(x => x.Id).SingleAsync()
+            };
+            db.RetailPurchaseOrders.Add(order);
+            await db.SaveChangesAsync();
+            var line = new RetailPurchaseOrderLine
+            {
+                PurchaseOrderId = order.Id, ProductId = product.Id, OrderedQuantity = 5m, UnitCost = 2m
+            };
+            db.RetailPurchaseOrderLines.Add(line);
+            await db.SaveChangesAsync();
+            return line;
+        }
+
+        var ownLine = await CreateOrderLine(businessId, "sql-receiving-isolation-owner@example.test");
+        var foreignLine = await CreateOrderLine(otherId, "sql-receiving-isolation-other@example.test");
+        var receipt = new RetailReceiving
+        {
+            BusinessId = businessId, PurchaseOrderId = ownLine.PurchaseOrderId,
+            CreatedByUserId = await db.Users.Where(x => x.Email == "sql-receiving-isolation-owner@example.test")
+                .Select(x => x.Id).SingleAsync()
+        };
+        db.RetailReceivings.Add(receipt);
+        await db.SaveChangesAsync();
+        var line = new RetailReceivingLine
+        {
+            ReceivingId = receipt.Id, PurchaseOrderLineId = ownLine.Id, Quantity = 1m
+        };
+        db.RetailReceivingLines.Add(line);
+        await db.SaveChangesAsync();
+
+        var path = $"/api/businesses/{businessId}/purchase-orders/{ownLine.PurchaseOrderId}";
+        using var valid = await owner.GetAsync(path);
+        Assert.Equal(HttpStatusCode.OK, valid.StatusCode);
+        using var denied = await other.GetAsync(path);
+        Assert.Equal(HttpStatusCode.NotFound, denied.StatusCode);
+
+        // Simulate pre-existing corrupt data allowed by independent foreign keys.
+        line.PurchaseOrderLineId = foreignLine.Id;
+        await db.SaveChangesAsync();
+        try
+        {
+            using var invalid = await owner.GetAsync(path);
+            Assert.Equal(HttpStatusCode.Conflict, invalid.StatusCode);
+            using var post = await Post(owner, path + $"/receivings/{receipt.Id}/post", new { });
+            Assert.Equal(HttpStatusCode.Conflict, post.StatusCode);
+            Assert.False(await db.RetailStockMovements.AnyAsync(x =>
+                x.BusinessId == businessId && x.SourceType == "Receiving" && x.SourceId == line.Id));
+        }
+        finally
+        {
+            line.PurchaseOrderLineId = ownLine.Id;
+            await db.SaveChangesAsync();
+        }
+    }
+
+    [Fact]
+    [Trait("Database", "SqlServer")]
     public async Task Large_catalog_reads_preserve_order_pagination_and_tenant_isolation()
     {
         var connectionString = Environment.GetEnvironmentVariable("SQLSERVER_TEST_CONNECTION");
