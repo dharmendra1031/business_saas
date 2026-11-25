@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState, type FormEvent } from 'react'
+import { useEffect, useLayoutEffect, useRef, useState, type FormEvent } from 'react'
 import { api, post, SessionExpiredError, UncertainWriteError } from './api'
 import { Package, Plus, Search } from 'lucide-react'
 import { classificationPath, classificationTrail } from './retailClassification'
@@ -82,6 +82,9 @@ export default function RetailProducts({ businessId, canOperate, currencyCode }:
   const [inlineParent, setInlineParent] = useState(0)
   const [inlineSaving, setInlineSaving] = useState(false)
   const [inlineNeedsReview, setInlineNeedsReview] = useState(false)
+  const [inlineError, setInlineError] = useState('')
+  const masterDialog = useRef<HTMLDialogElement>(null)
+  const masterSaving = useRef(false)
   const [page, setPage] = useState(1)
   const [total, setTotal] = useState(0)
   const [search, setSearch] = useState('')
@@ -243,8 +246,24 @@ export default function RetailProducts({ businessId, canOperate, currencyCode }:
   }
 
 
+  useLayoutEffect(() => {
+    if (!inlineType || !formOpen || !canOperate) return
+    const dialog = masterDialog.current
+    if (!dialog) return
+    dialog.showModal()
+    dialog.querySelector<HTMLInputElement>('input')?.focus()
+    return () => { dialog.close() }
+  }, [inlineType, formOpen, canOperate])
+
+  function closeInline() {
+    masterDialog.current?.close()
+    setInlineType(null)
+    setInlineError('')
+  }
+
   function beginInline(type: 'categories' | 'units' | 'brands') {
-    setInlineType(type === inlineType ? null : type)
+    setInlineType(type)
+    setInlineError('')
     setInlineName('')
     setInlineCode('')
     setInlineParent(type === 'categories' ? selectedSubgroup : 0)
@@ -255,8 +274,11 @@ export default function RetailProducts({ businessId, canOperate, currencyCode }:
     (inlineType !== 'units' || /^[A-Z0-9-]{1,12}$/.test(inlineCode.trim())) &&
     (inlineType !== 'categories' || inlineParent > 0)
 
-  async function addInline() {
-    if (!inlineType || !canOperate || inlineSaving || saving || inlineNeedsReview || !inlineValid) return
+  async function addInline(event: FormEvent<HTMLFormElement>) {
+    event.preventDefault()
+    if (!inlineType || !canOperate || masterSaving.current || inlineSaving || saving || inlineNeedsReview || !inlineValid) return
+    masterSaving.current = true
+    setInlineError('')
     const type = inlineType
     const name = inlineName.trim()
     const code = inlineCode.trim().toUpperCase()
@@ -264,21 +286,21 @@ export default function RetailProducts({ businessId, canOperate, currencyCode }:
     setInlineSaving(true)
     let added: { id: number }
     try {
-      added = await run(`Adding ${type === 'categories' ? 'category' : type === 'units' ? 'unit' : 'brand'}…`,
-        `${type === 'categories' ? 'Category' : type === 'units' ? 'Unit' : 'Brand'} created.`,
-        () => post<{ id: number }>(`/businesses/${businessId}/${type}`, {
-          name,
-          ...(type === 'units' ? { code } : {}),
-          ...(type === 'categories' ? { parentId } : {})
-        }))
+      added = await post<{ id: number }>(`/businesses/${businessId}/${type}`, {
+        name,
+        ...(type === 'units' ? { code } : {}),
+        ...(type === 'categories' ? { parentId } : {})
+      })
     } catch (cause) {
       if (cause instanceof UncertainWriteError) setInlineNeedsReview(true)
+      else if (!(cause instanceof SessionExpiredError)) setInlineError(errorMessage(cause))
       // Never auto-retry a possibly committed create. Retain inputs for review.
+      masterSaving.current = false
       setInlineSaving(false)
       return
     }
 
-    // The master was committed. Close the add panel before the follow-up
+    // The master was committed. Close the dialog before the follow-up
     // GET: a failed refresh must not offer a second Create for the same item.
     const field = type === 'categories' ? 'categoryId' : type === 'units' ? 'unitId' : 'brandId'
     const option: CatalogOption = { id: added.id, name, isActive: true,
@@ -286,7 +308,7 @@ export default function RetailProducts({ businessId, canOperate, currencyCode }:
       ...(type === 'categories' ? { parentId } : {}) }
     setOptions(current => ({ ...current, [type]: [...current[type], option] }))
     setForm(current => ({ ...current, [field]: added.id }))
-    setInlineType(null)
+    closeInline()
     setInlineNeedsReview(false)
     setInlineName('')
     setInlineCode('')
@@ -299,6 +321,7 @@ export default function RetailProducts({ businessId, canOperate, currencyCode }:
       if (!(cause instanceof SessionExpiredError))
         setOptionsError('Master created and selected, but the options list could not refresh. Use Retry setup.')
     } finally {
+      masterSaving.current = false
       setInlineSaving(false)
     }
   }
@@ -471,31 +494,6 @@ export default function RetailProducts({ businessId, canOperate, currencyCode }:
               {!conversionValid && <p className="field-help">Choose a different unit and enter a valid quantity and price.</p>}
             </details>
           </div>
-          {inlineType && <div className="form-wide border-top pt-2" role="group"
-            aria-label={`Add ${inlineType === 'categories' ? 'category' : inlineType === 'units' ? 'unit' : 'brand'}`}
-            onKeyDown={event => { if (event.key === 'Enter') { event.preventDefault(); if (inlineValid) void addInline() } }}>
-            <label className="form-label" htmlFor="inline-master-name">New {inlineType === 'categories' ? 'category' : inlineType === 'units' ? 'unit' : 'brand'} name</label>
-            <input id="inline-master-name" className="form-control" minLength={2} maxLength={80}
-              value={inlineName} onChange={event => setInlineName(event.target.value)} />
-            {inlineType === 'units' && <>
-              <label className="form-label mt-2" htmlFor="inline-master-code">Unit code</label>
-              <input id="inline-master-code" className="form-control" maxLength={12}
-                value={inlineCode} onChange={event => setInlineCode(event.target.value.toUpperCase())} />
-            </>}
-            {inlineType === 'categories' && <p className="field-help mt-2">
-              Subgroup: {classificationPath(options.categories, inlineParent)}
-            </p>}
-            {inlineNeedsReview && <p role="alert" className="alert alert-warning">
-              Creation status is unknown. Check Product Masters before attempting this again.
-            </p>}
-            <div className="d-flex gap-2 mt-2">
-              <ActionButton type="button" className="btn-sm" busy={inlineSaving}
-                busyLabel="Adding…" disabled={!inlineValid || inlineNeedsReview || saving}
-                onClick={() => void addInline()}>Add & select</ActionButton>
-              <button type="button" className="btn btn-sm btn-outline-secondary" disabled={inlineSaving}
-                onClick={() => setInlineType(null)}>Cancel</button>
-            </div>
-          </div>}
         </fieldset>
         <div className="form-footer">
           <button type="button" className="btn btn-outline-secondary" disabled={saving || inlineSaving}
@@ -503,6 +501,40 @@ export default function RetailProducts({ businessId, canOperate, currencyCode }:
           <ActionButton busy={saving} disabled={optionsLoading || inlineSaving || !!inlineType || !form.categoryId || !form.unitId || !conversionValid}>Save product</ActionButton>
         </div>
       </form>}
+
+      {formOpen && canOperate && inlineType && <dialog ref={masterDialog} className="entry-dialog"
+        aria-labelledby="master-dialog-heading"
+        onCancel={event => { event.preventDefault(); if (!masterSaving.current) closeInline() }}
+        onKeyDownCapture={event => {
+          if (event.key === 'Escape') {
+            event.preventDefault()
+            event.stopPropagation()
+            if (!masterSaving.current) closeInline()
+          }
+        }}>
+        <h3 id="master-dialog-heading" className="h5 mb-3">Add {inlineType === 'categories' ? 'category' : inlineType === 'units' ? 'unit' : 'brand'}</h3>
+        <form aria-busy={inlineSaving} onSubmit={event => void addInline(event)}>
+          <fieldset disabled={inlineSaving || inlineNeedsReview}>
+            {inlineType === 'categories' && <p className="small mb-2">Subgroup: {classificationPath(options.categories, inlineParent)}</p>}
+            <label className="form-label" htmlFor="inline-master-name">Name *</label>
+            <input id="inline-master-name" className="form-control" required minLength={2} maxLength={80}
+              value={inlineName} onChange={event => setInlineName(event.target.value)} />
+            {inlineType === 'units' && <div className="mt-3">
+              <label className="form-label" htmlFor="inline-master-code">Unit code *</label>
+              <input id="inline-master-code" className="form-control" required maxLength={12}
+                value={inlineCode} onChange={event => setInlineCode(event.target.value.toUpperCase())} />
+            </div>}
+          </fieldset>
+          {inlineError && <p role="alert" className="text-danger small mt-2">{inlineError}</p>}
+          {inlineNeedsReview && <p role="alert" className="alert alert-warning mt-2">
+            Creation status is unknown. Check Product Masters before attempting this again.
+          </p>}
+          <div className="d-flex justify-content-end gap-2 mt-3">
+            <button type="button" className="btn btn-outline-secondary" disabled={inlineSaving} onClick={closeInline}>Cancel</button>
+            <ActionButton busy={inlineSaving} busyLabel="Adding…" disabled={!inlineValid || inlineNeedsReview || saving}>Add & select</ActionButton>
+          </div>
+        </form>
+      </dialog>}
 
       {!formOpen && <>
         <form className="product-filters" onSubmit={event => {
