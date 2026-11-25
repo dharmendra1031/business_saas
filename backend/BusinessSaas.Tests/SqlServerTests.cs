@@ -1149,6 +1149,31 @@ public sealed class SqlServerTests
         Assert.Equal(8m, partialLedger.GetProperty("totals")[0].GetProperty("paid").GetDecimal());
         Assert.Equal(12m, partialLedger.GetProperty("totals")[0].GetProperty("outstanding").GetDecimal());
         Assert.Equal(12m, partialLedger.GetProperty("items")[0].GetProperty("outstanding").GetDecimal());
+        var outstandingPath = prefix + "/customers/outstanding-report";
+        var outstandingReport = await owner.GetFromJsonAsync<JsonElement>(outstandingPath);
+        var aging = outstandingReport.GetProperty("totals")[0];
+        Assert.Equal(12m, aging.GetProperty("outstanding").GetDecimal());
+        Assert.Equal(12m, aging.GetProperty("notDue").GetDecimal());
+        Assert.Equal(0m, aging.GetProperty("overdue").GetDecimal());
+        Assert.Equal(creditCustomerId, outstandingReport.GetProperty("items")[0].GetProperty("customerId").GetInt64());
+        Assert.Equal(HttpStatusCode.NotFound, (await cashier.GetAsync(outstandingPath)).StatusCode);
+        Assert.Equal(HttpStatusCode.NotFound, (await stranger.GetAsync(outstandingPath)).StatusCode);
+        var noOverdue = await owner.GetFromJsonAsync<JsonElement>(outstandingPath + "?overdueOnly=true");
+        Assert.Empty(noOverdue.GetProperty("items").EnumerateArray());
+        // Age a disposable fixture, then restore its due date before invoice replay tests.
+        using (var agingScope = factory.Services.CreateScope())
+        {
+            var agingDb = agingScope.ServiceProvider.GetRequiredService<AppDbContext>();
+            await agingDb.RetailCashSales.Where(x => x.Id == creditId).ExecuteUpdateAsync(x =>
+                x.SetProperty(sale => sale.CreditDueDate, creditDate.AddDays(-31)));
+            var overdueReport = await owner.GetFromJsonAsync<JsonElement>(outstandingPath + "?overdueOnly=true");
+            var overdueAging = overdueReport.GetProperty("totals")[0];
+            Assert.Equal(12m, overdueAging.GetProperty("overdue").GetDecimal());
+            Assert.Equal(12m, overdueAging.GetProperty("days31To60").GetDecimal());
+            Assert.Equal(0m, overdueAging.GetProperty("days1To30").GetDecimal());
+            await agingDb.RetailCashSales.Where(x => x.Id == creditId).ExecuteUpdateAsync(x =>
+                x.SetProperty(sale => sale.CreditDueDate, creditRequest.dueDate));
+        }
         var collectionHistory = await owner.GetFromJsonAsync<JsonElement>(paymentsPath + "?requestKey=" + payment.requestKey);
         Assert.Equal(collectionId, collectionHistory.GetProperty("items")[0].GetProperty("id").GetInt64());
         Assert.Equal(HttpStatusCode.NotFound, (await cashier.GetAsync(paymentsPath)).StatusCode);
@@ -1159,6 +1184,9 @@ public sealed class SqlServerTests
             Post(owner, paymentsPath, finalPayment with { requestKey = "sql-final-collection-b-20261125" }));
         Assert.Single(competing, x => x.StatusCode == HttpStatusCode.OK);
         Assert.Single(competing, x => x.StatusCode == HttpStatusCode.Conflict);
+        var settledReport = await owner.GetFromJsonAsync<JsonElement>(outstandingPath);
+        Assert.Empty(settledReport.GetProperty("items").EnumerateArray());
+        Assert.Empty(settledReport.GetProperty("totals").EnumerateArray());
         var settledLedger = await owner.GetFromJsonAsync<JsonElement>(creditLedgerPath);
         Assert.Equal(20m, settledLedger.GetProperty("totals")[0].GetProperty("paid").GetDecimal());
         Assert.Equal(0m, settledLedger.GetProperty("totals")[0].GetProperty("outstanding").GetDecimal());

@@ -28,6 +28,7 @@ public static class CreditCollections
 
     internal static void MapCreditCollections(RouteGroupBuilder customers)
     {
+        customers.MapGet("/outstanding-report", OutstandingReport);
         customers.MapGet("/{customerId:long}/credit-invoices/{saleId:long}/payments", async (
             long businessId, long customerId, long saleId, ClaimsPrincipal user, AppDbContext db,
             int page = 1, string? requestKey = null) =>
@@ -92,6 +93,74 @@ public static class CreditCollections
                 return Results.Conflict(new { message = "Collection is being updated. Verify history or retry the same request key." });
             }
         });
+    }
+
+    private static async Task<IResult> OutstandingReport(long businessId, ClaimsPrincipal user,
+        AppDbContext db, string? search, int page = 1, bool overdueOnly = false)
+    {
+        if (await RetailBillingSettingsEndpoints.OwnerId(db, businessId, user) is null)
+            return Results.NotFound();
+        var term = search?.Trim().ToUpperInvariant() ?? "";
+        if (page is < 1 or > 100000 || term.Length > 100)
+            return Results.BadRequest(new { message = "Invalid search or page." });
+
+        var timeZone = await db.Businesses.Where(x => x.Id == businessId)
+            .Select(x => x.TimeZoneId).SingleAsync();
+        var today = DateOnly.FromDateTime(TimeZoneInfo.ConvertTimeFromUtc(DateTime.UtcNow,
+            TimeZoneInfo.FindSystemTimeZoneById(timeZone)));
+        var cutoff30 = today.AddDays(-30);
+        var cutoff60 = today.AddDays(-60);
+        var cutoff90 = today.AddDays(-90);
+
+        await using var tx = await db.Database.BeginTransactionAsync(IsolationLevel.Serializable);
+        try
+        {
+            var paidByInvoice = db.RetailCreditPayments.AsNoTracking()
+                .Where(x => x.BusinessId == businessId).GroupBy(x => x.SaleId)
+                .Select(g => new { SaleId = g.Key, Paid = (decimal?)g.Sum(x => x.Amount) });
+            var customers = db.RetailCustomers.AsNoTracking().Where(x => x.BusinessId == businessId);
+            if (term.Length > 0)
+                customers = customers.Where(x => x.NameKey.Contains(term) || x.Phone.Contains(term));
+            var balances = from sale in db.RetailCashSales.AsNoTracking()
+                           join customer in customers on sale.CustomerId equals (long?)customer.Id
+                           join payment in paidByInvoice on sale.Id equals payment.SaleId into payments
+                           from payment in payments.DefaultIfEmpty()
+                           where sale.BusinessId == businessId && sale.CreditDueDate != null
+                           let outstanding = sale.Total - (payment.Paid ?? 0m)
+                           where outstanding > 0 && (!overdueOnly || sale.CreditDueDate < today)
+                           select new { CustomerId = customer.Id, customer.Name, customer.IsActive,
+                               sale.CurrencyCode, DueDate = sale.CreditDueDate!.Value, Outstanding = outstanding };
+
+            var totals = await balances.GroupBy(x => x.CurrencyCode).Select(g => new {
+                CurrencyCode = g.Key,
+                Outstanding = g.Sum(x => x.Outstanding),
+                NotDue = g.Sum(x => x.DueDate >= today ? x.Outstanding : 0m),
+                Overdue = g.Sum(x => x.DueDate < today ? x.Outstanding : 0m),
+                Days1To30 = g.Sum(x => x.DueDate < today && x.DueDate >= cutoff30 ? x.Outstanding : 0m),
+                Days31To60 = g.Sum(x => x.DueDate < cutoff30 && x.DueDate >= cutoff60 ? x.Outstanding : 0m),
+                Days61To90 = g.Sum(x => x.DueDate < cutoff60 && x.DueDate >= cutoff90 ? x.Outstanding : 0m),
+                DaysOver90 = g.Sum(x => x.DueDate < cutoff90 ? x.Outstanding : 0m),
+                InvoiceCount = g.Count()
+            }).OrderBy(x => x.CurrencyCode).ToListAsync();
+
+            var items = await balances.GroupBy(x => new { x.CustomerId, x.Name, x.IsActive, x.CurrencyCode })
+                .Select(g => new {
+                    g.Key.CustomerId, g.Key.Name, g.Key.IsActive, g.Key.CurrencyCode,
+                    Outstanding = g.Sum(x => x.Outstanding),
+                    Overdue = g.Sum(x => x.DueDate < today ? x.Outstanding : 0m),
+                    OldestDueDate = g.Min(x => x.DueDate),
+                    InvoiceCount = g.Count()
+                }).OrderByDescending(x => x.Overdue).ThenByDescending(x => x.Outstanding)
+                .ThenBy(x => x.CustomerId).ThenBy(x => x.CurrencyCode)
+                .Skip((page - 1) * 20).Take(21).ToListAsync();
+            await tx.CommitAsync();
+            return Results.Ok(new { businessDate = today, timeZoneId = timeZone, totals,
+                items = items.Take(20), page, hasMore = items.Count > 20 });
+        }
+        catch (Exception error) when (StockPosting.IsSqlConflict(error))
+        {
+            return Results.Conflict(new { message = "Outstanding balances are being updated. Reload the report." });
+        }
     }
 
     private static object View(RetailCreditPayment payment) => new {
