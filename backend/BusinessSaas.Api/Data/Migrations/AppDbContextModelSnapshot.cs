@@ -1960,6 +1960,26 @@ namespace BusinessSaas.Api.Data.Migrations
                 });
 
             modelBuilder.Entity("BusinessSaas.Api.Data.RetailCashReturn", b => b.Navigation("Lines"));
+            modelBuilder.Entity("BusinessSaas.Api.Data.RetailProductUnit", b =>
+                {
+                    b.Property<long>("ProductId").HasColumnType("bigint");
+                    b.Property<long>("UnitId").HasColumnType("bigint");
+                    b.Property<decimal>("Factor").HasPrecision(18, 3).HasColumnType("decimal(18,3)");
+                    b.HasKey("ProductId", "UnitId");
+                    b.HasIndex("UnitId");
+                    b.ToTable("RetailProductUnits", t => t.HasCheckConstraint("CK_RetailProductUnits_Factor",
+                        "[Factor] > 0 AND [Factor] <= 9999999.999"));
+                });
+
+            modelBuilder.Entity("BusinessSaas.Api.Data.RetailProductUnit", b =>
+                {
+                    b.HasOne("BusinessSaas.Api.Data.RetailProduct", null).WithMany("Conversions")
+                        .HasForeignKey("ProductId").OnDelete(DeleteBehavior.Cascade).IsRequired();
+                    b.HasOne("BusinessSaas.Api.Data.RetailUnit", null).WithMany()
+                        .HasForeignKey("UnitId").OnDelete(DeleteBehavior.Restrict).IsRequired();
+                });
+
+            modelBuilder.Entity("BusinessSaas.Api.Data.RetailProduct", b => b.Navigation("Conversions"));
 #pragma warning restore 612, 618
         }
     }

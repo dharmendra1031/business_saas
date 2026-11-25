@@ -126,6 +126,9 @@ public static class RetailProductEndpoints
             if (!await ValidReferences(db, businessId, request.CategoryId, request.UnitId, request.BrandId, true))
                 return Results.BadRequest(new { message = "Select an active category and unit from this business." });
 
+            if (!await ValidConversions(db, businessId, request.UnitId, request.Conversions, []))
+                return Results.BadRequest(new { message = "Choose distinct active alternate units with positive factors of up to three decimals." });
+
             var product = new RetailProduct
             {
                 BusinessId = businessId,
@@ -141,6 +144,7 @@ public static class RetailProductEndpoints
                 IsActive = request.IsActive ?? true
             };
 
+            ApplyConversions(product, request.Conversions);
             await using var transaction = await db.Database.BeginTransactionAsync();
             db.RetailProducts.Add(product);
             try
@@ -168,7 +172,7 @@ public static class RetailProductEndpoints
             var denied = await RetailMasterEndpoints.CheckAccess(db, user, businessId, true);
             if (denied is not null) return denied;
 
-            var product = await db.RetailProducts.SingleOrDefaultAsync(
+            var product = await db.RetailProducts.Include(x => x.Conversions).SingleOrDefaultAsync(
                 x => x.BusinessId == businessId && x.Id == productId);
             if (product is null) return Results.NotFound();
 
@@ -192,6 +196,11 @@ public static class RetailProductEndpoints
                 retainExisting ? product.BrandId : null))
                 return Results.BadRequest(new { message = "Select a valid category and unit from this business. Active products need active masters." });
 
+            if (product.UnitId != request.UnitId && product.Conversions.Count > 0)
+                return Results.Conflict(new { message = "Remove alternate units and save before changing the base stock unit." });
+            if (!await ValidConversions(db, businessId, request.UnitId, request.Conversions, product.Conversions))
+                return Results.BadRequest(new { message = "Choose distinct active alternate units with positive factors of up to three decimals." });
+
             if (product.UnitId != request.UnitId &&
                 (await db.RetailPurchaseOrderLines.AsNoTracking().AnyAsync(x => x.ProductId == productId) ||
                  await db.RetailStockBalances.AsNoTracking().AnyAsync(x =>
@@ -214,6 +223,7 @@ public static class RetailProductEndpoints
             product.ReorderLevel = request.ReorderLevel;
             product.TaxClassification = NormalizeCode(request.TaxClassification);
             product.IsActive = request.IsActive.Value;
+            ApplyConversions(product, request.Conversions);
 
             try { await db.SaveChangesAsync(); }
             catch (DbUpdateException exception) when (RetailModule.IsDuplicateKey(exception))
@@ -239,7 +249,9 @@ public static class RetailProductEndpoints
             product.SalePrice, product.TaxClassification, product.IsActive, product.ReorderLevel,
             product.BrandId,
             db.RetailBrands.Where(brand => brand.Id == product.BrandId &&
-                brand.BusinessId == businessId).Select(brand => brand.Name).FirstOrDefault());
+                brand.BusinessId == businessId).Select(brand => brand.Name).FirstOrDefault(),
+            product.Conversions.OrderBy(x => x.UnitId)
+                .Select(x => new ConversionRequest(x.UnitId, x.Factor)).ToList());
 
     private static async Task<bool> ValidReferences(AppDbContext db, long businessId,
         long categoryId, long unitId, long? brandId, bool requireActive,
@@ -260,6 +272,36 @@ public static class RetailProductEndpoints
         return brandId is null || brandId > 0 && await db.RetailBrands.AnyAsync(x =>
             x.Id == brandId.Value && x.BusinessId == businessId &&
             (!requireActive || x.IsActive || x.Id == retainedBrandId));
+    }
+
+    private static async Task<bool> ValidConversions(AppDbContext db, long businessId, long baseUnitId,
+        List<ConversionRequest>? requested, List<RetailProductUnit> existing)
+    {
+        if (requested is null) return true; // Existing clients omit this field.
+        if (requested.Count > 10 || requested.Any(x => x is null || x.UnitId <= 0 ||
+            x.UnitId == baseUnitId || x.Factor is < 0.001m or > 9999999.999m ||
+            decimal.Round(x.Factor, 3) != x.Factor) ||
+            requested.Select(x => x.UnitId).Distinct().Count() != requested.Count) return false;
+        var ids = requested.Select(x => x.UnitId).ToArray();
+        var units = await db.RetailUnits.AsNoTracking()
+            .Where(x => x.BusinessId == businessId && ids.Contains(x.Id))
+            .Select(x => new { x.Id, x.IsActive }).ToListAsync();
+        return requested.All(x => units.Any(u => u.Id == x.UnitId &&
+            (u.IsActive || existing.Any(e => e.UnitId == x.UnitId && e.Factor == x.Factor))));
+    }
+
+    private static void ApplyConversions(RetailProduct product, List<ConversionRequest>? requested)
+    {
+        if (requested is null) return;
+        foreach (var removed in product.Conversions.Where(x => !requested.Any(r => r.UnitId == x.UnitId)).ToArray())
+            product.Conversions.Remove(removed);
+        foreach (var item in requested)
+        {
+            var existing = product.Conversions.SingleOrDefault(x => x.UnitId == item.UnitId);
+            if (existing is null)
+                product.Conversions.Add(new RetailProductUnit { UnitId = item.UnitId, Factor = item.Factor });
+            else existing.Factor = item.Factor;
+        }
     }
 
     private static string? Validate(ProductRequest request, bool allowAutoSku = false)
@@ -304,10 +346,12 @@ public static class RetailProductEndpoints
 
     private sealed record ProductRequest(string? Name, string? Sku, string? Barcode,
         long CategoryId, long UnitId, decimal SalePrice, string? TaxClassification, bool? IsActive,
-        decimal? ReorderLevel = null, long? BrandId = null);
+        decimal? ReorderLevel = null, long? BrandId = null, List<ConversionRequest>? Conversions = null);
+
+    private sealed record ConversionRequest(long UnitId, decimal Factor);
 
     private sealed record ProductItem(long Id, string Name, string Sku, string? Barcode,
         long CategoryId, string CategoryName, long UnitId, string UnitCode,
         decimal SalePrice, string TaxClassification, bool IsActive, decimal? ReorderLevel,
-        long? BrandId, string? BrandName);
+        long? BrandId, string? BrandName, List<ConversionRequest> Conversions);
 }

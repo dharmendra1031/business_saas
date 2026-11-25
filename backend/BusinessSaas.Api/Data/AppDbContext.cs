@@ -296,6 +296,14 @@ public sealed class RetailProduct
     public decimal? ReorderLevel { get; set; }
     public string TaxClassification { get; set; } = "";
     public bool IsActive { get; set; } = true;
+    public List<RetailProductUnit> Conversions { get; set; } = [];
+}
+
+public sealed class RetailProductUnit
+{
+    public long ProductId { get; set; }
+    public long UnitId { get; set; }
+    public decimal Factor { get; set; }
 }
 
 public sealed class RetailSupplier
@@ -438,6 +446,7 @@ public sealed class AppDbContext(DbContextOptions<AppDbContext> options)
     public DbSet<RetailCashSale> RetailCashSales => Set<RetailCashSale>();
     public DbSet<RetailCashReturn> RetailCashReturns => Set<RetailCashReturn>();
     public DbSet<RetailProduct> RetailProducts => Set<RetailProduct>();
+    public DbSet<RetailProductUnit> RetailProductUnits => Set<RetailProductUnit>();
     public DbSet<RetailSupplier> RetailSuppliers => Set<RetailSupplier>();
     public DbSet<RetailCustomer> RetailCustomers => Set<RetailCustomer>();
     public DbSet<RetailStockBalance> RetailStockBalances => Set<RetailStockBalance>();
@@ -777,6 +786,17 @@ public sealed class AppDbContext(DbContextOptions<AppDbContext> options)
                 .HasForeignKey(x => x.UnitId).OnDelete(DeleteBehavior.Restrict);
             entity.HasOne<RetailBrand>().WithMany()
                 .HasForeignKey(x => x.BrandId).OnDelete(DeleteBehavior.Restrict);
+        });
+
+        builder.Entity<RetailProductUnit>(entity =>
+        {
+            entity.ToTable("RetailProductUnits", t => t.HasCheckConstraint("CK_RetailProductUnits_Factor",
+                "[Factor] > 0 AND [Factor] <= 9999999.999"));
+            entity.HasKey(x => new { x.ProductId, x.UnitId });
+            entity.Property(x => x.Factor).HasPrecision(18, 3);
+            entity.HasOne<RetailProduct>().WithMany(x => x.Conversions)
+                .HasForeignKey(x => x.ProductId).OnDelete(DeleteBehavior.Cascade);
+            entity.HasOne<RetailUnit>().WithMany().HasForeignKey(x => x.UnitId).OnDelete(DeleteBehavior.Restrict);
         });
 
         builder.Entity<RetailSupplier>(entity =>

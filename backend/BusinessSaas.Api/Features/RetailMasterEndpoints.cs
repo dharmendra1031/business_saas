@@ -188,8 +188,9 @@ public static class RetailMasterEndpoints
                 x.Id != unitId && (x.Code == code || x.NameKey == key)))
                 return Results.Conflict(new { message = "Unit code or name already exists." });
 
-            if (unit.Code != code && await db.RetailProducts.AsNoTracking().AnyAsync(x =>
-                    x.BusinessId == businessId && x.UnitId == unitId))
+            if (unit.Code != code &&
+                (await db.RetailProducts.AsNoTracking().AnyAsync(x => x.BusinessId == businessId && x.UnitId == unitId) ||
+                 await db.RetailProductUnits.AsNoTracking().AnyAsync(x => x.UnitId == unitId)))
                 return Results.Conflict(new { message =
                     "Unit code is already assigned to products and cannot change. Name and status can still be edited." });
 

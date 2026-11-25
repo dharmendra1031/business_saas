@@ -15,6 +15,7 @@ interface Product {
   brandName?: string | null
   unitId: number
   unitCode: string
+  conversions?: { unitId: number; factor: number }[]
   salePrice: number
   reorderLevel: number | null
   taxClassification: string
@@ -48,6 +49,7 @@ interface ProductForm {
   barcode: string
   categoryId: number
   unitId: number
+  conversions: { unitId: number; factor: string }[]
   brandId: number
   salePrice: string
   reorderLevel: string
@@ -56,7 +58,7 @@ interface ProductForm {
 }
 
 const initialForm: ProductForm = {
-  name: '', sku: '', barcode: '', categoryId: 0, unitId: 0, brandId: 0,
+  name: '', sku: '', barcode: '', categoryId: 0, unitId: 0, conversions: [], brandId: 0,
   salePrice: '', reorderLevel: '', taxClassification: '', isActive: true
 }
 
@@ -167,6 +169,7 @@ export default function RetailProducts({ businessId, canOperate, currencyCode }:
       barcode: item.barcode ?? '',
       categoryId: item.categoryId,
       unitId: item.unitId,
+      conversions: (item.conversions ?? []).map(x => ({ unitId: x.unitId, factor: String(x.factor) })),
       brandId: item.brandId ?? 0,
       salePrice: item.salePrice.toFixed(2),
       reorderLevel: item.reorderLevel == null ? '' : String(item.reorderLevel),
@@ -182,9 +185,18 @@ export default function RetailProducts({ businessId, canOperate, currencyCode }:
     if (field === 'sku' || field === 'barcode') setSkuError('')
   }
 
+  const conversionValid = form.conversions.length <= 10 &&
+    new Set(form.conversions.map(x => x.unitId)).size === form.conversions.length &&
+    form.conversions.every(x => x.unitId > 0 && x.unitId !== form.unitId &&
+      Number(x.factor) >= 0.001 && Number(x.factor) <= 9999999.999 &&
+      /^\d+(?:\.\d{0,3})?$/.test(x.factor))
+  function changeConversion(index: number, value: Partial<ProductForm['conversions'][number]>) {
+    changeForm('conversions', form.conversions.map((x, i) => i === index ? { ...x, ...value } : x))
+  }
+
   async function save(event: FormEvent) {
     event.preventDefault()
-    if (!canOperate || saving) return
+    if (!canOperate || saving || !conversionValid) return
 
     setSaving(true)
     setSkuError('')
@@ -195,6 +207,7 @@ export default function RetailProducts({ businessId, canOperate, currencyCode }:
       sku: form.sku.trim().toUpperCase(),
       barcode: form.barcode.trim() || null,
       brandId: form.brandId || null,
+      conversions: form.conversions.map(x => ({ unitId: x.unitId, factor: Number(x.factor) })),
       taxClassification: form.taxClassification.trim().toUpperCase(),
       salePrice: Number(form.salePrice),
       reorderLevel: form.reorderLevel.trim() === '' ? null : Number(form.reorderLevel),
@@ -377,7 +390,7 @@ export default function RetailProducts({ businessId, canOperate, currencyCode }:
               onClick={() => beginInline('categories')}>+ Add category</button>}
           </div>
           <div>
-            <label className="form-label" htmlFor="product-unit">Stock / sales unit *</label>
+            <label className="form-label" htmlFor="product-unit">Base stock unit *</label>
             <select id="product-unit" className="form-select" required value={form.unitId}
               onChange={event => changeForm('unitId', Number(event.target.value))}>
               <option value={0}>Select unit</option>
@@ -399,6 +412,40 @@ export default function RetailProducts({ businessId, canOperate, currencyCode }:
               {options.brands.map(item => <option key={item.id} value={item.id}>{item.name}</option>)}
             </select>
             <button type="button" className="btn btn-sm btn-link" onClick={() => beginInline('brands')}>+ Add brand</button>
+          </div>
+          <div className="form-wide">
+            <details open={form.conversions.length > 0 || undefined}>
+              <summary>Alternate units (optional)</summary>
+              <p className="field-help">Define how many base units one alternate unit contains. Purchase and POS currently use the base unit only.</p>
+              {form.conversions.length > 0 && <div className="table-responsive">
+                <table className="table table-sm align-middle">
+                  <thead><tr><th>Alternate unit</th><th>Base units per unit</th><th>Action</th></tr></thead>
+                  <tbody>{form.conversions.map((line, index) => <tr key={index}>
+                    <td><select className="form-select form-select-sm" aria-label={`Alternate unit ${index + 1}`}
+                      required value={line.unitId} onChange={event => changeConversion(index, { unitId: Number(event.target.value) })}>
+                      <option value={0}>Select unit</option>
+                      {line.unitId > 0 && !options.units.some(x => x.id === line.unitId) &&
+                        <option value={line.unitId}>Previous unit (inactive)</option>}
+                      {options.units.filter(x => x.id !== form.unitId &&
+                        (x.id === line.unitId || !form.conversions.some(row => row.unitId === x.id)))
+                        .map(x => <option key={x.id} value={x.id}>{x.name} ({x.code})</option>)}
+                    </select></td>
+                    <td><input className="form-control form-control-sm" type="number" inputMode="decimal"
+                      aria-label={`Conversion factor ${index + 1}`} min="0.001" max="9999999.999" step="0.001"
+                      required value={line.factor} onChange={event => changeConversion(index, { factor: event.target.value })} /></td>
+                    <td><button type="button" className="btn btn-sm btn-outline-secondary"
+                      onClick={() => changeForm('conversions', form.conversions.filter((_, i) => i !== index))}>Remove</button></td>
+                  </tr>)}</tbody>
+                </table>
+              </div>}
+              <button type="button" className="btn btn-sm btn-outline-secondary"
+                disabled={!form.unitId || form.conversions.length >= 10 ||
+                  !options.units.some(x => x.id !== form.unitId && !form.conversions.some(row => row.unitId === x.id))}
+                onClick={() => changeForm('conversions', [...form.conversions, { unitId: 0, factor: '' }])}>
+                + Add alternate unit
+              </button>
+              {!conversionValid && <p className="field-help">Select distinct units and enter positive factors with up to three decimal places.</p>}
+            </details>
           </div>
           {inlineType && <div className="form-wide product-form" role="group"
             aria-label={`Add ${inlineType === 'categories' ? 'category' : inlineType === 'units' ? 'unit' : 'brand'}`}
@@ -473,7 +520,7 @@ export default function RetailProducts({ businessId, canOperate, currencyCode }:
         <div className="form-footer">
           <button type="button" className="btn btn-outline-secondary" disabled={saving || inlineSaving}
             onClick={() => { setFormOpen(false); setSkuError('') }}>Cancel</button>
-          <ActionButton busy={saving} disabled={optionsLoading || inlineSaving || !!inlineType}>Save product</ActionButton>
+          <ActionButton busy={saving} disabled={optionsLoading || inlineSaving || !!inlineType || !conversionValid}>Save product</ActionButton>
         </div>
       </form>}
 

@@ -229,10 +229,43 @@ public sealed class RetailProductTests
             .GetProperty("id").GetInt64();
         Assert.True(productId > 0);
 
+        var boxId = await CreateId(owner, $"/api/businesses/{businessId}/units",
+            new { code = "BOX", name = "Box" });
+        object WithConversions(params object[] conversions) => new {
+            name = "Blue pen", sku = "PEN-100", barcode = "890000010001",
+            categoryId, unitId, salePrice = 12.50m, taxClassification = "EXEMPT", isActive = true, conversions
+        };
+        object Conversion(long unit, decimal factor) => new { unitId = unit, factor };
+        Assert.Equal(HttpStatusCode.BadRequest, (await Put(owner, path + "/" + productId,
+            WithConversions(Conversion(unitId, 12m)))).StatusCode);
+        Assert.Equal(HttpStatusCode.BadRequest, (await Put(owner, path + "/" + productId,
+            WithConversions(Conversion(foreignUnit, 12m)))).StatusCode);
+        Assert.Equal(HttpStatusCode.BadRequest, (await Put(owner, path + "/" + productId,
+            WithConversions(Conversion(boxId, 0.0001m)))).StatusCode);
+        Assert.Equal(HttpStatusCode.BadRequest, (await Put(owner, path + "/" + productId,
+            WithConversions(Conversion(boxId, 12m), Conversion(boxId, 24m)))).StatusCode);
+        Assert.Equal(HttpStatusCode.OK, (await Put(owner, path + "/" + productId,
+            WithConversions(Conversion(boxId, 12m)))).StatusCode);
+        var conversions = (await owner.GetFromJsonAsync<JsonElement>(path + "/" + productId)).GetProperty("conversions");
+        Assert.Equal(boxId, conversions[0].GetProperty("unitId").GetInt64());
+        Assert.Equal(12m, conversions[0].GetProperty("factor").GetDecimal());
+        Assert.Equal(HttpStatusCode.Conflict, (await Put(owner, path + "/" + productId,
+            Product(unit: itemId, isActive: true))).StatusCode);
+        Assert.Equal(HttpStatusCode.Conflict, (await Put(owner, $"/api/businesses/{businessId}/units/{boxId}",
+            new { code = "CASE", name = "Box", isActive = true })).StatusCode);
+        Assert.Equal(HttpStatusCode.OK, (await Put(owner, path + "/" + productId,
+            Product(isActive: true))).StatusCode);
+        Assert.Equal(12m, (await owner.GetFromJsonAsync<JsonElement>(path + "/" + productId))
+            .GetProperty("conversions")[0].GetProperty("factor").GetDecimal());
+        Assert.Equal(HttpStatusCode.OK, (await Put(owner, path + "/" + productId,
+            WithConversions())).StatusCode);
+        Assert.Empty((await owner.GetFromJsonAsync<JsonElement>(path + "/" + productId))
+            .GetProperty("conversions").EnumerateArray());
+
         // A referenced master unit code is a stock quantity identity, not a cosmetic label.
         Assert.Equal(HttpStatusCode.Conflict,
             (await Put(owner, $"/api/businesses/{businessId}/units/{unitId}",
-                new { code = "BOX", name = "Box", isActive = true })).StatusCode);
+                new { code = "PACK", name = "Pack", isActive = true })).StatusCode);
         Assert.Equal(HttpStatusCode.OK,
             (await Put(owner, $"/api/businesses/{businessId}/units/{unitId}",
                 new { code = "PCS", name = "Individual Pieces", isActive = true })).StatusCode);
