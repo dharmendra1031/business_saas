@@ -2764,6 +2764,8 @@ try {
     await t.login()
     await t.page.locator('.platform-shell').waitFor()
     await t.page.getByText('SUPER ADMIN MODULES').waitFor()
+    assert.equal(await t.page.getByRole('button', { name: 'Licenses', exact: true }).count(), 0)
+    assert.equal(await t.page.getByRole('heading', { name: 'Quick Stats', exact: true }).count(), 0)
     assert.equal(await t.page.locator('.platform-shell .app-sidebar .nav-entry').first()
       .evaluate(el => getComputedStyle(el).color), 'rgb(255, 255, 255)',
       'Super Admin dark sidebar labels remain pure white')
@@ -2913,7 +2915,8 @@ try {
     await t.login()
     await t.page.locator('.platform-shell .app-sidebar .nav-entry')
       .filter({ hasText: 'Platform Settings' }).click()
-    await t.page.getByRole('tab', { name: 'Business Types' }).click()
+    assert.equal(await t.page.getByRole('tab').count(), 4, 'Only working platform settings tabs remain')
+    assert.equal(await t.page.getByRole('tab', { name: 'Business Types' }).getAttribute('aria-selected'), 'true')
     await t.page.locator('#release-type-status').selectOption('Paused')
     await t.page.locator('#release-type-reason').fill('Pause new retail signups during upgrade')
     await t.page.getByRole('button', { name: 'Apply release policy' }).click()

@@ -1,8 +1,5 @@
 /* Platform Settings: business availability, module release, scoped maintenance & notices.
    Live Type, Maintenance and Announcement controls; Module is still design-only. */
-.platform-preview-columns.is-release-management { grid-template-columns: minmax(0, 1fr); }
-.platform-preview-columns.is-release-management > .platform-preview-side { display: none; }
-.platform-shell .platform-preview-columns.is-release-management .platform-preview-main { padding: 24px; }
 .platform-release-controls { min-width: 0; }
 .release-caution { display: flex; align-items: flex-start; gap: 10px; background: #fff9ed; color: #654e2a;
   border: 1px solid #ebddbf; border-radius: 9px; padding: 13px 15px; margin: 0 0 18px;
@@ -78,7 +75,6 @@
   .release-layout { grid-template-columns: 1fr; }
 }
 @media (max-width: 600px) {
-  .platform-shell .platform-preview-columns.is-release-management .platform-preview-main { padding: 14px; }
   .release-form-grid { grid-template-columns: 1fr; gap: 12px; }
   .release-editor { padding: 14px; }
   .release-list .release-panel-heading { padding: 15px 14px 0; }

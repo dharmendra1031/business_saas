@@ -43,7 +43,6 @@ button:focus-visible, a:focus-visible, input:focus-visible, select:focus-visible
 .sidebar-heading { font-size: .72rem; letter-spacing: .1em; color: #ffffff; padding: 27px 12px 8px; }
 .nav-entry { width: 100%; display: flex; align-items: center; gap: 12px; padding: 12px 14px; border-radius: 6px; border: 0; color: #e3f0fa; background: none; text-align: left; font-size: .93rem; }
 .nav-entry.active, .nav-entry:hover { background: #134c9d; color: white; }
-.sidebar-footer { margin-top: auto; font-size: .74rem; color: #ffffff; padding: 15px 12px 0; }
 .sidebar-scrim, .mobile-menu-toggle { display: none; }
 .app-main { min-width: 0; flex: 1; }
 .app-topbar { height: 68px; background: var(--surface); border-bottom: 1px solid var(--line); display: flex; justify-content: space-between; align-items: center; padding: 0 32px; }
@@ -103,7 +102,7 @@ button:focus-visible, a:focus-visible, input:focus-visible, select:focus-visible
     transition: transform .2s ease; }
   .app-sidebar.is-open { visibility: visible; transform: translateX(0); }
   .app-sidebar .brand > div { display: block; }
-  .app-sidebar .sidebar-heading, .app-sidebar .sidebar-footer { display: block; font-size: .72rem; }
+  .app-sidebar .sidebar-heading { display: block; font-size: .72rem; }
   .app-sidebar .nav-entry { font-size: .93rem; justify-content: flex-start; padding: 12px 14px; }
   .sidebar-scrim { display: block; position: fixed; inset: 0; z-index: 20; border: 0; background: #061c2b80; }
   .mobile-menu-toggle { display: inline-flex; align-items: center; background: none; border: 0;

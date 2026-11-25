@@ -107,8 +107,6 @@
   margin-bottom: 5px; color: #ffffff; min-height: 45px; }
 .platform-shell .app-sidebar .nav-entry.active { box-shadow: inset 0 0 0 1px #ffffff20; font-weight: 700; }
 .platform-shell .app-sidebar .nav-entry:disabled { opacity: .85; }
-.platform-shell .app-sidebar .sidebar-footer { color: #ffffff; border: 1px solid #3d4b77; background: #17244a;
-  padding: 17px 14px; border-radius: 11px; line-height: 1.4; }
 .platform-shell .page-content { max-width: none; width: 100%; padding: 28px 24px 48px; }
 .platform-shell .content-section { background: #fff; border: 1px solid #e3e7f1; box-shadow: 0 3px 15px #14264b0b; border-radius: 12px; }
 .platform-shell .page-header h1 { font-size: clamp(1.45rem, 2.15vw, 2rem); color: #000000; }
@@ -122,8 +120,6 @@
 .platform-shell .platform-topbar-brand > strong { font-size: 1.13rem; font-weight: 770; letter-spacing: -.025em; }
 .platform-topbar-badge { background: #4932b0; padding: 5px 10px; border-radius: 999px;
   font-size: .68rem; font-weight: 700; color: #fff; }
-.platform-topbar-divider { display: block; width: 1px; height: 24px; background: #4d5c84; margin: 0 5px; }
-.platform-topbar-caption { font-size: .8rem; color: #d3dbef; }
 .platform-shell .app-topbar .topbar-title { display: none; }
 .platform-global-search { display: flex; align-items: center; gap: 10px; min-width: 130px; max-width: 380px;
   flex: 1; height: 38px; margin-left: auto; padding: 0 6px 0 13px; border: 1px solid #52628d;
@@ -171,7 +167,7 @@
   font-weight: 790; color: #000000; letter-spacing: -.03em; font-variant-numeric: tabular-nums; }
 .platform-metric-content > small { color: #4b515c; font-size: .66rem; }
 .platform-shell .platform-analytics-grid { gap: 15px; grid-template-columns: minmax(0, 1.7fr) minmax(310px, 1fr); margin-bottom: 15px; }
-.platform-shell .platform-bottom-grid { display: grid; grid-template-columns: minmax(0, 1.45fr) minmax(0, 1fr) minmax(235px, .78fr); gap: 15px; }
+.platform-shell .platform-bottom-grid { display: grid; grid-template-columns: minmax(0, 1.45fr) minmax(0, 1fr); gap: 15px; }
 .platform-shell .platform-dashboard .content-section { padding: 18px; min-width: 0; }
 .platform-shell .platform-panel-heading { margin-bottom: 17px; }
 .platform-shell .platform-panel-heading h2 { color: #000000; font-size: 1rem; font-weight: 760; }
@@ -202,22 +198,12 @@
   border-radius: 50%; width: 30px; height: 30px; flex: 0 0 30px; }
 .platform-activity > div strong { color: #000000; font-weight: 730; }
 .platform-activity > div span, .platform-activity > div time { font-size: .74rem; line-height: 1.45; }
-.platform-quick-stat-list { margin: 0; display: grid; gap: 8px; }
-.platform-quick-stat-list > div { display: flex; align-items: center; justify-content: space-between; gap: 9px;
-  padding: 13px 12px; border: 1px solid #e6eaf2; border-radius: 9px; }
-.platform-quick-stat-list dt { color: #414e62; font-size: .78rem; font-weight: 670; }
-.platform-quick-stat-list dd { margin: 0; font-size: 1.08rem; color: #1f2d50; font-variant-numeric: tabular-nums; font-weight: 800; }
-.platform-quick-stat-list dd.platform-stat-unavailable { font-size: .69rem; color: #5e4c45; }
-.platform-quick-note { color: #47505e; font-size: .71rem; line-height: 1.55; margin: 14px 0 0; }
 .platform-expiring-card { margin-top: 15px; }
 .platform-empty-inline { padding: 22px 0; color: #47505e; font-size: .85rem; margin: 0; }
 .platform-shell .platform-overview-note { margin: 18px 0 0; }
 @media (max-width: 1380px) {
-  .platform-topbar-caption, .platform-topbar-divider { display: none; }
   .platform-shell .platform-metric-grid { grid-template-columns: repeat(3, minmax(0, 1fr)); }
   .platform-shell .platform-bottom-grid { grid-template-columns: minmax(0, 1.3fr) minmax(0, 1fr); }
-  .platform-quick-card { grid-column: 1 / -1; }
-  .platform-quick-stat-list { grid-template-columns: repeat(4, minmax(0, 1fr)); }
 }
 @media (max-width: 1090px) {
   .platform-shell .app-sidebar { flex-basis: 204px; width: 204px; }
@@ -229,8 +215,6 @@
 @media (max-width: 790px) {
   .platform-shell .platform-metric-grid { grid-template-columns: repeat(2, minmax(0, 1fr)); }
   .platform-shell .platform-bottom-grid { grid-template-columns: minmax(0, 1fr); }
-  .platform-quick-card { grid-column: auto; }
-  .platform-quick-stat-list { grid-template-columns: repeat(2, minmax(0, 1fr)); }
   .platform-shell .platform-dashboard-hero { align-items: stretch; flex-direction: column; }
   .platform-hero-actions { justify-content: flex-start; }
   .platform-global-search { max-width: none; }
@@ -264,9 +248,6 @@
   .platform-shell .platform-analytics-grid, .platform-shell .platform-bottom-grid { gap: 12px; }
   .platform-shell .platform-dashboard .content-section { padding: 14px; }
   .platform-shell .platform-plan-chart { flex-wrap: wrap; }
-  .platform-shell .platform-quick-stat-list { grid-template-columns: 1fr 1fr; gap: 6px; }
-  .platform-quick-stat-list > div { padding: 10px 9px; }
-  .platform-quick-stat-list dt { font-size: .7rem; }
 }
 
 /* SA-03 frontend-first business directory — approved enterprise table treatment. */
@@ -322,14 +303,9 @@
   .platform-directory-pages { width: 100%; justify-content: space-between; }
 }
 
-/* Frontend-only approved Platform Settings and Licensing preview.
-   Static visual structure, NOT pretend data or backend mutations. */
+/* Platform settings and authorized release controls. */
 .platform-preview-page > .page-header { margin-bottom: 21px; }
 .platform-preview-page > .page-header .platform-kicker { display: block; margin-bottom: 6px; }
-.platform-preview-notice { display: flex; gap: 11px; align-items: flex-start;
-  padding: 12px 16px; border: 1px solid #dce2f5; border-radius: 9px; margin-bottom: 20px;
-  background: #f3f4fe; color: #404d76; font-size: .82rem; line-height: 1.55; }
-.platform-preview-notice svg { flex: 0 0 auto; color: #4e40a5; margin-top: 2px; }
 .platform-preview-tabs { display: flex; gap: 9px; flex-wrap: wrap; margin-bottom: 18px; }
 .platform-preview-tabs > button { min-height: 43px; display: inline-flex; align-items: center; gap: 10px;
   padding: 10px 15px; border: 1px solid #e0e5f1; border-radius: 9px;
@@ -337,9 +313,7 @@
 .platform-preview-tabs > button:hover { border-color: #9985ed; color: #4a37b6; }
 .platform-preview-tabs > button.is-active { color: #fff; background: #151c4d;
   border-color: #151c4d; box-shadow: 0 3px 12px #17215220; }
-.platform-preview-columns { display: grid; grid-template-columns: minmax(0, 1.5fr) minmax(245px, .74fr);
-  gap: 17px; align-items: start; }
-.platform-shell .platform-preview-main { padding: 22px; min-height: 330px; }
+.platform-shell .platform-preview-main { padding: 24px; }
 .platform-preview-panel-title { display: flex; gap: 13px; align-items: center;
   padding-bottom: 16px; margin-bottom: 20px; border-bottom: 1px solid #e7eaf2; }
 .platform-preview-panel-icon { flex: 0 0 44px; width: 44px; height: 44px; display: grid; place-items: center;
@@ -347,44 +321,10 @@
 .platform-shell .platform-preview-panel-title h2 { font-size: 1.07rem; font-weight: 770; border: 0;
   padding: 0; margin: 0 0 4px; color: #000000; }
 .platform-preview-panel-title p { margin: 0; color: #455061; font-size: .79rem; }
-.platform-preview-field-grid { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 17px; }
-.platform-preview-field { min-height: 43px; display: flex; align-items: center;
-  padding: 10px 13px; border: 1px solid #dce3ef; border-radius: 8px;
-  background: #f8f9fc; color: #40516d; font-size: .85rem; }
-.platform-preview-field-grid .field-help { font-size: .73rem; line-height: 1.5; }
-.platform-preview-feature-list { display: grid; gap: 9px; }
-.platform-preview-feature-list > div { display: flex; align-items: center; gap: 15px;
-  justify-content: space-between; padding: 14px; border: 1px solid #e6eaf1; border-radius: 9px; }
-.platform-preview-feature-list > div > span:first-child { display: grid; gap: 5px; min-width: 0; }
-.platform-preview-feature-list strong { color: #000000; font-size: .86rem; font-weight: 730; }
-.platform-preview-feature-list small { color: #454e5c; font-size: .75rem; line-height: 1.45; }
-.platform-preview-feature-list svg { color: #4b515c; flex-shrink: 0; }
-.platform-preview-small-tag { background: #f2f0fd; color: #4f4391; padding: 5px 9px;
-  border-radius: 999px; white-space: nowrap; font-size: .72rem; font-weight: 720; }
-.platform-preview-footnote { margin: 21px 0 0; padding: 13px 14px; color: #5b503f;
-  background: #fbf6ee; border: 1px solid #f0e2cb; border-radius: 8px;
-  font-size: .76rem; line-height: 1.6; }
-.platform-shell .platform-preview-side { padding: 23px; }
-.platform-shell .platform-preview-side h2 { color: #000000; font-size: 1.14rem; font-weight: 760;
-  border: 0; margin: 9px 0 11px; padding: 0; }
-.platform-preview-side p { font-size: .84rem; color: #435062; line-height: 1.65; }
-.platform-preview-side-row { display: flex; align-items: center; gap: 9px; padding: 12px 0;
-  border-top: 1px solid #e9edf4; color: #3d5171; font-size: .79rem; font-weight: 690; }
-.platform-preview-side-row svg { color: #4c3fa4; flex: 0 0 auto; }
-.platform-preview-empty { display: grid; justify-items: center; text-align: center; gap: 10px;
-  padding: 58px 15px 66px; color: #475162; }
-.platform-preview-empty svg { color: #4c3cad; }
-.platform-preview-empty strong { color: #000000; font-size: .92rem; font-weight: 750; }
-.platform-preview-empty p { max-width: 410px; margin: 0; font-size: .79rem; line-height: 1.5; }
-@media (max-width: 1080px) {
-  .platform-preview-columns { grid-template-columns: 1fr; }
-}
 @media (max-width: 650px) {
   .platform-preview-tabs { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 7px; }
   .platform-preview-tabs > button { font-size: .75rem; gap: 7px; padding: 9px 10px; }
-  .platform-preview-field-grid { grid-template-columns: 1fr; gap: 13px; }
-  .platform-shell .platform-preview-main { padding: 16px; }
-  .platform-preview-feature-list > div { padding: 12px; }
+  .platform-shell .platform-preview-main { padding: 14px; }
 }
 
 /* SA-14–15: Customer accounts visual treatment, matching approved Super Admin table language. */
@@ -497,30 +437,13 @@
 .platform-operations-status.is-checking { color: #445060; background: #eef0f5; }
 .platform-operations-status.is-ready { color: #175937; background: #e6f6ed; }
 .platform-operations-status.is-unavailable { color: #764318; background: #fff1dd; }
-.platform-operations-section-heading { display: flex; justify-content: space-between; align-items: center;
-  gap: 12px; flex-wrap: wrap; margin-bottom: 15px; }
-.platform-operations-section-heading h2 { color: #000000; font-size: 1.15rem; font-weight: 780; margin-bottom: 5px; }
-.platform-operations-section-heading p { color: #435061; font-size: .8rem; margin: 0; }
-.platform-operations-grid { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 15px; }
-.platform-shell .platform-operations-card { display: flex; flex-direction: column; align-items: flex-start;
-  gap: 12px; padding: 22px; min-height: 229px; }
 .platform-operations-icon { display: grid; place-items: center; flex: 0 0 46px; width: 46px; height: 46px;
   color: #4e3bba; background: #eeebff; border-radius: 12px; }
 .platform-operations-icon.is-blue { color: #214c9f; background: #eaf0ff; flex-basis: 55px; width: 55px; height: 55px; }
-.platform-shell .platform-operations-card h3 { margin: 0; color: #000000; font-size: 1.02rem; font-weight: 760; }
-.platform-operations-card p { color: #444e5e; font-size: .79rem; line-height: 1.6; margin: 0; flex: 1; }
-.platform-operations-card-status { display: inline-flex; align-items: center; gap: 5px;
-  padding: 6px 10px; background: #f0f2f7; border-radius: 999px;
-  color: #475162; font-size: .71rem; font-weight: 720; }
-@media (max-width: 1060px) {
-  .platform-operations-grid { grid-template-columns: repeat(2, minmax(0, 1fr)); }
-}
 @media (max-width: 650px) {
   .platform-shell .platform-audit-security-card, .platform-shell .platform-readiness-panel { flex-wrap: wrap; padding: 17px; }
   .platform-audit-lock, .platform-operations-status { width: 100%; justify-content: center; }
   .platform-audit-note { padding: 12px 15px; }
-  .platform-operations-grid { grid-template-columns: 1fr; gap: 11px; }
-  .platform-shell .platform-operations-card { min-height: 0; padding: 17px; }
 }
 
 
