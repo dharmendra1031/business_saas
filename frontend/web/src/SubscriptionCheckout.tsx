@@ -106,17 +106,20 @@ export default function SubscriptionCheckout({ businessId }: { businessId: numbe
     }
   }
 
-  if (payment && !payment.enabled) return null
-  if (!payment || !payment.available) return <section className="content-section" aria-label="Subscription payment">
-    <h2>Subscription payment</h2>
+  if (payment && !payment.enabled) return <section aria-label="Subscription payment">
+    <h3>Subscription payment</h3>
+    <p>Online subscription payments are not enabled.</p>
+  </section>
+  if (!payment || !payment.available) return <section aria-label="Subscription payment">
+    <h3>Subscription payment</h3>
     {error ? <p role="alert">{error}</p> : <p role="status">{!payment ? 'Checking payment status…' :
       'No current subscription payment request.'}</p>}
     <button className="btn btn-outline-secondary" disabled={!payment && !error}
       onClick={() => setRefresh(n => n + 1)}>{error ? 'Retry' : 'Refresh status'}</button>
   </section>
 
-  return <section className="content-section" aria-label="Subscription payment">
-    <h2>Subscription payment</h2>
+  return <section aria-label="Subscription payment">
+    <h3>Subscription payment</h3>
     <p className="small text-secondary">
       Request #{payment.paymentRequestId} · {payment.currencyCode} {payment.amount?.toFixed(2)}
       {' · '}{payment.status}

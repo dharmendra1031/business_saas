@@ -2516,6 +2516,16 @@ try {
         await reportRow.getByText('4.80', { exact: true }).waitFor()
         await reportRow.getByText('19.20', { exact: true }).waitFor()
       }
+      if (label === 'Business Settings') {
+        let subscriptionReads = 0
+        await t.page.route('**/api/businesses/1/billing/checkout', route => {
+          subscriptionReads++
+          return response(route, 200, { enabled: true, available: false })
+        })
+        await t.page.getByRole('tab', { name: 'Subscription & billing', exact: true }).click()
+        await t.page.getByText('No current subscription payment request.', { exact: true }).waitFor()
+        assert.equal(subscriptionReads, 1)
+      }
       if (shot) await t.screenshot(shot)
     }
     await t.check()
@@ -2559,6 +2569,8 @@ try {
       'Manager must not see owner-only financial and approval KPI cards')
     assert.equal(await t.page.getByRole('heading', { name: 'Recent Activity' }).count(), 0,
       'Manager must not see owner-only receipt totals')
+    assert.equal(await t.page.getByRole('heading', { name: 'Attention Needed' }).count(), 0,
+      'Manager must not see an empty owner-only attention panel')
     assert.equal(await t.page.getByRole('button', { name: 'Staff & Access' }).count(), 0)
     assert.equal(await t.page.getByRole('button', { name: 'Business Settings' }).count(), 0)
     assert.equal(await t.page.getByRole('button', { name: 'Sales & Returns' }).count(), 0)

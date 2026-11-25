@@ -3,7 +3,6 @@ import { Activity, ArrowRight, BarChart3, Boxes, Building2, CreditCard, LayoutDa
 import { api, ApiResponseError, resetCsrf, SessionExpiredError, setSessionExpiredHandler, type Business, type RetailDashboard, type User } from './api'
 import CashCheckout from './CashCheckout'
 import TeamMembers from './TeamMembers'
-import SubscriptionCheckout from './SubscriptionCheckout'
 import RetailCatalog, { type RetailSection } from './RetailCatalog'
 import BusinessOverview from './BusinessOverview'
 import BusinessPreview, { type BusinessPreviewModule } from './BusinessPreview'
@@ -39,7 +38,6 @@ export default function App() {
   const [dashboardRefreshing, setDashboardRefreshing] = useState(false)
   const [approvalList, setApprovalList] = useState(false)
   const [stockAlertLocationId, setStockAlertLocationId] = useState<number | null>(null)
-  const [billingOpen, setBillingOpen] = useState(false)
   const [billingBusiness, setBillingBusiness] = useState<{ id: number; name: string } | null>(null)
   const [retailPage, setRetailPage] = useState<RetailPage>('overview')
   const [error, setError] = useState('')
@@ -177,7 +175,6 @@ export default function App() {
       }
       setApprovalList(false)
       setStockAlertLocationId(null)
-      setBillingOpen(false)
       setDashboard(details)
       setRetailPage(!showOverview && details.cashSaleEnabled && details.roleCode === 'Cashier' ? 'cash' : 'overview')
       setPage('retail')
@@ -239,7 +236,6 @@ export default function App() {
       resetCsrf()
       setUser(null)
       setDashboard(null)
-      setBillingOpen(false)
       setBusinesses([])
       setOpeningBusinessId(null)
       setBusinessesLoading(false)
@@ -547,10 +543,6 @@ export default function App() {
                     setRetailPage(section)
                   }}
                   onReviewApprovals={() => { setApprovalList(true); setRetailPage('purchases') }} />
-                {dashboard.roleCode === 'Owner' && <details className="content-section business-subscription-panel" onToggle={event => setBillingOpen(event.currentTarget.open)}>
-                  <summary><CreditCard size={17} /> Subscription & billing</summary>
-                  {billingOpen && <SubscriptionCheckout key={dashboard.business.id} businessId={dashboard.business.id} />}
-                </details>}
               </>}
               {retailPage === 'overview' && dashboard.roleCode === 'Cashier' && !dashboard.cashSaleEnabled &&
                 <section className="content-section">

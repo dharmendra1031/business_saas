@@ -90,13 +90,6 @@
 .business-setup-alert-link:hover { text-decoration: underline; }
 .business-setup-alert-link:focus-visible { outline: 3px solid #80aef2; outline-offset: 2px; }
 .business-location-warning { font-size: .84rem; margin: 12px 0; color: #734718; }
-.business-shell .business-subscription-panel { margin-top: 14px; padding: 0; }
-.business-subscription-panel > summary { display: flex; align-items: center; gap: 10px; cursor: pointer;
-  padding: 13px 17px; color: #294466; font-size: .87rem; font-weight: 750; list-style: none; }
-.business-subscription-panel > summary::-webkit-details-marker { display: none; }
-.business-subscription-panel > summary svg { color: #1d4e95; }
-.business-subscription-panel > .content-section { border: 0; border-top: 1px solid #e6ecf4;
-  box-shadow: none; border-radius: 0 0 12px 12px; }
 @media (max-width: 600px) {
   .business-shell .business-dashboard-page { padding-top: 14px; }
   .business-dashboard-summary { padding: 10px 12px; font-size: .82rem; }

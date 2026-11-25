@@ -70,7 +70,7 @@ export default function BusinessOverview({ dashboard, onNavigate, onReviewApprov
         </div>}
       </section>
 
-      <section className="content-section business-dashboard-panel" aria-labelledby="business-attention-title">
+      {(isOwner || locations.length === 0) && <section className="content-section business-dashboard-panel" aria-labelledby="business-attention-title">
         <h2 id="business-attention-title">Attention Needed</h2>
         {isOwner && pendingApprovals > 0
           ? <button type="button" className="business-attention-action" onClick={onReviewApprovals}>
@@ -78,8 +78,7 @@ export default function BusinessOverview({ dashboard, onNavigate, onReviewApprov
               <span>Review {pendingApprovals} draft purchase {pendingApprovals === 1 ? 'order' : 'orders'}</span>
               <ArrowRight size={16} aria-hidden="true" />
             </button>
-          : !isOwner ? <p>No assigned actions to show yet.</p>
-            : stockAlerts && stockAlerts.count === 0 ? <p>No pending approvals or stock alerts.</p> : null}
+          : isOwner && stockAlerts && stockAlerts.count === 0 ? <p>No pending approvals or stock alerts.</p> : null
         {isOwner && stockAlerts && stockAlerts.count > 0 && <div className="business-stock-alerts">
           <p>{stockAlerts.count.toLocaleString()} stock alerts · {stockAlerts.outOfStockCount.toLocaleString()} out of stock</p>
           <button type="button" className="business-setup-alert-link"
@@ -103,7 +102,7 @@ export default function BusinessOverview({ dashboard, onNavigate, onReviewApprov
           <ArrowRight size={15} aria-hidden="true" />
         </button>}
         {locations.length === 0 && <p role="status">No location assigned. Contact your business administrator.</p>}
-      </section>
+      </section>}
 
       {cash && <section className="content-section business-dashboard-panel" aria-labelledby="business-activity-title">
         <h2 id="business-activity-title">Recent Activity</h2>

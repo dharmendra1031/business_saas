@@ -9,6 +9,7 @@ import BusinessDailySales from './BusinessDailySales'
 import BusinessOutstanding from './BusinessOutstanding'
 import BusinessBillingSettings from './BusinessBillingSettings'
 import BusinessReceiptSettings from './BusinessReceiptSettings'
+import SubscriptionCheckout from './SubscriptionCheckout'
 
 export type BusinessPreviewModule = 'sales' | 'reports' | 'settings'
 
@@ -32,7 +33,8 @@ const modules = {
     tabs: [
       { name: 'General', Icon: Store, title: 'Business Identity', description: 'Registered business and market information.' },
       { name: 'Invoice & Print', Icon: FileText, title: 'Invoice & Print', description: '80mm/A4 templates and visible receipt fields.' },
-      { name: 'Billing & Payments', Icon: CreditCard, title: 'Billing & Payments', description: 'Choose which released payment methods are available for your store.' }
+      { name: 'Billing & Payments', Icon: CreditCard, title: 'Billing & Payments', description: 'Choose which released payment methods are available for your store.' },
+      { name: 'Subscription & billing', Icon: CreditCard, title: 'Subscription & billing', description: 'Manage your business subscription.' }
     ]
   }
 } as const
@@ -47,6 +49,7 @@ export default function BusinessPreview({ module, dashboard, userId, onBillingUp
   const [tab, setTab] = useState(0)
   const selected = item.tabs[tab]
   const generalSettings = module === 'settings' && tab === 0
+  const subscriptionSettings = module === 'settings' && tab === 3 && dashboard.roleCode === 'Owner'
   const billingSettings = module === 'settings' && tab === 2 && dashboard.roleCode === 'Owner'
   const receiptSettings = module === 'settings' && tab === 1 && dashboard.roleCode === 'Owner'
   const postedSales = module === 'sales' && tab === 0 && dashboard.roleCode === 'Owner'
@@ -71,9 +74,10 @@ export default function BusinessPreview({ module, dashboard, userId, onBillingUp
     </div>
 
     <section className="content-section business-preview-content" role="tabpanel">
-      <h3>{selected.title}</h3>
-      {!postedSales && !postedReturns && <p className="business-preview-description">{dailySales ? 'Gross cash sales, refunds and net cash sales.' : selected.description}</p>}
-      {postedSales ? <BusinessPostedSales dashboard={dashboard} userId={userId} /> :
+      {!subscriptionSettings && <h3>{selected.title}</h3>}
+      {!subscriptionSettings && !postedSales && !postedReturns && <p className="business-preview-description">{dailySales ? 'Gross cash sales, refunds and net cash sales.' : selected.description}</p>}
+      {subscriptionSettings ? <SubscriptionCheckout key={dashboard.business.id} businessId={dashboard.business.id} /> :
+        postedSales ? <BusinessPostedSales dashboard={dashboard} userId={userId} /> :
         postedReturns ? <BusinessReturns dashboard={dashboard} /> :
         dailySales ? <BusinessDailySales dashboard={dashboard} /> :
         outstanding ? <BusinessOutstanding businessId={dashboard.business.id} /> : receiptSettings ?
