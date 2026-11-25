@@ -846,6 +846,48 @@ public sealed class SqlServerTests
         using var remainingEstimate = await Post(owner, estimatePath, Estimate(0.250m));
         Assert.Equal(HttpStatusCode.OK, remainingEstimate.StatusCode);
         Assert.Equal(20m, (await remainingEstimate.Content.ReadFromJsonAsync<JsonElement>()).GetProperty("total").GetDecimal());
+        var exchangePath = returnPath.Replace("/returns", "/exchange-estimate");
+        var exchange = new {
+            locationId,
+            returns = new[] { new { lineId, quantity = 0.250m, restock = true } },
+            replacements = new[] { new { productId = unavailableId, quantity = 1m, expectedUnitPrice = 10m } }
+        };
+        Assert.Equal(HttpStatusCode.NotFound, (await Post(cashier, exchangePath, exchange)).StatusCode);
+        Assert.Equal(HttpStatusCode.NotFound, (await Post(stranger, exchangePath, exchange)).StatusCode);
+        using var exchangeResponse = await Post(owner, exchangePath, exchange);
+        Assert.Equal(HttpStatusCode.OK, exchangeResponse.StatusCode);
+        var quote = await exchangeResponse.Content.ReadFromJsonAsync<JsonElement>();
+        Assert.Equal(20m, quote.GetProperty("returnTotal").GetDecimal());
+        Assert.Equal(10m, quote.GetProperty("replacementTotal").GetDecimal());
+        Assert.Equal(-10m, quote.GetProperty("difference").GetDecimal());
+        Assert.Equal("Refund", quote.GetProperty("settlement").GetString());
+        Assert.False(quote.GetProperty("canPost").GetBoolean());
+        foreach (var (qty, difference, settlement) in new[] { (2m, 0m, "Even"), (1.5m, -5m, "Refund") })
+        {
+            using var otherQuote = await Post(owner, exchangePath, exchange with {
+                replacements = new[] { new { productId = unavailableId, quantity = qty, expectedUnitPrice = 10m } }
+            });
+            Assert.Equal(HttpStatusCode.OK, otherQuote.StatusCode);
+            var body = await otherQuote.Content.ReadFromJsonAsync<JsonElement>();
+            Assert.Equal(difference, body.GetProperty("difference").GetDecimal());
+            Assert.Equal(settlement, body.GetProperty("settlement").GetString());
+        }
+        Assert.Equal(HttpStatusCode.Conflict, (await Post(owner, exchangePath, exchange with {
+            replacements = new[] { new { productId = unavailableId, quantity = 3m, expectedUnitPrice = 10m } }
+        })).StatusCode);
+        Assert.Equal(HttpStatusCode.BadRequest, (await Post(owner, exchangePath, exchange with {
+            replacements = new[] { new { productId = unavailableId, quantity = 1m, expectedUnitPrice = 11m } }
+        })).StatusCode);
+        Assert.Equal(HttpStatusCode.Conflict, (await Post(owner, exchangePath, exchange with {
+            returns = new[] { new { lineId, quantity = 0.375m, restock = true } }
+        })).StatusCode);
+        using (var exchangeScope = factory.Services.CreateScope())
+        {
+            var exchangeDb = exchangeScope.ServiceProvider.GetRequiredService<AppDbContext>();
+            Assert.Equal(1, await exchangeDb.RetailCashReturns.CountAsync(x => x.SaleId == sale.GetProperty("id").GetInt64()));
+            Assert.Equal(2m, await exchangeDb.RetailStockBalances.Where(x => x.BusinessId == businessId &&
+                x.LocationId == locationId && x.ProductId == unavailableId).Select(x => x.Quantity).SingleAsync());
+        }
         using var remainder = await Post(owner, returnPath, request with {
             requestKey = "sql-return-final-20261125", expectedRefund = 20m,
             lines = new[] { new { lineId, quantity = 0.250m, restock = false } }
