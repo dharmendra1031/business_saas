@@ -46,3 +46,21 @@ for path in samples + cold:
         print(str(path.relative_to(root)), page_mm,
               f"initial render {metadata['firstMs']:.1f}ms",
               f"repeat render {metadata['repeatMs']:.1f}ms")
+
+# Converted samples use the same static templates; only the posted data differs.
+converted = sorted((root / "converted").glob("*.pdf"))
+assert {path.name for path in converted} == {"A4-converted.pdf", "Thermal80-converted.pdf"}
+for path in converted:
+    with pymupdf.open(path) as pdf:
+        assert len(pdf) == 1, path.name
+        text = " ".join(pdf[0].get_text().split()).replace(",", "")
+        assert "Packed Water" in text and "BOX" in text and "220.00" in text, (path.name, text)
+        assert "PCS" not in text, path.name
+        assert "INR 440.00" in text and text.count("TOTAL PAYABLE") == 1, (path.name, text)
+        expected_width = 80 if path.name.startswith("Thermal80") else 210
+        assert abs(pdf[0].rect.width * 25.4 / 72 - expected_width) < 1, path.name
+        if expected_width == 210:
+            assert abs(pdf[0].rect.height * 25.4 / 72 - 297) < 1, path.name
+        else:
+            assert pdf[0].rect.height * 25.4 / 72 <= 130, path.name
+        print(path.name, "selected unit/rate/amount and page geometry verified")

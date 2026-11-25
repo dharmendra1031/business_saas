@@ -192,6 +192,39 @@ public sealed class RetailReceiptReportTests
         }
     }
 
+    [Theory]
+    [InlineData("A4")]
+    [InlineData("Thermal80")]
+    [Trait("Renderer", "Windows")]
+    public void Converted_sale_renders_selected_unit_rate_and_amount(string paper)
+    {
+        if (!OperatingSystem.IsWindows()) return;
+        var business = new Business { Id = 42, Name = "Demo Retail Store",
+            ReceiptShowUnit = true, ReceiptShowUnitPrice = true, ReceiptShowSku = true };
+        var sale = new RetailCashSale { Id = 78, BusinessId = 42, CurrencyCode = "INR",
+            Total = 440m, Tendered = 500m, PostedAtUtc = new DateTime(2026, 11, 25, 4, 0, 0, DateTimeKind.Utc),
+            Lines = [new RetailCashSaleLine { Id = 1, ProductName = "Packed Water", ProductSku = "WATER-01",
+                SelectedUnitId = 41, UnitCode = "BOX", BaseUnitCode = "PCS", ConversionFactor = 24m,
+                Quantity = 2m, UnitPrice = 220m, LineTotal = 440m }] };
+        var data = RetailReceiptReportData.FromCashSale(sale, business, TimeZoneInfo.Utc);
+        var line = Assert.Single(data.Lines);
+        Assert.Equal("BOX", line.UnitCode);
+        Assert.Equal(2m, line.Quantity);
+        Assert.Equal(220m, line.UnitPrice);
+        Assert.Equal(440m, line.LineTotal);
+        Assert.Equal(60m, data.Header.ChangeAmount);
+        var pdf = RetailReceiptRenderer.Render(data, paper);
+        Assert.True(pdf.AsSpan().StartsWith("%PDF-"u8));
+        Assert.True(pdf.Length > 1000);
+        var output = Environment.GetEnvironmentVariable("RDLC_TEST_OUTPUT");
+        if (!string.IsNullOrWhiteSpace(output))
+        {
+            var folder = Path.Combine(output, "converted");
+            Directory.CreateDirectory(folder);
+            File.WriteAllBytes(Path.Combine(folder, paper + "-converted.pdf"), pdf);
+        }
+    }
+
     [Fact]
     public void Receipt_contract_uses_posted_sale_snapshot_not_live_product_price()
     {

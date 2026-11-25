@@ -944,24 +944,38 @@ public sealed class SqlServerTests
                 x.ProductId == packProductId && x.SourceType == "Receiving").ToListAsync());
         }
         // The master now says 24 PCS per BOX. Sell one BOX from the 30 PCS received.
-        var convertedSale = new { locationId, requestKey = "sql-pack-sale-20261125", tendered = 240m,
-            lines = new[] { new { productId = packProductId, quantity = 1m, expectedUnitPrice = 240m,
-                unitId = boxId, expectedFactor = 24m } } };
         var packSalePath = prefix + "/cash-sales";
+        var catalogPath = packSalePath + "/products?locationId=" + locationId + "&search=SQL-PACK-TEST&exact=true";
+        var automaticQuote = (await cashier.GetFromJsonAsync<JsonElement>(catalogPath))[0].GetProperty("conversions")[0];
+        Assert.Equal(240m, automaticQuote.GetProperty("salePrice").GetDecimal());
+        Assert.Equal(HttpStatusCode.BadRequest, (await Put(owner, prefix + "/products/" + packProductId,
+            new { convertedProduct.name, convertedProduct.sku, categoryId, unitId, salePrice = 10m,
+                taxClassification = "", isActive = true, conversions = new[] { new { unitId = boxId, factor = 24m, salePrice = 0m } } })).StatusCode);
+        Assert.Equal(HttpStatusCode.OK, (await Put(owner, prefix + "/products/" + packProductId,
+            new { convertedProduct.name, convertedProduct.sku, categoryId, unitId, salePrice = 10m,
+                taxClassification = "", isActive = true, conversions = new[] { new { unitId = boxId, factor = 24m, salePrice = 220m } } })).StatusCode);
+        var convertedSale = new { locationId, requestKey = "sql-pack-sale-20261125", tendered = 220m,
+            lines = new[] { new { productId = packProductId, quantity = 1m, expectedUnitPrice = 220m,
+                unitId = boxId, expectedFactor = 24m } } };
         var packCatalog = await cashier.GetFromJsonAsync<JsonElement>(packSalePath +
             "/products?locationId=" + locationId + "&search=SQL-PACK-TEST&exact=true");
         var packQuote = packCatalog[0].GetProperty("conversions")[0];
         Assert.Equal(boxId, packQuote.GetProperty("unitId").GetInt64());
         Assert.Equal(24m, packQuote.GetProperty("factor").GetDecimal());
-        Assert.Equal(240m, packQuote.GetProperty("salePrice").GetDecimal());
+        Assert.Equal(220m, packQuote.GetProperty("salePrice").GetDecimal());
         Assert.Equal(HttpStatusCode.BadRequest, (await Post(cashier, packSalePath, convertedSale with {
             requestKey = "sql-pack-stale-sale-20261125",
             lines = new[] { new { productId = packProductId, quantity = 1m, expectedUnitPrice = 120m,
                 unitId = boxId, expectedFactor = 12m } }
         })).StatusCode);
         Assert.Equal(HttpStatusCode.BadRequest, (await Post(cashier, packSalePath, convertedSale with {
-            requestKey = "sql-pack-oversell-20261125", tendered = 480m,
-            lines = new[] { new { productId = packProductId, quantity = 2m, expectedUnitPrice = 240m,
+            requestKey = "sql-pack-oversell-20261125", tendered = 440m,
+            lines = new[] { new { productId = packProductId, quantity = 2m, expectedUnitPrice = 220m,
+                unitId = boxId, expectedFactor = 24m } }
+        })).StatusCode);
+        Assert.Equal(HttpStatusCode.BadRequest, (await Post(cashier, packSalePath, convertedSale with {
+            requestKey = "sql-pack-stale-price-20261125", tendered = 240m,
+            lines = new[] { new { productId = packProductId, quantity = 1m, expectedUnitPrice = 240m,
                 unitId = boxId, expectedFactor = 24m } }
         })).StatusCode);
         using var packSaleResponse = await Post(cashier, packSalePath, convertedSale);
@@ -973,7 +987,7 @@ public sealed class SqlServerTests
         Assert.Equal("SQBOX", soldPack.GetProperty("unitCode").GetString());
         Assert.Equal("SQPCS", soldPack.GetProperty("baseUnitCode").GetString());
         Assert.Equal(24m, soldPack.GetProperty("baseQuantity").GetDecimal());
-        Assert.Equal(240m, soldPack.GetProperty("lineTotal").GetDecimal());
+        Assert.Equal(220m, soldPack.GetProperty("lineTotal").GetDecimal());
         Assert.Equal(HttpStatusCode.OK, (await Put(owner, prefix + "/products/" + packProductId,
             convertedProduct)).StatusCode);
         using var replayPack = await Post(cashier, packSalePath, convertedSale);
@@ -983,9 +997,9 @@ public sealed class SqlServerTests
         using var packEstimate = await Post(owner, packReturnPath + "/return-estimate",
             new { locationId, lines = new[] { new { lineId = soldPackLineId, quantity = 0.5m } } });
         Assert.Equal(HttpStatusCode.OK, packEstimate.StatusCode);
-        Assert.Equal(120m, (await packEstimate.Content.ReadFromJsonAsync<JsonElement>()).GetProperty("total").GetDecimal());
+        Assert.Equal(110m, (await packEstimate.Content.ReadFromJsonAsync<JsonElement>()).GetProperty("total").GetDecimal());
         var packReturn = new { locationId, requestKey = "sql-pack-return-20261125", reason = "Returned half box",
-            expectedRefund = 120m, cashRefundConfirmed = true,
+            expectedRefund = 110m, cashRefundConfirmed = true,
             lines = new[] { new { lineId = soldPackLineId, quantity = 0.5m, restock = true } } };
         Assert.Equal(HttpStatusCode.OK, (await Post(owner, packReturnPath + "/returns", packReturn)).StatusCode);
         Assert.Equal(HttpStatusCode.OK, (await Post(owner, packReturnPath + "/returns", packReturn)).StatusCode);
