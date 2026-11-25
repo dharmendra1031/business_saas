@@ -307,7 +307,9 @@ export default function CashCheckout({ userId, dashboard, onExit }: {
   function updateQuantity(line: Line, quantity: number) {
     if (scanLock.current || !validQuantity(quantity)) return
     if (!fitsStock(line, quantity)) {
-      setError('Quantity exceeds available base stock or cannot be converted exactly to three decimals.')
+      setError(line.unitId == null && availableStock(line) !== undefined
+        ? `Only ${availableStock(line)} ${line.unitCode ?? 'units'} available at this location.`
+        : 'Quantity exceeds available base stock or cannot be converted exactly to three decimals.')
       return
     }
     setBasket(previous => previous.map(x => x.productId === line.productId ? { ...x, quantity } : x))
@@ -562,7 +564,7 @@ export default function CashCheckout({ userId, dashboard, onExit }: {
                 aria-label={`Add ${item.name}, ${money(item.salePrice)}, ${item.available} ${item.unitCode ?? 'units'} available`}
                 onClick={() => addProduct(item)}>
                 <span className="pos-product-meta">
-                  {inBasket > 0 && <span className="pos-product-in-cart">{inBasket} in cart</span>}
+                  {inBasket > 0 && <span className="pos-product-in-cart">{inBasket} {basketLine?.unitId != null ? (item.unitCode ?? 'base units') + ' ' : ''}in cart</span>}
                   <strong>{item.name}</strong>
                   <small>{item.sku}</small>
                   <span className="pos-product-bottom"><b>{money(item.salePrice)}</b>

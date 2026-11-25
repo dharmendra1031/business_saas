@@ -436,11 +436,12 @@ public static class RetailCashSales
                 Available = db.RetailStockBalances
                 .Where(b => b.BusinessId == businessId && b.LocationId == locationId && b.ProductId == x.Id)
                 .Select(b => (decimal?)b.Quantity).FirstOrDefault() ?? 0,
-                Conversions = (from conversion in x.Conversions
-                    join unit in db.RetailUnits on conversion.UnitId equals unit.Id
-                    where allowAlternates && unit.BusinessId == businessId && unit.IsActive && unit.Id != x.UnitId
-                    orderby unit.Code
-                    select new { conversion.UnitId, conversion.Factor, UnitCode = unit.Code }).ToList()
+                Conversions = x.Conversions.Where(conversion => allowAlternates && conversion.UnitId != x.UnitId &&
+                    db.RetailUnits.Any(unit => unit.Id == conversion.UnitId && unit.BusinessId == businessId && unit.IsActive))
+                    .OrderBy(conversion => conversion.UnitId)
+                    .Select(conversion => new { conversion.UnitId, conversion.Factor,
+                        UnitCode = db.RetailUnits.Where(unit => unit.Id == conversion.UnitId && unit.BusinessId == businessId)
+                            .Select(unit => unit.Code).FirstOrDefault() }).ToList()
             }).ToListAsync(cancellationToken);
         return Results.Ok(products.Select(x => new {
             x.Id, x.Name, x.Sku, x.Barcode, x.SalePrice, x.UnitCode, x.Available,
