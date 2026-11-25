@@ -1701,7 +1701,7 @@ try {
       assert.equal(req.lines[0].productId, 71)
       savedCredit = { id: 81, requestKey: req.requestKey, customerId: 61, customerName: 'Credit Customer',
         creditDueDate: req.dueDate, paymentMethod: 'Credit', total: 100, outstanding: 100, tendered: 0,
-        currencyCode: 'INR', postedAtUtc: '2026-11-25T04:00:00Z', printAvailable: false,
+        currencyCode: 'INR', postedAtUtc: '2026-11-25T04:00:00Z', printAvailable: true,
         lines: [{ id: 82, productName: 'Credit Item', quantity: 1, unitPrice: 100, lineTotal: 100, unitCode: 'PCS' }] }
       return route.abort('failed')
     })
@@ -1722,7 +1722,10 @@ try {
     await t.page.getByRole('button', { name: 'Record credit sale' }).click()
     await t.page.getByRole('heading', { name: 'Credit invoice #81' }).waitFor()
     assert.equal(posts, 1)
-    assert.equal(await t.page.getByRole('button', { name: 'Print receipt' }).count(), 0)
+    assert.equal(await t.page.getByRole('link', { name: 'Print receipt', exact: true }).count(), 0)
+    assert.equal(await t.page.getByRole('link', { name: 'Print credit invoice' }).getAttribute('href'),
+      '/api/businesses/1/credit-sales/business-invoices/81/pdf?locationId=1')
+    await t.screenshot('credit-invoice-posted')
     await t.page.getByRole('button', { name: 'New sale' }).click()
     await t.page.getByRole('heading', { name: 'New Sale', exact: true }).waitFor()
     await t.check()
