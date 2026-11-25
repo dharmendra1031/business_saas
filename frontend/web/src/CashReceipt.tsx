@@ -13,6 +13,7 @@ export interface Receipt {
   paymentMethod?: 'Cash' | 'Credit'
   creditDueDate?: string | null
   outstanding?: number
+  exchange?: { originalSaleId: number; returnId: number; returnTotal: number; difference: number } | null
   requestKey?: string
   businessName?: string | null
   locationName?: string | null
@@ -418,22 +419,27 @@ export default function CashReceipt({ receipt, businessName, timeZone, pdfPath, 
         </tr>)}</tbody>
       </table>
     </div>
-    {credit ? <p><strong>Total {money(receipt.total)}</strong><br />
+    {receipt.exchange ? <p><strong>Replacement invoice total {money(receipt.total)}</strong><br />
+      Original invoice #{receipt.exchange.originalSaleId} · Return #{receipt.exchange.returnId}<br />
+      Return value {money(receipt.exchange.returnTotal)}<br />
+      {receipt.exchange.difference > 0 ? 'Cash collected ' + money(receipt.exchange.difference) :
+        receipt.exchange.difference < 0 ? 'Cash refunded ' + money(-receipt.exchange.difference) : 'No cash settlement'}</p> :
+      credit ? <p><strong>Total {money(receipt.total)}</strong><br />
       Outstanding {money(receipt.outstanding ?? receipt.total)}<br />Due date: {receipt.creditDueDate}</p> :
       <p><strong>Total {money(receipt.total)}</strong><br />Cash received {money(receipt.tendered)}<br />
       Change {money(receipt.tendered - receipt.total)}</p>}
     {printNotice && <p role="status" className="small text-body-secondary">{printNotice}</p>}
     {receipt.printAvailable
       ? <a className="btn btn-outline-secondary me-2" href={pdfPath} target="_blank" rel="noopener noreferrer">{credit ? 'Print credit invoice' : 'Print receipt'}</a>
-      : <p className="small text-body-secondary" role="status">RDLC printing requires a Windows report host.</p>}
-    {returnEstimate && returnEstimate.canOperate && <button type="button" className="btn btn-outline-secondary me-2" aria-expanded={showEstimate}
+      : <p className="small text-body-secondary" role="status">{receipt.exchange ? 'Exchange RDLC printing is not released.' : 'RDLC printing requires a Windows report host.'}</p>}
+    {returnEstimate && !receipt.exchange && returnEstimate.canOperate && <button type="button" className="btn btn-outline-secondary me-2" aria-expanded={showEstimate}
       onClick={() => { setShowExchange(false); setShowEstimate(value => !value) }}>{showEstimate ? 'Close estimate' : 'Estimate return'}</button>}
-    {returnEstimate && returnEstimate.canOperate && !credit && receipt.lines.some(line => (line.remainingQuantity ?? 0) > 0) && !showEstimate &&
+    {returnEstimate && !receipt.exchange && returnEstimate.canOperate && !credit && receipt.lines.some(line => (line.remainingQuantity ?? 0) > 0) && !showEstimate &&
       <button type="button" className="btn btn-outline-secondary me-2" aria-expanded={showExchange}
         onClick={() => setShowExchange(value => !value)}>{showExchange ? 'Close exchange' : 'Estimate exchange'}</button>}
     <button type="button" className="btn btn-primary" onClick={onBack}>{backLabel}</button>
     {returnNotice && <p className="alert alert-success mt-3" role="status">{returnNotice}</p>}
-    {returnEstimate && showEstimate && <div className="mt-3"><ReturnEstimate receipt={receipt}
+    {returnEstimate && !receipt.exchange && showEstimate && <div className="mt-3"><ReturnEstimate receipt={receipt}
       options={returnEstimate} /></div>}
     {returnEstimate && showExchange && <div className="mt-3"><ExchangeEstimate receipt={receipt} options={returnEstimate} /></div>}
     {returnEstimate && <ReturnHistory receipt={receipt} options={returnEstimate}

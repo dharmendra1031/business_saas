@@ -362,6 +362,7 @@ public sealed class SqlServerTests(Xunit.Abstractions.ITestOutputHelper output)
             builder.UseEnvironment("Development"); // Cash posting is not released outside Development yet.
             builder.UseSetting("RetailReturns:PostingEnabled", "true");
             builder.UseSetting("RetailSales:AlternateUnitsEnabled", "true");
+            builder.UseSetting("RetailExchanges:PostingEnabled", "true");
             builder.UseSetting("RetailCredit:PostingEnabled", "true");
             builder.UseSetting("RetailCredit:CollectionsEnabled", "true");
             builder.ConfigureServices(services =>
@@ -1459,6 +1460,67 @@ public sealed class SqlServerTests(Xunit.Abstractions.ITestOutputHelper output)
                 Assert.Equal(group.Count(), refundTotals[group.Key].GetProperty("returnCount").GetInt32());
             }
         }
+
+        // A same-product exchange restores the sold unit and then issues two units
+        // in one transaction; only the price difference is physically collected.
+        var exchangeOriginal = await owner.GetFromJsonAsync<JsonElement>(
+            prefix + "/cash-sales/business-receipts/" + reportRaceId + "?locationId=" + locationId);
+        var exchangeLineId = exchangeOriginal.GetProperty("lines")[0].GetProperty("id").GetInt64();
+        var postingPath = prefix + "/cash-sales/business-receipts/" + reportRaceId + "/exchanges";
+        var exchangePost = new {
+            locationId, requestKey = "sql-atomic-exchange-20261125", reason = "Customer exchanged product",
+            expectedSettlement = 15m, settlementConfirmed = true,
+            returns = new[] { new { lineId = exchangeLineId, quantity = 1m, restock = true } },
+            replacements = new[] { new { productId = reportRaceProduct, quantity = 2m, expectedUnitPrice = 15m } }
+        };
+        var beforePosting = await ExchangeBaseline();
+        Assert.Equal(HttpStatusCode.NotFound, (await Post(cashier, postingPath, exchangePost)).StatusCode);
+        Assert.Equal(HttpStatusCode.NotFound, (await Post(stranger, postingPath, exchangePost)).StatusCode);
+        Assert.Equal(HttpStatusCode.Conflict, (await Post(owner, postingPath, exchangePost with {
+            expectedSettlement = 14m
+        })).StatusCode);
+        Assert.Equal(HttpStatusCode.Conflict, (await Post(owner, postingPath, exchangePost with {
+            returns = new[] { new { lineId = exchangeLineId, quantity = 1m, restock = false } }
+        })).StatusCode);
+        Assert.Equal(beforePosting, await ExchangeBaseline());
+        using var postedExchange = await Post(owner, postingPath, exchangePost);
+        Assert.Equal(HttpStatusCode.OK, postedExchange.StatusCode);
+        var exchangeReceipt = await postedExchange.Content.ReadFromJsonAsync<JsonElement>();
+        var replacementId = exchangeReceipt.GetProperty("replacementSaleId").GetInt64();
+        Assert.Equal(15m, exchangeReceipt.GetProperty("difference").GetDecimal());
+        Assert.Equal(15m, exchangeReceipt.GetProperty("returnTotal").GetDecimal());
+        Assert.Equal(30m, exchangeReceipt.GetProperty("replacementTotal").GetDecimal());
+        using var exchangeReplay = await Post(owner, postingPath, exchangePost);
+        Assert.Equal(HttpStatusCode.OK, exchangeReplay.StatusCode);
+        Assert.Equal(replacementId, (await exchangeReplay.Content.ReadFromJsonAsync<JsonElement>()).GetProperty("replacementSaleId").GetInt64());
+        Assert.Equal(HttpStatusCode.Conflict, (await Post(owner, postingPath, exchangePost with {
+            reason = "Different exchange reason"
+        })).StatusCode);
+        Assert.Equal(HttpStatusCode.Conflict, (await Post(owner, postingPath, exchangePost with {
+            requestKey = "sql-atomic-exchange-excess-20261125"
+        })).StatusCode);
+        var recoveryPath = postingPath + "?locationId=" + locationId + "&requestKey=" + exchangePost.requestKey;
+        Assert.Equal(HttpStatusCode.NotFound, (await stranger.GetAsync(recoveryPath)).StatusCode);
+        Assert.Equal(replacementId, (await owner.GetFromJsonAsync<JsonElement>(recoveryPath)).GetProperty("replacementSaleId").GetInt64());
+        var replacementPath = prefix + "/cash-sales/business-receipts/" + replacementId;
+        var replacementReceipt = await owner.GetFromJsonAsync<JsonElement>(replacementPath + "?locationId=" + locationId);
+        Assert.Equal(15m, replacementReceipt.GetProperty("tendered").GetDecimal());
+        Assert.Equal(15m, replacementReceipt.GetProperty("exchange").GetProperty("difference").GetDecimal());
+        Assert.False(replacementReceipt.GetProperty("printAvailable").GetBoolean());
+        Assert.Equal(HttpStatusCode.Conflict, (await owner.GetAsync(replacementPath + "/pdf?locationId=" + locationId)).StatusCode);
+        using (var scope = factory.Services.CreateScope())
+        {
+            var db = scope.ServiceProvider.GetRequiredService<AppDbContext>();
+            Assert.Equal(0m, await db.RetailStockBalances.Where(x => x.BusinessId == businessId &&
+                x.LocationId == locationId && x.ProductId == reportRaceProduct).Select(x => x.Quantity).SingleAsync());
+            var linked = await db.RetailCashReturns.Include(x => x.Lines).SingleAsync(x =>
+                x.BusinessId == businessId && x.RequestKey == exchangePost.requestKey);
+            Assert.Equal(replacementId, linked.ReplacementSaleId);
+            Assert.Equal(15m, linked.NetCashSettlement);
+            Assert.Single(linked.Lines);
+        }
+        Assert.Equal((beforePosting.Sales + 1, beforePosting.Returns + 1, beforePosting.Movements + 2,
+            beforePosting.SalesTotal + 30m, beforePosting.ReturnsTotal + 15m), await ExchangeBaseline());
     }
 
     [Fact]

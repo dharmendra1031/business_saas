@@ -63,7 +63,7 @@ public static class RetailCashSales
         var sale = await CashOnly(db).Include(x => x.Lines).SingleOrDefaultAsync(x =>
             x.BusinessId == businessId && x.CashierId == actor && x.LocationId == locationId &&
             x.RequestKey == requestKey, cancellationToken);
-        return sale is null ? Results.NotFound() : Results.Ok(Receipt(sale));
+        return sale is null ? Results.NotFound() : await ReadCashReceipt(db, sale, cancellationToken: cancellationToken);
     }
 
     private static async Task<IResult> FindCreditReceipt(long businessId, long locationId, string requestKey,
@@ -98,7 +98,7 @@ public static class RetailCashSales
         var sale = await CashOnly(db).Include(x => x.Lines)
             .Where(x => x.BusinessId == businessId && x.CashierId == actor && x.LocationId == locationId)
             .OrderByDescending(x => x.Id).FirstOrDefaultAsync();
-        return sale is null ? Results.NotFound() : Results.Ok(Receipt(sale));
+        return sale is null ? Results.NotFound() : await ReadCashReceipt(db, sale);
     }
 
     private static async Task<IResult> ReceiptById(long businessId, long locationId, long receiptId,
@@ -109,11 +109,21 @@ public static class RetailCashSales
         var sale = await CashOnly(db).Include(x => x.Lines)
             .SingleOrDefaultAsync(x => x.Id == receiptId && x.BusinessId == businessId &&
                 x.CashierId == actor && x.LocationId == locationId);
-        return sale is null ? Results.NotFound() : Results.Ok(Receipt(sale));
+        return sale is null ? Results.NotFound() : await ReadCashReceipt(db, sale);
+    }
+
+    private static async Task<IResult> ReadCashReceipt(AppDbContext db, RetailCashSale sale,
+        IReadOnlyList<RetailCashReturnLine>? returns = null, CancellationToken cancellationToken = default)
+    {
+        var exchange = await db.RetailCashReturns.AsNoTracking().SingleOrDefaultAsync(x =>
+            x.BusinessId == sale.BusinessId && x.ReplacementSaleId == sale.Id, cancellationToken);
+        if (exchange is not null && exchange.NetCashSettlement != sale.Total - exchange.Total)
+            return Results.Conflict(new { message = "Exchange requires reconciliation." });
+        return Results.Ok(Receipt(sale, returns, exchange: exchange));
     }
 
     private static object Receipt(RetailCashSale sale, IReadOnlyList<RetailCashReturnLine>? returns = null,
-        decimal creditPaid = 0m)
+        decimal creditPaid = 0m, RetailCashReturn? exchange = null)
     {
         var lines = sale.Lines.OrderBy(x => x.Id).ToArray();
         // Older single-item checkout clients read these four fields from the receipt header.
@@ -123,7 +133,9 @@ public static class RetailCashSales
             sale.BusinessName, sale.LocationName, sale.TimeZoneId, sale.CreditDueDate,
             paymentMethod = sale.CreditDueDate.HasValue ? "Credit" : "Cash",
             outstanding = sale.CreditDueDate.HasValue ? sale.Total - creditPaid : 0m,
-            printAvailable = OperatingSystem.IsWindows(),
+            printAvailable = exchange is null && OperatingSystem.IsWindows(),
+            Exchange = exchange is null ? null : new { OriginalSaleId = exchange.SaleId, ReturnId = exchange.Id,
+                ReturnTotal = exchange.Total, Difference = exchange.NetCashSettlement },
             PostedAtUtc = DateTime.SpecifyKind(sale.PostedAtUtc, DateTimeKind.Utc),
             first.ProductId, first.ProductName, first.UnitPrice, first.Quantity,
             Lines = lines.Select(line => new { line.Id, line.SaleId, line.ProductId,
@@ -202,7 +214,7 @@ public static class RetailCashSales
         var earlier = await ReturnedLines(db, businessId, receiptId, cancellationToken);
         if (!ReturnLinesMatchSale(sale, earlier))
             return Results.Conflict(new { message = "Return lines require reconciliation." });
-        return Results.Ok(Receipt(sale, earlier));
+        return await ReadCashReceipt(db, sale, earlier, cancellationToken);
     }
 
     private static Task<List<RetailCashReturnLine>> ReturnedLines(AppDbContext db, long businessId, long receiptId, CancellationToken cancellationToken = default) =>
@@ -596,7 +608,7 @@ public static class RetailCashSales
         if (records.Any(record => record.Lines.Any(line => !lineIds.Contains(line.SaleLineId))))
             return Results.Conflict(new { message = "Return lines require reconciliation." });
         return Results.Ok(new { items = records.Take(pageSize).Select(x => new {
-            x.Id, x.SaleId, x.RequestKey, x.Total, x.Reason, x.ActorUserId,
+            x.Id, x.SaleId, x.RequestKey, x.Total, x.Reason, x.ActorUserId, x.ReplacementSaleId, x.NetCashSettlement,
             PostedAtUtc = DateTime.SpecifyKind(x.PostedAtUtc, DateTimeKind.Utc),
             Lines = x.Lines.OrderBy(line => line.Id).Select(line => new {
                 line.SaleLineId, line.Quantity, line.Amount, line.Restock
@@ -788,6 +800,7 @@ public static class RetailCashSales
                     where status == "All" || returnStatus == status
                     select new { sale.Id, sale.LocationId, sale.LocationName, sale.CustomerId, sale.CustomerName,
                         sale.CurrencyCode, sale.Total, sale.PostedAtUtc, sale.CreditDueDate,
+                        IsExchange = db.RetailCashReturns.Any(x => x.BusinessId == businessId && x.ReplacementSaleId == sale.Id),
                         Status = returnStatus };
 
         await using var tx = await db.Database.BeginTransactionAsync(IsolationLevel.Serializable, cancellationToken);
@@ -816,7 +829,7 @@ public static class RetailCashSales
                 items = items.Select(x => new { x.Id, x.LocationId, x.LocationName, x.CustomerId, x.CustomerName,
                     x.CurrencyCode, x.Total, PostedAtUtc = DateTime.SpecifyKind(x.PostedAtUtc, DateTimeKind.Utc),
                     x.Status, PaymentMethod = x.CreditDueDate == null ? "Cash" : "Credit",
-                    PrintAvailable = OperatingSystem.IsWindows() }),
+                    PrintAvailable = !x.IsExchange && OperatingSystem.IsWindows() }),
                 hasMore = (long)page * pageSize < total });
         }
         catch (Exception error) when (StockPosting.IsSqlConflict(error))
