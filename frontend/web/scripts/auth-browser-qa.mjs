@@ -1443,7 +1443,10 @@ try {
     assert.equal(await dialog.getByRole('button', { name: 'Save Only' }).isDisabled(), true)
     await t.page.getByLabel('Cash received').fill('2.151')
     assert.equal(await dialog.getByRole('button', { name: 'Save Only' }).isDisabled(), true)
-    await t.page.getByLabel('Cash received').fill('45035996273704.92')
+    // 2^52 - 1 cents = 45035996273704.95, inclusive.
+    await t.page.getByLabel('Cash received').fill('45035996273704.95')
+    assert.equal(await dialog.getByRole('button', { name: 'Save Only' }).isEnabled(), true)
+    await t.page.getByLabel('Cash received').fill('45035996273704.96')
     assert.equal(await dialog.getByRole('button', { name: 'Save Only' }).isDisabled(), true)
     await t.page.getByLabel('Cash received').fill('2.15')
     await t.page.getByRole('button', { name: 'Save Only' }).click()
