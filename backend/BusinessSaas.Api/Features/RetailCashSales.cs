@@ -489,6 +489,12 @@ public static class RetailCashSales
                 await tx.CommitAsync();
                 return Results.Ok(ExchangeReceipt(record, replacement));
             }
+            var canPost = config.GetValue<bool>("RetailExchanges:PostingEnabled") &&
+                config.GetValue<bool>("RetailReturns:PostingEnabled") && shop.CashSalesEnabled &&
+                await db.BusinessSubscriptions.AsNoTracking().AnyAsync(x => x.BusinessId == businessId &&
+                    (x.Status == "Trial" && x.TrialEndsAtUtc > DateTime.UtcNow ||
+                     x.Status == "Active" && x.PaidStartsAtUtc <= DateTime.UtcNow &&
+                     x.PaidEndsAtUtc > DateTime.UtcNow && x.PaidPlanVersionId != null));
             await tx.CommitAsync();
             return Results.Ok(new { receiptId, original.CurrencyCode, ReturnTotal = returnTotal,
                 ReplacementTotal = replacement.Total, Difference = difference,
@@ -497,7 +503,7 @@ public static class RetailCashSales
                 ReplacementLines = replacement.Lines.Select(x => new { x.ProductId, x.ProductName,
                     x.Quantity, x.UnitCode, x.UnitPrice, Amount = x.LineTotal,
                     BaseQuantity = x.Quantity * (x.ConversionFactor ?? 1m) }),
-                CanPost = false });
+                CanPost = canPost });
         }
         catch (Exception ex) when (StockPosting.IsSqlConflict(ex))
         {

@@ -890,7 +890,7 @@ public sealed class SqlServerTests(Xunit.Abstractions.ITestOutputHelper output)
         Assert.Equal(10m, quote.GetProperty("replacementTotal").GetDecimal());
         Assert.Equal(-10m, quote.GetProperty("difference").GetDecimal());
         Assert.Equal("Refund", quote.GetProperty("settlement").GetString());
-        Assert.False(quote.GetProperty("canPost").GetBoolean());
+        Assert.True(quote.GetProperty("canPost").GetBoolean());
         foreach (var (qty, difference, settlement) in new[] { (2m, 0m, "Even"), (1.5m, -5m, "Refund") })
         {
             using var otherQuote = await Post(owner, exchangePath, exchange with {
@@ -929,7 +929,7 @@ public sealed class SqlServerTests(Xunit.Abstractions.ITestOutputHelper output)
         Assert.Equal(20m, sameProductBody.GetProperty("returnTotal").GetDecimal());
         Assert.Equal(80m, sameProductBody.GetProperty("replacementTotal").GetDecimal());
         Assert.Equal(60m, sameProductBody.GetProperty("difference").GetDecimal());
-        Assert.False(sameProductBody.GetProperty("canPost").GetBoolean());
+        Assert.True(sameProductBody.GetProperty("canPost").GetBoolean());
         Assert.Equal(HttpStatusCode.Conflict, (await Post(owner, exchangePath, sameProduct with {
             returns = new[] { new { lineId, quantity = 0.250m, restock = false } }
         })).StatusCode);

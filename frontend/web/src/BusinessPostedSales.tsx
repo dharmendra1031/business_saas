@@ -81,6 +81,10 @@ export default function BusinessPostedSales({ dashboard, userId }: { dashboard: 
       onRecorded: (id, total) => {
         setReturnNotice(`Return #${id} recorded: ${receipt.currencyCode} ${total.toFixed(2)}.`)
         refreshReceipt()
+      },
+      onExchangeRecorded: (id, replacementId) => {
+        setReturnNotice(`Exchange recorded: Return #${id}, replacement invoice #${replacementId}.`)
+        refreshReceipt()
       }
     } : undefined} />
   if (selected) return <>

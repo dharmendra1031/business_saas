@@ -30,6 +30,7 @@ export interface Receipt {
 interface ReturnOptions {
   path: string; productSearchPath: string; locationId: number; userId: number; canOperate: boolean
   onRecorded: (id: number, total: number) => void
+  onExchangeRecorded: (id: number, replacementId: number) => void
 }
 interface ReturnRequest {
   locationId: number; requestKey: string; reason: string; expectedRefund: number;
@@ -264,10 +265,57 @@ interface ExchangeProduct {
 }
 interface ExchangeQuote {
   currencyCode: string; returnTotal: number; replacementTotal: number; difference: number
-  settlement: 'Collect' | 'Refund' | 'Even'
+  settlement: 'Collect' | 'Refund' | 'Even'; canPost: boolean
+}
+interface ExchangeRequest {
+  locationId: number; requestKey: string; reason: string; expectedSettlement: number; settlementConfirmed: true
+  returns: ReturnRequest['lines']
+  replacements: { productId: number; quantity: number; expectedUnitPrice: number;
+    expectedBaseUnitCode: string | null; unitId?: number; expectedFactor?: number }[]
+}
+interface PendingExchange { request: ExchangeRequest; currencyCode: string; returnTotal: number; replacementTotal: number }
+interface PostedExchange extends ExchangeQuote {
+  returnId: number; originalSaleId: number; replacementSaleId: number; requestKey: string; reason: string
+}
+function exchangeStorageKey(options: ReturnOptions) {
+  return `cash-exchange:${options.userId}:${options.locationId}:${options.path}`
+}
+function readExchange(options: ReturnOptions): { pending: PendingExchange | null; error: string } {
+  try {
+    const raw = sessionStorage.getItem(exchangeStorageKey(options))
+    if (!raw) return { pending: null, error: '' }
+    const saved = JSON.parse(raw) as PendingExchange
+    const r = saved.request
+    const quantity = (n: number) => Number.isFinite(n) && n >= 0.001 && n <= 1000000 &&
+      Math.abs(Math.round(n * 1000) - n * 1000) < 0.000001
+    if (!r || r.locationId !== options.locationId || typeof r.requestKey !== 'string' ||
+      !/^[0-9a-f]{32}$/.test(r.requestKey) || typeof r.reason !== 'string' || r.reason.length < 5 ||
+      r.reason.length > 200 || r.settlementConfirmed !== true ||
+      !Number.isFinite(r.expectedSettlement) || !Number.isFinite(saved.returnTotal) ||
+      !Number.isFinite(saved.replacementTotal) || saved.returnTotal < 0 || saved.replacementTotal <= 0 ||
+      Math.abs(saved.replacementTotal - saved.returnTotal - r.expectedSettlement) > 0.000001 ||
+      typeof saved.currencyCode !== 'string' || !Array.isArray(r.returns) || !r.returns.length || r.returns.length > 100 ||
+      r.returns.some(x => !Number.isSafeInteger(x.lineId) || x.lineId <= 0 || !quantity(x.quantity) || typeof x.restock !== 'boolean') ||
+      new Set(r.returns.map(x => x.lineId)).size !== r.returns.length ||
+      !Array.isArray(r.replacements) || !r.replacements.length || r.replacements.length > 100 ||
+      r.replacements.some(x => !Number.isSafeInteger(x.productId) || x.productId <= 0 || !quantity(x.quantity) ||
+        !Number.isFinite(x.expectedUnitPrice) || x.expectedUnitPrice <= 0 ||
+        (x.expectedBaseUnitCode !== null && typeof x.expectedBaseUnitCode !== 'string') ||
+        (x.unitId != null && (!Number.isSafeInteger(x.unitId) || x.unitId <= 0 ||
+          !Number.isFinite(x.expectedFactor) || x.expectedFactor! <= 0)) ||
+        (x.unitId == null && x.expectedFactor != null)) ||
+      new Set(r.replacements.map(x => x.productId)).size !== r.replacements.length)
+      throw new Error('Invalid pending exchange')
+    return { pending: saved, error: '' }
+  } catch {
+    return { pending: null, error: 'Pending exchange storage is unavailable. Reconcile exchange history before recording another return or exchange.' }
+  }
 }
 
-function ExchangeEstimate({ receipt, options }: { receipt: Receipt; options: ReturnOptions }) {
+function ExchangeEstimate({ receipt, options, pending, onPending }: {
+  receipt: Receipt; options: ReturnOptions; pending: PendingExchange | null
+  onPending: (value: PendingExchange | null) => void
+}) {
   const [returns, setReturns] = useState<Record<number, { quantity: string; condition: string }>>({})
   const [replacements, setReplacements] = useState<{ product: ExchangeProduct; quantity: string; unitId: number }[]>([])
   const [lookup, setLookup] = useState(false)
@@ -275,9 +323,16 @@ function ExchangeEstimate({ receipt, options }: { receipt: Receipt; options: Ret
   const [products, setProducts] = useState<ExchangeProduct[]>([])
   const [status, setStatus] = useState('')
   const [quote, setQuote] = useState<ExchangeQuote | null>(null)
+  const [reason, setReason] = useState('')
+  const [confirmed, setConfirmed] = useState(false)
   const [error, setError] = useState('')
   const [busy, setBusy] = useState(false)
   const lock = useRef(false)
+  const mounted = useRef(true)
+  useEffect(() => {
+    mounted.current = true
+    return () => { mounted.current = false }
+  }, [])
   useEffect(() => {
     if (!lookup) return
     const controller = new AbortController()
@@ -300,31 +355,79 @@ function ExchangeEstimate({ receipt, options }: { receipt: Receipt; options: Ret
     baseQuantity(Number(line.quantity), unit(line)?.factor ?? 1) !== null &&
     Number(line.quantity) <= 1000000)
   const money = (amount: number) => receipt.currencyCode + ' ' + amount.toFixed(2)
-  function invalidate() { setQuote(null); setError('') }
+  function invalidate() { setQuote(null); setConfirmed(false); setError('') }
+  function exchangeItems() {
+    return {
+      locationId: options.locationId,
+      returns: selected.map(line => ({ lineId: line.id, quantity: Number(returns[line.id].quantity),
+        restock: returns[line.id].condition === 'restock' })),
+      replacements: replacements.map(line => {
+        const chosen = unit(line)
+        return { productId: line.product.id, quantity: Number(line.quantity),
+          expectedUnitPrice: chosen?.salePrice ?? line.product.salePrice,
+          expectedBaseUnitCode: line.product.unitCode,
+          ...(chosen ? { unitId: chosen.unitId, expectedFactor: chosen.factor } : {}) }
+      })
+    }
+  }
+  async function record(saved: PendingExchange, checkOnly = false) {
+    if (lock.current) return
+    lock.current = true; setBusy(true); setError('')
+    const request = saved.request
+    try {
+      if (!checkOnly) {
+        sessionStorage.setItem(exchangeStorageKey(options), JSON.stringify(saved))
+        onPending(saved)
+      }
+      const result = checkOnly
+        ? await api<PostedExchange>(options.path + '/exchanges?' + new URLSearchParams({
+          locationId: String(options.locationId), requestKey: request.requestKey
+        }))
+        : await post<PostedExchange>(options.path + '/exchanges', request)
+      if (!Number.isSafeInteger(result.returnId) || result.returnId <= 0 ||
+        !Number.isSafeInteger(result.replacementSaleId) || result.replacementSaleId <= 0 ||
+        result.replacementSaleId === receipt.id || result.originalSaleId !== receipt.id ||
+        result.requestKey !== request.requestKey || result.reason !== request.reason ||
+        result.currencyCode !== saved.currencyCode || result.returnTotal !== saved.returnTotal ||
+        result.replacementTotal !== saved.replacementTotal || result.difference !== request.expectedSettlement)
+        throw new Error('Exchange response could not be verified.')
+      sessionStorage.removeItem(exchangeStorageKey(options))
+      if (mounted.current) {
+        onPending(null)
+        options.onExchangeRecorded(result.returnId, result.replacementSaleId)
+      }
+    } catch (cause) {
+      if (mounted.current) setError((cause instanceof Error ? cause.message : 'Unable to verify exchange.') +
+        ' Check the recorded exchange or retry the same request. Do not settle cash again.')
+    } finally { lock.current = false; if (mounted.current) setBusy(false) }
+  }
+  if (pending) return <section className="border rounded p-2 mb-3" aria-label="Exchange recovery">
+    <h3 className="h6">Verify previous exchange</h3>
+    <p>Confirmed settlement: <strong>{pending.currencyCode} {pending.request.expectedSettlement.toFixed(2)}</strong>. Do not collect or refund cash again.</p>
+    {error && <p role="alert" className="text-danger">{error}</p>}
+    <div className="d-flex flex-wrap gap-2">
+      <button type="button" className="btn btn-outline-secondary" disabled={busy}
+        onClick={() => void record(pending, true)}>Check posted exchange</button>
+      <button type="button" className="btn btn-primary" disabled={busy || !options.canOperate}
+        onClick={() => void record(pending)}>Retry exchange recording</button>
+    </div>
+  </section>
+  const canRecord = quote?.canPost === true && options.canOperate && valid && confirmed &&
+    !busy && reason.trim().length >= 5 && Number.isFinite(quote.difference) &&
+    Math.max(Math.abs(quote.difference), quote.returnTotal, quote.replacementTotal) <= Number.MAX_SAFE_INTEGER / 100
   function changeReturn(id: number, field: 'quantity' | 'condition', value: string) {
     setReturns(previous => ({ ...previous, [id]: { ...(previous[id] ?? { quantity: '', condition: '' }), [field]: value } }))
     invalidate()
   }
   return <section className="border rounded p-2 mb-3" aria-label="Exchange estimate">
     <h3 className="h6">Exchange estimate</h3>
-    <p className="small">Preview only. No sale, refund or stock movement is posted. Do not collect or refund cash from this estimate.</p>
+    <p className="small">Calculation does not post a sale, refund or stock movement. Record only after confirming the actual settlement when posting is available.</p>
     <form onSubmit={async event => {
       event.preventDefault()
       if (!valid || lock.current) return
       lock.current = true; setBusy(true); invalidate()
       try {
-        setQuote(await post<ExchangeQuote>(options.path + '/exchange-estimate', {
-          locationId: options.locationId,
-          returns: selected.map(line => ({ lineId: line.id, quantity: Number(returns[line.id].quantity),
-            restock: returns[line.id].condition === 'restock' })),
-          replacements: replacements.map(line => {
-            const chosen = unit(line)
-            return { productId: line.product.id, quantity: Number(line.quantity),
-              expectedUnitPrice: chosen?.salePrice ?? line.product.salePrice,
-              expectedBaseUnitCode: line.product.unitCode,
-              ...(chosen ? { unitId: chosen.unitId, expectedFactor: chosen.factor } : {}) }
-          })
-        }))
+        setQuote(await post<ExchangeQuote>(options.path + '/exchange-estimate', exchangeItems()))
       } catch (cause) { setError(cause instanceof Error ? cause.message : 'Unable to calculate exchange.') }
       finally { lock.current = false; setBusy(false) }
     }}>
@@ -370,6 +473,24 @@ function ExchangeEstimate({ receipt, options }: { receipt: Receipt; options: Ret
         <strong>{quote.settlement === 'Even' ? 'No balance to settle' : (quote.settlement === 'Collect' ? 'Estimated collection: ' : 'Estimated refund: ') + quote.currencyCode + ' ' + Math.abs(quote.difference).toFixed(2)}</strong>
       </div>}
     </form>
+    {quote && !quote.canPost && <p className="small mt-2">Preview only. Exchange posting is not enabled.</p>}
+    {quote?.canPost && options.canOperate && <div className="border-top mt-3 pt-2">
+      <label className="d-block mb-2">Exchange reason
+        <input className="form-control" maxLength={200} disabled={busy} value={reason}
+          onChange={event => { setReason(event.target.value); setConfirmed(false) }} />
+      </label>
+      <label className="form-check mb-2"><input className="form-check-input" type="checkbox" checked={confirmed}
+        disabled={busy} onChange={event => setConfirmed(event.target.checked)} />
+        {quote.difference > 0 ? 'I confirm the stated cash has been collected.' :
+          quote.difference < 0 ? 'I confirm the stated cash has been refunded.' : 'I confirm no cash was exchanged.'}
+      </label>
+      <button type="button" className="btn btn-primary" disabled={!canRecord} onClick={() => {
+        if (!canRecord || !quote) return
+        void record({ currencyCode: quote.currencyCode, returnTotal: quote.returnTotal, replacementTotal: quote.replacementTotal,
+          request: { ...exchangeItems(), requestKey: operationKey(), reason: reason.trim(),
+            expectedSettlement: quote.difference, settlementConfirmed: true } })
+      }}>Record exchange</button>
+    </div>}
     {lookup && <LookupDialog title="Replacement products" searchId="exchange-product-search" search={search}
       placeholder="Search product, SKU or barcode" columns={['SKU', 'Product', 'Available stock', 'Rate']}
       rows={products.map(product => ({ id: product.id, cells: [product.sku, product.name, String(product.available), money(product.salePrice)],
@@ -392,7 +513,10 @@ export default function CashReceipt({ receipt, businessName, timeZone, pdfPath, 
   returnNotice?: string
 }) {
   const [showEstimate, setShowEstimate] = useState(() => !!returnEstimate && !!readPending(returnEstimate).request)
-  const [showExchange, setShowExchange] = useState(false)
+  const [restoredExchange] = useState(() => returnEstimate ? readExchange(returnEstimate) : { pending: null, error: '' })
+  const [pendingExchange, setPendingExchange] = useState(restoredExchange.pending)
+  const [showExchange, setShowExchange] = useState(!!restoredExchange.pending)
+  const returnRecovery = returnEstimate ? readPending(returnEstimate) : null
   const money = (amount: number) => receipt.currencyCode + ' ' + amount.toFixed(2)
   const credit = receipt.paymentMethod === 'Credit'
   return <section className="content-section" aria-label={credit ? 'Credit invoice' : 'Cash receipt'}>
@@ -432,16 +556,19 @@ export default function CashReceipt({ receipt, businessName, timeZone, pdfPath, 
     {receipt.printAvailable
       ? <a className="btn btn-outline-secondary me-2" href={pdfPath} target="_blank" rel="noopener noreferrer">{credit ? 'Print credit invoice' : 'Print receipt'}</a>
       : <p className="small text-body-secondary" role="status">{receipt.exchange ? 'Exchange RDLC printing is not released.' : 'RDLC printing requires a Windows report host.'}</p>}
-    {returnEstimate && !receipt.exchange && returnEstimate.canOperate && <button type="button" className="btn btn-outline-secondary me-2" aria-expanded={showEstimate}
+    {restoredExchange.error && <p role="alert" className="text-danger">{restoredExchange.error}</p>}
+    {returnEstimate && !receipt.exchange && !pendingExchange && !restoredExchange.error && returnEstimate.canOperate && <button type="button" className="btn btn-outline-secondary me-2" aria-expanded={showEstimate}
       onClick={() => { setShowExchange(false); setShowEstimate(value => !value) }}>{showEstimate ? 'Close estimate' : 'Estimate return'}</button>}
-    {returnEstimate && !receipt.exchange && returnEstimate.canOperate && !credit && receipt.lines.some(line => (line.remainingQuantity ?? 0) > 0) && !showEstimate &&
+    {returnEstimate && !receipt.exchange && !pendingExchange && !restoredExchange.error && !returnRecovery?.request &&
+      !returnRecovery?.error && returnEstimate.canOperate && !credit && receipt.lines.some(line => (line.remainingQuantity ?? 0) > 0) && !showEstimate &&
       <button type="button" className="btn btn-outline-secondary me-2" aria-expanded={showExchange}
         onClick={() => setShowExchange(value => !value)}>{showExchange ? 'Close exchange' : 'Estimate exchange'}</button>}
     <button type="button" className="btn btn-primary" onClick={onBack}>{backLabel}</button>
     {returnNotice && <p className="alert alert-success mt-3" role="status">{returnNotice}</p>}
-    {returnEstimate && !receipt.exchange && showEstimate && <div className="mt-3"><ReturnEstimate receipt={receipt}
+    {returnEstimate && !receipt.exchange && !pendingExchange && !restoredExchange.error && showEstimate && <div className="mt-3"><ReturnEstimate receipt={receipt}
       options={returnEstimate} /></div>}
-    {returnEstimate && showExchange && <div className="mt-3"><ExchangeEstimate receipt={receipt} options={returnEstimate} /></div>}
+    {returnEstimate && (showExchange || pendingExchange) && !restoredExchange.error && <div className="mt-3">
+      <ExchangeEstimate receipt={receipt} options={returnEstimate} pending={pendingExchange} onPending={setPendingExchange} /></div>}
     {returnEstimate && <ReturnHistory receipt={receipt} options={returnEstimate}
       timeZone={receipt.timeZoneId ?? timeZone} />}
   </section>
