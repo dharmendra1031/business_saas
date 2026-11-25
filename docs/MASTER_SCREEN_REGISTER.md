@@ -5,6 +5,12 @@
 > This is a **planning, UX-acceptance and traceability register**. No entry marked **DONE**; source components, API handlers and passing CI alone do not prove real browser/production acceptance.
 > This document is the single reference for **which screen belongs to which workspace, its purpose, its flow, current observed implementation and the required quality gate**. Keep screen IDs stable while development progresses.
 
+## 25 November 2026 — Baseline audit refresh
+
+Source baseline: [`fff47ff`](https://github.com/dharmendra1031/business_saas/commit/fff47ffa124c936ebd7b06ec084f302a1e2ace8a). Build and Auth Browser QA passed. This is a register reconciliation and targeted source review, not individual acceptance of every row. Existing statuses are carried forward where no new evidence was inspected. Complete requires frontend, backend, database, integration, security, responsive UX, code quality, measured performance and tests; no item is certified Complete in this pass. Pending means implementation or decision outstanding; Partial means existing code/docs or incomplete acceptance; Deferred means intentionally postponed. SMTP configuration and tax are deferred; physical silent printing remains pending. CI is shared baseline evidence, not proof for every row.
+
+Counts: {"Partial":89,"Pending":42,"Deferred":14}.
+
 ## Frontend-first design phase (owner update: 22 Nov 2026)
 
 The owner approved designing and visually accepting all released screens **before building their missing backend features**. The per-screen source of truth is still this stable 145-item register; the separate [Frontend-First Design & Visual QA Tracker](./FRONTEND_FIRST_DESIGN_TRACKER.md) tracks frontend-only visual implementation versus API-integrated readiness.
@@ -111,11 +117,11 @@ The mockup pictures display illustrative controls (Card, UPI, Split, Services, d
 | AUTH-06 | MFA verification challenge | State | Partial | P0 | Recoverable invalid/expired code and attempt limits; no bypass. |
 | AUTH-07 | Business Owner invitation / activation | Flow | Partial | P0 | Single-use 48-hour verified-email invitation API, Super Admin MFA, audit, rate limiting and secure accept implemented; actual SMTP delivery and hosted approval pending. |
 | AUTH-08 | Invitation acceptance / join business | Page | Partial | P1 | Secure password setup and email ownership verification implemented; business/role assignment remains separate Super Admin action, hosted acceptance pending. |
-| AUTH-09 | Password recovery / secure reset | Page | Missing | P1 | Generic response to prevent enumeration, expiring token, existing-session safety. |
-| AUTH-10 | Email/phone verification | Page | Missing | P1 | Verified contact before privileged activation; no fake verified flag. |
+| AUTH-09 | Password recovery / secure reset | Page | Pending | P1 | Generic response to prevent enumeration, expiring token, existing-session safety. |
+| AUTH-10 | Email/phone verification | Page | Pending | P1 | Verified contact before privileged activation; no fake verified flag. |
 | AUTH-11 | My Businesses / secure switcher | Page | Partial | P0 | Only authorized memberships; switching clears old tenant context; NO Create Business for owners. |
 | AUTH-12 | Session expired / forbidden / unavailable | State | Partial | P0 | Separate expiry, permission denial and outage actions; no cross-role menu leakage. |
-| AUTH-13 | My Profile / credential settings | Page | Missing | P2 | Account preferences and password changes, never global role editing. |
+| AUTH-13 | My Profile / credential settings | Page | Pending | P2 | Account preferences and password changes, never global role editing. |
 
 ### B. Platform Super Admin — exactly eight TOP-LEVEL modules
 
@@ -124,7 +130,7 @@ The mockup pictures display illustrative controls (Card, UPI, Split, Services, d
 | ID | Screen / interaction | Type | Current | Priority | Required outcome / guardrail |
 | --- | --- | --- | --- | --- | --- |
 | SA-01 | Dashboard — Platform Overview | Page | Partial | P0 | Live KPIs, business growth, plans, expiring trials, recent audited activity; no fake revenue. |
-| SA-02 | Dashboard — report drill-down | Panel | Missing | P2 | Date filters and verified platform aggregate detail, NOT another top-level Reports menu. |
+| SA-02 | Dashboard — report drill-down | Panel | Pending | P2 | Date filters and verified platform aggregate detail, NOT another top-level Reports menu. |
 | SA-03 | Businesses — directory | Page | Partial | P0 | Search/filter/paginate by name, owner, type, status and plan; one Create Business action. |
 | SA-04 | Businesses — Create Business: identity | Wizard step | Partial | P0 | Enter name, business type, country, timezone, currency; supported market only. |
 | SA-05 | Businesses — Create Business: owner assignment | Wizard step | Partial | P0 | Find verified user or issue owner invite; business creator is platform, owner is assigned account. |
@@ -134,42 +140,42 @@ The mockup pictures display illustrative controls (Card, UPI, Split, Services, d
 | SA-09 | Businesses — business details | Page | Partial | P0 | Owner, country, locations summary, trial/subscription, status and audited platform actions; no stock editing. |
 | SA-10 | Businesses — extend trial | Modal | Partial | P1 | Expiry before/after, reason, MFA/server permission, confirmed audit ID. |
 | SA-11 | Businesses — suspend/reactivate | Modal | Partial | P1 | Scope and impact explained; reason, confirmation and audit; no silent rollback. |
-| SA-12 | Businesses — owner reassignment | Modal | Missing | P2 | Explicit ownership proof, safe permission handoff, prior-owner handling and audit. |
+| SA-12 | Businesses — owner reassignment | Modal | Pending | P2 | Explicit ownership proof, safe permission handoff, prior-owner handling and audit. |
 | SA-13 | Businesses — subscription status detail | Tab | Partial | P1 | Trial/active/expired state, period, plan version and permitted platform actions; not POS payments. |
 | SA-14 | Customers — account directory | Page | Partial | P1 | Read-only user/customer directory with verified filters and owned-business counts. |
 | SA-15 | Customers — customer detail | Page | Partial | P1 | Identity/verification and owned businesses; no shop records. |
-| SA-16 | Customers — account restriction review | Modal | Missing | P2 | If approved: explicit account-wide impact, reason, audited permission checks. |
+| SA-16 | Customers — account restriction review | Modal | Pending | P2 | If approved: explicit account-wide impact, reason, audited permission checks. |
 | SA-17 | Plans & Billing — plans catalogue | Tab | Partial | P1 | Published plan details, monthly/yearly pricing and compatible module/limit rules from real data. |
 | SA-18 | Plans & Billing — plan details/versions | Page | Partial | P1 | Compare draft and published immutable versions; historical subscription terms unchanged. |
 | SA-19 | Plans & Billing — edit plan draft | Form | Partial | P1 | Validated plan limits/prices/module compatibility, staged changes only. |
 | SA-20 | Plans & Billing — publish plan | Modal | Partial | P1 | Preview old/new terms and confirm atomic publish with auditing. |
-| SA-21 | Plans & Billing — subscription directory | Tab | Missing | P2 | Subscription records per business; not a new top-level navigation module. |
+| SA-21 | Plans & Billing — subscription directory | Tab | Pending | P2 | Subscription records per business; not a new top-level navigation module. |
 | SA-22 | Plans & Billing — billing draft list | Tab | Partial | P1 | Server-paginated drafts now include linked payment request ID/live status; no duplicate prepare action across pages; production acceptance pending. |
 | SA-23 | Plans & Billing — billing preview/create | Form | Partial | P1 | Business, cycle, period, tax/currency precision, preview before draft. |
 | SA-24 | Plans & Billing — payment request preparation | Form | Partial | P1 | Attach draft, authorized reason, audit trail; never imply payment captured by preparation. |
 | SA-25 | Plans & Billing — reconciliation queue | Tab | Partial | P1 | Unknown provider outcomes checked with verified provider/order reference; no double billing. |
 | SA-26 | Plans & Billing — reconciliation confirmation | Form | Partial | P1 | Reasoned verified reconciliation; idempotent and audited backend. |
-| SA-27 | Plans & Billing — issued invoice history/detail | Tab | Missing | P2 | Only legally issued real documents; separate draft from final invoice. |
-| SA-28 | Plans & Billing — refund review | Modal | Missing | P2 | Provider settlement verification, eligible amount, reason and second-charge safeguards. |
-| SA-29 | Licenses — license list | Page | Missing | P2 | Hosted platform's offline/on-prem licenses with search/status; do not mix with subscriptions. |
-| SA-30 | Licenses — issue / activation import | Wizard | Missing | P2 | Signed license issuance or activation, machine/contract checks and audit. |
-| SA-31 | Licenses — renew / transfer / revoke | Modal | Missing | P2 | Lifecycle transitions and historical license validity, permissions and audit. |
-| SA-32 | Licenses — license history | Tab | Missing | P2 | Issuer, machine, version, event trail from real data. |
-| SA-33 | Platform Settings — landing / policy summary | Page | Missing | P2 | Distinct global settings hub; never tenant retail settings. |
+| SA-27 | Plans & Billing — issued invoice history/detail | Tab | Pending | P2 | Only legally issued real documents; separate draft from final invoice. |
+| SA-28 | Plans & Billing — refund review | Modal | Pending | P2 | Provider settlement verification, eligible amount, reason and second-charge safeguards. |
+| SA-29 | Licenses — license list | Page | Pending | P2 | Hosted platform's offline/on-prem licenses with search/status; do not mix with subscriptions. |
+| SA-30 | Licenses — issue / activation import | Wizard | Pending | P2 | Signed license issuance or activation, machine/contract checks and audit. |
+| SA-31 | Licenses — renew / transfer / revoke | Modal | Pending | P2 | Lifecycle transitions and historical license validity, permissions and audit. |
+| SA-32 | Licenses — license history | Tab | Pending | P2 | Issuer, machine, version, event trail from real data. |
+| SA-33 | Platform Settings — landing / policy summary | Page | Pending | P2 | Distinct global settings hub; never tenant retail settings. |
 | SA-34 | Platform Settings — supported business types | Tab | Partial | P2 | Live global availability policy, revision/audit, server-checked new provisioning; market-specific policy and UX sign-off pending. |
 | SA-35 | Platform Settings — entitlements / modules | Tab | Partial | P2 | Live compiled-module availability and tenant write enforcement; plan-specific entitlements and full release acceptance pending. |
-| SA-36 | Platform Settings — countries, currency, timezones | Tab | Missing | P2 | Approved market configuration; avoid changing legal financial rules silently. |
-| SA-37 | Platform Settings — trial and grace policy | Tab | Missing | P2 | Global policy versions and effective dates, not retroactive silent edits. |
-| SA-38 | Platform Settings — languages / translations | Tab | Missing | P2 | Upload, preview, validate and publish permitted language packs; RTL tests. |
-| SA-39 | Platform Settings — branding / platform identity | Tab | Missing | P2 | Approved global logo/theme and communication templates; no unverified logos. |
+| SA-36 | Platform Settings — countries, currency, timezones | Tab | Pending | P2 | Approved market configuration; avoid changing legal financial rules silently. |
+| SA-37 | Platform Settings — trial and grace policy | Tab | Pending | P2 | Global policy versions and effective dates, not retroactive silent edits. |
+| SA-38 | Platform Settings — languages / translations | Tab | Pending | P2 | Upload, preview, validate and publish permitted language packs; RTL tests. |
+| SA-39 | Platform Settings — branding / platform identity | Tab | Pending | P2 | Approved global logo/theme and communication templates; no unverified logos. |
 | SA-40 | Security & Audit — overview | Page | Partial | P1 | Platform MFA status and safe overview; no blanket tenant access. |
 | SA-41 | Security & Audit — admin actions history | Tab | Partial | P1 | Time/actor/entity/action and old/new values from real audited operations. |
-| SA-42 | Security & Audit — sign-in/access history | Tab | Missing | P2 | Login failures and elevated access signals with PII-minimized logs. |
+| SA-42 | Security & Audit — sign-in/access history | Tab | Pending | P2 | Login failures and elevated access signals with PII-minimized logs. |
 | SA-43 | Operations — API & database readiness | Page | Partial | P1 | Only actual readiness endpoint evidence; no invented uptime. |
-| SA-44 | Operations — monitoring / incidents | Tab | Missing | P2 | Genuine health signals, retry and responsible follow-up. |
-| SA-45 | Operations — backup and restore verification | Tab | Missing | P2 | Last verified restoration, recovery evidence and protected operator actions. |
-| SA-46 | Operations — support and announcements | Tab | Missing | P2 | Support issues and platform messages when backend exists; not standalone top-level menus. |
-| SA-47 | Operations — tenant infrastructure / data moves | Tab | Missing | P3 | Approved dedicated SQL provisioning/migration and source/destination verification for Enterprise. |
+| SA-44 | Operations — monitoring / incidents | Tab | Pending | P2 | Genuine health signals, retry and responsible follow-up. |
+| SA-45 | Operations — backup and restore verification | Tab | Pending | P2 | Last verified restoration, recovery evidence and protected operator actions. |
+| SA-46 | Operations — support and announcements | Tab | Partial | P2 |Support issues and platform messages when backend exists; not standalone top-level menus. **25 Nov audit:** PlatformStatusEndpoints.cs + PlatformNoticeBanner.tsx; announcements implemented; support workflow pending. |
+| SA-47 | Operations — tenant infrastructure / data moves | Tab | Pending | P3 | Approved dedicated SQL provisioning/migration and source/destination verification for Enterprise. |
 
 ### C. Business Owner / Admin / Location Manager — Retail V1
 
@@ -181,57 +187,57 @@ The mockup pictures display illustrative controls (Card, UPI, Split, Services, d
 | BUS-02 | First-run business setup checklist | Page | Partial | P0 | Dashboard shows location and catalog readiness. Chromium fixtures at 1366px and 360px verified that Owners can open Inventory from the checklist and that it clears after the dashboard sees the first stock balance. Receipt settings and hosted acceptance remain pending. |
 | BUS-03 | Business selector / context switch | Page | Partial | P0 | Compact membership-only rows with business name/type/role; no owner tenant creation. Repeated clicks guarded and prior context cleared; Chromium fixture QA passed. Real tenant-revocation/authorization E2E and visual owner sign-off pending. |
 | BUS-04 | Locations — list and active location | Page | Partial | P1 | Authorized stock location selection and one-location label verified in Chromium; sidebar uses count for multi-branch rather than assuming first is active. Separate location management/list and authoritative primary/active scope still missing. |
-| BUS-05 | Locations — add / edit | Form | Missing | P1 | Permission and entitlement limits; no unauthorized branch access. |
+| BUS-05 | Locations — add / edit | Form | Pending | P1 | Permission and entitlement limits; no unauthorized branch access. |
 | BUS-06 | Products — list / search | Page | Partial | P0 | Existing paging/search/status plus optional Reorder Level (decimal 18,3) in create/edit, null disables alerts. API validation and tenant isolation retained. Browser acceptance pending. |
 | BUS-07 | Products — create | Form | Partial | P0 | Name, SKU/barcode, category, unit, sale price, tax classification, validation. |
 | BUS-08 | Products — edit | Form | Partial | P1 | Prefill, meaningful update, no stock reset; protected duplicate-SKU checks. |
-| BUS-09 | Products — detail | Panel | Missing | P2 | Product identity, current status and inventory links; no fabricated movement history. |
+| BUS-09 | Products — detail | Panel | Pending | P2 | Product identity, current status and inventory links; no fabricated movement history. |
 | BUS-10 | Categories — list | Tab | Partial | P1 | Real business-scoped categories and search. |
 | BUS-11 | Categories — create/edit | Form | Partial | P1 | Prevent duplicates and invalid reassignment; preserve product relationships. |
 | BUS-12 | Units — list | Tab | Partial | P1 | Real business-scoped stock units. |
 | BUS-13 | Units — create/edit | Form | Partial | P1 | Stable unit identity; conversions only after separate approved rule. |
 | BUS-14 | Customers — list | Page | Partial | P1 | Business retail customers (not platform customer accounts); search and pagination. |
 | BUS-15 | Customers — create/edit | Form | Partial | P1 | Tenant scope, identity dedupe and validation. |
-| BUS-16 | Customers — detail / purchase history | Panel | Missing | P2 | Only authorized customer sales/returns. |
+| BUS-16 | Customers — detail / purchase history | Panel | Pending | P2 | Only authorized customer sales/returns. |
 | BUS-17 | Suppliers — list | Page | Partial | P1 | Supplier contact/search/pagination for this business. |
 | BUS-18 | Suppliers — create/edit | Form | Partial | P1 | Business-scoped data, duplicate handling. |
-| BUS-19 | Suppliers — details and purchase history | Panel | Missing | P2 | Only related purchase documents; no imaginary account balance. |
+| BUS-19 | Suppliers — details and purchase history | Panel | Pending | P2 | Only related purchase documents; no imaginary account balance. |
 | BUS-20 | Purchases — purchase order list | Page | Partial | P1 | Draft/pending/approved/partially received/closed states, filters and totals. |
 | BUS-21 | Purchases — create purchase order | Form | Partial | P1 | Supplier, location, products, unit costs and quantities; save does not post stock. |
 | BUS-22 | Purchases — PO details / approval | Page | Partial | P1 | Ordered vs received vs remaining; role-checked approval with reason where required. |
 | BUS-23 | Purchases — goods receipt draft | Form | Partial | P1 | Receive against remaining quantities; reject over-receive. |
 | BUS-24 | Purchases — receipt review/post | State | Partial | P1 | Explicit post action updates stock exactly once, retry-safe. |
 | BUS-25 | Purchases — receiving history | Tab | Partial | P1 | Real posted/pending receipts and outstanding balance. |
-| BUS-26 | Purchases — reversal / correction | Form | Missing | P2 | Compensating transaction with actor/reason; no silent stock overwrite. |
+| BUS-26 | Purchases — reversal / correction | Form | Pending | P2 | Compensating transaction with actor/reason; no silent stock overwrite. |
 | BUS-27 | Inventory — stock by location | Page | Partial | P1 | Server-paged Alerts Only filter for the selected authorized location; product needs an explicit reorder threshold and initialized balance. Dashboard deep-link selects the first alert location and enables filter. Switching locations preserves filter, normal Inventory remains one-click accessible. Real hosted acceptance pending. |
 | BUS-28 | Inventory — stock movement ledger | Tab | Partial | P1 | Origin, actor, time and quantity delta; correct tenant/branch filter. |
 | BUS-29 | Inventory — opening stock | Form | Partial | P1 | Authorized one-time posting and duplicate prevention. |
 | BUS-30 | Inventory — adjustment request | Form | Partial | P1 | Reason, current balance, proposed variance and negative-stock safeguards. |
 | BUS-31 | Inventory — approval queue | Tab | Partial | P1 | Location/role-specific approvals, no unauthorized posting. |
 | BUS-32 | Inventory — adjustment detail/history | Panel | Partial | P1 | Full before/after and posting outcome with audit. |
-| BUS-33 | Inventory — low stock / reorder | Page | Missing | P2 | Configured reorder points and real counts, no invented thresholds. |
+| BUS-33 | Inventory — low stock / reorder | Page | Pending | P2 | Configured reorder points and real counts, no invented thresholds. |
 | BUS-34 | Inventory — branch transfer | Flow | Deferred | P3 | Optional V1: source issue, in-transit, destination receive and audit. |
-| BUS-35 | Sales — posted invoice list | Page | Partial | P1 | Owners can browse posted cash receipts by location and filter by receipt number and date in the business timezone. Backend and Chromium fixtures verified access and filtering. Hosted acceptance remains pending. |
-| BUS-36 | Sales — invoice detail / reprint | Page | Partial | P1 | Owner can open and print a committed receipt from the location-scoped sales list. Integration tests verified access boundaries, and Chromium verified receipt details, print and returning to the same filter. Hosted and printer acceptance remain pending. |
-| BUS-37 | Sales — return / refund list | Page | Missing | P1 | Search original sale and return status without over-refund. |
-| BUS-38 | Sales — return eligibility and lines | Form | Missing | P1 | Original quantities, already returned, reason and allowed amount; immutable history. |
-| BUS-39 | Sales — return/refund confirmation | Modal | Missing | P1 | Role, stock reversal and settlement verification, idempotency. |
-| BUS-40 | Sales — exchange | Flow | Missing | P2 | Linked return + new sale; difference explicit, no editing posted invoice. |
-| BUS-41 | Cash Register — sessions and drawer summary | Page | Missing | P1 | Cashier/location sessions, posted movements and opening float. |
-| BUS-42 | Cash Register — variance approval | Modal | Missing | P1 | Counted vs expected, approval threshold, reason and immutable close. |
+| BUS-35 | Sales — posted invoice list | Page | Partial | P1 |Owners can browse posted cash receipts by location and filter by receipt number and date in the business timezone. Backend and Chromium fixtures verified access and filtering. Hosted acceptance remains pending. **25 Nov audit:** BusinessPostedSales.tsx + RetailCashSales; cash/credit register; reconciliation and load test pending. |
+| BUS-36 | Sales — invoice detail / reprint | Page | Partial | P1 |Owner can open and print a committed receipt from the location-scoped sales list. Integration tests verified access boundaries, and Chromium verified receipt details, print and returning to the same filter. Hosted and printer acceptance remain pending. **25 Nov audit:** CashReceipt.tsx + cash/credit PDF endpoints; physical print pending. |
+| BUS-37 | Sales — return / refund list | Page | Partial | P1 |Search original sale and return status without over-refund. **25 Nov audit:** BusinessReturns.tsx + RetailCashSales.BusinessReturnRegister; return register browser regression. |
+| BUS-38 | Sales — return eligibility and lines | Form | Partial | P1 |Original quantities, already returned, reason and allowed amount; immutable history. **25 Nov audit:** RetailCashSales.EstimateReturn + CashReceipt.tsx; quantity and eligibility review. |
+| BUS-39 | Sales — return/refund confirmation | Modal | Partial | P1 |Role, stock reversal and settlement verification, idempotency. **25 Nov audit:** RetailCashSales.PostReturn + CashReceipt.tsx; refund recovery browser regression. |
+| BUS-40 | Sales — exchange | Flow | Partial | P2 |Linked return + new sale; difference explicit, no editing posted invoice. **25 Nov audit:** RetailCashSales exchange estimate exists; linked posting and UI not certified. |
+| BUS-41 | Cash Register — sessions and drawer summary | Page | Pending | P1 | Cashier/location sessions, posted movements and opening float. |
+| BUS-42 | Cash Register — variance approval | Modal | Pending | P1 | Counted vs expected, approval threshold, reason and immutable close. |
 | BUS-43 | Reports — reports hub | Page | Partial | P1 | Owner can open a daily cash sales report by business date and location. Inventory, purchasing and register reports remain pending. |
-| BUS-44 | Reports — daily sales | Page | Partial | P1 | Posted cash receipt count and total by currency. Backend and Chromium fixtures verified the cash report. Discounts, tax, refunds, other tenders and hosted acceptance remain pending. |
-| BUS-45 | Reports — stock balances/movements | Page | Missing | P1 | Current balances from movement ledger, valuation only when approved. |
-| BUS-46 | Reports — purchase/receiving | Page | Missing | P2 | Ordered vs actually received and outstanding. |
-| BUS-47 | Reports — cash and register | Page | Missing | P2 | Tender, refunds and variance by authorized shift, no SaaS revenue leakage. |
+| BUS-44 | Reports — daily sales | Page | Partial | P1 |Posted cash receipt count and total by currency. Backend and Chromium fixtures verified the cash report. Discounts, tax, refunds, other tenders and hosted acceptance remain pending. **25 Nov audit:** BusinessDailySales.tsx + daily-report endpoint; ledger reconciliation pending. |
+| BUS-45 | Reports — stock balances/movements | Page | Pending | P1 | Current balances from movement ledger, valuation only when approved. |
+| BUS-46 | Reports — purchase/receiving | Page | Pending | P2 | Ordered vs actually received and outstanding. |
+| BUS-47 | Reports — cash and register | Page | Pending | P2 | Tender, refunds and variance by authorized shift, no SaaS revenue leakage. |
 | BUS-48 | Staff & Access — team list | Page | Partial | P1 | Business memberships and roles from server, not platform accounts. |
 | BUS-49 | Staff & Access — invite/add/revoke | Form | Partial | P1 | Verified identity/eligibility, audit, scoped role and safe revocation. |
-| BUS-50 | Staff & Access — location assignment | Form | Missing | P1 | Manager/cashier access only to assigned location(s). |
+| BUS-50 | Staff & Access — location assignment | Form | Pending | P1 | Manager/cashier access only to assigned location(s). |
 | BUS-51 | Subscription — status and entitlements | Page | Partial | P1 | Plan/version, trial/grace, limits and billing status for selected business. |
 | BUS-52 | Subscription — approved payment / renewal | Flow | Partial | P1 | Real provider outcomes, secure checkout and verified reconciliation. |
-| BUS-53 | Business Settings — Invoice & Print options | Tab | Partial | P1 | Owner-only saved/revision-checked/audited 80mm/A4 paper choice, optional time/rate/tender/change/footer visibility, footer text; required invoice fields cannot hide. Static RDLC templates, typed XSD/dataset contract and tests added. Legal identity/address/tax snapshot, report renderer, true thermal printing and physical-printer acceptance NOT implemented. |
+| BUS-53 | Business Settings — Invoice & Print options | Tab | Partial | P1 |Owner-only saved/revision-checked/audited 80mm/A4 paper choice, optional time/rate/tender/change/footer visibility, footer text; required invoice fields cannot hide. Static RDLC templates, typed XSD/dataset contract and tests added. Legal identity/address/tax snapshot, report renderer, true thermal printing and physical-printer acceptance NOT implemented. **25 Nov audit:** BusinessReceiptSettings.tsx and static RDLC PDF renderer; physical silent print/cutter pending. |
 | BUS-54 | Business Settings — Billing & Payments | Tab | Partial | P1 | Owner-only persisted Cash ON/OFF (revision-safe, audited), POS cash gate, blocked future credit release and read-only history are implemented with API/SQL tests. Owner can intentionally pause new cash checkout. Customer Credit/Udhar cannot be enabled before its invoice/receivable/collection workflow release. Card/UPI, tax, discount and refund policy remain unimplemented here; hosted acceptance pending. |
-| BUS-55 | Business Settings — language and preferences | Tab | Missing | P2 | Published locale pack, correct currency and RTL independent of language. |
+| BUS-55 | Business Settings — language and preferences | Tab | Pending | P2 | Published locale pack, correct currency and RTL independent of language. |
 
 ### D. Cashier / POS — approved Ibdaa-inspired independent 61/39 layout
 
@@ -240,9 +246,9 @@ The mockup pictures display illustrative controls (Card, UPI, Split, Services, d
 | ID | Screen / interaction | Type | Current | Priority | Required outcome / guardrail |
 | --- | --- | --- | --- | --- | --- |
 | POS-01 | New Sale — catalogue + basket | Page | Partial | P0 | FULL-WIDTH: 61% photo product/category/search grid left, 39% cart/customer/total right; no admin sidebar. |
-| POS-02 | Product quick detail / selection | Modal | Missing | P1 | Only if required by real product configuration; use actual price/unit/stock, no tailoring-only fictional controls. |
-| POS-03 | Customer search / walk-in selector | Panel | Missing | P1 | Business-scoped customer lookup; walk-in allowed for Cash but an active customer is mandatory for any released Customer Credit/Udhar sale, including credit-limit and overdue validations before posting. |
-| POS-04 | Quick add customer | Modal | Missing | P2 | Create customer without losing current cart, with duplicate checks. |
+| POS-02 | Product quick detail / selection | Modal | Pending | P1 | Only if required by real product configuration; use actual price/unit/stock, no tailoring-only fictional controls. |
+| POS-03 | Customer search / walk-in selector | Panel | Partial | P1 |Business-scoped customer lookup; walk-in allowed for Cash but an active customer is mandatory for any released Customer Credit/Udhar sale, including credit-limit and overdue validations before posting. **25 Nov audit:** CashCheckout.tsx customer selection; posted customer snapshot; final role/device acceptance pending. |
+| POS-04 | Quick add customer | Modal | Pending | P2 | Create customer without losing current cart, with duplicate checks. |
 | POS-05 | Cart quantity / remove / clear | State | Partial | P0 | Inline fast edit, exact money and stock checks; no extra page. |
 | POS-06 | Payment Popup — Cash first; Credit when released | Modal | Partial | P0 | Existing Development cash-only modal and stock-safe posting verified by SQL/Chromium regression tests. Eventually expose only Owner-enabled **and** released Cash/Credit options: Cash has tender/change, Credit requires customer, outstanding/credit limit and due date. Never show an enabled but unimplemented Credit option. Hosted and real printer acceptance still pending. |
 | POS-07 | Payment Popup — processing / unknown outcome | State | Partial | P0 | Original request is held for receipt lookup and retry. Chromium fixture verified recovery after a lost response and denied retry using the same request key. Hosted acceptance remains pending. |
@@ -250,11 +256,11 @@ The mockup pictures display illustrative controls (Card, UPI, Split, Services, d
 | POS-09 | Sale complete / committed receipt | State | Partial | P0 | Chromium fixtures verified the receipt ID and that New Sale clears the original basket after normal posting and recovery. Hosted acceptance remains pending. |
 | POS-10 | Receipt print / reprint | Page | Partial | P1 | Chromium fixtures verified Print is only offered after a receipt is returned and repeated print invocations do not submit another sale. Physical printer and hosted acceptance remain pending. |
 | POS-11 | Find invoice / sale history | Page | Partial | P1 | POS supports receipt number lookup and paginated cash receipt history for the signed-in account and selected location. Chromium verified paging, opening a receipt and returning to the unchanged basket. Hosted acceptance remains pending. |
-| POS-12 | Held bills — list / resume / cancel | Page | Missing | P2 | Draft only; no stock posting/payment until later real completed sale. |
-| POS-13 | Return/refund lookup | Flow | Missing | P1 | Read eligibility against posted invoice; show actions only to permitted role. |
-| POS-14 | Cash Register — open shift | Modal | Missing | P1 | Authorized location, opening float and drawer rules; audit. |
-| POS-15 | Cash Register — shift summary | Page | Missing | P1 | Posted cash movements, expected vs counted, business date. |
-| POS-16 | Cash Register — close shift | Modal | Missing | P1 | Count, variance and approval, no silent cash mutation. |
+| POS-12 | Held bills — list / resume / cancel | Page | Pending | P2 | Draft only; no stock posting/payment until later real completed sale. |
+| POS-13 | Return/refund lookup | Flow | Pending | P1 | Read eligibility against posted invoice; show actions only to permitted role. |
+| POS-14 | Cash Register — open shift | Modal | Pending | P1 | Authorized location, opening float and drawer rules; audit. |
+| POS-15 | Cash Register — shift summary | Page | Pending | P1 | Posted cash movements, expected vs counted, business date. |
+| POS-16 | Cash Register — close shift | Modal | Pending | P1 | Count, variance and approval, no silent cash mutation. |
 | POS-17 | Insufficient stock / changed price review | Modal | Partial | P0 | Server identifies the affected item for stale prices or insufficient stock. Checkout preserves the basket, clears cash entry, refreshes the catalog and blocks checkout until the flagged line is removed. Chromium fixtures verified checkout at the corrected price with a new request key and that an out-of-stock item cannot be re-added. Hosted acceptance remains pending. |
 | POS-18 | Outage / pending-sale recovery | State | Partial | P0 | Existing pending/replay path; make status understandable and block duplicate posting. |
 

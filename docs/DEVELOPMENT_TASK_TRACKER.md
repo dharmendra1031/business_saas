@@ -6,6 +6,52 @@
 
 > **LATEST SCREEN-LEVEL SOURCE OF TRUTH:** [MASTER_SCREEN_REGISTER.md](./MASTER_SCREEN_REGISTER.md) tracks 145 actual UI work items with stable IDs, roles, acceptance gates and execution order. **DR-001:** Only Platform Super Admin creates/provisions businesses and assigns owners, superseding any older owner self-service references below. Owners/Cashiers use shared sign-in and separate authorized workspaces; they cannot create businesses. Platform-only provisioning and the shared sign-in are implemented in code; owner invitation code is implemented but SMTP delivery configuration, full role QA and visual acceptance remain pending. A tracker task is not DONE solely because it displays a working component. Preserve the existing BS task IDs, but when executing any BS task cite the corresponding AUTH/SA/BUS/POS screen ID.
 
+## 25 November 2026 — Baseline audit refresh
+
+Source baseline: [`fff47ff`](https://github.com/dharmendra1031/business_saas/commit/fff47ffa124c936ebd7b06ec084f302a1e2ace8a). Build and Auth Browser QA passed. This is a register reconciliation and targeted source review, not individual acceptance of every row. Existing statuses are carried forward where no new evidence was inspected. Complete requires frontend, backend, database, integration, security, responsive UX, code quality, measured performance and tests; no item is certified Complete in this pass. Pending means implementation or decision outstanding; Partial means existing code/docs or incomplete acceptance; Deferred means intentionally postponed. SMTP configuration and tax are deferred; physical silent printing remains pending. CI is shared baseline evidence, not proof for every row.
+
+Counts: {"Partial":101,"Pending":53,"Deferred":36}.
+
+### Targeted task evidence (remaining acceptance pending)
+
+- BS-025: PlatformMfaSetup.tsx / AuthEndpoints.cs.
+- BS-038: BusinessStaffEndpoints.cs / App.tsx.
+- BS-040: TeamMembers.tsx / BusinessStaffEndpoints.cs.
+- BS-055: PlatformTypeAvailabilityEndpoints.cs.
+- BS-056: PlatformPlans.tsx / PlatformBillingEndpoints.cs.
+- BS-057: PlatformEndpoints.cs.
+- BS-058: PlatformAudit.tsx.
+- BS-063: SubscriptionAccess.cs.
+- BS-066: SubscriptionCheckout.tsx / RazorpayPaymentEndpoints.cs.
+- BS-068: PlatformBilling.tsx; issued history acceptance pending.
+- BS-086: RetailAdjustmentEndpoints.cs.
+- BS-087: BusinessOverview.tsx stock alerts; full reorder workflow pending.
+- BS-100: RetailPurchaseEndpoints.cs; concurrency acceptance pending.
+- BS-101: CashCheckout.tsx.
+- BS-102: RetailCatalog.tsx.
+- BS-103: CashCheckout.tsx.
+- BS-105: PosCashPaymentDialog.tsx.
+- BS-106: CreditCollections.cs / RetailCashSales.cs / CreditPayment.tsx.
+- BS-107: CreditCollections.cs / CreditPayment.tsx; split tender deferred.
+- BS-108: RetailCashSales.cs request-key recovery.
+- BS-110: CashReceipt.tsx / static RDLC PDF; physical silent printing pending.
+- BS-111: BusinessPostedSales.tsx.
+- BS-112: CashReceipt.tsx.
+- BS-113: RetailCashSales.cs PostReturn.
+- BS-114: RetailCashSales.cs AllocateReturn.
+- BS-115: RetailCashSales.cs owner return flow; full policy pending.
+- BS-116: RetailCashSales.cs / StockPosting.cs.
+- BS-117: RetailCashSales.cs exchange estimate only.
+- BS-120: auth-browser-qa.mjs return recovery; full reconciliation pending.
+- BS-122: BusinessDailySales.tsx.
+- BS-124: RetailStock.tsx; report acceptance pending.
+- BS-128: BusinessPostedSales.tsx / BusinessReturns.tsx.
+- BS-139: auth-browser-qa.mjs; full accessibility review pending.
+- BS-181: Auth Browser QA workflow; production E2E pending.
+- BS-182: role/tenant regression baseline; penetration review pending.
+- BS-183: dependency review baseline; full security audit pending.
+- BS-187: SQL concurrency regression baseline; target workload benchmark pending.
+
 ## Non-negotiable rule — UI/UX review **after EVERY task**
 
 > **No task is DONE until its code and tests pass AND the resulting user flow is checked for clarity, usability and regressions.** A successful build alone is not task completion.
@@ -21,7 +67,7 @@
 
 **Code rules:** Small developer-style changes, simple names and existing code reuse. One .NET API and React app, no unnecessary services, abstraction, dependencies, or duplicate licensing code. SQL primary keys are numeric auto-increment; no UUID/GUID entity IDs. Every sensitive API enforces verified BusinessId and user permissions. Preserve security, financial correctness and tenant isolation.
 
-**Status legend:** `BASELINE` = code/docs exist but full UI/UX gate not verified; `TODO` = pending; `DECISION REQUIRED` = business policy/hardware approval pending; `UX REVIEW PENDING` = tests/static review done but actual browser/role review outstanding; `DONE` = implementation + tests + real user-flow verification. Only DONE counts as complete.
+**Status legend:** Complete = all acceptance gates passed; Partial = implementation/docs or acceptance incomplete; Pending = implementation or decision outstanding; Deferred = intentionally postponed. Historical DONE wording means Complete.
 
 **How to execute:** Work in numeric task order **within a working vertical slice**, respecting dependencies; platform security and limited plan/trial can run in parallel with Retail. Keep future Salon, Repair, BYO database and 1,000-category framework unimplemented until their dependent workflows are proven. For each finished task append commit/CI/UX evidence and change its status to DONE; do not create a new project or table simply because a task appears here.
 
@@ -75,286 +121,286 @@
 
 | ID | Task / clear deliverable | Mandatory task-specific UI/UX check | Status |
 | --- | --- | --- | --- |
-| BS-001 | Lock multi-business scope | Owner समझे: एक account से अलग businesses | BASELINE |
-| BS-002 | Confirm numeric IDs and BusinessId model | कहीं UUID या confusing tenant identifier न दिखे | BASELINE |
-| BS-003 | Review Retail V1 acceptance flow | Login से Sale और Return तक steps स्पष्ट हों | BASELINE |
-| BS-004 | Record privacy, security and release gates | Business user को तकनीकी jargon न दिखे | BASELINE |
-| BS-005 | Finalize initial launch country and tax policy | Currency और tax labels market से मेल खाएँ | DECISION REQUIRED |
-| BS-006 | Agree plan names, trial terms and limits | Plans तुलना करने में ambiguity न हो | DECISION REQUIRED |
-| BS-007 | Confirm payment and refund policies | Payment states स्पष्ट समझ आएँ | DECISION REQUIRED |
-| BS-008 | Confirm printer and barcode requirements | Cashier को scanner fallback दिखे | DECISION REQUIRED |
-| BS-009 | Define supported/unsupported business types | अधूरे templates selectable न हों | UX REVIEW PENDING |
-| BS-010 | Approve phase dependencies and no-overengineering rules | Menu सिर्फ usable features दिखाए | BASELINE |
+| BS-001 | Lock multi-business scope | Owner समझे: एक account से अलग businesses | Partial |
+| BS-002 | Confirm numeric IDs and BusinessId model | कहीं UUID या confusing tenant identifier न दिखे | Partial |
+| BS-003 | Review Retail V1 acceptance flow | Login से Sale और Return तक steps स्पष्ट हों | Partial |
+| BS-004 | Record privacy, security and release gates | Business user को तकनीकी jargon न दिखे | Partial |
+| BS-005 | Finalize initial launch country and tax policy | Currency और tax labels market से मेल खाएँ | Pending |
+| BS-006 | Agree plan names, trial terms and limits | Plans तुलना करने में ambiguity न हो | Pending |
+| BS-007 | Confirm payment and refund policies | Payment states स्पष्ट समझ आएँ | Pending |
+| BS-008 | Confirm printer and barcode requirements | Cashier को scanner fallback दिखे | Pending |
+| BS-009 | Define supported/unsupported business types | अधूरे templates selectable न हों | Partial |
+| BS-010 | Approve phase dependencies and no-overengineering rules | Menu सिर्फ usable features दिखाए | Partial |
 
 ### B. Core engineering foundation — Now
 
 | ID | Task / clear deliverable | Mandatory task-specific UI/UX check | Status |
 | --- | --- | --- | --- |
-| BS-011 | Maintain one .NET 10 API and test project | पुराने pages regress न हों | BASELINE |
-| BS-012 | Maintain one React TypeScript web app | Navigation consistent रहे | BASELINE |
-| BS-013 | Keep SQL Server EF migrations reviewed | Migration के बाद login/setup smoke test | BASELINE |
-| BS-014 | Verify numeric Identity and entity IDs | UI में IDs technical clutter न बनें | BASELINE |
-| BS-015 | Keep secure environment configuration | Secret fields UI में leak न हों | UX REVIEW PENDING |
-| BS-016 | Run backend and SQL integration CI | Core journey browser smoke के लिए तैयार हो | BASELINE |
-| BS-017 | Run frontend typecheck and production build | हर existing screen render हो | BASELINE |
-| BS-018 | Add request error logging and correlation | User को readable error, internals नहीं | UX REVIEW PENDING |
-| BS-019 | Persist auth/data-protection keys for deployment | Restart पर user session predictable हो | UX REVIEW PENDING |
-| BS-020 | Document Windows local setup and clean deployment | Fresh installation का first-run सरल हो | UX REVIEW PENDING |
+| BS-011 | Maintain one .NET 10 API and test project | पुराने pages regress न हों | Partial |
+| BS-012 | Maintain one React TypeScript web app | Navigation consistent रहे | Partial |
+| BS-013 | Keep SQL Server EF migrations reviewed | Migration के बाद login/setup smoke test | Partial |
+| BS-014 | Verify numeric Identity and entity IDs | UI में IDs technical clutter न बनें | Partial |
+| BS-015 | Keep secure environment configuration | Secret fields UI में leak न हों | Partial |
+| BS-016 | Run backend and SQL integration CI | Core journey browser smoke के लिए तैयार हो | Partial |
+| BS-017 | Run frontend typecheck and production build | हर existing screen render हो | Partial |
+| BS-018 | Add request error logging and correlation | User को readable error, internals नहीं | Partial |
+| BS-019 | Persist auth/data-protection keys for deployment | Restart पर user session predictable हो | Partial |
+| BS-020 | Document Windows local setup and clean deployment | Fresh installation का first-run सरल हो | Partial |
 
 ### C. Accounts and security — Now
 
 | ID | Task / clear deliverable | Mandatory task-specific UI/UX check | Status |
 | --- | --- | --- | --- |
-| BS-021 | Keep register flow and password validation | Form labels, focus और inline errors साफ हों | BASELINE |
-| BS-022 | Keep login and logout flows | Wrong password पर actionable message | UX REVIEW PENDING |
-| BS-023 | Complete verified email registration | Verify link के बाद next step साफ हो | TODO |
-| BS-024 | Add password reset with expiring token | Recovery flow confusion-free हो | TODO |
-| BS-025 | Add production-compatible MFA for privileged users | Admin security prompts understandable हों | TODO |
-| BS-026 | Verify lockout and abuse/rate limiting | Lockout duration स्पष्ट दिखे | UX REVIEW PENDING |
-| BS-027 | Verify CSRF and secure cookie handling | Normal form submission बाधित न हो | BASELINE |
-| BS-028 | Build secure session-expired handling | Session खत्म होने पर clear sign-in redirect | UX REVIEW PENDING |
-| BS-029 | Test privilege removal and revoked access | Removed user को सही access denied view | UX REVIEW PENDING |
-| BS-030 | Audit login, recovery and security events | User-facing errors में sensitive data न दिखे | TODO |
+| BS-021 | Keep register flow and password validation | Form labels, focus और inline errors साफ हों | Partial |
+| BS-022 | Keep login and logout flows | Wrong password पर actionable message | Partial |
+| BS-023 | Complete verified email registration | Verify link के बाद next step साफ हो | Deferred |
+| BS-024 | Add password reset with expiring token | Recovery flow confusion-free हो | Pending |
+| BS-025 | Add production-compatible MFA for privileged users | Admin security prompts understandable हों | Partial |
+| BS-026 | Verify lockout and abuse/rate limiting | Lockout duration स्पष्ट दिखे | Partial |
+| BS-027 | Verify CSRF and secure cookie handling | Normal form submission बाधित न हो | Partial |
+| BS-028 | Build secure session-expired handling | Session खत्म होने पर clear sign-in redirect | Partial |
+| BS-029 | Test privilege removal and revoked access | Removed user को सही access denied view | Partial |
+| BS-030 | Audit login, recovery and security events | User-facing errors में sensitive data न दिखे | Pending |
 
 ### D. Business creation & tenant isolation — Now
 
 | ID | Task / clear deliverable | Mandatory task-specific UI/UX check | Status |
 | --- | --- | --- | --- |
-| BS-031 | Keep business list filtered by membership | दूसरे owner के business न दिखें | BASELINE |
-| BS-032 | Keep Create Business transactional | Submit पर duplicate business न बने | BASELINE |
-| BS-033 | Keep idempotent business creation retry | Retry में पुराना result आसानी से मिले | BASELINE |
-| BS-034 | Keep first location creation | First shop ready state साफ दिखे | BASELINE |
-| BS-035 | Keep 14-day trial setup | Trial date और eligibility स्पष्ट हो | BASELINE |
-| BS-036 | Verify two accounts and two businesses | Business switch पर पुराने records न दिखें | BASELINE |
-| BS-037 | Add membership-based business context guard | Wrong URL पर safe access denied | UX REVIEW PENDING |
-| BS-038 | Add Owner/Manager/Cashier permissions | Role के हिसाब से ही menus दिखें | TODO |
-| BS-039 | Add location-specific user assignment | Selected branch unmistakable हो | TODO |
-| BS-040 | Add invite and deactivate business staff | Invite status, errors, revoke action स्पष्ट हों | TODO |
+| BS-031 | Keep business list filtered by membership | दूसरे owner के business न दिखें | Partial |
+| BS-032 | Keep Create Business transactional | Submit पर duplicate business न बने | Partial |
+| BS-033 | Keep idempotent business creation retry | Retry में पुराना result आसानी से मिले | Partial |
+| BS-034 | Keep first location creation | First shop ready state साफ दिखे | Partial |
+| BS-035 | Keep 14-day trial setup | Trial date और eligibility स्पष्ट हो | Partial |
+| BS-036 | Verify two accounts and two businesses | Business switch पर पुराने records न दिखें | Partial |
+| BS-037 | Add membership-based business context guard | Wrong URL पर safe access denied | Partial |
+| BS-038 | Add Owner/Manager/Cashier permissions | Role के हिसाब से ही menus दिखें | Partial |
+| BS-039 | Add location-specific user assignment | Selected branch unmistakable हो | Pending |
+| BS-040 | Add invite and deactivate business staff | Invite status, errors, revoke action स्पष्ट हों | Partial |
 
 ### E. Global UI/UX quality system — Every phase
 
 | ID | Task / clear deliverable | Mandatory task-specific UI/UX check | Status |
 | --- | --- | --- | --- |
-| BS-041 | Create one clean navigation hierarchy | Primary actions तुरंत मिलें | UX REVIEW PENDING |
-| BS-042 | Define compact typography and spacing | हर viewport पर readable hierarchy | UX REVIEW PENDING |
-| BS-043 | Define responsive widths 360/768/1440 | Horizontal overflow न हो | UX REVIEW PENDING |
-| BS-044 | Standardize form labels and required fields | Field purpose समझने में guesswork न हो | UX REVIEW PENDING |
-| BS-045 | Standardize first-field focus and keyboard order | Tab/Enter से workflow तेज हो | UX REVIEW PENDING |
-| BS-046 | Standardize edit prefill and validation | Edit के दौरान data सुरक्षित दिखे | TODO |
-| BS-047 | Standardize loading/empty/error states | Empty और failed state अलग हों | UX REVIEW PENDING |
-| BS-048 | Standardize search/filter/pagination tables | Filter हटाना और row action सरल हो | TODO |
-| BS-049 | Review dialogs, confirms, destructive actions | गलती से delete/void न हो | UX REVIEW PENDING |
-| BS-050 | Do cross-role usability walkthrough each task | अगला action बिना explanation समझ आए | TODO |
+| BS-041 | Create one clean navigation hierarchy | Primary actions तुरंत मिलें | Partial |
+| BS-042 | Define compact typography and spacing | हर viewport पर readable hierarchy | Partial |
+| BS-043 | Define responsive widths 360/768/1440 | Horizontal overflow न हो | Partial |
+| BS-044 | Standardize form labels and required fields | Field purpose समझने में guesswork न हो | Partial |
+| BS-045 | Standardize first-field focus and keyboard order | Tab/Enter से workflow तेज हो | Partial |
+| BS-046 | Standardize edit prefill and validation | Edit के दौरान data सुरक्षित दिखे | Pending |
+| BS-047 | Standardize loading/empty/error states | Empty और failed state अलग हों | Partial |
+| BS-048 | Standardize search/filter/pagination tables | Filter हटाना और row action सरल हो | Pending |
+| BS-049 | Review dialogs, confirms, destructive actions | गलती से delete/void न हो | Partial |
+| BS-050 | Do cross-role usability walkthrough each task | अगला action बिना explanation समझ आए | Pending |
 
 ### F. Super Admin platform — After access baseline
 
 | ID | Task / clear deliverable | Mandatory task-specific UI/UX check | Status |
 | --- | --- | --- | --- |
-| BS-051 | Keep explicit Platform Admin permission gate | Business Owner को admin navigation न मिले | BASELINE |
-| BS-052 | Add secured Platform Admin layout | Admin vs shop workspace स्पष्ट हो | UX REVIEW PENDING |
-| BS-053 | Add business directory with paging | एक business ढूँढना आसान हो | UX REVIEW PENDING |
-| BS-054 | Add admin business detail summary | Subscription/owner/status अलग-अलग पढ़ें | UX REVIEW PENDING |
-| BS-055 | Add supported business type toggles | Unsupported type का effect साफ दिखे | TODO |
-| BS-056 | Add simple plan and entitlement editor | Changes की effective date स्पष्ट हो | TODO |
-| BS-057 | Add trial status and authorized adjustments | Trial extension के reason दिखें | TODO |
-| BS-058 | Add platform audit history | Actor/time/change आसानी से दिखें | TODO |
-| BS-059 | Add platform admin account provisioning | किसे platform access है, स्पष्ट हो | TODO |
-| BS-060 | Test all platform API cross-role denials | Forbidden states में private details न leak हों | UX REVIEW PENDING |
+| BS-051 | Keep explicit Platform Admin permission gate | Business Owner को admin navigation न मिले | Partial |
+| BS-052 | Add secured Platform Admin layout | Admin vs shop workspace स्पष्ट हो | Partial |
+| BS-053 | Add business directory with paging | एक business ढूँढना आसान हो | Partial |
+| BS-054 | Add admin business detail summary | Subscription/owner/status अलग-अलग पढ़ें | Partial |
+| BS-055 | Add supported business type toggles | Unsupported type का effect साफ दिखे | Partial |
+| BS-056 | Add simple plan and entitlement editor | Changes की effective date स्पष्ट हो | Partial |
+| BS-057 | Add trial status and authorized adjustments | Trial extension के reason दिखें | Partial |
+| BS-058 | Add platform audit history | Actor/time/change आसानी से दिखें | Partial |
+| BS-059 | Add platform admin account provisioning | किसे platform access है, स्पष्ट हो | Pending |
+| BS-060 | Test all platform API cross-role denials | Forbidden states में private details न leak हों | Partial |
 
 ### G. Subscriptions & billing — Before paid launch
 
 | ID | Task / clear deliverable | Mandatory task-specific UI/UX check | Status |
 | --- | --- | --- | --- |
-| BS-061 | Keep subscription and Starter trial record | Plan और expiry UI consistent हों | UX REVIEW PENDING |
-| BS-062 | Define exact plan/module limits | Limit wording unambiguous हो | DECISION REQUIRED |
-| BS-063 | Enforce trial/active status in operation APIs | Disabled action explanatory बने | TODO |
-| BS-064 | Add subscription upgrade/downgrade flow | Proration/changes से पहले summary हो | TODO |
-| BS-065 | Add payment provider selection for launch market | Supported methods ही दिखें | DECISION REQUIRED |
-| BS-066 | Implement secure checkout redirect/return | Pending vs success अलग दिखाई दे | TODO |
-| BS-067 | Verify webhook signature and idempotency | Double charge का UI impression न बने | TODO |
-| BS-068 | Add invoice and subscription payment history | Customer आसानी से proof ढूँढ सके | TODO |
-| BS-069 | Implement failed-payment/retry/grace policy | Next step और deadline साफ हो | DECISION REQUIRED |
-| BS-070 | Test expiry, renewal and entitlement denial | Expired user को read/export policy समझ आए | TODO |
+| BS-061 | Keep subscription and Starter trial record | Plan और expiry UI consistent हों | Partial |
+| BS-062 | Define exact plan/module limits | Limit wording unambiguous हो | Pending |
+| BS-063 | Enforce trial/active status in operation APIs | Disabled action explanatory बने | Partial |
+| BS-064 | Add subscription upgrade/downgrade flow | Proration/changes से पहले summary हो | Pending |
+| BS-065 | Add payment provider selection for launch market | Supported methods ही दिखें | Pending |
+| BS-066 | Implement secure checkout redirect/return | Pending vs success अलग दिखाई दे | Partial |
+| BS-067 | Verify webhook signature and idempotency | Double charge का UI impression न बने | Pending |
+| BS-068 | Add invoice and subscription payment history | Customer आसानी से proof ढूँढ सके | Partial |
+| BS-069 | Implement failed-payment/retry/grace policy | Next step और deadline साफ हो | Pending |
+| BS-070 | Test expiry, renewal and entitlement denial | Expired user को read/export policy समझ आए | Pending |
 
 ### H. Retail master data — Retail V1
 
 | ID | Task / clear deliverable | Mandatory task-specific UI/UX check | Status |
 | --- | --- | --- | --- |
-| BS-071 | Add Category master and uniqueness rules | New/Edit/List compact हों | UX REVIEW PENDING |
-| BS-072 | Add Unit master and validation | Unit selection unambiguous हो | UX REVIEW PENDING |
-| BS-073 | Add Product master with scoped SKU | Duplicate SKU inline message दे | UX REVIEW PENDING |
-| BS-074 | Add barcode field and lookup | Scanner/manual search दोनों सरल हों | UX REVIEW PENDING |
-| BS-075 | Add sale price and tax classification | Money rounding और unit साफ दिखें | UX REVIEW PENDING |
-| BS-076 | Add Product Edit/Deactivate actions | Inactive meaning तुरंत समझ आए | UX REVIEW PENDING |
-| BS-077 | Add Supplier master | Required contact fields स्पष्ट हों | UX REVIEW PENDING |
-| BS-078 | Add Customer master for optional association | Walk-in sale customer बिना भी चले | UX REVIEW PENDING |
-| BS-079 | Add product table search/filter/paging | Large catalog में fast search हो | UX REVIEW PENDING |
-| BS-080 | Test cross-business master access denial | Wrong ID पर data/metadata leak न हो | UX REVIEW PENDING |
+| BS-071 | Add Category master and uniqueness rules | New/Edit/List compact हों | Partial |
+| BS-072 | Add Unit master and validation | Unit selection unambiguous हो | Partial |
+| BS-073 | Add Product master with scoped SKU | Duplicate SKU inline message दे | Partial |
+| BS-074 | Add barcode field and lookup | Scanner/manual search दोनों सरल हों | Partial |
+| BS-075 | Add sale price and tax classification | Money rounding और unit साफ दिखें | Partial |
+| BS-076 | Add Product Edit/Deactivate actions | Inactive meaning तुरंत समझ आए | Partial |
+| BS-077 | Add Supplier master | Required contact fields स्पष्ट हों | Partial |
+| BS-078 | Add Customer master for optional association | Walk-in sale customer बिना भी चले | Partial |
+| BS-079 | Add product table search/filter/paging | Large catalog में fast search हो | Partial |
+| BS-080 | Test cross-business master access denial | Wrong ID पर data/metadata leak न हो | Partial |
 
 ### I. Retail stock & inventory — Retail V1
 
 | ID | Task / clear deliverable | Mandatory task-specific UI/UX check | Status |
 | --- | --- | --- | --- |
-| BS-081 | Create stock movement ledger design | Stock history user-readable हो | UX REVIEW PENDING |
-| BS-082 | Implement opening stock with one-time rules | Opening vs Adjustment अलग दिखें | UX REVIEW PENDING |
-| BS-083 | Implement branch-scoped stock balance view | Available quantity prominent हो | UX REVIEW PENDING |
-| BS-084 | Implement stock adjustment with reason | Old/New/Delta before save साफ हों | UX REVIEW PENDING |
-| BS-085 | Prevent negative stock under concurrency | Insufficient stock तुरंत दिखे | UX REVIEW PENDING |
-| BS-086 | Add audited inventory corrections | Correction किसने किया दिखे | TODO |
-| BS-087 | Add low-stock thresholds and list | Low vs out-of-stock अलग हों | TODO |
-| BS-088 | Add optional location transfer only when needed | Source/destination clearly labeled हों | TODO |
-| BS-089 | Verify valuation policy and rounding | Cost vs retail price confuse न हों | TODO |
-| BS-090 | Test stock ledger reconciliation | Reports और stock screen totals मिलें | TODO |
+| BS-081 | Create stock movement ledger design | Stock history user-readable हो | Partial |
+| BS-082 | Implement opening stock with one-time rules | Opening vs Adjustment अलग दिखें | Partial |
+| BS-083 | Implement branch-scoped stock balance view | Available quantity prominent हो | Partial |
+| BS-084 | Implement stock adjustment with reason | Old/New/Delta before save साफ हों | Partial |
+| BS-085 | Prevent negative stock under concurrency | Insufficient stock तुरंत दिखे | Partial |
+| BS-086 | Add audited inventory corrections | Correction किसने किया दिखे | Partial |
+| BS-087 | Add low-stock thresholds and list | Low vs out-of-stock अलग हों | Partial |
+| BS-088 | Add optional location transfer only when needed | Source/destination clearly labeled हों | Pending |
+| BS-089 | Verify valuation policy and rounding | Cost vs retail price confuse न हों | Pending |
+| BS-090 | Test stock ledger reconciliation | Reports और stock screen totals मिलें | Pending |
 
 ### J. Purchase & receiving — Retail V1
 
 | ID | Task / clear deliverable | Mandatory task-specific UI/UX check | Status |
 | --- | --- | --- | --- |
-| BS-091 | Build Purchase Order create/list | Supplier और items कम clicks में चुनें | UX REVIEW PENDING |
-| BS-092 | Add PO draft/approve states | Approval से stock बढ़ने का भ्रम न हो | UX REVIEW PENDING |
-| BS-093 | Implement PO item quantities and totals | Ordered/Received/Remaining अलग हों | UX REVIEW PENDING |
-| BS-094 | Build partial goods receiving | 40+60 flow स्पष्ट दिखे | UX REVIEW PENDING |
-| BS-095 | Block over-receiving | Exceeded quantity inline बताई जाए | UX REVIEW PENDING |
-| BS-096 | Post receiving to stock ledger | Posted receipt status unmistakable हो | UX REVIEW PENDING |
-| BS-097 | Add direct receiving only when authorized | Receiving type साफ लिखा हो | TODO |
-| BS-098 | Implement purchase return/reversal rules | Reversal purpose/amount visible हों | TODO |
-| BS-099 | Add supplier outstanding/payment view | Due vs paid स्पष्ट हो | TODO |
-| BS-100 | Test concurrency and receipt isolation | Pending spinner duplicate post न करे | TODO |
+| BS-091 | Build Purchase Order create/list | Supplier और items कम clicks में चुनें | Partial |
+| BS-092 | Add PO draft/approve states | Approval से stock बढ़ने का भ्रम न हो | Partial |
+| BS-093 | Implement PO item quantities and totals | Ordered/Received/Remaining अलग हों | Partial |
+| BS-094 | Build partial goods receiving | 40+60 flow स्पष्ट दिखे | Partial |
+| BS-095 | Block over-receiving | Exceeded quantity inline बताई जाए | Partial |
+| BS-096 | Post receiving to stock ledger | Posted receipt status unmistakable हो | Partial |
+| BS-097 | Add direct receiving only when authorized | Receiving type साफ लिखा हो | Pending |
+| BS-098 | Implement purchase return/reversal rules | Reversal purpose/amount visible हों | Pending |
+| BS-099 | Add supplier outstanding/payment view | Due vs paid स्पष्ट हो | Pending |
+| BS-100 | Test concurrency and receipt isolation | Pending spinner duplicate post न करे | Partial |
 
 ### K. Retail POS & invoices — Retail V1
 
 | ID | Task / clear deliverable | Mandatory task-specific UI/UX check | Status |
 | --- | --- | --- | --- |
-| BS-101 | Create cashier-first POS screen | Barcode/search field default focus | TODO |
-| BS-102 | Implement fast product lookup | Search results price/unit readable हों | TODO |
-| BS-103 | Implement cart quantity/add/remove | Total तत्काल update हो | TODO |
-| BS-104 | Calculate discounts and tax on server | Price breakdown transparent हो | TODO |
-| BS-105 | Implement cash tender/change | Pay/Change values clearly separated हों | TODO |
-| BS-106 | Implement Owner-gated Customer Credit/Udhar invoices and receivable ledger; card/external tender remains separately gated | Customer, limit, due date, outstanding, auditable collections और disabled-credit safety स्पष्ट हो; Card/UPI capability fake न हो | TODO |
-| BS-107 | Implement authorized Customer Credit collections and supported split tender after payment rules are approved | Customer outstanding, collected amount, remaining balance और duplicate-safe cash movement दिखे | TODO |
-| BS-108 | Post invoice idempotently | Double tap से दूसरा bill न बने | TODO |
-| BS-109 | Add hold/resume draft bills | Held vs posted visual distinction हो | TODO |
-| BS-110 | Print/reprint receipts without reposting | Print fail पर sale safe और reprint available | TODO |
+| BS-101 | Create cashier-first POS screen | Barcode/search field default focus | Partial |
+| BS-102 | Implement fast product lookup | Search results price/unit readable हों | Partial |
+| BS-103 | Implement cart quantity/add/remove | Total तत्काल update हो | Partial |
+| BS-104 | Calculate discounts and tax on server | Price breakdown transparent हो | Deferred |
+| BS-105 | Implement cash tender/change | Pay/Change values clearly separated हों | Partial |
+| BS-106 | Implement Owner-gated Customer Credit/Udhar invoices and receivable ledger; card/external tender remains separately gated | Customer, limit, due date, outstanding, auditable collections और disabled-credit safety स्पष्ट हो; Card/UPI capability fake न हो | Partial |
+| BS-107 | Implement authorized Customer Credit collections and supported split tender after payment rules are approved | Customer outstanding, collected amount, remaining balance और duplicate-safe cash movement दिखे | Partial |
+| BS-108 | Post invoice idempotently | Double tap से दूसरा bill न बने | Partial |
+| BS-109 | Add hold/resume draft bills | Held vs posted visual distinction हो | Pending |
+| BS-110 | Print/reprint receipts without reposting | Print fail पर sale safe और reprint available | Partial |
 
 ### L. Returns, refunds & cashier controls — Retail V1
 
 | ID | Task / clear deliverable | Mandatory task-specific UI/UX check | Status |
 | --- | --- | --- | --- |
-| BS-111 | Build searchable sales history | Invoice खोजने के clear filters हों | TODO |
-| BS-112 | Build sale detail/receipt screen | Purchased vs returned amounts अलग हों | TODO |
-| BS-113 | Implement full and partial return | Available refundable balance साफ हो | TODO |
-| BS-114 | Block over-return by quantity | Excess return actionable message दे | TODO |
-| BS-115 | Implement refund policy and approvals | Cashier को permission reason दिखे | TODO |
-| BS-116 | Post stock/financial reversal entries | Original invoice immutable दिखे | TODO |
-| BS-117 | Build exchange as linked return and sale | Net payable/refund transparent हो | TODO |
-| BS-118 | Implement cash register open | Opening float का अर्थ स्पष्ट हो | TODO |
-| BS-119 | Implement drawer close/count/variance | Expected vs counted cash अलग हों | TODO |
-| BS-120 | Test refund retry/concurrency/reconciliation | Multiple taps duplicate refund न बनाएं | TODO |
+| BS-111 | Build searchable sales history | Invoice खोजने के clear filters हों | Partial |
+| BS-112 | Build sale detail/receipt screen | Purchased vs returned amounts अलग हों | Partial |
+| BS-113 | Implement full and partial return | Available refundable balance साफ हो | Partial |
+| BS-114 | Block over-return by quantity | Excess return actionable message दे | Partial |
+| BS-115 | Implement refund policy and approvals | Cashier को permission reason दिखे | Partial |
+| BS-116 | Post stock/financial reversal entries | Original invoice immutable दिखे | Partial |
+| BS-117 | Build exchange as linked return and sale | Net payable/refund transparent हो | Partial |
+| BS-118 | Implement cash register open | Opening float का अर्थ स्पष्ट हो | Pending |
+| BS-119 | Implement drawer close/count/variance | Expected vs counted cash अलग हों | Pending |
+| BS-120 | Test refund retry/concurrency/reconciliation | Multiple taps duplicate refund न बनाएं | Partial |
 
 ### M. Retail reporting & daily operations — Retail V1
 
 | ID | Task / clear deliverable | Mandatory task-specific UI/UX check | Status |
 | --- | --- | --- | --- |
-| BS-121 | Build real Retail Dashboard actions | Cash totals/draft POs and configured stock alerts integration; other payment channels and release E2E pending | PARTIAL |
-| BS-122 | Build date-filtered daily sales report | Business date/timezone स्पष्ट हो | TODO |
-| BS-123 | Build purchase/receiving report | Ordered vs received totals अलग हों | TODO |
-| BS-124 | Build stock balance and movement report | Available vs on-hand समझ आए | TODO |
-| BS-125 | Build supplier outstanding report | Due amount और payment dates साफ हों | TODO |
-| BS-126 | Build cashier register variance report | Cash/card/variance अलग हों | TODO |
-| BS-127 | Implement CSV/export under tenant scope | Export में applied filters दिखें | TODO |
-| BS-128 | Add pagination and server-side totals | Page subtotal vs grand total अलग हों | TODO |
-| BS-129 | Test report arithmetic against ledger | UI और database totals reconcile हों | TODO |
-| BS-130 | Run Retail end-to-end owner/cashier pilot | Create→Receive→Sale→Return बिना confusion | TODO |
+| BS-121 | Build real Retail Dashboard actions | Cash totals/draft POs and configured stock alerts integration; other payment channels and release E2E pending | Partial |
+| BS-122 | Build date-filtered daily sales report | Business date/timezone स्पष्ट हो | Partial |
+| BS-123 | Build purchase/receiving report | Ordered vs received totals अलग हों | Pending |
+| BS-124 | Build stock balance and movement report | Available vs on-hand समझ आए | Partial |
+| BS-125 | Build supplier outstanding report | Due amount और payment dates साफ हों | Pending |
+| BS-126 | Build cashier register variance report | Cash/card/variance अलग हों | Pending |
+| BS-127 | Implement CSV/export under tenant scope | Export में applied filters दिखें | Pending |
+| BS-128 | Add pagination and server-side totals | Page subtotal vs grand total अलग हों | Partial |
+| BS-129 | Test report arithmetic against ledger | UI और database totals reconcile हों | Pending |
+| BS-130 | Run Retail end-to-end owner/cashier pilot | Create→Receive→Sale→Return बिना confusion | Pending |
 
 ### N. Languages, RTL & accessibility — In working features
 
 | ID | Task / clear deliverable | Mandatory task-specific UI/UX check | Status |
 | --- | --- | --- | --- |
-| BS-131 | Prepare simple translation key convention | Hardcoded mixed-language labels न हों | TODO |
-| BS-132 | Add English fallback language pack | Missing key की जगह meaningful text | TODO |
-| BS-133 | Add Arabic translation and RTL direction | Forms/tables reading order natural हो | TODO |
-| BS-134 | Add language selection in UI | Current language visibly selected हो | TODO |
-| BS-135 | Persist business/user language preference | Refresh पर language न बदले | TODO |
-| BS-136 | Build admin language file upload | Allowed file format साफ दिखे | TODO |
-| BS-137 | Validate placeholder/key consistency | Upload errors exact line/key बताएं | TODO |
-| BS-138 | Add preview and publish/rollback controls | Preview और live language अलग दिखें | TODO |
-| BS-139 | Check keyboard/screen-reader focus labels | Every action operable without mouse | TODO |
-| BS-140 | Audit all release screens in mobile and RTL | No clipped labels or horizontal scrolling | TODO |
+| BS-131 | Prepare simple translation key convention | Hardcoded mixed-language labels न हों | Pending |
+| BS-132 | Add English fallback language pack | Missing key की जगह meaningful text | Pending |
+| BS-133 | Add Arabic translation and RTL direction | Forms/tables reading order natural हो | Pending |
+| BS-134 | Add language selection in UI | Current language visibly selected हो | Pending |
+| BS-135 | Persist business/user language preference | Refresh पर language न बदले | Pending |
+| BS-136 | Build admin language file upload | Allowed file format साफ दिखे | Pending |
+| BS-137 | Validate placeholder/key consistency | Upload errors exact line/key बताएं | Pending |
+| BS-138 | Add preview and publish/rollback controls | Preview और live language अलग दिखें | Pending |
+| BS-139 | Check keyboard/screen-reader focus labels | Every action operable without mouse | Partial |
+| BS-140 | Audit all release screens in mobile and RTL | No clipped labels or horizontal scrolling | Pending |
 
 ### O. License Manager & offline Windows — After secure admin
 
 | ID | Task / clear deliverable | Mandatory task-specific UI/UX check | Status |
 | --- | --- | --- | --- |
-| BS-141 | Complete private package release-tag publication | Admin errors में package internals न दिखें | TODO |
-| BS-142 | Verify authorized private NuGet consumption | Existing cloud screens regress न हों | TODO |
-| BS-143 | Integrate platform-only license list/history API | Only Super Admin sees licenses | TODO |
-| BS-144 | Add license issue/renew/transfer/revoke APIs | Dangerous actions confirmed and audited हों | TODO |
-| BS-145 | Build Super Admin License screens | Create/renew flow सरल और consistent हो | TODO |
-| BS-146 | Reuse protected Windows signing service | Signing key किसी UI/API response में न दिखे | TODO |
-| BS-147 | Build offline activation request import/export | File selection और outcome clearly labeled हों | TODO |
-| BS-148 | Integrate on-prem local signed license validation | License status और expiry स्पष्ट दिखें | TODO |
-| BS-149 | Implement expiry grace/read-export policy | Expired user का safe next step दिखे | TODO |
-| BS-150 | Test offline reboot/machine binding/reissue | LAN app बिना internet और confusion चले | TODO |
+| BS-141 | Complete private package release-tag publication | Admin errors में package internals न दिखें | Pending |
+| BS-142 | Verify authorized private NuGet consumption | Existing cloud screens regress न हों | Pending |
+| BS-143 | Integrate platform-only license list/history API | Only Super Admin sees licenses | Pending |
+| BS-144 | Add license issue/renew/transfer/revoke APIs | Dangerous actions confirmed and audited हों | Pending |
+| BS-145 | Build Super Admin License screens | Create/renew flow सरल और consistent हो | Pending |
+| BS-146 | Reuse protected Windows signing service | Signing key किसी UI/API response में न दिखे | Pending |
+| BS-147 | Build offline activation request import/export | File selection और outcome clearly labeled हों | Deferred |
+| BS-148 | Integrate on-prem local signed license validation | License status और expiry स्पष्ट दिखें | Deferred |
+| BS-149 | Implement expiry grace/read-export policy | Expired user का safe next step दिखे | Deferred |
+| BS-150 | Test offline reboot/machine binding/reissue | LAN app बिना internet और confusion चले | Deferred |
 
 ### P. White label & dedicated SQL Server — Enterprise after Retail
 
 | ID | Task / clear deliverable | Mandatory task-specific UI/UX check | Status |
 | --- | --- | --- | --- |
-| BS-151 | Create simple business branding settings | Logo/name/theme preview सही दिखे | TODO |
-| BS-152 | Validate approved custom domain ownership | Domain verification steps readable हों | TODO |
-| BS-153 | Automate TLS binding and trusted host routing | Wrong host पर accidental access न हो | TODO |
-| BS-154 | Protect tenant-specific login/cookie scope | Cross-domain sign-in loop न बने | TODO |
-| BS-155 | Define central control vs operational data boundary | Business switch behavior unchanged रहे | TODO |
-| BS-156 | Add approved dedicated SQL Server assignment | Admin accidental database switch न करे | TODO |
-| BS-157 | Implement migration to dedicated DB with rollback | Progress और success/failure clear हों | TODO |
-| BS-158 | Verify tenant isolation across database modes | Wrong database data never appears | TODO |
-| BS-159 | Define BYO customer-hosted database contract | Unsupported provider selectable न हो | TODO |
-| BS-160 | Test white-label/SQL upgrade/restore flows | Branding, invoice and navigation stay consistent | TODO |
+| BS-151 | Create simple business branding settings | Logo/name/theme preview सही दिखे | Deferred |
+| BS-152 | Validate approved custom domain ownership | Domain verification steps readable हों | Deferred |
+| BS-153 | Automate TLS binding and trusted host routing | Wrong host पर accidental access न हो | Deferred |
+| BS-154 | Protect tenant-specific login/cookie scope | Cross-domain sign-in loop न बने | Deferred |
+| BS-155 | Define central control vs operational data boundary | Business switch behavior unchanged रहे | Deferred |
+| BS-156 | Add approved dedicated SQL Server assignment | Admin accidental database switch न करे | Deferred |
+| BS-157 | Implement migration to dedicated DB with rollback | Progress और success/failure clear हों | Deferred |
+| BS-158 | Verify tenant isolation across database modes | Wrong database data never appears | Deferred |
+| BS-159 | Define BYO customer-hosted database contract | Unsupported provider selectable न हो | Deferred |
+| BS-160 | Test white-label/SQL upgrade/restore flows | Branding, invoice and navigation stay consistent | Deferred |
 
 ### Q. Salon / Barber vertical — After Retail release
 
 | ID | Task / clear deliverable | Mandatory task-specific UI/UX check | Status |
 | --- | --- | --- | --- |
-| BS-161 | Enable reviewed Salon business type | Unsupported state hidden until ready | TODO |
-| BS-162 | Build service/category catalog | Service price and duration readable हों | TODO |
-| BS-163 | Build staff master and permissions | Staff availability easy to edit हो | TODO |
-| BS-164 | Build resources/chairs/rooms configuration | Schedule capacity understandable हो | TODO |
-| BS-165 | Build appointment calendar day/week | Busy slots easy to distinguish हों | TODO |
-| BS-166 | Prevent overlapping appointments | Conflict with alternatives दिखे | TODO |
-| BS-167 | Add customer lookup and booking form | Repeat customer booking fast हो | TODO |
-| BS-168 | Implement appointment status/cancel/no-show | Status meanings and fees clear हों | TODO |
-| BS-169 | Implement checkout and relevant deposits | Appointment to receipt smooth हो | TODO |
-| BS-170 | Run salon owner/receptionist usability pilot | Book→Serve→Bill end-to-end simple हो | TODO |
+| BS-161 | Enable reviewed Salon business type | Unsupported state hidden until ready | Deferred |
+| BS-162 | Build service/category catalog | Service price and duration readable हों | Deferred |
+| BS-163 | Build staff master and permissions | Staff availability easy to edit हो | Deferred |
+| BS-164 | Build resources/chairs/rooms configuration | Schedule capacity understandable हो | Deferred |
+| BS-165 | Build appointment calendar day/week | Busy slots easy to distinguish हों | Deferred |
+| BS-166 | Prevent overlapping appointments | Conflict with alternatives दिखे | Deferred |
+| BS-167 | Add customer lookup and booking form | Repeat customer booking fast हो | Deferred |
+| BS-168 | Implement appointment status/cancel/no-show | Status meanings and fees clear हों | Deferred |
+| BS-169 | Implement checkout and relevant deposits | Appointment to receipt smooth हो | Deferred |
+| BS-170 | Run salon owner/receptionist usability pilot | Book→Serve→Bill end-to-end simple हो | Deferred |
 
 ### R. Repair Center vertical — After Salon readiness
 
 | ID | Task / clear deliverable | Mandatory task-specific UI/UX check | Status |
 | --- | --- | --- | --- |
-| BS-171 | Enable reviewed Repair business type | Only working workflows advertised हों | TODO |
-| BS-172 | Build repair customer/device intake | Serial and issue fields easy हों | TODO |
-| BS-173 | Create job card with numeric ID | Customer receipt/tracking readable हो | TODO |
-| BS-174 | Assign technician and due date | Ownership and priority clear हों | TODO |
-| BS-175 | Define repair statuses and history | Status timeline customer-friendly हो | TODO |
-| BS-176 | Implement parts use and stock deduction | Parts consumption validated हो | TODO |
-| BS-177 | Add estimates/customer approval | Approved vs draft cost obvious हो | TODO |
-| BS-178 | Record labor charges and final billing | Parts and labor separate हों | TODO |
-| BS-179 | Handle rework/return and audit | Reopen reason and prior history visible हों | TODO |
-| BS-180 | Run job intake→delivery usability pilot | Technician and counter flow intuitive हो | TODO |
+| BS-171 | Enable reviewed Repair business type | Only working workflows advertised हों | Deferred |
+| BS-172 | Build repair customer/device intake | Serial and issue fields easy हों | Deferred |
+| BS-173 | Create job card with numeric ID | Customer receipt/tracking readable हो | Deferred |
+| BS-174 | Assign technician and due date | Ownership and priority clear हों | Deferred |
+| BS-175 | Define repair statuses and history | Status timeline customer-friendly हो | Deferred |
+| BS-176 | Implement parts use and stock deduction | Parts consumption validated हो | Deferred |
+| BS-177 | Add estimates/customer approval | Approved vs draft cost obvious हो | Deferred |
+| BS-178 | Record labor charges and final billing | Parts and labor separate हों | Deferred |
+| BS-179 | Handle rework/return and audit | Reopen reason and prior history visible हों | Deferred |
+| BS-180 | Run job intake→delivery usability pilot | Technician and counter flow intuitive हो | Deferred |
 
 ### S. Production, quality & scale — Release gate
 
 | ID | Task / clear deliverable | Mandatory task-specific UI/UX check | Status |
 | --- | --- | --- | --- |
-| BS-181 | Verify browser E2E critical workflows | Real click journey without dead ends | TODO |
-| BS-182 | Run role/tenant penetration regression | Access denied clear and no leakage | TODO |
-| BS-183 | Review secrets, packages and vulnerability alerts | No private debug details on screens | TODO |
-| BS-184 | Perform SQL backup and independent restore drill | Restored app screens behave correctly | TODO |
-| BS-185 | Configure IIS/HTTPS/reverse proxy/deploy pipeline | Cold start shows useful load state | TODO |
-| BS-186 | Add production error metrics and monitoring | User errors never expose stack traces | TODO |
-| BS-187 | Load test target concurrent business workload | POS search and checkout remain responsive | TODO |
-| BS-188 | Perform payment and stock fault-injection drills | Failures preserve outcome visibility | TODO |
-| BS-189 | Run accessibility/mobile/RTL acceptance by role | Zero unresolved critical confusion | TODO |
-| BS-190 | Pilot rollout, support runbook and release sign-off | New users finish first sale unassisted | TODO |
+| BS-181 | Verify browser E2E critical workflows | Real click journey without dead ends | Partial |
+| BS-182 | Run role/tenant penetration regression | Access denied clear and no leakage | Partial |
+| BS-183 | Review secrets, packages and vulnerability alerts | No private debug details on screens | Partial |
+| BS-184 | Perform SQL backup and independent restore drill | Restored app screens behave correctly | Pending |
+| BS-185 | Configure IIS/HTTPS/reverse proxy/deploy pipeline | Cold start shows useful load state | Pending |
+| BS-186 | Add production error metrics and monitoring | User errors never expose stack traces | Pending |
+| BS-187 | Load test target concurrent business workload | POS search and checkout remain responsive | Partial |
+| BS-188 | Perform payment and stock fault-injection drills | Failures preserve outcome visibility | Pending |
+| BS-189 | Run accessibility/mobile/RTL acceptance by role | Zero unresolved critical confusion | Pending |
+| BS-190 | Pilot rollout, support runbook and release sign-off | New users finish first sale unassisted | Pending |
 
 ## Definition of DONE, required for each BS task
 
