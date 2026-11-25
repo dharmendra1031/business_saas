@@ -1143,16 +1143,16 @@ public sealed class SqlServerTests
         Assert.Equal(8m, partialLedger.GetProperty("totals")[0].GetProperty("paid").GetDecimal());
         Assert.Equal(12m, partialLedger.GetProperty("totals")[0].GetProperty("outstanding").GetDecimal());
         Assert.Equal(12m, partialLedger.GetProperty("items")[0].GetProperty("outstanding").GetDecimal());
-        var history = await owner.GetFromJsonAsync<JsonElement>(paymentsPath + "?requestKey=" + payment.requestKey);
-        Assert.Equal(collectionId, history.GetProperty("items")[0].GetProperty("id").GetInt64());
+        var collectionHistory = await owner.GetFromJsonAsync<JsonElement>(paymentsPath + "?requestKey=" + payment.requestKey);
+        Assert.Equal(collectionId, collectionHistory.GetProperty("items")[0].GetProperty("id").GetInt64());
         Assert.Equal(HttpStatusCode.NotFound, (await cashier.GetAsync(paymentsPath)).StatusCode);
         // Independent requests competing for the exact remaining balance.
         var finalPayment = payment with { requestKey = "sql-final-collection-a-20261125",
             amount = 12m, expectedOutstanding = 12m };
         var competing = await Task.WhenAll(Post(owner, paymentsPath, finalPayment),
             Post(owner, paymentsPath, finalPayment with { requestKey = "sql-final-collection-b-20261125" }));
-        Assert.Single(competing.Where(x => x.StatusCode == HttpStatusCode.OK));
-        Assert.Single(competing.Where(x => x.StatusCode == HttpStatusCode.Conflict));
+        Assert.Single(competing, x => x.StatusCode == HttpStatusCode.OK);
+        Assert.Single(competing, x => x.StatusCode == HttpStatusCode.Conflict);
         var settledLedger = await owner.GetFromJsonAsync<JsonElement>(creditLedgerPath);
         Assert.Equal(20m, settledLedger.GetProperty("totals")[0].GetProperty("paid").GetDecimal());
         Assert.Equal(0m, settledLedger.GetProperty("totals")[0].GetProperty("outstanding").GetDecimal());

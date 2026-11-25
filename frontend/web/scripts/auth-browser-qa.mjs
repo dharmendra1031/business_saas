@@ -1680,6 +1680,58 @@ try {
   }
 
   {
+    const t = await scenario('owner-credit-payment-recovery', { role: 'Owner', hasProducts: true })
+    let saved = null
+    let posts = 0
+    await t.page.route('**/api/businesses/1/customers?*', route => response(route, 200, {
+      items: [{ id: 61, name: 'Credit Customer', phone: '1234567890', email: '', isActive: true, creditLimit: 500 }],
+      total: 1, page: 1, pageSize: 20
+    }))
+    await t.page.route('**/api/businesses/1/customers/61/credit-ledger?*', route => response(route, 200, {
+      customerId: 61, name: 'Credit Customer', creditLimit: 500, canCollect: true,
+      totals: [{ currencyCode: 'INR', debit: 100, paid: saved ? 40 : 0, outstanding: saved ? 60 : 100, invoiceCount: 1 }],
+      items: [{ id: 81, locationName: 'Main Shop', currencyCode: 'INR', debit: 100, paid: saved ? 40 : 0,
+        outstanding: saved ? 60 : 100, creditDueDate: '2026-12-02', postedAtUtc: '2026-11-25T04:00:00Z' }],
+      hasMore: false
+    }))
+    await t.page.route('**/api/businesses/1/customers/61/credit-invoices/81/payments*', async route => {
+      if (route.request().method() === 'POST') {
+        posts++
+        const req = route.request().postDataJSON()
+        assert.equal(req.amount, 40)
+        assert.equal(req.expectedOutstanding, 100)
+        assert.equal(req.cashReceivedConfirmed, true)
+        saved = { id: 91, saleId: 81, amount: req.amount, requestKey: req.requestKey,
+          method: 'Cash', postedAtUtc: '2026-11-25T04:00:00Z' }
+        return route.abort('failed')
+      }
+      const key = new URL(route.request().url()).searchParams.get('requestKey')
+      return response(route, 200, { items: saved && (!key || key === saved.requestKey) ? [saved] : [], hasMore: false })
+    })
+    await t.login()
+    await t.page.locator('.app-sidebar .nav-entry').filter({ hasText: /^Customers$/ }).click()
+    await t.page.getByRole('button', { name: 'Credit ledger for Credit Customer' }).click()
+    await t.page.getByRole('button', { name: 'Receive payment #81' }).click()
+    await t.page.getByLabel('Cash received (INR)', { exact: true }).fill('40')
+    assert.equal(await t.page.getByRole('button', { name: 'Record payment', exact: true }).isDisabled(), true)
+    await t.page.getByLabel('Cash already received for this invoice.').check()
+    await t.page.getByRole('button', { name: 'Record payment', exact: true }).click()
+    await t.page.getByRole('button', { name: 'Check saved payment' }).waitFor()
+    await t.page.getByRole('button', { name: 'Close payment' }).click()
+    await t.page.getByRole('button', { name: 'Close ledger' }).click()
+    await t.page.getByRole('button', { name: 'Credit ledger for Credit Customer' }).click()
+    await t.page.getByRole('button', { name: 'Check saved payment' }).click()
+    await t.page.getByText('Payment #91 recorded.', { exact: false }).waitFor()
+    await t.page.getByRole('button', { name: 'Receive payment #81' }).waitFor()
+    assert.equal(posts, 1)
+    await t.page.getByRole('button', { name: 'Receive payment #81' }).click()
+    await t.page.getByRole('cell', { name: '#91', exact: true }).waitFor()
+    await t.check()
+    await t.context.close()
+    console.log('PASS owner credit payment recovery without duplicate posting')
+  }
+
+  {
     const t = await scenario('product-inline-category-unit-brand', {
       role: 'Owner', hasProducts: true, productsFixture: true
     })

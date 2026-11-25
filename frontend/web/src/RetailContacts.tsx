@@ -71,7 +71,7 @@ function CustomerCreditLedger({ path, userId, onClose }: { path: string; userId:
     {selected && <CreditPayment key={selected.id} customerPath={path.replace(/\/credit-ledger$/, '')}
       invoice={selected} storageKey={storageKey} pending={pending} canCollect={ledger?.canCollect === true && !recovery.error}
       onPending={setPending} onRecorded={payment => {
-        setNotice('Payment #' + payment.id + ' recorded. Ledger refreshed from saved transactions.')
+        setNotice('Payment #' + payment.id + ' recorded. Reloading ledger from saved transactions.')
         setSelected(null); setReload(x => x + 1)
       }} onClose={() => setSelected(null)} />}
     {error ? <p role="alert" className="mt-2">{error} <button type="button" className="btn btn-sm btn-outline-secondary"
