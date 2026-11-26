@@ -1536,7 +1536,7 @@ public sealed class SqlServerTests(Xunit.Abstractions.ITestOutputHelper output)
         Assert.Equal(exchangeTotals.GetProperty("netSales").GetDecimal(),
             exchangeTotals.GetProperty("cashCollected").GetDecimal() - exchangeTotals.GetProperty("cashRefunded").GetDecimal());
 
-        // Run competing exchange requests on independent authenticated clients.
+        // Run raceCompetingRequest exchange requests on independent authenticated clients.
         using var secondOwner = factory.CreateClient();
         Assert.Equal(HttpStatusCode.NoContent, (await Post(secondOwner, "/api/auth/login",
             new { email = "sql-retail-flow-owner@example.test", password = "TestPassword123!" })).StatusCode);
@@ -1553,33 +1553,33 @@ public sealed class SqlServerTests(Xunit.Abstractions.ITestOutputHelper output)
                 name = "Exchange replacement " + label, sku = "EX-REPLACE-" + label,
                 categoryId, brandId, unitId, salePrice = price, taxClassification = ""
             });
-            foreach (var product in new[] { soldProduct, newProduct })
+            foreach (var exchangeProductId in new[] { soldProduct, newProduct })
                 Assert.Equal(HttpStatusCode.Created, (await Post(owner, stockPath + "/opening",
-                    new { productId = product, quantity = 1m })).StatusCode);
+                    new { productId = exchangeProductId, quantity = 1m })).StatusCode);
             using var originalResponse = await Post(cashier, prefix + "/cash-sales", new
             {
                 locationId, requestKey = "sql-exchange-original-" + label, tendered = 15m,
                 lines = new[] { new { productId = soldProduct, quantity = 1m, expectedUnitPrice = 15m } }
             });
             Assert.Equal(HttpStatusCode.OK, originalResponse.StatusCode);
-            var originalReceipt = await originalResponse.Content.ReadFromJsonAsync<JsonElement>();
-            var originalId = originalReceipt.GetProperty("id").GetInt64();
-            var originalLineId = originalReceipt.GetProperty("lines")[0].GetProperty("id").GetInt64();
+            var raceOriginalReceipt = await originalResponse.Content.ReadFromJsonAsync<JsonElement>();
+            var originalId = raceOriginalReceipt.GetProperty("id").GetInt64();
+            var originalLineId = raceOriginalReceipt.GetProperty("lines")[0].GetProperty("id").GetInt64();
             var path = prefix + "/cash-sales/business-receipts/" + originalId + "/exchanges";
-            var request = new
+            var raceExchangeRequest = new
             {
                 locationId, requestKey = "sql-exchange-race-" + label, reason = "Concurrent exchange regression",
                 expectedSettlement = price - 15m, settlementConfirmed = true,
                 returns = new[] { new { lineId = originalLineId, quantity = 1m, restock = true } },
                 replacements = new[] { new { productId = newProduct, quantity = 1m, expectedUnitPrice = price } }
             };
-            var competing = sameKey ? request : request with { requestKey = request.requestKey + "-other" };
+            var raceCompetingRequest = sameKey ? raceExchangeRequest : raceExchangeRequest with { requestKey = raceExchangeRequest.requestKey + "-other" };
             var before = await ExchangeBaseline();
             var reportDay = DateOnly.FromDateTime(TimeZoneInfo.ConvertTimeFromUtc(DateTime.UtcNow, zone));
             var reportPath = dailyPath + reportDay.ToString("yyyy-MM-dd");
             var reportBefore = (await owner.GetFromJsonAsync<JsonElement>(reportPath)).GetProperty("totals")[0];
 
-            var results = await Task.WhenAll(Post(owner, path, request), Post(secondOwner, path, competing));
+            var results = await Task.WhenAll(Post(owner, path, raceExchangeRequest), Post(secondOwner, path, raceCompetingRequest));
             using var first = results[0];
             using var second = results[1];
             foreach (var response in results)
@@ -1587,10 +1587,10 @@ public sealed class SqlServerTests(Xunit.Abstractions.ITestOutputHelper output)
                     await response.Content.ReadAsStringAsync());
             if (!sameKey)
                 Assert.True(results.Count(x => x.StatusCode == HttpStatusCode.OK) <= 1);
-            var winner = second.StatusCode == HttpStatusCode.OK ? competing : request;
-            using var replay = await Post(owner, path, winner);
-            Assert.Equal(HttpStatusCode.OK, replay.StatusCode);
-            var posted = await replay.Content.ReadFromJsonAsync<JsonElement>();
+            var winner = second.StatusCode == HttpStatusCode.OK ? raceCompetingRequest : raceExchangeRequest;
+            using var raceExchangeReplay = await Post(owner, path, winner);
+            Assert.Equal(HttpStatusCode.OK, raceExchangeReplay.StatusCode);
+            var posted = await raceExchangeReplay.Content.ReadFromJsonAsync<JsonElement>();
             var linkedSaleId = posted.GetProperty("replacementSaleId").GetInt64();
             foreach (var response in results.Where(x => x.StatusCode == HttpStatusCode.OK))
                 Assert.Equal(linkedSaleId, (await response.Content.ReadFromJsonAsync<JsonElement>())
@@ -1611,13 +1611,13 @@ public sealed class SqlServerTests(Xunit.Abstractions.ITestOutputHelper output)
                 Assert.Equal(price - 15m, linked.NetCashSettlement);
                 Assert.Equal(0m, await db.RetailCashSales.Where(x => x.Id == linkedSaleId &&
                     x.BusinessId == businessId).Select(x => x.Tendered).SingleAsync());
-                foreach (var (product, quantity) in new[] { (soldProduct, 1m), (newProduct, 0m) })
+                foreach (var (exchangeProductId, quantity) in new[] { (soldProduct, 1m), (newProduct, 0m) })
                 {
                     Assert.Equal(quantity, await db.RetailStockBalances.Where(x =>
-                        x.BusinessId == businessId && x.LocationId == locationId && x.ProductId == product)
+                        x.BusinessId == businessId && x.LocationId == locationId && x.ProductId == exchangeProductId)
                         .Select(x => x.Quantity).SingleAsync());
                     Assert.Equal(quantity, await db.RetailStockMovements.Where(x =>
-                        x.BusinessId == businessId && x.LocationId == locationId && x.ProductId == product)
+                        x.BusinessId == businessId && x.LocationId == locationId && x.ProductId == exchangeProductId)
                         .SumAsync(x => x.QuantityChange));
                 }
             }
