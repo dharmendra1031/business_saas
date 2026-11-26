@@ -451,6 +451,7 @@ public sealed class AppDbContext(DbContextOptions<AppDbContext> options)
     public DbSet<RetailCashSale> RetailCashSales => Set<RetailCashSale>();
     public DbSet<RetailCashReturn> RetailCashReturns => Set<RetailCashReturn>();
     public DbSet<RetailCreditPayment> RetailCreditPayments => Set<RetailCreditPayment>();
+    public DbSet<RetailCashRegisterSession> RetailCashRegisterSessions => Set<RetailCashRegisterSession>();
     public DbSet<RetailProduct> RetailProducts => Set<RetailProduct>();
     public DbSet<RetailProductUnit> RetailProductUnits => Set<RetailProductUnit>();
     public DbSet<RetailSupplier> RetailSuppliers => Set<RetailSupplier>();
@@ -886,6 +887,21 @@ public sealed class AppDbContext(DbContextOptions<AppDbContext> options)
             entity.Property(x => x.UnitPrice).HasPrecision(18, 2);
             entity.HasOne<RetailProduct>().WithMany().HasForeignKey(x => x.ProductId).OnDelete(DeleteBehavior.Restrict);
             entity.HasOne<RetailCashSale>().WithMany(x => x.Lines).HasForeignKey(x => x.SaleId);
+        });
+
+        builder.Entity<RetailCashRegisterSession>(entity =>
+        {
+            entity.Property(x => x.CurrencyCode).HasMaxLength(3).IsRequired();
+            entity.Property(x => x.RequestKey).HasMaxLength(80).IsRequired();
+            entity.Property(x => x.OpeningCash).HasPrecision(18, 2);
+            entity.ToTable(t => t.HasCheckConstraint("CK_RetailCashRegisterSessions_AmountsAndDates",
+                "[OpeningCash] >= 0 AND ([ClosedAtUtc] IS NULL OR [ClosedAtUtc] >= [OpenedAtUtc])"));
+            entity.HasIndex(x => new { x.BusinessId, x.RequestKey }).IsUnique();
+            entity.HasIndex(x => new { x.BusinessId, x.LocationId, x.ActorUserId })
+                .IsUnique().HasFilter("[ClosedAtUtc] IS NULL");
+            entity.HasOne<Business>().WithMany().HasForeignKey(x => x.BusinessId).OnDelete(DeleteBehavior.Restrict);
+            entity.HasOne<BusinessLocation>().WithMany().HasForeignKey(x => x.LocationId).OnDelete(DeleteBehavior.Restrict);
+            entity.HasOne<AppUser>().WithMany().HasForeignKey(x => x.ActorUserId).OnDelete(DeleteBehavior.Restrict);
         });
 
         builder.Entity<RetailCreditPayment>(entity =>

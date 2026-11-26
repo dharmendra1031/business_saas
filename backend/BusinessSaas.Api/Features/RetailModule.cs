@@ -17,7 +17,11 @@ public static class RetailModule
         app.MapRetailStockEndpoints();
         app.MapRetailAdjustmentEndpoints();
         app.MapRetailPurchaseEndpoints();
-        if (app.Environment.IsDevelopment()) app.MapRetailCashSales();
+        if (app.Environment.IsDevelopment())
+        {
+            app.MapRetailCashSales();
+            app.MapRetailCashRegister();
+        }
     }
 
     internal static bool IsDuplicateKey(DbUpdateException error) =>

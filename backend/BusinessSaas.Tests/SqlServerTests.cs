@@ -86,6 +86,7 @@ public sealed class SqlServerTests(Xunit.Abstractions.ITestOutputHelper output)
             Assert.Contains("20261118210000_RetailCashBasket", await db.Database.GetAppliedMigrationsAsync());
             Assert.Contains("20261125170000_RetailReadIndexes", await db.Database.GetAppliedMigrationsAsync());
             Assert.Contains("20261125180000_RetailExchangeLink", await db.Database.GetAppliedMigrationsAsync());
+            Assert.Contains("20261126190000_RetailCashRegisterSessions", await db.Database.GetAppliedMigrationsAsync());
             Assert.Equal(1, await db.Database.SqlQueryRaw<int>(
                 "SELECT COUNT(*) AS [Value] FROM sys.indexes WHERE object_id = OBJECT_ID('RetailCashReturns') " +
                 "AND name = 'IX_RetailCashReturns_ReplacementSaleId' AND is_unique = 1 AND has_filter = 1").SingleAsync());
@@ -1536,7 +1537,7 @@ public sealed class SqlServerTests(Xunit.Abstractions.ITestOutputHelper output)
         Assert.Equal(exchangeTotals.GetProperty("netSales").GetDecimal(),
             exchangeTotals.GetProperty("cashCollected").GetDecimal() - exchangeTotals.GetProperty("cashRefunded").GetDecimal());
 
-        // Run raceCompetingRequest exchange requests on independent authenticated clients.
+        // Run competing exchange requests on independent authenticated clients.
         using var secondOwner = factory.CreateClient();
         Assert.Equal(HttpStatusCode.NoContent, (await Post(secondOwner, "/api/auth/login",
             new { email = "sql-retail-flow-owner@example.test", password = "TestPassword123!" })).StatusCode);
@@ -2162,6 +2163,98 @@ public sealed class SqlServerTests(Xunit.Abstractions.ITestOutputHelper output)
         Assert.Empty(empty.GetProperty("items").EnumerateArray());
         Assert.Empty(empty.GetProperty("totals").EnumerateArray());
         Assert.Equal(HttpStatusCode.NotFound, (await stranger.GetAsync(path)).StatusCode);
+    }
+
+    [Fact]
+    [Trait("Database", "SqlServer")]
+    public async Task Cash_register_opening_is_scoped_idempotent_and_concurrent()
+    {
+        var connectionString = Environment.GetEnvironmentVariable("SQLSERVER_TEST_CONNECTION");
+        if (string.IsNullOrWhiteSpace(connectionString)) return;
+
+        using var factory = new WebApplicationFactory<Program>().WithWebHostBuilder(builder =>
+        {
+            builder.UseEnvironment("Development");
+            builder.UseSetting("RetailCashRegister:OpeningEnabled", "true");
+            builder.ConfigureServices(services =>
+            {
+                services.RemoveAll<DbContextOptions<AppDbContext>>();
+                services.RemoveAll<IDbContextOptionsConfiguration<AppDbContext>>();
+                services.AddDbContext<AppDbContext>(options => options.UseSqlServer(connectionString));
+            });
+        });
+        using var owner = factory.CreateClient();
+        using var secondOwner = factory.CreateClient();
+        using var cashier = factory.CreateClient();
+        using var manager = factory.CreateClient();
+        using var stranger = factory.CreateClient();
+        await RegisterAndLogin(owner, "sql-register-owner@example.test");
+        await RegisterAndLogin(cashier, "sql-register-cashier@example.test");
+        await RegisterAndLogin(manager, "sql-register-manager@example.test");
+        await RegisterAndLogin(stranger, "sql-register-stranger@example.test");
+        Assert.Equal(HttpStatusCode.NoContent, (await Post(secondOwner, "/api/auth/login",
+            new { email = "sql-register-owner@example.test", password = "TestPassword123!" })).StatusCode);
+        var businessId = await BusinessFixtures.SeedAsync(factory.Services, owner, "Register Test", "sql-register-test");
+        var otherBusiness = await BusinessFixtures.SeedAsync(factory.Services, stranger, "Foreign Register", "sql-register-foreign");
+        long locationId, foreignLocationId;
+        using (var scope = factory.Services.CreateScope())
+        {
+            var db = scope.ServiceProvider.GetRequiredService<AppDbContext>();
+            locationId = await db.BusinessLocations.Where(x => x.BusinessId == businessId).Select(x => x.Id).SingleAsync();
+            foreignLocationId = await db.BusinessLocations.Where(x => x.BusinessId == otherBusiness).Select(x => x.Id).SingleAsync();
+            foreach (var (email, role) in new[] { ("sql-register-cashier@example.test", "Cashier"),
+                ("sql-register-manager@example.test", "Manager") })
+                db.BusinessUsers.Add(new BusinessUser { BusinessId = businessId, RoleCode = role,
+                    UserId = await db.Users.Where(x => x.Email == email).Select(x => x.Id).SingleAsync() });
+            await db.SaveChangesAsync();
+        }
+        var path = $"/api/businesses/{businessId}/cash-register";
+        var current = path + "/current?locationId=" + locationId;
+        var opening = new { locationId, openingCash = 2000m, requestKey = "sql-register-opening-owner" };
+        Assert.True((await owner.GetFromJsonAsync<JsonElement>(current)).GetProperty("canOpen").GetBoolean());
+        Assert.Equal(HttpStatusCode.NotFound, (await stranger.GetAsync(current)).StatusCode);
+        Assert.Equal(HttpStatusCode.NotFound, (await manager.GetAsync(current)).StatusCode);
+        Assert.Equal(HttpStatusCode.NotFound, (await Post(owner, path + "/open",
+            opening with { locationId = foreignLocationId })).StatusCode);
+        Assert.Equal(HttpStatusCode.BadRequest, (await Post(owner, path + "/open",
+            opening with { openingCash = -1m })).StatusCode);
+        Assert.Equal(HttpStatusCode.BadRequest, (await Post(owner, path + "/open",
+            opening with { openingCash = 0.001m })).StatusCode);
+        var competing = opening with { requestKey = "sql-register-opening-competing" };
+        var results = await Task.WhenAll(Post(owner, path + "/open", opening), Post(secondOwner, path + "/open", competing));
+        using var first = results[0];
+        using var second = results[1];
+        foreach (var response in results)
+            Assert.True(response.StatusCode is HttpStatusCode.OK or HttpStatusCode.Conflict,
+                await response.Content.ReadAsStringAsync());
+        Assert.True(results.Count(x => x.StatusCode == HttpStatusCode.OK) <= 1);
+        var winner = second.StatusCode == HttpStatusCode.OK ? competing : opening;
+        using var replay = await Post(owner, path + "/open", winner);
+        Assert.Equal(HttpStatusCode.OK, replay.StatusCode);
+        var opened = await replay.Content.ReadFromJsonAsync<JsonElement>();
+        Assert.Equal(2000m, opened.GetProperty("openingCash").GetDecimal());
+        Assert.Equal("INR", opened.GetProperty("currencyCode").GetString());
+        Assert.Equal(HttpStatusCode.Conflict, (await Post(owner, path + "/open",
+            winner with { openingCash = 3000m })).StatusCode);
+        Assert.Equal(HttpStatusCode.Conflict, (await Post(owner, path + "/open",
+            winner with { requestKey = "sql-register-opening-extra" })).StatusCode);
+        var currentOwner = await owner.GetFromJsonAsync<JsonElement>(current);
+        Assert.False(currentOwner.GetProperty("canOpen").GetBoolean());
+        Assert.Equal(opened.GetProperty("id").GetInt64(), currentOwner.GetProperty("session").GetProperty("id").GetInt64());
+        Assert.Equal(JsonValueKind.Null, (await cashier.GetFromJsonAsync<JsonElement>(current)).GetProperty("session").ValueKind);
+        Assert.Equal(HttpStatusCode.Conflict, (await Post(cashier, path + "/open", winner)).StatusCode);
+        using var cashierOpen = await Post(cashier, path + "/open",
+            opening with { requestKey = "sql-register-opening-cashier", openingCash = 0m });
+        Assert.Equal(HttpStatusCode.OK, cashierOpen.StatusCode);
+        Assert.Equal(HttpStatusCode.NotFound, (await Post(manager, path + "/open", opening)).StatusCode);
+        using (var scope = factory.Services.CreateScope())
+        {
+            var db = scope.ServiceProvider.GetRequiredService<AppDbContext>();
+            Assert.Equal(2, await db.RetailCashRegisterSessions.CountAsync(x => x.BusinessId == businessId));
+            Assert.Equal(2, await db.RetailCashRegisterSessions.Where(x => x.BusinessId == businessId)
+                .Select(x => x.ActorUserId).Distinct().CountAsync());
+            Assert.False(await db.RetailCashSales.AnyAsync(x => x.BusinessId == businessId));
+        }
     }
 
     private static async Task RegisterAndLogin(HttpClient client, string email)

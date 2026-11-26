@@ -2006,6 +2006,27 @@ namespace BusinessSaas.Api.Data.Migrations
                 });
 
             modelBuilder.Entity("BusinessSaas.Api.Data.RetailProduct", b => b.Navigation("Conversions"));
+            modelBuilder.Entity("BusinessSaas.Api.Data.RetailCashRegisterSession", b =>
+                {
+                    b.Property<long>("Id").ValueGeneratedOnAdd().HasColumnType("bigint");
+                    SqlServerPropertyBuilderExtensions.UseIdentityColumn(b.Property<long>("Id"));
+                    b.Property<long>("ActorUserId").HasColumnType("bigint");
+                    b.Property<long>("BusinessId").HasColumnType("bigint");
+                    b.Property<DateTime?>("ClosedAtUtc").HasColumnType("datetime2");
+                    b.Property<string>("CurrencyCode").IsRequired().HasMaxLength(3).HasColumnType("nvarchar(3)");
+                    b.Property<long>("LocationId").HasColumnType("bigint");
+                    b.Property<DateTime>("OpenedAtUtc").HasColumnType("datetime2");
+                    b.Property<decimal>("OpeningCash").HasPrecision(18, 2).HasColumnType("decimal(18,2)");
+                    b.Property<string>("RequestKey").IsRequired().HasMaxLength(80).HasColumnType("nvarchar(80)");
+                    b.HasKey("Id");
+                    b.HasIndex("ActorUserId");
+                    b.HasIndex("LocationId");
+                    b.HasIndex("BusinessId", "RequestKey").IsUnique();
+                    b.HasIndex("BusinessId", "LocationId", "ActorUserId").IsUnique().HasFilter("[ClosedAtUtc] IS NULL");
+                    b.ToTable("RetailCashRegisterSessions", t => t.HasCheckConstraint("CK_RetailCashRegisterSessions_AmountsAndDates",
+                        "[OpeningCash] >= 0 AND ([ClosedAtUtc] IS NULL OR [ClosedAtUtc] >= [OpenedAtUtc])"));
+                });
+
             modelBuilder.Entity("BusinessSaas.Api.Data.RetailCreditPayment", b =>
                 {
                     b.Property<long>("Id").ValueGeneratedOnAdd().HasColumnType("bigint");
@@ -2021,6 +2042,16 @@ namespace BusinessSaas.Api.Data.Migrations
                     b.HasIndex("SaleId");
                     b.HasIndex("BusinessId", "RequestKey").IsUnique();
                     b.ToTable("RetailCreditPayments");
+                });
+
+            modelBuilder.Entity("BusinessSaas.Api.Data.RetailCashRegisterSession", b =>
+                {
+                    b.HasOne("BusinessSaas.Api.Data.AppUser", null).WithMany().HasForeignKey("ActorUserId")
+                        .OnDelete(DeleteBehavior.Restrict).IsRequired();
+                    b.HasOne("BusinessSaas.Api.Data.Business", null).WithMany().HasForeignKey("BusinessId")
+                        .OnDelete(DeleteBehavior.Restrict).IsRequired();
+                    b.HasOne("BusinessSaas.Api.Data.BusinessLocation", null).WithMany().HasForeignKey("LocationId")
+                        .OnDelete(DeleteBehavior.Restrict).IsRequired();
                 });
 
             modelBuilder.Entity("BusinessSaas.Api.Data.RetailCreditPayment", b =>

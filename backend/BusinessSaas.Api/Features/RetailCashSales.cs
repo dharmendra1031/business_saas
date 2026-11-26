@@ -39,8 +39,8 @@ public static class RetailCashSales
         credit.MapGet("/business-invoices/{receiptId:long}/pdf", CreditInvoicePdf);
     }
 
-    private static async Task<Business?> Shop(AppDbContext db, long businessId, long actor, long locationId,
-        bool ownerOnly = false, CancellationToken cancellationToken = default)
+    internal static async Task<Business?> Shop(AppDbContext db, long businessId, long actor, long locationId,
+        bool ownerOnly = false, CancellationToken cancellationToken = default, bool allowManager = true)
     {
         return await (from b in db.Businesses.AsNoTracking()
                       join t in db.BusinessTypes on b.BusinessTypeId equals t.Id
@@ -48,7 +48,7 @@ public static class RetailCashSales
                       join loc in db.BusinessLocations on b.Id equals loc.BusinessId
                       where b.Id == businessId && t.Code == "RETAIL" && m.UserId == actor &&
                           loc.Id == locationId && (m.RoleCode == "Owner" ||
-                          (!ownerOnly && loc.IsPrimary && (m.RoleCode == "Cashier" || m.RoleCode == "Manager")))
+                          (!ownerOnly && loc.IsPrimary && (m.RoleCode == "Cashier" || allowManager && m.RoleCode == "Manager")))
                       select b).SingleOrDefaultAsync(cancellationToken);
     }
 
