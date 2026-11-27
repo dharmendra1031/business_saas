@@ -15,6 +15,7 @@ public static class RetailCashRegister
         var group = app.MapGroup("/api/businesses/{businessId:long}/cash-register").RequireAuthorization();
         group.MapGet("/current", Current);
         group.MapPost("/open", Open);
+        group.MapGet("/{sessionId:long}/summary", Summary);
     }
 
     private static IQueryable<RetailCashRegisterSession> Active(AppDbContext db, long businessId, long locationId, long actor) =>
@@ -67,6 +68,76 @@ public static class RetailCashRegister
         var session = await Active(db, businessId, locationId, actor).SingleOrDefaultAsync(cancellationToken);
         return Results.Ok(new { business.CurrencyCode, CanOpen = session is null &&
             await CanOpen(db, businessId, config, cancellationToken), Session = session is null ? null : Detail(session) });
+    }
+
+    // Owner-only preview of linked posted cash. Closing must recalculate within its own transaction.
+    private static async Task<IResult> Summary(long businessId, long sessionId, long locationId,
+        ClaimsPrincipal user, AppDbContext db, CancellationToken cancellationToken)
+    {
+        if (!long.TryParse(user.FindFirstValue(ClaimTypes.NameIdentifier), out var actor))
+            return Results.NotFound();
+
+        try
+        {
+            await using var tx = await db.Database.BeginTransactionAsync(IsolationLevel.Serializable, cancellationToken);
+            if (await RetailCashSales.Shop(db, businessId, actor, locationId, ownerOnly: true,
+                cancellationToken: cancellationToken) is null) return Results.NotFound();
+
+            var session = await db.RetailCashRegisterSessions.AsNoTracking().SingleOrDefaultAsync(x =>
+                x.Id == sessionId && x.BusinessId == businessId && x.LocationId == locationId, cancellationToken);
+            if (session is null) return Results.NotFound();
+
+            var sales = db.RetailCashSales.AsNoTracking();
+            var returns = db.RetailCashReturns.AsNoTracking();
+            var linkedSales = sales.Where(x => x.RegisterSessionId == session.Id);
+            var linkedReturns = returns.Where(x => x.RegisterSessionId == session.Id);
+            var payments = db.RetailCreditPayments.AsNoTracking().Where(x => x.RegisterSessionId == session.Id);
+            var cashDocuments = sales.Where(x => x.BusinessId == businessId && x.LocationId == locationId &&
+                x.CurrencyCode == session.CurrencyCode && x.CreditDueDate == null);
+            var creditDocuments = sales.Where(x => x.BusinessId == businessId && x.LocationId == locationId &&
+                x.CurrencyCode == session.CurrencyCode && x.CreditDueDate != null);
+
+            // Reject inconsistent links rather than silently excluding financial records.
+            if (await linkedSales.AnyAsync(x => x.BusinessId != businessId || x.LocationId != locationId ||
+                    x.CurrencyCode != session.CurrencyCode || x.CashierId != session.ActorUserId ||
+                    x.CreditDueDate != null || x.PostedAtUtc < session.OpenedAtUtc ||
+                    (session.ClosedAtUtc != null && x.PostedAtUtc > session.ClosedAtUtc) ||
+                    returns.Any(r => r.ReplacementSaleId == x.Id &&
+                        (r.BusinessId != businessId || r.RegisterSessionId != session.Id)), cancellationToken) ||
+                await linkedReturns.AnyAsync(r => r.BusinessId != businessId ||
+                    r.ActorUserId != session.ActorUserId || r.PostedAtUtc < session.OpenedAtUtc ||
+                    (session.ClosedAtUtc != null && r.PostedAtUtc > session.ClosedAtUtc) ||
+                    !cashDocuments.Any(s => s.Id == r.SaleId) ||
+                    (r.ReplacementSaleId == null && r.NetCashSettlement != null) ||
+                    (r.ReplacementSaleId != null && (r.NetCashSettlement == null ||
+                        !linkedSales.Any(s => s.Id == r.ReplacementSaleId &&
+                            s.Total - r.Total == r.NetCashSettlement))), cancellationToken) ||
+                await payments.AnyAsync(x => x.BusinessId != businessId || x.ActorUserId != session.ActorUserId ||
+                    x.PostedAtUtc < session.OpenedAtUtc ||
+                    (session.ClosedAtUtc != null && x.PostedAtUtc > session.ClosedAtUtc) ||
+                    !creditDocuments.Any(s => s.Id == x.SaleId), cancellationToken))
+                return Results.Conflict(new { code = "REGISTER_RECONCILIATION_REQUIRED",
+                    message = "Register posting links require reconciliation." });
+
+            // A replacement invoice is not another cash sale. Its return records the net exchange settlement.
+            var cashSales = await linkedSales.Where(s => !returns.Any(r => r.ReplacementSaleId == s.Id))
+                .SumAsync(s => (decimal?)s.Total, cancellationToken) ?? 0m;
+            var refunds = await linkedReturns.Where(r => r.ReplacementSaleId == null)
+                .SumAsync(r => (decimal?)r.Total, cancellationToken) ?? 0m;
+            var exchangeSettlement = await linkedReturns.Where(r => r.ReplacementSaleId != null)
+                .SumAsync(r => r.NetCashSettlement, cancellationToken) ?? 0m;
+            var creditCollections = await payments.SumAsync(x => (decimal?)x.Amount, cancellationToken) ?? 0m;
+            var expectedCash = session.OpeningCash + cashSales - refunds + exchangeSettlement + creditCollections;
+            await tx.CommitAsync(cancellationToken);
+
+            return Results.Ok(new { SessionId = session.Id, session.CurrencyCode, session.OpeningCash,
+                CashSales = cashSales, CashRefunds = refunds, NetExchangeSettlement = exchangeSettlement,
+                CreditCollections = creditCollections, ExpectedCash = expectedCash });
+        }
+        catch (Exception error) when (StockPosting.IsSqlConflict(error))
+        {
+            return Results.Conflict(new { message = "Register transactions are changing. Reload the summary." });
+        }
     }
 
     private static async Task<IResult> Open(long businessId, OpenRequest request, ClaimsPrincipal user,

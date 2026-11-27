@@ -544,6 +544,14 @@ public sealed class SqlServerTests(Xunit.Abstractions.ITestOutputHelper output)
         var sale = await saleResponse.Content.ReadFromJsonAsync<JsonElement>();
         Assert.Equal(30m, sale.GetProperty("total").GetDecimal());
         Assert.Equal("SQL Retail Flow", sale.GetProperty("businessName").GetString());
+        string RegisterSummary(long id) => prefix + "/cash-register/" + id + "/summary?locationId=" + locationId;
+        var firstSummary = await owner.GetFromJsonAsync<JsonElement>(RegisterSummary(cashierRegisterId));
+        Assert.Equal(100m, firstSummary.GetProperty("openingCash").GetDecimal());
+        Assert.Equal(30m, firstSummary.GetProperty("cashSales").GetDecimal());
+        Assert.Equal(130m, firstSummary.GetProperty("expectedCash").GetDecimal());
+        Assert.Equal(HttpStatusCode.NotFound, (await cashier.GetAsync(RegisterSummary(cashierRegisterId))).StatusCode);
+        Assert.Equal(HttpStatusCode.NotFound, (await stranger.GetAsync(RegisterSummary(cashierRegisterId))).StatusCode);
+        Assert.Equal(HttpStatusCode.NotFound, (await owner.GetAsync(RegisterSummary(long.MaxValue))).StatusCode);
         var originalLine = sale.GetProperty("lines")[0];
         Assert.Equal(0.375m, originalLine.GetProperty("quantity").GetDecimal());
         Assert.Equal(30m, originalLine.GetProperty("lineTotal").GetDecimal());
@@ -1671,6 +1679,22 @@ public sealed class SqlServerTests(Xunit.Abstractions.ITestOutputHelper output)
             Assert.All(payments, x => Assert.Equal(ownerRegisterId, x.RegisterSessionId));
             Assert.False(await db.RetailCashSales.AnyAsync(x => x.BusinessId == businessId &&
                 x.CreditDueDate != null && x.RegisterSessionId != null));
+
+            var ownerSummary = await owner.GetFromJsonAsync<JsonElement>(RegisterSummary(ownerRegisterId));
+            var refundTotal = returns.Where(x => x.ReplacementSaleId == null).Sum(x => x.Total);
+            var exchangeTotal = returns.Where(x => x.ReplacementSaleId != null).Sum(x => x.NetCashSettlement!.Value);
+            var collections = payments.Sum(x => x.Amount);
+            Assert.Equal(0m, ownerSummary.GetProperty("cashSales").GetDecimal());
+            Assert.Equal(refundTotal, ownerSummary.GetProperty("cashRefunds").GetDecimal());
+            Assert.Equal(exchangeTotal, ownerSummary.GetProperty("netExchangeSettlement").GetDecimal());
+            Assert.Equal(collections, ownerSummary.GetProperty("creditCollections").GetDecimal());
+            Assert.Equal(100m - refundTotal + exchangeTotal + collections,
+                ownerSummary.GetProperty("expectedCash").GetDecimal());
+
+            var cashierSummary = await owner.GetFromJsonAsync<JsonElement>(RegisterSummary(cashierRegisterId));
+            var cashierCash = cashDocuments.Where(x => !replacementIds.Contains(x.Id)).Sum(x => x.Total);
+            Assert.Equal(cashierCash, cashierSummary.GetProperty("cashSales").GetDecimal());
+            Assert.Equal(100m + cashierCash, cashierSummary.GetProperty("expectedCash").GetDecimal());
         }
     }
 
