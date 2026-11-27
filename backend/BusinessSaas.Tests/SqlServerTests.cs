@@ -1025,27 +1025,46 @@ public sealed class SqlServerTests(Xunit.Abstractions.ITestOutputHelper output)
         var zone = TimeZoneInfo.FindSystemTimeZoneById(sale.GetProperty("timeZoneId").GetString()!);
         var reportDate = DateOnly.FromDateTime(TimeZoneInfo.ConvertTimeFromUtc(returnUtc, zone));
         var earlierUtc = returnUtc.AddDays(-2);
+        var backdatedSaleId = sale.GetProperty("id").GetInt64();
+        DateTime originalPostedAtUtc;
         using (var scope = factory.Services.CreateScope())
         {
             var db = scope.ServiceProvider.GetRequiredService<AppDbContext>();
-            await db.RetailCashSales.Where(x => x.Id == sale.GetProperty("id").GetInt64())
+            originalPostedAtUtc = await db.RetailCashSales.Where(x => x.Id == backdatedSaleId)
+                .Select(x => x.PostedAtUtc).SingleAsync();
+            await db.RetailCashSales.Where(x => x.Id == backdatedSaleId)
                 .ExecuteUpdateAsync(set => set.SetProperty(x => x.PostedAtUtc, earlierUtc));
         }
         var dailyPath = prefix + "/cash-sales/daily-report?locationId=" + locationId + "&date=";
-        var earlierDate = DateOnly.FromDateTime(TimeZoneInfo.ConvertTimeFromUtc(earlierUtc, zone));
-        var earlierReport = await owner.GetFromJsonAsync<JsonElement>(dailyPath + earlierDate.ToString("yyyy-MM-dd"));
-        var earlierTotal = earlierReport.GetProperty("totals")[0];
-        Assert.Equal(30m, earlierTotal.GetProperty("salesTotal").GetDecimal());
-        Assert.Equal(0m, earlierTotal.GetProperty("refundTotal").GetDecimal());
-        Assert.Equal(30m, earlierTotal.GetProperty("netSales").GetDecimal());
-        Assert.Equal(30m, earlierTotal.GetProperty("cashCollected").GetDecimal());
-        Assert.Equal(0m, earlierTotal.GetProperty("cashRefunded").GetDecimal());
-        var dailyReport = await owner.GetFromJsonAsync<JsonElement>(dailyPath + reportDate.ToString("yyyy-MM-dd"));
-        var todayTotal = dailyReport.GetProperty("totals")[0];
-        Assert.True(todayTotal.GetProperty("refundTotal").GetDecimal() >= 10m);
-        Assert.Equal(todayTotal.GetProperty("salesTotal").GetDecimal() - todayTotal.GetProperty("refundTotal").GetDecimal(),
-            todayTotal.GetProperty("netSales").GetDecimal());
-        Assert.Equal(HttpStatusCode.NotFound, (await cashier.GetAsync(dailyPath + reportDate.ToString("yyyy-MM-dd"))).StatusCode);
+        try
+        {
+            var earlierDate = DateOnly.FromDateTime(TimeZoneInfo.ConvertTimeFromUtc(earlierUtc, zone));
+            var earlierReport = await owner.GetFromJsonAsync<JsonElement>(dailyPath + earlierDate.ToString("yyyy-MM-dd"));
+            var earlierTotal = earlierReport.GetProperty("totals")[0];
+            Assert.Equal(30m, earlierTotal.GetProperty("salesTotal").GetDecimal());
+            Assert.Equal(0m, earlierTotal.GetProperty("refundTotal").GetDecimal());
+            Assert.Equal(30m, earlierTotal.GetProperty("netSales").GetDecimal());
+            Assert.Equal(30m, earlierTotal.GetProperty("cashCollected").GetDecimal());
+            Assert.Equal(0m, earlierTotal.GetProperty("cashRefunded").GetDecimal());
+            var dailyReport = await owner.GetFromJsonAsync<JsonElement>(dailyPath + reportDate.ToString("yyyy-MM-dd"));
+            var todayTotal = dailyReport.GetProperty("totals")[0];
+            Assert.True(todayTotal.GetProperty("refundTotal").GetDecimal() >= 10m);
+            Assert.Equal(todayTotal.GetProperty("salesTotal").GetDecimal() - todayTotal.GetProperty("refundTotal").GetDecimal(),
+                todayTotal.GetProperty("netSales").GetDecimal());
+            Assert.Equal(HttpStatusCode.NotFound, (await cashier.GetAsync(dailyPath + reportDate.ToString("yyyy-MM-dd"))).StatusCode);
+            using var invalidSummary = await owner.GetAsync(RegisterSummary(cashierRegisterId));
+            Assert.Equal(HttpStatusCode.Conflict, invalidSummary.StatusCode);
+            Assert.Equal("REGISTER_RECONCILIATION_REQUIRED",
+                (await invalidSummary.Content.ReadFromJsonAsync<JsonElement>()).GetProperty("code").GetString());
+        }
+        finally
+        {
+            // Restore the synthetic timestamp before testing register reconciliation.
+            using var scope = factory.Services.CreateScope();
+            var db = scope.ServiceProvider.GetRequiredService<AppDbContext>();
+            await db.RetailCashSales.Where(x => x.Id == backdatedSaleId)
+                .ExecuteUpdateAsync(set => set.SetProperty(x => x.PostedAtUtc, originalPostedAtUtc));
+        }
 
         // Converted purchase quantities use the factor recorded on the PO, not a later master edit.
         var boxId = await Created(prefix + "/units", new { name = "SQL Box", code = "SQBOX" });
