@@ -2035,6 +2035,16 @@ try {
 
   {
     const t = await scenario('owner-credit-payment-recovery', { role: 'Owner', hasProducts: true })
+    let registerSession = null
+    await t.page.route('**/api/businesses/1/cash-register/current?*', route => {
+      assert.equal(new URL(route.request().url()).searchParams.get('locationId'), '1')
+      return response(route, 200, { currencyCode: 'INR', canOpen: !registerSession, session: registerSession })
+    })
+    await t.page.route('**/api/businesses/1/cash-register/open', route => {
+      registerSession = { ...route.request().postDataJSON(), id: 95, actorUserId: 10,
+        currencyCode: 'INR', openedAtUtc: '2026-11-27T09:00:00Z', closedAtUtc: null }
+      return response(route, 200, registerSession)
+    })
     let saved = null
     let posts = 0
     let limit = 500
@@ -2052,9 +2062,9 @@ try {
       total: 1, page: 1, pageSize: 20
     }))
     await t.page.route('**/api/businesses/1/customers/61/credit-ledger?*', route => response(route, 200, {
-      customerId: 61, name: 'Credit Customer', creditLimit: limit, canCollect: true,
+      customerId: 61, name: 'Credit Customer', creditLimit: limit, canCollect: true, registerRequired: true,
       totals: [{ currencyCode: 'INR', debit: 100, paid: saved ? 40 : 0, outstanding: saved ? 60 : 100, invoiceCount: 1 }],
-      items: [{ id: 81, locationName: 'Main Shop', currencyCode: 'INR', debit: 100, paid: saved ? 40 : 0,
+      items: [{ id: 81, locationId: 1, locationName: 'Main Shop', currencyCode: 'INR', debit: 100, paid: saved ? 40 : 0,
         outstanding: saved ? 60 : 100, creditDueDate: '2026-12-02', postedAtUtc: '2026-11-25T04:00:00Z' }],
       hasMore: false
     }))
@@ -2104,6 +2114,13 @@ try {
     await t.page.getByRole('button', { name: 'Credit ledger for Credit Customer' }).click()
     assert.equal(await t.page.locator('#contact-search').count(), 0, 'Ledger opens without the customer register')
     await t.page.getByRole('button', { name: 'Receive payment #81' }).click()
+    const paymentRegister = t.page.getByRole('region', { name: 'Cash register' })
+    await paymentRegister.getByRole('button', { name: 'Open Shift' }).waitFor()
+    assert.equal(await t.page.getByLabel('Cash received (INR)', { exact: true }).isDisabled(), true)
+    assert.equal(await t.page.getByLabel('Cash already received for this invoice.').isDisabled(), true)
+    await paymentRegister.getByLabel('Opening cash (INR)').fill('100')
+    await paymentRegister.getByRole('button', { name: 'Open Shift' }).click()
+    await paymentRegister.getByText('Shift #95 open · Opening cash INR 100.00').waitFor()
     await t.page.getByLabel('Cash received (INR)', { exact: true }).fill('40')
     assert.equal(await t.page.getByRole('button', { name: 'Record payment', exact: true }).isDisabled(), true)
     await t.page.getByLabel('Cash already received for this invoice.').check()
@@ -2434,6 +2451,19 @@ try {
 
   {
     const t = await scenario('business-owner-all-tabs', { role: 'Owner', hasProducts: true })
+    let registerSession = null
+    await t.page.route('**/api/businesses/1/cash-register/current?*', route => {
+      assert.equal(new URL(route.request().url()).searchParams.get('locationId'), '1')
+      return response(route, 200, { currencyCode: 'INR', canOpen: !registerSession, session: registerSession })
+    })
+    await t.page.route('**/api/businesses/1/cash-register/open', route => {
+      registerSession = { ...route.request().postDataJSON(), id: 95, actorUserId: 10,
+        currencyCode: 'INR', openedAtUtc: '2026-11-27T09:00:00Z', closedAtUtc: null }
+      return response(route, 200, registerSession)
+    })
+    await t.page.route('**/api/businesses/1/dashboard', route => response(route, 200, {
+      ...dashboard('Owner', true), cashRegisterRequired: true
+    }))
     await t.page.route('**/api/businesses/1/staff', route =>
       response(route, 200, [{ userId: 10, email: 'qa@example.test', roleCode: 'Owner' }]))
     await t.login()
@@ -2597,6 +2627,12 @@ try {
         assert.equal(await record.isDisabled(), true)
         await estimate.getByLabel('Stock disposition — Loose Rice').selectOption('no-stock')
         await estimate.getByLabel('Return reason').fill('Damaged goods')
+        const returnRegister = estimate.getByRole('region', { name: 'Cash register' })
+        await returnRegister.getByRole('button', { name: 'Open Shift' }).waitFor()
+        assert.equal(await estimate.getByRole('checkbox').isDisabled(), true)
+        await returnRegister.getByLabel('Opening cash (INR)').fill('100')
+        await returnRegister.getByRole('button', { name: 'Open Shift' }).click()
+        await returnRegister.getByText('Shift #95 open · Opening cash INR 100.00').waitFor()
         await estimate.getByRole('checkbox').check()
         await t.screenshot('BUS-38-return-confirmation-desktop')
         const viewport = t.page.viewportSize()
@@ -2619,6 +2655,7 @@ try {
         await receipt.getByRole('button', { name: 'Estimate return' }).click()
         await receipt.getByText('Sold: 0.25 · Returned: 0.175 · Remaining: 0.075 KG', { exact: true }).waitFor()
         await receipt.getByRole('button', { name: 'Close estimate' }).click()
+        registerSession = null
         let exchangePosts = 0
         let savedExchange
         await t.page.route('**/api/businesses/1/cash-sales/business-receipts/42/exchange-estimate', route =>
@@ -2649,6 +2686,12 @@ try {
         const postExchange = exchange.getByRole('button', { name: 'Record exchange' })
         assert.equal(await postExchange.isDisabled(), true)
         await exchange.getByLabel('Exchange reason').fill('Customer exchange')
+        const exchangeRegister = exchange.getByRole('region', { name: 'Cash register' })
+        await exchangeRegister.getByRole('button', { name: 'Open Shift' }).waitFor()
+        assert.equal(await exchange.getByRole('checkbox').isDisabled(), true)
+        await exchangeRegister.getByLabel('Opening cash (INR)').fill('100')
+        await exchangeRegister.getByRole('button', { name: 'Open Shift' }).click()
+        await exchangeRegister.getByText('Shift #95 open · Opening cash INR 100.00').waitFor()
         await exchange.getByRole('checkbox').check()
         await postExchange.click()
         const exchangeRecovery = receipt.getByRole('region', { name: 'Exchange recovery' })
