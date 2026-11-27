@@ -88,6 +88,7 @@ public sealed class SqlServerTests(Xunit.Abstractions.ITestOutputHelper output)
             Assert.Contains("20261125180000_RetailExchangeLink", await db.Database.GetAppliedMigrationsAsync());
             Assert.Contains("20261126190000_RetailCashRegisterSessions", await db.Database.GetAppliedMigrationsAsync());
             Assert.Contains("20261127090000_RetailCashRegisterPostingLinks", await db.Database.GetAppliedMigrationsAsync());
+            Assert.Contains("20261127110000_RetailCashRegisterMovements", await db.Database.GetAppliedMigrationsAsync());
             Assert.Equal(1, await db.Database.SqlQueryRaw<int>(
                 "SELECT COUNT(*) AS [Value] FROM sys.indexes WHERE object_id = OBJECT_ID('RetailCashReturns') " +
                 "AND name = 'IX_RetailCashReturns_ReplacementSaleId' AND is_unique = 1 AND has_filter = 1").SingleAsync());
@@ -2240,6 +2241,8 @@ public sealed class SqlServerTests(Xunit.Abstractions.ITestOutputHelper output)
         {
             builder.UseEnvironment("Development");
             builder.UseSetting("RetailCashRegister:OpeningEnabled", "true");
+            builder.UseSetting("RetailCashRegister:LinkingEnabled", "true");
+            builder.UseSetting("RetailCashRegister:MovementsEnabled", "true");
             builder.ConfigureServices(services =>
             {
                 services.RemoveAll<DbContextOptions<AppDbContext>>();
@@ -2311,6 +2314,37 @@ public sealed class SqlServerTests(Xunit.Abstractions.ITestOutputHelper output)
             opening with { requestKey = "sql-register-opening-cashier", openingCash = 0m });
         Assert.Equal(HttpStatusCode.OK, cashierOpen.StatusCode);
         Assert.Equal(HttpStatusCode.NotFound, (await Post(manager, path + "/open", opening)).StatusCode);
+
+        var registerId = opened.GetProperty("id").GetInt64();
+        var movementPath = path + "/" + registerId + "/movements";
+        var movement = new { locationId, isCashIn = true, amount = 500m, reason = "Add change float",
+            requestKey = "sql-register-movement-cash-in" };
+        Assert.Equal(HttpStatusCode.NotFound, (await Post(cashier, movementPath, movement)).StatusCode);
+        Assert.Equal(HttpStatusCode.NotFound, (await Post(stranger, movementPath, movement)).StatusCode);
+        Assert.Equal(HttpStatusCode.NotFound, (await Post(manager, movementPath, movement)).StatusCode);
+        Assert.Equal(HttpStatusCode.NotFound, (await Post(owner, movementPath,
+            movement with { locationId = foreignLocationId })).StatusCode);
+        Assert.Equal(HttpStatusCode.BadRequest, (await Post(owner, movementPath, movement with { amount = 0m })).StatusCode);
+        Assert.Equal(HttpStatusCode.BadRequest, (await Post(owner, movementPath, movement with { amount = 0.001m })).StatusCode);
+        Assert.Equal(HttpStatusCode.BadRequest, (await Post(owner, movementPath, movement with { reason = "" })).StatusCode);
+        var cashInResponses = await Task.WhenAll(Post(owner, movementPath, movement), Post(secondOwner, movementPath, movement));
+        foreach (var response in cashInResponses)
+        {
+            using (response)
+                Assert.True(response.StatusCode is HttpStatusCode.OK or HttpStatusCode.Conflict,
+                    await response.Content.ReadAsStringAsync());
+        }
+        using var movementReplay = await Post(owner, movementPath, movement);
+        Assert.Equal(HttpStatusCode.OK, movementReplay.StatusCode);
+        Assert.Equal(HttpStatusCode.Conflict, (await Post(owner, movementPath, movement with { amount = 600m })).StatusCode);
+        Assert.Equal(HttpStatusCode.OK, (await Post(owner, movementPath, movement with {
+            isCashIn = false, amount = 125m, reason = "Cash transfer out", requestKey = "sql-register-movement-cash-out"
+        })).StatusCode);
+        var summary = await owner.GetFromJsonAsync<JsonElement>(path + "/" + registerId + "/summary?locationId=" + locationId);
+        Assert.Equal(500m, summary.GetProperty("cashIn").GetDecimal());
+        Assert.Equal(125m, summary.GetProperty("cashOut").GetDecimal());
+        Assert.Equal(2375m, summary.GetProperty("expectedCash").GetDecimal());
+
         using (var scope = factory.Services.CreateScope())
         {
             var db = scope.ServiceProvider.GetRequiredService<AppDbContext>();
@@ -2318,6 +2352,7 @@ public sealed class SqlServerTests(Xunit.Abstractions.ITestOutputHelper output)
             Assert.Equal(2, await db.RetailCashRegisterSessions.Where(x => x.BusinessId == businessId)
                 .Select(x => x.ActorUserId).Distinct().CountAsync());
             Assert.False(await db.RetailCashSales.AnyAsync(x => x.BusinessId == businessId));
+            Assert.Equal(2, await db.RetailCashRegisterMovements.CountAsync(x => x.RegisterSessionId == registerId));
         }
     }
 

@@ -452,6 +452,7 @@ public sealed class AppDbContext(DbContextOptions<AppDbContext> options)
     public DbSet<RetailCashReturn> RetailCashReturns => Set<RetailCashReturn>();
     public DbSet<RetailCreditPayment> RetailCreditPayments => Set<RetailCreditPayment>();
     public DbSet<RetailCashRegisterSession> RetailCashRegisterSessions => Set<RetailCashRegisterSession>();
+    public DbSet<RetailCashRegisterMovement> RetailCashRegisterMovements => Set<RetailCashRegisterMovement>();
     public DbSet<RetailProduct> RetailProducts => Set<RetailProduct>();
     public DbSet<RetailProductUnit> RetailProductUnits => Set<RetailProductUnit>();
     public DbSet<RetailSupplier> RetailSuppliers => Set<RetailSupplier>();
@@ -889,6 +890,18 @@ public sealed class AppDbContext(DbContextOptions<AppDbContext> options)
             entity.Property(x => x.UnitPrice).HasPrecision(18, 2);
             entity.HasOne<RetailProduct>().WithMany().HasForeignKey(x => x.ProductId).OnDelete(DeleteBehavior.Restrict);
             entity.HasOne<RetailCashSale>().WithMany(x => x.Lines).HasForeignKey(x => x.SaleId);
+        });
+
+        builder.Entity<RetailCashRegisterMovement>(entity =>
+        {
+            entity.Property(x => x.RequestKey).HasMaxLength(80).IsRequired();
+            entity.Property(x => x.Amount).HasPrecision(18, 2);
+            entity.Property(x => x.Reason).HasMaxLength(200).IsRequired();
+            entity.ToTable(t => t.HasCheckConstraint("CK_RetailCashRegisterMovements_Amount", "[Amount] > 0"));
+            entity.HasIndex(x => new { x.RegisterSessionId, x.RequestKey }).IsUnique();
+            entity.HasOne<RetailCashRegisterSession>().WithMany().HasForeignKey(x => x.RegisterSessionId)
+                .OnDelete(DeleteBehavior.Restrict);
+            entity.HasOne<AppUser>().WithMany().HasForeignKey(x => x.ActorUserId).OnDelete(DeleteBehavior.Restrict);
         });
 
         builder.Entity<RetailCashRegisterSession>(entity =>

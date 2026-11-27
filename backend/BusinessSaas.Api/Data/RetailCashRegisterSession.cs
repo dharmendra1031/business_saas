@@ -12,3 +12,16 @@ public sealed class RetailCashRegisterSession
     public DateTime OpenedAtUtc { get; set; }
     public DateTime? ClosedAtUtc { get; set; }
 }
+
+// Immutable non-sale cash movement; the register supplies tenant, location and currency.
+public sealed class RetailCashRegisterMovement
+{
+    public long Id { get; set; }
+    public long RegisterSessionId { get; set; }
+    public long ActorUserId { get; set; }
+    public string RequestKey { get; set; } = "";
+    public bool IsCashIn { get; set; }
+    public decimal Amount { get; set; }
+    public string Reason { get; set; } = "";
+    public DateTime PostedAtUtc { get; set; }
+}

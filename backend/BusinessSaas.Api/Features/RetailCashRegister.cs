@@ -9,6 +9,7 @@ namespace BusinessSaas.Api.Features;
 public static class RetailCashRegister
 {
     public sealed record OpenRequest(long LocationId, decimal? OpeningCash, string? RequestKey);
+    public sealed record MovementRequest(long LocationId, bool? IsCashIn, decimal? Amount, string? Reason, string? RequestKey);
 
     public static void MapRetailCashRegister(this WebApplication app)
     {
@@ -16,6 +17,7 @@ public static class RetailCashRegister
         group.MapGet("/current", Current);
         group.MapPost("/open", Open);
         group.MapGet("/{sessionId:long}/summary", Summary);
+        group.MapPost("/{sessionId:long}/movements", RecordMovement);
     }
 
     private static IQueryable<RetailCashRegisterSession> Active(AppDbContext db, long businessId, long locationId, long actor) =>
@@ -68,6 +70,71 @@ public static class RetailCashRegister
         var session = await Active(db, businessId, locationId, actor).SingleOrDefaultAsync(cancellationToken);
         return Results.Ok(new { business.CurrencyCode, CanOpen = session is null &&
             await CanOpen(db, businessId, config, cancellationToken), Session = session is null ? null : Detail(session) });
+    }
+
+    private static object MovementDetail(RetailCashRegisterMovement movement) => new
+    {
+        movement.Id, movement.RegisterSessionId, movement.ActorUserId, movement.IsCashIn, movement.Amount,
+        movement.Reason, movement.RequestKey,
+        PostedAtUtc = DateTime.SpecifyKind(movement.PostedAtUtc, DateTimeKind.Utc)
+    };
+
+    private static async Task<IResult> RecordMovement(long businessId, long sessionId, MovementRequest request,
+        ClaimsPrincipal user, AppDbContext db, IConfiguration config, CancellationToken cancellationToken)
+    {
+        if (!long.TryParse(user.FindFirstValue(ClaimTypes.NameIdentifier), out var actor))
+            return Results.NotFound();
+
+        try
+        {
+            await using var tx = await db.Database.BeginTransactionAsync(IsolationLevel.Serializable, cancellationToken);
+            if (await RetailCashSales.Shop(db, businessId, actor, request.LocationId, ownerOnly: true,
+                cancellationToken: cancellationToken) is null) return Results.NotFound();
+            var session = await db.RetailCashRegisterSessions.AsNoTracking().SingleOrDefaultAsync(x =>
+                x.Id == sessionId && x.BusinessId == businessId && x.LocationId == request.LocationId, cancellationToken);
+            if (session is null) return Results.NotFound();
+
+            var reason = request.Reason?.Trim() ?? "";
+            if (request.IsCashIn is not { } isCashIn || request.Amount is not { } amount ||
+                amount <= 0m || amount > 9999999999999999.99m || decimal.Round(amount, 2) != amount ||
+                reason.Length is < 5 or > 200 || string.IsNullOrWhiteSpace(request.RequestKey) ||
+                request.RequestKey.Length is < 12 or > 80)
+                return Results.BadRequest(new { message = "Enter a valid cash movement, reason and request key." });
+
+            var prior = await db.RetailCashRegisterMovements.AsNoTracking().SingleOrDefaultAsync(x =>
+                x.RegisterSessionId == sessionId && x.RequestKey == request.RequestKey, cancellationToken);
+            if (prior is not null)
+            {
+                if (prior.ActorUserId != actor || prior.IsCashIn != isCashIn || prior.Amount != amount || prior.Reason != reason)
+                    return Results.Conflict(new { message = "Request key belongs to a different cash movement." });
+                await tx.CommitAsync(cancellationToken);
+                return Results.Ok(MovementDetail(prior));
+            }
+
+            if (!config.GetValue<bool>("RetailCashRegister:MovementsEnabled") ||
+                !config.GetValue<bool>("RetailCashRegister:LinkingEnabled"))
+                return Results.Conflict(new { message = "Cash register movements are not released on this host." });
+            if (session.ClosedAtUtc is not null || session.OpenedAtUtc > DateTime.UtcNow)
+                return Results.Conflict(new { message = "Cash movements require an open register." });
+            var subscription = await db.BusinessSubscriptions.AsNoTracking()
+                .SingleOrDefaultAsync(x => x.BusinessId == businessId, cancellationToken);
+            if (subscription is null || !SubscriptionAccess.CanOperate(subscription, DateTime.UtcNow))
+                return Results.Conflict(new { message = "Business is not enabled for financial posting." });
+
+            var movement = new RetailCashRegisterMovement
+            {
+                RegisterSessionId = sessionId, ActorUserId = actor, RequestKey = request.RequestKey,
+                IsCashIn = isCashIn, Amount = amount, Reason = reason, PostedAtUtc = DateTime.UtcNow
+            };
+            db.RetailCashRegisterMovements.Add(movement);
+            await db.SaveChangesAsync(cancellationToken);
+            await tx.CommitAsync(cancellationToken);
+            return Results.Ok(MovementDetail(movement));
+        }
+        catch (Exception error) when (StockPosting.IsSqlConflict(error))
+        {
+            return Results.Conflict(new { message = "Register is being updated. Retry the same request key." });
+        }
     }
 
     // Owner-only preview of linked posted cash. Closing must recalculate within its own transaction.
@@ -127,12 +194,19 @@ public static class RetailCashRegister
             var exchangeSettlement = await linkedReturns.Where(r => r.ReplacementSaleId != null)
                 .SumAsync(r => r.NetCashSettlement, cancellationToken) ?? 0m;
             var creditCollections = await payments.SumAsync(x => (decimal?)x.Amount, cancellationToken) ?? 0m;
-            var expectedCash = session.OpeningCash + cashSales - refunds + exchangeSettlement + creditCollections;
+            var movements = db.RetailCashRegisterMovements.AsNoTracking().Where(x => x.RegisterSessionId == session.Id);
+            if (await movements.AnyAsync(x => x.PostedAtUtc < session.OpenedAtUtc ||
+                (session.ClosedAtUtc != null && x.PostedAtUtc > session.ClosedAtUtc), cancellationToken))
+                return Results.Conflict(new { code = "REGISTER_RECONCILIATION_REQUIRED",
+                    message = "Register cash movements require reconciliation." });
+            var cashIn = await movements.Where(x => x.IsCashIn).SumAsync(x => (decimal?)x.Amount, cancellationToken) ?? 0m;
+            var cashOut = await movements.Where(x => !x.IsCashIn).SumAsync(x => (decimal?)x.Amount, cancellationToken) ?? 0m;
+            var expectedCash = session.OpeningCash + cashSales - refunds + exchangeSettlement + creditCollections + cashIn - cashOut;
             await tx.CommitAsync(cancellationToken);
 
             return Results.Ok(new { SessionId = session.Id, session.CurrencyCode, session.OpeningCash,
                 CashSales = cashSales, CashRefunds = refunds, NetExchangeSettlement = exchangeSettlement,
-                CreditCollections = creditCollections, ExpectedCash = expectedCash });
+                CreditCollections = creditCollections, CashIn = cashIn, CashOut = cashOut, ExpectedCash = expectedCash });
         }
         catch (Exception error) when (StockPosting.IsSqlConflict(error))
         {
