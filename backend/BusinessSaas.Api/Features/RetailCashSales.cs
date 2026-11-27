@@ -471,6 +471,11 @@ public static class RetailCashSales
                 replacement.MerchantLogo = shop.ReceiptLogo;
                 // Tendered is actual cash received, never the gross replacement invoice value.
                 replacement.Tendered = Math.Max(0m, difference);
+                var (registerId, registerError) = await RetailCashRegister.PostingSession(db, config,
+                    businessId, request.LocationId, actor, original.CurrencyCode);
+                if (registerError is not null) return registerError;
+                replacement.RegisterSessionId = registerId;
+                record.RegisterSessionId = registerId;
                 db.RetailCashSales.Add(replacement);
                 await db.SaveChangesAsync();
                 record.Total = returnTotal;
@@ -712,6 +717,10 @@ public static class RetailCashSales
             if (record.Total != request.ExpectedRefund)
                 return Results.Conflict(new { code = "RETURN_REJECTED", message = "Refund amount changed. Verify remaining return balance." });
 
+            var (registerId, registerError) = await RetailCashRegister.PostingSession(db, config,
+                businessId, sale.LocationId, actor, sale.CurrencyCode);
+            if (registerError is not null) return registerError;
+            record.RegisterSessionId = registerId;
             db.RetailCashReturns.Add(record);
             await db.SaveChangesAsync();
             foreach (var line in record.Lines.Where(x => x.Restock).OrderBy(x => original[x.SaleLineId].ProductId))
@@ -1154,6 +1163,13 @@ public static class RetailCashSales
             }
             else if (request.Tendered < sale.Total)
                 return Results.BadRequest(new { message = "Cash received is less than the basket total." });
+            if (!isCredit)
+            {
+                var (registerId, registerError) = await RetailCashRegister.PostingSession(db, config,
+                    businessId, sale.LocationId, actor, sale.CurrencyCode);
+                if (registerError is not null) return registerError;
+                sale.RegisterSessionId = registerId;
+            }
             var validated = Stopwatch.GetTimestamp();
             db.RetailCashSales.Add(sale);
             await db.SaveChangesAsync();

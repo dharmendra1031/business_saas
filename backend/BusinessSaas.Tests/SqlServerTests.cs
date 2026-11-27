@@ -87,6 +87,7 @@ public sealed class SqlServerTests(Xunit.Abstractions.ITestOutputHelper output)
             Assert.Contains("20261125170000_RetailReadIndexes", await db.Database.GetAppliedMigrationsAsync());
             Assert.Contains("20261125180000_RetailExchangeLink", await db.Database.GetAppliedMigrationsAsync());
             Assert.Contains("20261126190000_RetailCashRegisterSessions", await db.Database.GetAppliedMigrationsAsync());
+            Assert.Contains("20261127090000_RetailCashRegisterPostingLinks", await db.Database.GetAppliedMigrationsAsync());
             Assert.Equal(1, await db.Database.SqlQueryRaw<int>(
                 "SELECT COUNT(*) AS [Value] FROM sys.indexes WHERE object_id = OBJECT_ID('RetailCashReturns') " +
                 "AND name = 'IX_RetailCashReturns_ReplacementSaleId' AND is_unique = 1 AND has_filter = 1").SingleAsync());
@@ -364,6 +365,8 @@ public sealed class SqlServerTests(Xunit.Abstractions.ITestOutputHelper output)
             builder.UseSetting("RetailReturns:PostingEnabled", "true");
             builder.UseSetting("RetailSales:AlternateUnitsEnabled", "true");
             builder.UseSetting("RetailExchanges:PostingEnabled", "true");
+            builder.UseSetting("RetailCashRegister:OpeningEnabled", "true");
+            builder.UseSetting("RetailCashRegister:LinkingEnabled", "true");
             builder.UseSetting("RetailCredit:PostingEnabled", "true");
             builder.UseSetting("RetailCredit:CollectionsEnabled", "true");
             builder.ConfigureServices(services =>
@@ -517,6 +520,21 @@ public sealed class SqlServerTests(Xunit.Abstractions.ITestOutputHelper output)
             locationId, requestKey = "sql-flow-cash-sale-20261124", tendered = 35m,
             lines = new[] { new { productId, quantity = 0.375m, expectedUnitPrice = 80m } }
         };
+        using (var withoutRegister = await Post(cashier, prefix + "/cash-sales", saleRequest))
+        {
+            Assert.Equal(HttpStatusCode.Conflict, withoutRegister.StatusCode);
+            Assert.Equal("REGISTER_REQUIRED", (await withoutRegister.Content.ReadFromJsonAsync<JsonElement>())
+                .GetProperty("code").GetString());
+        }
+        async Task<long> OpenRegister(HttpClient client, string key)
+        {
+            using var response = await Post(client, prefix + "/cash-register/open",
+                new { locationId, requestKey = key, openingCash = 100m });
+            Assert.Equal(HttpStatusCode.OK, response.StatusCode);
+            return (await response.Content.ReadFromJsonAsync<JsonElement>()).GetProperty("id").GetInt64();
+        }
+        var cashierRegisterId = await OpenRegister(cashier, "sql-retail-flow-cashier-register");
+        var ownerRegisterId = await OpenRegister(owner, "sql-retail-flow-owner-register");
         var saleResponse = await Post(cashier, prefix + "/cash-sales", saleRequest);
         Assert.Equal(HttpStatusCode.OK, saleResponse.StatusCode);
         var saleTiming = Assert.Single(saleResponse.Headers.GetValues("Server-Timing"));
@@ -1631,6 +1649,28 @@ public sealed class SqlServerTests(Xunit.Abstractions.ITestOutputHelper output)
                 reportAfter.GetProperty("cashCollected").GetDecimal());
             Assert.Equal(reportBefore.GetProperty("cashRefunded").GetDecimal() + 15m - price,
                 reportAfter.GetProperty("cashRefunded").GetDecimal());
+        }
+
+        // Every newly posted cash document belongs to the operator who actually
+        // settled it. Unpaid credit invoices never count as cash receipts.
+        using (var scope = factory.Services.CreateScope())
+        {
+            var db = scope.ServiceProvider.GetRequiredService<AppDbContext>();
+            var cashDocuments = await db.RetailCashSales.AsNoTracking().Where(x => x.BusinessId == businessId &&
+                x.CreditDueDate == null).ToListAsync();
+            var returns = await db.RetailCashReturns.AsNoTracking().Where(x => x.BusinessId == businessId).ToListAsync();
+            var replacementIds = returns.Where(x => x.ReplacementSaleId.HasValue)
+                .Select(x => x.ReplacementSaleId!.Value).ToHashSet();
+            Assert.NotEmpty(cashDocuments);
+            Assert.NotEmpty(returns);
+            Assert.All(cashDocuments, x => Assert.Equal(replacementIds.Contains(x.Id) ? ownerRegisterId : cashierRegisterId,
+                x.RegisterSessionId));
+            Assert.All(returns, x => Assert.Equal(ownerRegisterId, x.RegisterSessionId));
+            var payments = await db.RetailCreditPayments.AsNoTracking().Where(x => x.BusinessId == businessId).ToListAsync();
+            Assert.NotEmpty(payments);
+            Assert.All(payments, x => Assert.Equal(ownerRegisterId, x.RegisterSessionId));
+            Assert.False(await db.RetailCashSales.AnyAsync(x => x.BusinessId == businessId &&
+                x.CreditDueDate != null && x.RegisterSessionId != null));
         }
     }
 

@@ -20,6 +20,23 @@ public static class RetailCashRegister
         db.RetailCashRegisterSessions.AsNoTracking().Where(x => x.BusinessId == businessId &&
             x.LocationId == locationId && x.ActorUserId == actor && x.ClosedAtUtc == null);
 
+    // Resolve only for a new financial write inside its existing serializable transaction.
+    // Recovery/replay returns the stored link, not a session selected at retry time.
+    internal static async Task<(long? Id, IResult? Error)> PostingSession(AppDbContext db, IConfiguration config,
+        long businessId, long locationId, long actor, string currencyCode)
+    {
+        if (!config.GetValue<bool>("RetailCashRegister:LinkingEnabled")) return (null, null);
+        if (db.Database.CurrentTransaction is null)
+            throw new InvalidOperationException("Register linking requires a posting transaction.");
+        var sessionId = await Active(db, businessId, locationId, actor)
+            .Where(x => x.CurrencyCode == currencyCode && x.OpenedAtUtc <= DateTime.UtcNow)
+            .Select(x => (long?)x.Id).SingleOrDefaultAsync();
+        if (sessionId is null)
+            return (null, Results.Conflict(new { code = "REGISTER_REQUIRED",
+                message = "Open your cash register for this location and currency before recording cash." }));
+        return (sessionId, null);
+    }
+
     private static async Task<bool> CanOpen(AppDbContext db, long businessId, IConfiguration config,
         CancellationToken cancellationToken)
     {

@@ -1813,7 +1813,9 @@ namespace BusinessSaas.Api.Data.Migrations
                         .HasPrecision(18, 2)
                         .HasColumnType("decimal(18,2)");
 
+                    b.Property<long?>("RegisterSessionId").HasColumnType("bigint");
                     b.HasKey("Id");
+                    b.HasIndex("RegisterSessionId");
 
                     b.HasIndex("CashierId");
 
@@ -1887,6 +1889,8 @@ namespace BusinessSaas.Api.Data.Migrations
 
             modelBuilder.Entity("BusinessSaas.Api.Data.RetailCashSale", b =>
                 {
+                    b.HasOne("BusinessSaas.Api.Data.RetailCashRegisterSession", null).WithMany().HasForeignKey("RegisterSessionId")
+                        .OnDelete(DeleteBehavior.Restrict);
                     b.HasOne("BusinessSaas.Api.Data.Business", null)
                         .WithMany()
                         .HasForeignKey("BusinessId")
@@ -1938,7 +1942,9 @@ namespace BusinessSaas.Api.Data.Migrations
                     b.Property<string>("RequestKey").IsRequired().HasMaxLength(80).HasColumnType("nvarchar(80)");
                     b.Property<long>("SaleId").HasColumnType("bigint");
                     b.Property<decimal>("Total").HasPrecision(18, 2).HasColumnType("decimal(18,2)");
+                    b.Property<long?>("RegisterSessionId").HasColumnType("bigint");
                     b.HasKey("Id");
+                    b.HasIndex("RegisterSessionId");
                     b.HasIndex("ActorUserId");
                     b.HasIndex("ReplacementSaleId").IsUnique().HasFilter("[ReplacementSaleId] IS NOT NULL");
                     b.HasIndex("SaleId");
@@ -1966,6 +1972,8 @@ namespace BusinessSaas.Api.Data.Migrations
 
             modelBuilder.Entity("BusinessSaas.Api.Data.RetailCashReturn", b =>
                 {
+                    b.HasOne("BusinessSaas.Api.Data.RetailCashRegisterSession", null).WithMany().HasForeignKey("RegisterSessionId")
+                        .OnDelete(DeleteBehavior.Restrict);
                     b.HasOne("BusinessSaas.Api.Data.AppUser", null).WithMany().HasForeignKey("ActorUserId")
                         .OnDelete(DeleteBehavior.Restrict).IsRequired();
                     b.HasOne("BusinessSaas.Api.Data.Business", null).WithMany().HasForeignKey("BusinessId")
@@ -2037,7 +2045,9 @@ namespace BusinessSaas.Api.Data.Migrations
                     b.Property<string>("RequestKey").IsRequired().HasMaxLength(80).HasColumnType("nvarchar(80)");
                     b.Property<decimal>("Amount").HasPrecision(18, 2).HasColumnType("decimal(18,2)");
                     b.Property<DateTime>("PostedAtUtc").HasColumnType("datetime2");
+                    b.Property<long?>("RegisterSessionId").HasColumnType("bigint");
                     b.HasKey("Id");
+                    b.HasIndex("RegisterSessionId");
                     b.HasIndex("ActorUserId");
                     b.HasIndex("SaleId");
                     b.HasIndex("BusinessId", "RequestKey").IsUnique();
@@ -2056,6 +2066,8 @@ namespace BusinessSaas.Api.Data.Migrations
 
             modelBuilder.Entity("BusinessSaas.Api.Data.RetailCreditPayment", b =>
                 {
+                    b.HasOne("BusinessSaas.Api.Data.RetailCashRegisterSession", null).WithMany().HasForeignKey("RegisterSessionId")
+                        .OnDelete(DeleteBehavior.Restrict);
                     b.HasOne("BusinessSaas.Api.Data.Business", null).WithMany().HasForeignKey("BusinessId")
                         .OnDelete(DeleteBehavior.Restrict).IsRequired();
                     b.HasOne("BusinessSaas.Api.Data.RetailCashSale", null).WithMany().HasForeignKey("SaleId")

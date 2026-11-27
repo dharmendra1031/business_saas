@@ -79,8 +79,12 @@ public static class CreditCollections
                 var outstanding = sale.Total - paid;
                 if (outstanding != request.ExpectedOutstanding || request.Amount > outstanding)
                     return Results.Conflict(new { message = "Invoice outstanding changed. Reconcile the cash received before recording another payment." });
+                var (registerId, registerError) = await RetailCashRegister.PostingSession(db, config,
+                    businessId, sale.LocationId, actor.Value, sale.CurrencyCode);
+                if (registerError is not null) return registerError;
                 var payment = new RetailCreditPayment
                 {
+                    RegisterSessionId = registerId,
                     BusinessId = businessId, SaleId = saleId, ActorUserId = actor.Value,
                     RequestKey = request.RequestKey, Amount = request.Amount, PostedAtUtc = DateTime.UtcNow
                 };

@@ -846,6 +846,8 @@ public sealed class AppDbContext(DbContextOptions<AppDbContext> options)
 
         builder.Entity<RetailCashSale>(entity =>
         {
+            entity.HasOne<RetailCashRegisterSession>().WithMany().HasForeignKey(x => x.RegisterSessionId)
+                .OnDelete(DeleteBehavior.Restrict);
             entity.Property(x => x.MerchantLegalName).HasMaxLength(150);
             entity.Property(x => x.MerchantAddress).HasMaxLength(300);
             entity.Property(x => x.MerchantPhone).HasMaxLength(25);
@@ -906,6 +908,8 @@ public sealed class AppDbContext(DbContextOptions<AppDbContext> options)
 
         builder.Entity<RetailCreditPayment>(entity =>
         {
+            entity.HasOne<RetailCashRegisterSession>().WithMany().HasForeignKey(x => x.RegisterSessionId)
+                .OnDelete(DeleteBehavior.Restrict);
             entity.Property(x => x.Amount).HasPrecision(18, 2);
             entity.Property(x => x.RequestKey).HasMaxLength(80);
             entity.HasIndex(x => new { x.BusinessId, x.RequestKey }).IsUnique();
@@ -915,6 +919,8 @@ public sealed class AppDbContext(DbContextOptions<AppDbContext> options)
         });
         builder.Entity<RetailCashReturn>(entity =>
         {
+            entity.HasOne<RetailCashRegisterSession>().WithMany().HasForeignKey(x => x.RegisterSessionId)
+                .OnDelete(DeleteBehavior.Restrict);
             entity.Property(x => x.RequestKey).HasMaxLength(80);
             entity.Property(x => x.Reason).HasMaxLength(200);
             entity.Property(x => x.Total).HasPrecision(18, 2);

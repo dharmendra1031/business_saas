@@ -4,6 +4,7 @@ namespace BusinessSaas.Api.Data;
 public sealed class RetailCashSale
 {
     public long Id { get; set; }
+    public long? RegisterSessionId { get; set; }
     public long BusinessId { get; set; }
     public long LocationId { get; set; }
     public long CashierId { get; set; }
@@ -48,6 +49,7 @@ public sealed class RetailCashSaleLine
 public sealed class RetailCashReturn
 {
     public long Id { get; set; }
+    public long? RegisterSessionId { get; set; }
     public long BusinessId { get; set; }
     public long SaleId { get; set; }
     // Both null for a standalone return. Positive settlement is cash collected, negative is refunded.
@@ -75,6 +77,7 @@ public sealed class RetailCashReturnLine
 public sealed class RetailCreditPayment
 {
     public long Id { get; set; }
+    public long? RegisterSessionId { get; set; }
     public long BusinessId { get; set; }
     public long SaleId { get; set; }
     public long ActorUserId { get; set; }
