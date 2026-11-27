@@ -283,3 +283,7 @@ Nullable RegisterSessionId links the existing cash sale, cash return and credit 
 ### Real-shop readiness — register rejection recovery
 
 POS checks the active operator/location/currency register before opening the cash payment dialog when register linking is required. Managers cannot initiate cash settlement in that pilot. A server REGISTER_REQUIRED rejection preserves the original sale key and exposes the existing opening panel inside pending-sale recovery; retry checks readiness again without collecting cash again. Credit invoice recording is unaffected. Existing disabled-register behavior and backend transactional enforcement remain unchanged. A browser regression simulates a missing shift, successful opening, then a register state change before posting and same-request recovery. This is a POS-specific fix, not the business setting or closing release; return, exchange and collection preflight still require acceptance. No production flags enabled.
+
+### Register state synchronization correction
+
+Browser QA found that the opening panel can load before a sale rejection arrives and retain the earlier open shift. A REGISTER_REQUIRED response or a failed active-session preflight now remounts the panel with a fresh status read. Open sessions also expose a manual status check. The original pending sale and request key remain intact. The existing failing browser regression is retained without relaxing assertions. Return, exchange and collection readiness remain separate follow-up work.

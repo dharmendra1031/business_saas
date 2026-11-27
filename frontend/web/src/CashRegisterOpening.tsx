@@ -90,7 +90,11 @@ export default function CashRegisterOpening({ userId, businessId, locationId, ca
       <small>{required ? 'Open shift required for cash' : 'Opening pilot · billing is not linked'}</small>
     </div>
     {error && <p role="alert" className="small text-danger mb-1">{error}</p>}
-    {current?.session && <p role="status" className="small mb-1">Shift #{current.session.id} open · Opening cash {current.session.currencyCode} {current.session.openingCash.toFixed(2)}</p>}
+    {current?.session && <div className="d-flex flex-wrap align-items-center gap-2 mb-1">
+      <p role="status" className="small mb-0">Shift #{current.session.id} open · Opening cash {current.session.currencyCode} {current.session.openingCash.toFixed(2)}</p>
+      {!pending && <button type="button" className="btn btn-outline-secondary btn-sm" disabled={busy || disabled}
+        onClick={() => setReload(x => x + 1)}>Check shift status</button>}
+    </div>}
     {pending ? <>
       <p className="small mb-1">Pending opening: {pending.openingCash.toFixed(2)}. Verify before counting cash again.</p>
       <div className="d-flex flex-wrap gap-2">

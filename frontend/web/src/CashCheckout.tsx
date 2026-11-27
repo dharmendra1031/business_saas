@@ -94,6 +94,7 @@ export default function CashCheckout({ userId, dashboard, onExit }: {
   const base = `/businesses/${business.id}/cash-sales`
   const [pending, setPending] = useState(() => restore(key))
   const [registerRejected, setRegisterRejected] = useState(false)
+  const [registerRefresh, setRegisterRefresh] = useState(0)
   const registerRequired = dashboard.cashRegisterRequired === true || registerRejected
   const [method, setMethod] = useState<'Cash' | 'Credit'>(() => pending?.dueDate || (!cashAvailable && creditAvailable) ? 'Credit' : 'Cash')
   const [dueDate, setDueDate] = useState('')
@@ -422,6 +423,7 @@ export default function CashCheckout({ userId, dashboard, onExit }: {
           setError(retry ? 'Open your cash register before retrying. Do not collect cash again.' :
             'Open your cash register before taking payment.')
           setRegisterRejected(true)
+          setRegisterRefresh(x => x + 1)
           setHistoryPage(0)
           return
         }
@@ -484,6 +486,7 @@ export default function CashCheckout({ userId, dashboard, onExit }: {
       setError(cause instanceof Error ? cause.message : 'Unable to confirm sale.')
       if (!isCredit && cause instanceof ApiResponseError && cause.code === 'REGISTER_REQUIRED') {
         setRegisterRejected(true)
+        setRegisterRefresh(x => x + 1)
         setShowPayment(false)
         setError('Open your cash register, then record the original request. Do not collect cash again.')
       }
@@ -596,7 +599,7 @@ export default function CashCheckout({ userId, dashboard, onExit }: {
       <p role="status">{busy ? 'Recording sale…' : lookupState === 'missing' ? 'No posted receipt found for this sale.'
         : lookupState === 'unknown' ? 'Receipt status could not be verified. Do not create another sale.' : 'Checking for the posted receipt…'}</p>
       {!pending.dueDate && registerRequired && dashboard.roleCode !== 'Manager' &&
-        <CashRegisterOpening key={locationId} userId={userId} businessId={business.id} locationId={locationId}
+        <CashRegisterOpening key={locationId + ':' + registerRefresh} userId={userId} businessId={business.id} locationId={locationId}
           canOperate={dashboard.canOperate} disabled={busy || scanBusy} required />}
       {lookupState === 'missing' && <button type="button" className="btn btn-primary me-2"
         disabled={busy || scanBusy || !dashboard.canOperate}
@@ -626,7 +629,7 @@ export default function CashCheckout({ userId, dashboard, onExit }: {
         </div>
         {!historyPage && (dashboard.cashRegisterOpeningEnabled || registerRequired) &&
           dashboard.roleCode !== 'Manager' && locationId > 0 &&
-          <CashRegisterOpening key={locationId} userId={userId} businessId={business.id} locationId={locationId}
+          <CashRegisterOpening key={locationId + ':' + registerRefresh} userId={userId} businessId={business.id} locationId={locationId}
             canOperate={dashboard.canOperate} disabled={busy || scanBusy} required={registerRequired} />}
         {!historyPage && <form className="pos-search" role="search" onSubmit={event => void submitBarcode(event)}>
           <label className="visually-hidden" htmlFor="pos-product-search">Search product or scan barcode</label>
