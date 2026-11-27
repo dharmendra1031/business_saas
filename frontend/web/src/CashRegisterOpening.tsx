@@ -6,7 +6,7 @@ interface OpeningRequest { locationId: number; requestKey: string; openingCash: 
 interface RegisterSession extends OpeningRequest {
   id: number; actorUserId: number; currencyCode: string; openedAtUtc: string; closedAtUtc: string | null
 }
-interface CurrentRegister { currencyCode: string; canOpen: boolean; session: RegisterSession | null }
+export interface CurrentRegister { currencyCode: string; canOpen: boolean; session: RegisterSession | null }
 
 function matchesOpening(session: RegisterSession, request: OpeningRequest, userId: number, currencyCode: string) {
   return Number.isSafeInteger(session.id) && session.id > 0 && session.actorUserId === userId &&
@@ -15,8 +15,8 @@ function matchesOpening(session: RegisterSession, request: OpeningRequest, userI
     session.currencyCode === currencyCode
 }
 
-export default function CashRegisterOpening({ userId, businessId, locationId, canOperate, disabled }: {
-  userId: number; businessId: number; locationId: number; canOperate: boolean; disabled: boolean
+export default function CashRegisterOpening({ userId, businessId, locationId, canOperate, disabled, required }: {
+  userId: number; businessId: number; locationId: number; canOperate: boolean; disabled: boolean; required: boolean
 }) {
   const base = `/businesses/${businessId}/cash-register`
   const key = `cash-register-opening:${userId}:${businessId}:${locationId}`
@@ -87,7 +87,7 @@ export default function CashRegisterOpening({ userId, businessId, locationId, ca
   return <section className="border rounded p-2 mb-2" aria-label="Cash register">
     <div className="d-flex flex-wrap align-items-center justify-content-between gap-2">
       <strong>Cash register</strong>
-      <small>Opening pilot · billing is not linked</small>
+      <small>{required ? 'Open shift required for cash' : 'Opening pilot · billing is not linked'}</small>
     </div>
     {error && <p role="alert" className="small text-danger mb-1">{error}</p>}
     {current?.session && <p role="status" className="small mb-1">Shift #{current.session.id} open · Opening cash {current.session.currencyCode} {current.session.openingCash.toFixed(2)}</p>}

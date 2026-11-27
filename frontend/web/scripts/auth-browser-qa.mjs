@@ -1220,6 +1220,79 @@ try {
   }
 
   {
+    const t = await scenario('pos-register-required-recovery', { role: 'Cashier', hasProducts: true })
+    let session = null
+    let openingWrites = 0
+    let saleWrites = 0
+    let originalRequest
+    await t.page.route('**/api/businesses/1/dashboard', route => response(route, 200, {
+      ...dashboard('Cashier', true), cashRegisterOpeningEnabled: true, cashRegisterRequired: true
+    }))
+    await t.page.route('**/api/businesses/1/cash-sales/products*', route => response(route, 200, [{
+      id: 401, name: 'Register Item', sku: 'REGISTER-401', barcode: null,
+      salePrice: 25, available: 3, unitCode: 'PCS'
+    }]))
+    await t.page.route('**/api/businesses/1/cash-register/current?*', route =>
+      response(route, 200, { currencyCode: 'INR', canOpen: !session, session }))
+    await t.page.route('**/api/businesses/1/cash-register/open', route => {
+      openingWrites++
+      session = { ...route.request().postDataJSON(), id: 90 + openingWrites, actorUserId: 10,
+        currencyCode: 'INR', openedAtUtc: '2026-11-26T09:00:00Z', closedAtUtc: null }
+      return response(route, 200, session)
+    })
+    await t.page.route('**/api/businesses/1/cash-sales/receipt?*', route => {
+      assert.equal(new URL(route.request().url()).searchParams.get('requestKey'), originalRequest.requestKey)
+      return response(route, 404, {})
+    })
+    await t.page.route('**/api/businesses/1/cash-sales', route => {
+      saleWrites++
+      const request = route.request().postDataJSON()
+      if (saleWrites === 1) {
+        originalRequest = request
+        // Simulate a concurrent register state change after preflight.
+        session = null
+        return response(route, 409, { code: 'REGISTER_REQUIRED', message: 'Open your register.' })
+      }
+      assert.deepEqual(request, originalRequest)
+      assert.ok(session)
+      return response(route, 200, { id: 501, total: 25, tendered: 25, currencyCode: 'INR',
+        printAvailable: false, postedAtUtc: '2026-11-26T09:05:00Z',
+        lines: [{ id: 502, productName: 'Register Item', unitPrice: 25, quantity: 1 }] })
+    })
+    await t.login()
+    await t.page.getByRole('button', { name: /Add Register Item/ }).click()
+    const pay = t.page.getByRole('button', { name: /Pay \/ Checkout/ })
+    await pay.click()
+    await t.page.getByText('Open your cash register before taking payment.', { exact: true }).waitFor()
+    assert.equal(await t.page.getByRole('dialog', { name: 'Complete Payment' }).count(), 0)
+    assert.equal(saleWrites, 0)
+    const register = t.page.getByRole('region', { name: 'Cash register' })
+    await register.getByLabel('Opening cash (INR)').fill('100')
+    await register.getByRole('button', { name: 'Open Shift' }).click()
+    await register.getByText('Shift #91 open · Opening cash INR 100.00').waitFor()
+    await pay.click()
+    await t.page.getByRole('dialog', { name: 'Complete Payment' }).waitFor()
+    await t.page.getByLabel('Cash received').fill('25')
+    await t.page.getByRole('button', { name: 'Save Only' }).click()
+    const recovery = t.page.getByRole('region', { name: 'Pending sale recovery' })
+    await recovery.getByText('No posted receipt found for this sale.').waitFor()
+    const retry = recovery.getByRole('button', { name: 'Record original request' })
+    await retry.click()
+    await t.page.getByText('Open your cash register before retrying. Do not collect cash again.', { exact: true }).waitFor()
+    assert.equal(saleWrites, 1)
+    await recovery.getByLabel('Opening cash (INR)').fill('100')
+    await recovery.getByRole('button', { name: 'Open Shift' }).click()
+    await recovery.getByText('Shift #92 open · Opening cash INR 100.00').waitFor()
+    await retry.click()
+    await t.page.getByRole('button', { name: 'New sale' }).waitFor()
+    assert.equal(saleWrites, 2)
+    assert.equal(openingWrites, 2)
+    await t.check()
+    await t.context.close()
+    console.log('PASS register pre-payment check and same-key recovery after register rejection')
+  }
+
+  {
     const t = await scenario('pos-safe-barcode', { role: 'Cashier', hasProducts: true })
     const first = { id: 401, name: 'Scan Item', sku: 'SCAN-401', barcode: '900001',
       salePrice: 25, available: 3, unitCode: 'PCS' }

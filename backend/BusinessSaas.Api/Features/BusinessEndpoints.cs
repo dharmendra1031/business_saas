@@ -185,6 +185,8 @@ public static class BusinessEndpoints
             return Results.Ok(new { hasProducts, hasInitializedStock, pendingApprovals, cashSalesToday, stockAlerts,
                 business = details, roleCode, locations, subscription, accessStatus,
                 canOperate, cashSaleEnabled = environment.IsDevelopment(),
+                cashRegisterRequired = environment.IsDevelopment() && details.TypeCode == "RETAIL" &&
+                    config.GetValue<bool>("RetailCashRegister:LinkingEnabled"),
                 cashRegisterOpeningEnabled = environment.IsDevelopment() && details.TypeCode == "RETAIL" &&
                     (roleCode == "Owner" || roleCode == "Cashier") && config.GetValue<bool>("RetailCashRegister:OpeningEnabled"),
                 cashPaymentEnabled = details.CashSalesEnabled,
