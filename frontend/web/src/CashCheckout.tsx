@@ -1,6 +1,7 @@
 import { useEffect, useLayoutEffect, useRef, useState, type FormEvent } from 'react'
 import { ArrowLeft, ArrowRight, Banknote, Check, Minus, Package, Plus, ReceiptText, Search, ShoppingBag, Trash2 } from 'lucide-react'
 import PosCashPaymentDialog from './PosCashPaymentDialog'
+import CashRegisterOpening from './CashRegisterOpening'
 import LookupDialog, { MasterLookup } from './LookupDialog'
 import { maxExactCents, moneyCents } from './posMoney'
 import { baseQuantity } from './stockQuantity'
@@ -582,6 +583,9 @@ export default function CashCheckout({ userId, dashboard, onExit }: {
             <ReceiptText size={16} /> {historyPage > 0 ? 'Back to products' : 'Receipt history'}
           </button>
         </div>
+        {!historyPage && dashboard.cashRegisterOpeningEnabled && locationId > 0 &&
+          <CashRegisterOpening key={locationId} userId={userId} businessId={business.id} locationId={locationId}
+            canOperate={dashboard.canOperate} disabled={busy || scanBusy} />}
         {!historyPage && <form className="pos-search" role="search" onSubmit={event => void submitBarcode(event)}>
           <label className="visually-hidden" htmlFor="pos-product-search">Search product or scan barcode</label>
           <button type="button" className="btn btn-outline-secondary btn-sm" aria-label="Search items"

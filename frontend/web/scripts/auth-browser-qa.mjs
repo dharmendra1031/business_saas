@@ -1177,6 +1177,49 @@ try {
   }
 
   {
+    const t = await scenario('pos-register-opening-recovery', { role: 'Cashier', hasProducts: true })
+    let opened = null
+    let writes = 0
+    let reads = 0
+    await t.page.route('**/api/businesses/1/dashboard', route => response(route, 200, {
+      ...dashboard('Cashier', true, 0, 1, 1, false, false, false), cashRegisterOpeningEnabled: true
+    }))
+    await t.page.route('**/api/businesses/1/cash-register/current?*', route => {
+      reads++
+      assert.equal(new URL(route.request().url()).searchParams.get('locationId'), '1')
+      return response(route, 200, { currencyCode: 'INR', canOpen: !opened, session: opened })
+    })
+    await t.page.route('**/api/businesses/1/cash-register/open', route => {
+      writes++
+      const request = route.request().postDataJSON()
+      assert.equal(request.openingCash, 2000)
+      assert.equal(request.locationId, 1)
+      assert.match(request.requestKey, /^[0-9a-f]{32}$/)
+      opened = { ...request, id: 93, actorUserId: 10, currencyCode: 'INR',
+        openedAtUtc: '2026-11-26T09:00:00Z', closedAtUtc: null }
+      return route.abort()
+    })
+    await t.login()
+    const register = t.page.getByRole('region', { name: 'Cash register' })
+    const openShift = register.getByRole('button', { name: 'Open Shift' })
+    await openShift.waitFor()
+    assert.equal(await openShift.isDisabled(), true)
+    await register.getByLabel('Opening cash (INR)', { exact: true }).fill('-1')
+    assert.equal(await openShift.isDisabled(), true)
+    await register.getByLabel('Opening cash (INR)', { exact: true }).fill('2000')
+    await openShift.click()
+    await register.getByRole('alert').waitFor()
+    await register.getByRole('button', { name: 'Check shift status' }).click()
+    await register.getByText('Shift #93 open · Opening cash INR 2000.00').waitFor()
+    assert.equal(await register.getByRole('button', { name: 'Retry same opening' }).count(), 0)
+    assert.equal(writes, 1, 'Lookup recovery cannot create a second opening')
+    assert.ok(reads >= 2)
+    await t.check()
+    await t.context.close()
+    console.log('PASS register opening and lost-response lookup recovery')
+  }
+
+  {
     const t = await scenario('pos-safe-barcode', { role: 'Cashier', hasProducts: true })
     const first = { id: 401, name: 'Scan Item', sku: 'SCAN-401', barcode: '900001',
       salePrice: 25, available: 3, unitCode: 'PCS' }

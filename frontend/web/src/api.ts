@@ -84,6 +84,7 @@ export interface RetailDashboard {
     }[]
   } | null
   cashSaleEnabled?: boolean
+  cashRegisterOpeningEnabled?: boolean
   cashPaymentEnabled?: boolean
   creditPaymentEnabled?: boolean
   receiptAutoOpen?: boolean
