@@ -2,6 +2,7 @@ using System.Data;
 using System.Security.Claims;
 using BusinessSaas.Api.Data;
 using Microsoft.EntityFrameworkCore;
+using Microsoft.EntityFrameworkCore.Storage;
 
 namespace BusinessSaas.Api.Features;
 
@@ -26,8 +27,9 @@ public static class RetailCashRegister
         long businessId, long locationId, long actor, string currencyCode)
     {
         if (!config.GetValue<bool>("RetailCashRegister:LinkingEnabled")) return (null, null);
-        if (db.Database.CurrentTransaction is null)
-            throw new InvalidOperationException("Register linking requires a posting transaction.");
+        if (db.Database.CurrentTransaction is not { } transaction ||
+            transaction.GetDbTransaction().IsolationLevel != IsolationLevel.Serializable)
+            throw new InvalidOperationException("Register linking requires a serializable posting transaction.");
         var sessionId = await Active(db, businessId, locationId, actor)
             .Where(x => x.CurrencyCode == currencyCode && x.OpenedAtUtc <= DateTime.UtcNow)
             .Select(x => (long?)x.Id).SingleOrDefaultAsync();
