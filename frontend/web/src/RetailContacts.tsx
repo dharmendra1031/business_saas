@@ -31,11 +31,12 @@ interface CreditLedger {
   creditLimit: number
   totals: { currencyCode: string; debit: number; paid: number; outstanding: number; invoiceCount: number }[]
   canCollect?: boolean
+  registerRequired?: boolean
   items: CreditInvoice[]
   hasMore: boolean
 }
 
-function CustomerCreditLedger({ path, userId, onClose }: { path: string; userId: number; onClose: () => void }) {
+function CustomerCreditLedger({ path, userId, businessId, onClose }: { path: string; userId: number; businessId: number; onClose: () => void }) {
   const storageKey = 'credit-collection:' + userId + ':' + path
   const [recovery] = useState(() => {
     try { return { pending: readCollection(storageKey), error: '' } }
@@ -70,6 +71,7 @@ function CustomerCreditLedger({ path, userId, onClose }: { path: string; userId:
       onClick={() => setSelected(pending.invoice)}>Recover saved collection</button>}
     {selected && <CreditPayment key={selected.id} customerPath={path.replace(/\/credit-ledger$/, '')}
       invoice={selected} storageKey={storageKey} pending={pending} canCollect={ledger?.canCollect === true && !recovery.error}
+      businessId={businessId} userId={userId} registerRequired={ledger?.registerRequired === true}
       onPending={setPending} onRecorded={payment => {
         setNotice('Payment #' + payment.id + ' recorded. Reloading ledger from saved transactions.')
         setSelected(null); setReload(x => x + 1)
@@ -349,7 +351,7 @@ export default function RetailContacts({ businessId, canOperate, type, isOwner, 
 
       {!supplier && isOwner && ledgerCustomer !== null &&
         <CustomerCreditLedger key={basePath + '/' + ledgerCustomer}
-          path={basePath + '/' + ledgerCustomer + '/credit-ledger'} userId={userId} onClose={() => setLedgerCustomer(null)} />}
+          path={basePath + '/' + ledgerCustomer + '/credit-ledger'} userId={userId} businessId={businessId} onClose={() => setLedgerCustomer(null)} />}
 
       {!formOpen && ledgerCustomer === null && <>
       <form className="masters-search" onSubmit={event => {

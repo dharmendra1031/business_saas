@@ -287,3 +287,7 @@ POS checks the active operator/location/currency register before opening the cas
 ### Register state synchronization correction
 
 Browser QA found that the opening panel can load before a sale rejection arrives and retain the earlier open shift. A REGISTER_REQUIRED response or a failed active-session preflight now remounts the panel with a fresh status read. Open sessions also expose a manual status check. The original pending sale and request key remain intact. The existing failing browser regression is retained without relaxing assertions. Return, exchange and collection readiness remain separate follow-up work.
+
+### Real-shop readiness — refund, exchange and collection register checks
+
+Reuse the existing register opening panel in the three cash settlement forms when the register linking capability is active. The panel checks operator, location, open state and document currency; cash settlement confirmation remains disabled until the register is verified. Return/exchange/collection REGISTER_REQUIRED responses retain the pending request, refresh the register panel, and instruct the operator not to repeat the physical settlement. Lookup-only recovery remains available even if a shift is no longer open. Credit ledger exposes the existing register linking capability and uses its original invoice location; older stored requests without a location still support lookup. No new endpoint or ledger, no production activation. Server posting checks remain authoritative; this UI precheck does not eliminate races between physical cash handling and commit.

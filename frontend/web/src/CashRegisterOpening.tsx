@@ -15,8 +15,9 @@ function matchesOpening(session: RegisterSession, request: OpeningRequest, userI
     session.currencyCode === currencyCode
 }
 
-export default function CashRegisterOpening({ userId, businessId, locationId, canOperate, disabled, required }: {
+export default function CashRegisterOpening({ userId, businessId, locationId, canOperate, disabled, required, currencyCode, onReady }: {
   userId: number; businessId: number; locationId: number; canOperate: boolean; disabled: boolean; required: boolean
+  currencyCode?: string; onReady?: (ready: boolean) => void
 }) {
   const base = `/businesses/${businessId}/cash-register`
   const key = `cash-register-opening:${userId}:${businessId}:${locationId}`
@@ -63,6 +64,15 @@ export default function CashRegisterOpening({ userId, businessId, locationId, ca
     return () => controller.abort()
   }, [base, key, locationId, userId, reload])
 
+  const active = current?.session
+  const ready = !!active && Number.isSafeInteger(active.id) && active.id > 0 &&
+    active.actorUserId === userId && active.locationId === locationId && active.closedAtUtc === null &&
+    active.currencyCode === (currencyCode ?? current?.currencyCode) && !pending && !storageError && !busy
+  useEffect(() => {
+    onReady?.(ready)
+    return () => onReady?.(false)
+  }, [ready, onReady])
+
   async function open(request: OpeningRequest) {
     if (lock.current || disabled || !canOperate || !current?.canOpen || current.session || storageError) return
     lock.current = true; setBusy(true); setError('')
@@ -90,6 +100,7 @@ export default function CashRegisterOpening({ userId, businessId, locationId, ca
       <small>{required ? 'Open shift required for cash' : 'Opening pilot · billing is not linked'}</small>
     </div>
     {error && <p role="alert" className="small text-danger mb-1">{error}</p>}
+    {active && currencyCode && active.currencyCode !== currencyCode && <p role="alert" className="small text-danger">Register currency does not match this invoice.</p>}
     {current?.session && <div className="d-flex flex-wrap align-items-center gap-2 mb-1">
       <p role="status" className="small mb-0">Shift #{current.session.id} open · Opening cash {current.session.currencyCode} {current.session.openingCash.toFixed(2)}</p>
       {!pending && <button type="button" className="btn btn-outline-secondary btn-sm" disabled={busy || disabled}

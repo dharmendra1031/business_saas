@@ -78,6 +78,7 @@ export default function BusinessPostedSales({ dashboard, userId }: { dashboard: 
     returnEstimate={selected.paymentMethod === 'Cash' && dashboard.roleCode === 'Owner' ? {
       path: base + '/' + receipt.id, productSearchPath: `/businesses/${business.id}/cash-sales/products`,
       locationId: selected.locationId, userId, canOperate: dashboard.canOperate,
+      businessId: business.id, registerRequired: dashboard.cashRegisterRequired,
       onRecorded: (id, total) => {
         setReturnNotice(`Return #${id} recorded: ${receipt.currencyCode} ${total.toFixed(2)}.`)
         refreshReceipt()

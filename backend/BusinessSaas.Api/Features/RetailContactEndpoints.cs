@@ -202,6 +202,7 @@ public static class RetailContactEndpoints
                 }).ToListAsync(cancellationToken);
             await tx.CommitAsync(cancellationToken);
             return Results.Ok(new { customerId, customer.Name, customer.CreditLimit,
+                registerRequired = environment.IsDevelopment() && config.GetValue<bool>("RetailCashRegister:LinkingEnabled"),
                 canCollect = environment.IsDevelopment() && config.GetValue<bool>("RetailCredit:CollectionsEnabled") &&
                     await RetailMasterEndpoints.CheckAccess(db, user, businessId, true, cancellationToken) is null,
                 totals = billed.Select(x => new { x.CurrencyCode, x.Debit, x.InvoiceCount,

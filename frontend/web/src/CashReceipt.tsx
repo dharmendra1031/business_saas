@@ -2,6 +2,7 @@ import { useEffect, useRef, useState } from 'react'
 import { api, ApiResponseError, operationKey, post } from './api'
 import { baseQuantity } from './stockQuantity'
 import LookupDialog from './LookupDialog'
+import CashRegisterOpening from './CashRegisterOpening'
 
 export interface Receipt {
   id: number
@@ -29,6 +30,7 @@ export interface Receipt {
 
 interface ReturnOptions {
   path: string; productSearchPath: string; locationId: number; userId: number; canOperate: boolean
+  businessId: number; registerRequired?: boolean
   onRecorded: (id: number, total: number) => void
   onExchangeRecorded: (id: number, replacementId: number) => void
 }
@@ -130,6 +132,14 @@ function ReturnEstimate({ receipt, options }: { receipt: Receipt; options: Retur
   const [confirmed, setConfirmed] = useState(false)
   const [busy, setBusy] = useState(false)
   const [error, setError] = useState('')
+  const [registerReady, setRegisterReady] = useState(false)
+  const [registerRejected, setRegisterRejected] = useState(false)
+  const [registerRefresh, setRegisterRefresh] = useState(0)
+  const registerRequired = options.registerRequired === true || registerRejected
+  useEffect(() => { if (registerRequired && !registerReady) setConfirmed(false) }, [registerRequired, registerReady])
+  const registerPanel = registerRequired && <CashRegisterOpening key={registerRefresh}
+    userId={options.userId} businessId={options.businessId} locationId={options.locationId}
+    currencyCode={receipt.currencyCode} canOperate={options.canOperate} disabled={busy} required onReady={setRegisterReady} />
   const lock = useRef(false)
   const mounted = useRef(true)
   useEffect(() => {
@@ -176,7 +186,10 @@ function ReturnEstimate({ receipt, options }: { receipt: Receipt; options: Retur
         finish(await post<PostedReturn>(options.path + '/returns', request), request)
       }
     } catch (cause) {
-      if (cause instanceof ApiResponseError && cause.code === 'RETURN_REJECTED') {
+      if (cause instanceof ApiResponseError && cause.code === 'REGISTER_REQUIRED') {
+        setRegisterRejected(true); setRegisterReady(false); setRegisterRefresh(x => x + 1)
+        setError('Open your cash register and retry the same recording. Do not refund cash again.')
+      } else if (cause instanceof ApiResponseError && cause.code === 'RETURN_REJECTED') {
         try { sessionStorage.removeItem(key); setPending(null); setEstimate(null); setConfirmed(false) } catch { /* Keep recovery available. */ }
         setError(cause.message + ' Reconcile cash already refunded before making any new return.')
       } else {
@@ -188,6 +201,7 @@ function ReturnEstimate({ receipt, options }: { receipt: Receipt; options: Retur
   if (pending) return <section className="border rounded p-2 mb-3" aria-label="Return recovery">
     <h3 className="h6">Verify previous return</h3>
     <p>Refund amount: <strong>{receipt.currencyCode} {pending.expectedRefund.toFixed(2)}</strong>. Do not refund cash again.</p>
+    {registerPanel}
     {error && <p role="alert" className="text-danger">{error}</p>}
     <div className="d-flex flex-wrap gap-2">
       <button type="button" className="btn btn-outline-secondary" disabled={busy} onClick={() => void recordReturn(pending, true)}>Check posted return</button>
@@ -195,7 +209,7 @@ function ReturnEstimate({ receipt, options }: { receipt: Receipt; options: Retur
     </div>
   </section>
   const canRecord = !!estimate?.canPost && options.canOperate && valid && !busy && !restored.error &&
-    reason.trim().length >= 5 && confirmed && selected.every(line => !!dispositions[line.id])
+    reason.trim().length >= 5 && confirmed && (!registerRequired || registerReady) && selected.every(line => !!dispositions[line.id])
   return <section className="border rounded p-2 mb-3" aria-label="Return estimate">
     <h3 className="h6">Return estimate</h3>
     <p className="small mb-2">Calculate the amount before confirming a cash refund. No money is transferred by the software.</p>
@@ -239,6 +253,7 @@ function ReturnEstimate({ receipt, options }: { receipt: Receipt; options: Retur
     </form>
     {estimate && !estimate.canPost && <p className="small mt-2 mb-0">Preview only. Return posting is not enabled.</p>}
     {estimate?.canPost && options.canOperate && <div className="border-top mt-3 pt-2">
+      {registerPanel}
       {selected.map(line => <label key={line.id} className="d-block mb-2">Stock disposition — {line.productName}
         <select className="form-select form-select-sm" disabled={busy} value={dispositions[line.id] ?? ''}
           onChange={event => { setDispositions({ ...dispositions, [line.id]: event.target.value }); setConfirmed(false) }}>
@@ -249,7 +264,7 @@ function ReturnEstimate({ receipt, options }: { receipt: Receipt; options: Retur
         <input className="form-control" maxLength={200} disabled={busy} value={reason}
           onChange={event => { setReason(event.target.value); setConfirmed(false) }} />
       </label>
-      <label className="form-check mb-2"><input className="form-check-input" type="checkbox" checked={confirmed} disabled={busy}
+      <label className="form-check mb-2"><input className="form-check-input" type="checkbox" checked={confirmed && (!registerRequired || registerReady)} disabled={busy || registerRequired && !registerReady}
         onChange={event => setConfirmed(event.target.checked)} />
         I confirm the stated cash refund has already been settled with the customer.
       </label>
@@ -333,6 +348,14 @@ function ExchangeEstimate({ receipt, options, pending, onPending }: {
   const [confirmed, setConfirmed] = useState(false)
   const [error, setError] = useState('')
   const [busy, setBusy] = useState(false)
+  const [registerReady, setRegisterReady] = useState(false)
+  const [registerRejected, setRegisterRejected] = useState(false)
+  const [registerRefresh, setRegisterRefresh] = useState(0)
+  const registerRequired = options.registerRequired === true || registerRejected
+  useEffect(() => { if (registerRequired && !registerReady) setConfirmed(false) }, [registerRequired, registerReady])
+  const registerPanel = registerRequired && <CashRegisterOpening key={registerRefresh}
+    userId={options.userId} businessId={options.businessId} locationId={options.locationId}
+    currencyCode={receipt.currencyCode} canOperate={options.canOperate} disabled={busy} required onReady={setRegisterReady} />
   const lock = useRef(false)
   const mounted = useRef(true)
   useEffect(() => {
@@ -403,13 +426,19 @@ function ExchangeEstimate({ receipt, options, pending, onPending }: {
         options.onExchangeRecorded(result.returnId, result.replacementSaleId)
       }
     } catch (cause) {
-      if (mounted.current) setError((cause instanceof Error ? cause.message : 'Unable to verify exchange.') +
-        ' Check the recorded exchange or retry the same request. Do not settle cash again.')
+      if (mounted.current) {
+        if (cause instanceof ApiResponseError && cause.code === 'REGISTER_REQUIRED') {
+          setRegisterRejected(true); setRegisterReady(false); setRegisterRefresh(x => x + 1)
+        }
+        setError((cause instanceof Error ? cause.message : 'Unable to verify exchange.') +
+          ' Check the recorded exchange or retry the same request. Do not settle cash again.')
+      }
     } finally { lock.current = false; if (mounted.current) setBusy(false) }
   }
   if (pending) return <section className="border rounded p-2 mb-3" aria-label="Exchange recovery">
     <h3 className="h6">Verify previous exchange</h3>
     <p>Confirmed settlement: <strong>{pending.currencyCode} {pending.request.expectedSettlement.toFixed(2)}</strong>. Do not collect or refund cash again.</p>
+    {registerPanel}
     {error && <p role="alert" className="text-danger">{error}</p>}
     <div className="d-flex flex-wrap gap-2">
       <button type="button" className="btn btn-outline-secondary" disabled={busy}
@@ -418,7 +447,7 @@ function ExchangeEstimate({ receipt, options, pending, onPending }: {
         onClick={() => void record(pending)}>Retry exchange recording</button>
     </div>
   </section>
-  const canRecord = quote?.canPost === true && options.canOperate && valid && confirmed &&
+  const canRecord = quote?.canPost === true && options.canOperate && valid && confirmed && (!registerRequired || registerReady) &&
     !busy && reason.trim().length >= 5 && Number.isFinite(quote.difference) &&
     Math.max(Math.abs(quote.difference), quote.returnTotal, quote.replacementTotal) <= Number.MAX_SAFE_INTEGER / 100
   function changeReturn(id: number, field: 'quantity' | 'condition', value: string) {
@@ -481,12 +510,13 @@ function ExchangeEstimate({ receipt, options, pending, onPending }: {
     </form>
     {quote && !quote.canPost && <p className="small mt-2">Preview only. Exchange posting is not enabled.</p>}
     {quote?.canPost && options.canOperate && <div className="border-top mt-3 pt-2">
+      {registerPanel}
       <label className="d-block mb-2">Exchange reason
         <input className="form-control" maxLength={200} disabled={busy} value={reason}
           onChange={event => { setReason(event.target.value); setConfirmed(false) }} />
       </label>
-      <label className="form-check mb-2"><input className="form-check-input" type="checkbox" checked={confirmed}
-        disabled={busy} onChange={event => setConfirmed(event.target.checked)} />
+      <label className="form-check mb-2"><input className="form-check-input" type="checkbox" checked={confirmed && (!registerRequired || registerReady)}
+        disabled={busy || registerRequired && !registerReady} onChange={event => setConfirmed(event.target.checked)} />
         {quote.difference > 0 ? 'I confirm the stated cash has been collected.' :
           quote.difference < 0 ? 'I confirm the stated cash has been refunded.' : 'I confirm no cash was exchanged.'}
       </label>

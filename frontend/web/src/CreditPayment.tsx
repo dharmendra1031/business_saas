@@ -1,9 +1,10 @@
 import { useEffect, useRef, useState } from 'react'
-import { api, operationKey, post } from './api'
+import { api, ApiResponseError, operationKey, post } from './api'
+import CashRegisterOpening from './CashRegisterOpening'
 import { moneyCents } from './posMoney'
 
 export interface CreditInvoice {
-  id: number; currencyCode: string; locationName?: string | null;
+  id: number; currencyCode: string; locationName?: string | null; locationId?: number;
   debit: number; paid: number; outstanding: number; creditDueDate: string; postedAtUtc: string
 }
 interface Request {
@@ -30,14 +31,24 @@ export function readCollection(key: string): PendingCollection | null {
   return value
 }
 
-export default function CreditPayment({ customerPath, invoice, storageKey, pending, canCollect, onPending, onRecorded, onClose }: {
+export default function CreditPayment({ customerPath, invoice, storageKey, pending, canCollect, businessId, userId, registerRequired, onPending, onRecorded, onClose }: {
   customerPath: string; invoice: CreditInvoice; storageKey: string; pending: PendingCollection | null;
-  canCollect: boolean; onPending: (value: PendingCollection | null) => void;
+  canCollect: boolean; businessId: number; userId: number; registerRequired: boolean;
+  onPending: (value: PendingCollection | null) => void;
   onRecorded: (payment: Payment) => void; onClose: () => void
 }) {
   const [amount, setAmount] = useState('')
   const [confirmed, setConfirmed] = useState(false)
   const [busy, setBusy] = useState(false)
+  const [registerReady, setRegisterReady] = useState(false)
+  const [registerRejected, setRegisterRejected] = useState(false)
+  const [registerRefresh, setRegisterRefresh] = useState(0)
+  const needsRegister = registerRequired || registerRejected
+  useEffect(() => { if (needsRegister && !registerReady) setConfirmed(false) }, [needsRegister, registerReady])
+  const registerPanel = needsRegister && (invoice.locationId && Number.isSafeInteger(invoice.locationId) && invoice.locationId > 0
+    ? <CashRegisterOpening key={registerRefresh} businessId={businessId} userId={userId} locationId={invoice.locationId}
+        currencyCode={invoice.currencyCode} canOperate={canCollect} disabled={busy} required onReady={setRegisterReady} />
+    : <p role="alert">Original invoice location is missing from this saved request. Verify payment history before continuing.</p>)
   const [error, setError] = useState('')
   const [page, setPage] = useState(1)
   const [history, setHistory] = useState<History | null>(null)
@@ -60,7 +71,7 @@ export default function CreditPayment({ customerPath, invoice, storageKey, pendi
 
   const cents = moneyCents(amount)
   const outstandingCents = moneyCents(invoice.outstanding)
-  const valid = cents > 0 && cents <= outstandingCents && confirmed
+  const valid = cents > 0 && cents <= outstandingCents && confirmed && (!needsRegister || registerReady)
   function verify(payment: Payment, request: Request) {
     if (!Number.isSafeInteger(payment.id) || payment.id <= 0 || payment.saleId !== invoice.id ||
         payment.requestKey !== request.requestKey || moneyCents(payment.amount) !== moneyCents(request.amount) ||
@@ -74,6 +85,12 @@ export default function CreditPayment({ customerPath, invoice, storageKey, pendi
       onRecorded(payment)
     }
   }
+  function handleFailure(cause: unknown, fallback: string) {
+    if (cause instanceof ApiResponseError && cause.code === 'REGISTER_REQUIRED') {
+      setRegisterRejected(true); setRegisterReady(false); setRegisterRefresh(x => x + 1)
+      setError('Open your cash register and retry the same request. Do not receive cash again.')
+    } else setError(cause instanceof Error ? cause.message : fallback)
+  }
   async function recover(lookupOnly: boolean) {
     if (lock.current || !pending) return
     lock.current = true; setBusy(true); setError('')
@@ -85,7 +102,7 @@ export default function CreditPayment({ customerPath, invoice, storageKey, pendi
       else if (lookupOnly) setError('No matching payment found. Do not take cash again. Retry the same saved request only after checking the cash received.')
       else complete(await post<Payment>(path, request), request)
     } catch (cause) {
-      if (mounted.current) setError(cause instanceof Error ? cause.message : 'Unable to verify payment.')
+      if (mounted.current) handleFailure(cause, 'Unable to verify payment.')
     } finally { lock.current = false; if (mounted.current) setBusy(false) }
   }
   async function record() {
@@ -100,7 +117,7 @@ export default function CreditPayment({ customerPath, invoice, storageKey, pendi
       onPending(saved)
       complete(await post<Payment>(path, request), request)
     } catch (cause) {
-      if (mounted.current) setError(cause instanceof Error ? cause.message : 'Unable to record payment.')
+      if (mounted.current) handleFailure(cause, 'Unable to record payment.')
     } finally { lock.current = false; if (mounted.current) setBusy(false) }
   }
   return <section className="border rounded p-2 my-2" aria-label="Invoice payment">
@@ -109,6 +126,7 @@ export default function CreditPayment({ customerPath, invoice, storageKey, pendi
       <button type="button" className="btn btn-sm btn-outline-secondary" disabled={busy} onClick={onClose}>Close payment</button>
     </div>
     <p className="small mt-2 mb-1">Collection location: {invoice.locationName ?? 'Original invoice location'} · {invoice.currencyCode}</p>
+    {(pending || canCollect && outstandingCents > 0) && registerPanel}
     {pending ? <>
       <p role="status" className="alert alert-warning py-2">Unresolved collection of {invoice.currencyCode} {pending.request.amount.toFixed(2)}.
         Do not receive cash again. Check history or retry the exact saved request.</p>
@@ -120,10 +138,10 @@ export default function CreditPayment({ customerPath, invoice, storageKey, pendi
       <p className="mb-2">Outstanding: <strong>{invoice.currencyCode} {invoice.outstanding.toFixed(2)}</strong></p>
       <label className="form-label" htmlFor="credit-payment-amount">Cash received ({invoice.currencyCode})</label>
       <input id="credit-payment-amount" className="form-control" type="number" min="0.01" max={invoice.outstanding}
-        step="0.01" required disabled={busy} value={amount} onChange={event => { setAmount(event.target.value); setConfirmed(false) }} />
+        step="0.01" required disabled={busy || needsRegister && !registerReady} value={amount} onChange={event => { setAmount(event.target.value); setConfirmed(false) }} />
       {cents > 0 && cents <= outstandingCents && <p className="small mt-1">Remaining: {invoice.currencyCode} {((outstandingCents - cents) / 100).toFixed(2)}</p>}
-      <label className="form-check my-2"><input className="form-check-input" type="checkbox" disabled={busy}
-        checked={confirmed} onChange={event => setConfirmed(event.target.checked)} /> Cash already received for this invoice.</label>
+      <label className="form-check my-2"><input className="form-check-input" type="checkbox" disabled={busy || needsRegister && !registerReady}
+        checked={confirmed && (!needsRegister || registerReady)} onChange={event => setConfirmed(event.target.checked)} /> Cash already received for this invoice.</label>
       <button type="submit" className="btn btn-primary btn-sm" disabled={busy || !valid}>Record payment</button>
     </form> : <p className="small mt-2">No new payment can be entered here.</p>}
     {error && <p role="alert" className="alert alert-danger py-2 mt-2">{error}</p>}
