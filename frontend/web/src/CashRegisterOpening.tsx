@@ -8,6 +8,13 @@ interface RegisterSession extends OpeningRequest {
 }
 interface CurrentRegister { currencyCode: string; canOpen: boolean; session: RegisterSession | null }
 
+function matchesOpening(session: RegisterSession, request: OpeningRequest, userId: number, currencyCode: string) {
+  return Number.isSafeInteger(session.id) && session.id > 0 && session.actorUserId === userId &&
+    session.locationId === request.locationId && session.requestKey === request.requestKey &&
+    session.openingCash === request.openingCash && session.closedAtUtc === null &&
+    session.currencyCode === currencyCode
+}
+
 export default function CashRegisterOpening({ userId, businessId, locationId, canOperate, disabled }: {
   userId: number; businessId: number; locationId: number; canOperate: boolean; disabled: boolean
 }) {
@@ -21,10 +28,6 @@ export default function CashRegisterOpening({ userId, businessId, locationId, ca
   const [busy, setBusy] = useState(false)
   const [reload, setReload] = useState(0)
   const lock = useRef(false)
-  const matches = (session: RegisterSession, request: OpeningRequest) =>
-    Number.isSafeInteger(session.id) && session.id > 0 && session.actorUserId === userId &&
-    session.locationId === locationId && session.requestKey === request.requestKey &&
-    session.openingCash === request.openingCash && session.closedAtUtc === null
 
   useEffect(() => {
     const controller = new AbortController()
@@ -48,10 +51,7 @@ export default function CashRegisterOpening({ userId, businessId, locationId, ca
       { signal: controller.signal }).then(value => {
       if (controller.signal.aborted) return
       setCurrent(value)
-      if (saved && value.session && Number.isSafeInteger(value.session.id) && value.session.id > 0 &&
-        value.session.actorUserId === userId && value.session.locationId === locationId &&
-        value.session.requestKey === saved.requestKey && value.session.openingCash === saved.openingCash &&
-        value.session.closedAtUtc === null && value.session.currencyCode === value.currencyCode) {
+      if (saved && value.session && matchesOpening(value.session, saved, userId, value.currencyCode)) {
         try { sessionStorage.removeItem(key); setPending(null) }
         catch { setError('The opening was verified, but recovery storage could not be cleared.') }
       } else if (saved && value.session) {
@@ -71,7 +71,7 @@ export default function CashRegisterOpening({ userId, businessId, locationId, ca
       sessionStorage.setItem(key, JSON.stringify(request))
       setPending(request)
       const result = await post<RegisterSession>(base + '/open', request)
-      if (!matches(result, request) || result.currencyCode !== current.currencyCode)
+      if (!matchesOpening(result, request, userId, current.currencyCode))
         throw new Error('Register opening response could not be verified.')
       sessionStorage.removeItem(key)
       setPending(null)
