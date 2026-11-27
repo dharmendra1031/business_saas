@@ -92,7 +92,34 @@ jobs:
           fi
           echo "SQLSERVER_TEST_CONNECTION=Server=127.0.0.1,14333;Database=BusinessSaasCi;User Id=sa;Password=$password;Encrypt=True;TrustServerCertificate=True;Connect Timeout=15" >> "$GITHUB_ENV"
       - name: SQL Server migration and tenant integration test
-        run: dotnet test backend/BusinessSaas.Tests/BusinessSaas.Tests.csproj --configuration Release --filter "Database=SqlServer" --logger "console;verbosity=detailed"
+        run: dotnet test backend/BusinessSaas.Tests/BusinessSaas.Tests.csproj --configuration Release --filter "Database=SqlServer" --logger "console;verbosity=minimal" --logger "trx;LogFileName=sql-server.trx" --results-directory "${{ runner.temp }}/sql-test-results"
+      - name: Report SQL Server test failures
+        if: failure()
+        shell: bash
+        run: |
+          python3 - <<'PY'
+          import os
+          from pathlib import Path
+          import xml.etree.ElementTree as ET
+
+          for report in Path(os.environ["RUNNER_TEMP"], "sql-test-results").glob("*.trx"):
+              for result in ET.parse(report).getroot().findall(".//{*}UnitTestResult"):
+                  if result.get("outcome") != "Failed":
+                      continue
+                  print(result.get("testName"))
+                  for tag in ("Message", "StackTrace"):
+                      detail = result.find(".//{*}ErrorInfo/{*}" + tag)
+                      if detail is not None:
+                          print((detail.text or "")[:6000])
+          PY
+      - name: Upload SQL Server test results
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: sql-server-test-results
+          path: ${{ runner.temp }}/sql-test-results/*.trx
+          if-no-files-found: warn
+          retention-days: 7
 
   frontend:
     runs-on: ubuntu-latest
