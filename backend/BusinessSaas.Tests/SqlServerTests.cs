@@ -540,7 +540,12 @@ public sealed class SqlServerTests(Xunit.Abstractions.ITestOutputHelper output)
 
         using var factory = new WebApplicationFactory<Program>().WithWebHostBuilder(builder =>
         {
-            builder.UseEnvironment("Development"); // Cash posting is not released outside Development yet.
+            builder.UseEnvironment("RetailAcceptance");
+            builder.UseSetting("RetailAcceptance:Enabled", "true");
+            builder.UseSetting("Payments:Enabled", "false");
+            builder.UseSetting("Payments:AllowLive", "false");
+            builder.UseSetting("Razorpay:Mode", "Test");
+            builder.UseSetting("RetailCashRegister:ClosingEnabled", "true");
             builder.UseSetting("RetailReturns:PostingEnabled", "true");
             builder.UseSetting("RetailSales:AlternateUnitsEnabled", "true");
             builder.UseSetting("RetailExchanges:PostingEnabled", "true");
@@ -556,12 +561,34 @@ public sealed class SqlServerTests(Xunit.Abstractions.ITestOutputHelper output)
                 services.AddDbContext<AppDbContext>(options => options.UseSqlServer(connectionString));
             });
         });
-        using var owner = factory.CreateClient();
-        using var cashier = factory.CreateClient();
-        using var stranger = factory.CreateClient();
-        await RegisterAndLogin(owner, "sql-retail-flow-owner@example.test");
-        await RegisterAndLogin(cashier, "sql-retail-flow-cashier@example.test");
-        await RegisterAndLogin(stranger, "sql-retail-flow-stranger@example.test");
+        var clientOptions = new WebApplicationFactoryClientOptions { BaseAddress = new Uri("https://localhost") };
+        using var owner = factory.CreateClient(clientOptions);
+        using var cashier = factory.CreateClient(clientOptions);
+        using var stranger = factory.CreateClient(clientOptions);
+        // Only test fixtures: apply reviewed migrations explicitly, as required by the acceptance host.
+        using (var scope = factory.Services.CreateScope())
+        {
+            var db = scope.ServiceProvider.GetRequiredService<AppDbContext>();
+            await db.Database.MigrateAsync();
+            var users = scope.ServiceProvider.GetRequiredService<Microsoft.AspNetCore.Identity.UserManager<AppUser>>();
+            foreach (var email in new[] { "sql-retail-flow-owner@example.test", "sql-retail-flow-cashier@example.test",
+                "sql-retail-flow-stranger@example.test" })
+            {
+                var created = await users.CreateAsync(new AppUser { UserName = email, Email = email,
+                    EmailConfirmed = true }, "TestPassword123!");
+                Assert.True(created.Succeeded, string.Join("; ", created.Errors.Select(e => e.Description)));
+            }
+        }
+        Assert.False((await owner.GetFromJsonAsync<JsonElement>("/api/auth/options")).GetProperty("canRegister").GetBoolean());
+        foreach (var (client, email) in new[] { (owner, "sql-retail-flow-owner@example.test"),
+            (cashier, "sql-retail-flow-cashier@example.test"), (stranger, "sql-retail-flow-stranger@example.test") })
+        {
+            using var login = await Post(client, "/api/auth/login", new { email, password = "TestPassword123!" });
+            Assert.Equal(HttpStatusCode.NoContent, login.StatusCode);
+            Assert.Contains(login.Headers.GetValues("Set-Cookie"), cookie =>
+                cookie.StartsWith("BusinessSaas.Auth=", StringComparison.Ordinal) &&
+                cookie.Contains("; secure", StringComparison.OrdinalIgnoreCase));
+        }
 
         var businessId = await BusinessFixtures.SeedAsync(factory.Services, owner,
             "SQL Retail Flow", "sql-retail-flow-20261124");
@@ -1966,6 +1993,61 @@ public sealed class SqlServerTests(Xunit.Abstractions.ITestOutputHelper output)
                 x.ProductId == packProductId && x.SourceType == "CreditReturnLine"));
             Assert.Equal(3.5m, await db.RetailStockBalances.Where(x => x.BusinessId == businessId && x.LocationId == locationId &&
                 x.ProductId == packProductId).Select(x => x.Quantity).SingleAsync());
+        }
+        // Complete the same tenant workflow with a real branch transfer and closing.
+        long branchId;
+        using (var scope = factory.Services.CreateScope())
+        {
+            var db = scope.ServiceProvider.GetRequiredService<AppDbContext>();
+            var branch = new BusinessLocation { BusinessId = businessId, Name = "Acceptance Branch", Code = "ACC2" };
+            db.BusinessLocations.Add(branch);
+            await db.SaveChangesAsync();
+            branchId = branch.Id;
+        }
+        var transferPath = prefix + "/stock/transfers";
+        var dispatched = await Post(owner, transferPath, new
+        {
+            fromLocationId = locationId, toLocationId = branchId, reason = "Replenish acceptance branch",
+            requestKey = "sql-acceptance-transfer-001", dispatchNow = true,
+            lines = new[] { new { productId = packProductId, quantity = 1m } }
+        });
+        Assert.Equal(HttpStatusCode.OK, dispatched.StatusCode);
+        var transferId = (await dispatched.Content.ReadFromJsonAsync<JsonElement>()).GetProperty("id").GetInt64();
+        var transferDetailPath = transferPath + "/" + transferId;
+        var dispatchedDetail = await owner.GetFromJsonAsync<JsonElement>(transferDetailPath);
+        var transferLineId = dispatchedDetail.GetProperty("lines")[0].GetProperty("id").GetInt64();
+        Assert.Equal(HttpStatusCode.OK, (await Post(owner, transferDetailPath + "/receive", new
+        {
+            lineId = transferLineId, quantity = 1m, kind = "Received", reason = "",
+            requestKey = "sql-acceptance-transfer-receive", expectedRemaining = 1m
+        })).StatusCode);
+        Assert.Equal("Completed", (await owner.GetFromJsonAsync<JsonElement>(transferDetailPath))
+            .GetProperty("transfer").GetProperty("status").GetString());
+        using (var scope = factory.Services.CreateScope())
+        {
+            var db = scope.ServiceProvider.GetRequiredService<AppDbContext>();
+            foreach (var (location, expectedQuantity) in new[] { (locationId, 2.5m), (branchId, 1m) })
+            {
+                Assert.Equal(expectedQuantity, await db.RetailStockBalances.Where(x => x.BusinessId == businessId &&
+                    x.LocationId == location && x.ProductId == packProductId).Select(x => x.Quantity).SingleAsync());
+                Assert.Equal(expectedQuantity, await db.RetailStockMovements.Where(x => x.BusinessId == businessId &&
+                    x.LocationId == location && x.ProductId == packProductId).SumAsync(x => x.QuantityChange));
+            }
+        }
+        var closingSummary = await owner.GetFromJsonAsync<JsonElement>(RegisterSummary(cashierRegisterId));
+        var expectedCash = closingSummary.GetProperty("expectedCash").GetDecimal();
+        var closePath = prefix + "/cash-register/" + cashierRegisterId + "/close";
+        var closing = new { locationId, expectedCash, actualCash = expectedCash, reason = "", requestKey = "sql-acceptance-closing-001" };
+        Assert.Equal(HttpStatusCode.OK, (await Post(owner, closePath, closing)).StatusCode);
+        var closedReplay = await Post(owner, closePath, closing);
+        Assert.Equal(HttpStatusCode.OK, closedReplay.StatusCode);
+        Assert.Equal(0m, (await closedReplay.Content.ReadFromJsonAsync<JsonElement>()).GetProperty("variance").GetDecimal());
+        using (var scope = factory.Services.CreateScope())
+        {
+            var db = scope.ServiceProvider.GetRequiredService<AppDbContext>();
+            var session = await db.RetailCashRegisterSessions.SingleAsync(x => x.Id == cashierRegisterId);
+            Assert.NotNull(session.ClosedAtUtc);
+            Assert.Equal(expectedCash, session.ClosingActualCash);
         }
     }
 
