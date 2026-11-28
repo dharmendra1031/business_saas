@@ -541,6 +541,7 @@ public sealed class SqlServerTests(Xunit.Abstractions.ITestOutputHelper output)
         using var factory = new WebApplicationFactory<Program>().WithWebHostBuilder(builder =>
         {
             builder.UseEnvironment("RetailAcceptance");
+            builder.UseSetting("ConnectionStrings:Default", connectionString);
             builder.UseSetting("RetailAcceptance:Enabled", "true");
             builder.UseSetting("Payments:Enabled", "false");
             builder.UseSetting("Payments:AllowLive", "false");
