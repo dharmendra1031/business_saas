@@ -1181,6 +1181,64 @@ try {
   }
 
   {
+    const t = await scenario('owner-unpaid-credit-return', {
+      role: 'Owner', hasProducts: true, ownerPos: true
+    })
+    let returned = null
+    let writes = 0
+    await t.page.route('**/api/businesses/1/cash-sales/business-receipts?*', route =>
+      response(route, 200, { items: [{ id: 83, locationId: 1, locationName: 'Main Shop',
+        customerName: 'Credit Customer', paymentMethod: 'Credit', status: returned ? 'Partial return' : 'Posted',
+        printAvailable: false, total: 20, currencyCode: 'INR', postedAtUtc: '2026-11-23T06:00:00Z' }],
+        total: 1, pageSize: 10, totals: [{ currencyCode: 'INR', total: 20, cash: 0, credit: 20 }], hasMore: false }))
+    await t.page.route('**/api/businesses/1/credit-sales/business-invoices/83?*', route =>
+      response(route, 200, { id: 83, paymentMethod: 'Credit', total: 20, tendered: 0,
+        outstanding: returned ? 10 : 20, creditDueDate: '2026-12-01', currencyCode: 'INR',
+        printAvailable: false, postedAtUtc: '2026-11-23T06:00:00Z',
+        lines: [{ id: 5, productName: 'Credit Item', unitCode: 'PCS', quantity: 2, unitPrice: 10,
+          lineTotal: 20, returnedQuantity: returned ? 1 : 0, remainingQuantity: returned ? 1 : 2 }] }))
+    await t.page.route('**/api/businesses/1/credit-sales/business-invoices/83/return-estimate', route =>
+      response(route, 200, { receiptId: 83, currencyCode: 'INR', total: 10,
+        lines: [{ lineId: 5, amount: 10 }], canPost: true }))
+    await t.page.route('**/api/businesses/1/credit-sales/business-invoices/83/returns?*', route =>
+      response(route, 200, { items: returned ? [returned] : [], hasMore: false }))
+    await t.page.route('**/api/businesses/1/credit-sales/business-invoices/83/returns', route => {
+      const body = route.request().postDataJSON()
+      assert.equal(body.cashRefundConfirmed, false)
+      assert.equal(body.creditAdjustmentConfirmed, true)
+      assert.equal(body.expectedRefund, 10)
+      writes++
+      returned = { id: 88, saleId: 83, requestKey: body.requestKey, total: 10,
+        reason: body.reason, postedAtUtc: '2026-11-23T07:00:00Z',
+        lines: [{ saleLineId: 5, quantity: 1, amount: 10, restock: true }] }
+      return route.abort()
+    })
+    await t.login()
+    await t.page.locator('.app-sidebar .nav-entry').filter({ hasText: 'Sales & Returns' }).first().click()
+    await t.page.getByRole('button', { name: 'Receipt #83' }).click()
+    const receipt = t.page.getByRole('region', { name: 'Credit invoice' })
+    await receipt.getByRole('button', { name: 'Estimate return' }).click()
+    const estimate = receipt.getByRole('region', { name: 'Return estimate' })
+    await estimate.getByRole('spinbutton', { name: 'Return quantity for Credit Item' }).fill('1')
+    await estimate.getByRole('button', { name: 'Calculate estimate' }).click()
+    await estimate.getByLabel('Stock disposition — Credit Item').selectOption('restock')
+    await estimate.getByLabel('Return reason').fill('Customer returned credit item')
+    assert.equal(await estimate.getByRole('region', { name: 'Cash register' }).count(), 0)
+    assert.equal(await receipt.getByRole('button', { name: 'Estimate exchange' }).count(), 0)
+    await estimate.getByRole('checkbox').check()
+    await estimate.getByRole('button', { name: 'Record credit return' }).click()
+    const recovery = receipt.getByRole('region', { name: 'Return recovery' })
+    await recovery.getByRole('alert').waitFor()
+    await recovery.getByRole('button', { name: 'Check posted return' }).click()
+    await receipt.getByText(/Return #88 recorded: INR 10.00/).waitFor()
+    assert.equal(writes, 1)
+    await receipt.getByText(/Outstanding INR 10.00/).waitFor()
+    await t.check()
+    await t.context.close()
+    console.log('PASS unpaid credit return adjusts balance and recovers without cash refund or duplicate posting')
+  }
+
+  {
     const t = await scenario('owner-save-failure-retains-input', {
       role: 'Owner', hasProducts: true, ownerPos: true, width: 360, height: 780
     })

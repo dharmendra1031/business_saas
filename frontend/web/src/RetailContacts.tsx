@@ -30,7 +30,7 @@ interface CreditLedger {
   customerId: number
   name: string
   creditLimit: number
-  totals: { currencyCode: string; debit: number; paid: number; outstanding: number; invoiceCount: number }[]
+  totals: { currencyCode: string; debit: number; paid: number; returned?: number; outstanding: number; invoiceCount: number }[]
   canCollect?: boolean
   registerRequired?: boolean
   items: CreditInvoice[]
@@ -82,15 +82,16 @@ function CustomerCreditLedger({ path, userId, businessId, onClose }: { path: str
       <>
         {ledger.totals.length === 0 ? <p className="mt-2 mb-1">No posted credit invoices.</p> :
           <>{ledger.totals.map(total => <p key={total.currencyCode} className="mt-2 mb-1">
-            Credit sales: {total.currencyCode} {total.debit.toFixed(2)} · Received: {total.currencyCode} {total.paid.toFixed(2)} ·
+            Credit sales: {total.currencyCode} {total.debit.toFixed(2)} · Received: {total.currencyCode} {total.paid.toFixed(2)} · Returns: {total.currencyCode} {(total.returned ?? 0).toFixed(2)} ·
             Outstanding: <strong>{total.currencyCode} {total.outstanding.toFixed(2)}</strong> · {total.invoiceCount} invoices
           </p>)}
           <div className="table-responsive"><table className="table table-sm align-middle">
-            <thead><tr><th>Invoice</th><th>Location</th><th>Due date</th><th className="text-end">Invoice amount</th><th className="text-end">Received</th><th className="text-end">Outstanding</th><th>Action</th></tr></thead>
+            <thead><tr><th>Invoice</th><th>Location</th><th>Due date</th><th className="text-end">Invoice amount</th><th className="text-end">Received</th><th className="text-end">Returns</th><th className="text-end">Outstanding</th><th>Action</th></tr></thead>
             <tbody>{ledger.items.map(invoice => <tr key={invoice.id}>
               <td>#{invoice.id}</td><td>{invoice.locationName ?? '—'}</td><td>{invoice.creditDueDate}</td>
               <td className="text-end">{invoice.currencyCode} {invoice.debit.toFixed(2)}</td>
               <td className="text-end">{invoice.currencyCode} {invoice.paid.toFixed(2)}</td>
+              <td className="text-end">{invoice.currencyCode} {(invoice.returned ?? 0).toFixed(2)}</td>
               <td className="text-end">{invoice.currencyCode} {invoice.outstanding.toFixed(2)}</td>
               <td><button type="button" className="btn btn-sm btn-outline-secondary"
                 disabled={!!pending || selected !== null}

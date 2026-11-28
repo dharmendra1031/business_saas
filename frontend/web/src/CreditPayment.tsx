@@ -5,7 +5,7 @@ import { moneyCents } from './posMoney'
 
 export interface CreditInvoice {
   id: number; currencyCode: string; locationName?: string | null; locationId?: number;
-  debit: number; paid: number; outstanding: number; creditDueDate: string; postedAtUtc: string
+  debit: number; paid: number; returned?: number; outstanding: number; creditDueDate: string; postedAtUtc: string
 }
 interface Request {
   requestKey: string; amount: number; expectedOutstanding: number; cashReceivedConfirmed: true

@@ -75,10 +75,13 @@ export default function BusinessPostedSales({ dashboard, userId }: { dashboard: 
   if (receipt && selected) return <CashReceipt receipt={receipt} businessName={business.name}
     pdfPath={invoicePdf(selected)}
     timeZone={business.timeZoneId} backLabel="Back to receipts" onBack={closeReceipt} returnNotice={returnNotice}
-    returnEstimate={selected.paymentMethod === 'Cash' && dashboard.roleCode === 'Owner' ? {
-      path: base + '/' + receipt.id, productSearchPath: `/businesses/${business.id}/cash-sales/products`,
+    returnEstimate={dashboard.roleCode === 'Owner' ? {
+      path: selected.paymentMethod === 'Credit'
+        ? `/businesses/${business.id}/credit-sales/business-invoices/${receipt.id}` : base + '/' + receipt.id,
+      productSearchPath: `/businesses/${business.id}/cash-sales/products`,
       locationId: selected.locationId, userId, canOperate: dashboard.canOperate,
-      businessId: business.id, registerRequired: dashboard.cashRegisterRequired,
+      businessId: business.id, registerRequired: selected.paymentMethod === 'Cash' && dashboard.cashRegisterRequired,
+      creditAdjustment: selected.paymentMethod === 'Credit',
       onRecorded: (id, total) => {
         setReturnNotice(`Return #${id} recorded: ${receipt.currencyCode} ${total.toFixed(2)}.`)
         refreshReceipt()

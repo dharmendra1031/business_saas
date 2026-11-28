@@ -30,13 +30,13 @@ export interface Receipt {
 
 interface ReturnOptions {
   path: string; productSearchPath: string; locationId: number; userId: number; canOperate: boolean
-  businessId: number; registerRequired?: boolean
+  businessId: number; registerRequired?: boolean; creditAdjustment?: boolean
   onRecorded: (id: number, total: number) => void
   onExchangeRecorded: (id: number, replacementId: number) => void
 }
 interface ReturnRequest {
   locationId: number; requestKey: string; reason: string; expectedRefund: number;
-  cashRefundConfirmed: boolean; lines: { lineId: number; quantity: number; restock: boolean }[]
+  cashRefundConfirmed: boolean; creditAdjustmentConfirmed?: boolean; lines: { lineId: number; quantity: number; restock: boolean }[]
 }
 interface PostedReturn {
   id: number; saleId: number; requestKey: string; total: number; reason: string; postedAtUtc: string;
@@ -64,7 +64,8 @@ function readPending(options: ReturnOptions): { request: ReturnRequest | null; e
         Math.abs(Math.round(line.quantity * 1000) - line.quantity * 1000) > 0.000001 ||
         typeof line.restock !== 'boolean') ||
       new Set(request.lines.map(line => line.lineId)).size !== request.lines.length ||
-      request.cashRefundConfirmed !== true || !Number.isFinite(request.expectedRefund) || request.expectedRefund < 0)
+      request.cashRefundConfirmed !== !options.creditAdjustment ||
+      !!request.creditAdjustmentConfirmed !== !!options.creditAdjustment || !Number.isFinite(request.expectedRefund) || request.expectedRefund < 0)
       throw new Error('Invalid pending return')
     return { request, error: '' }
   } catch {
@@ -135,7 +136,8 @@ function ReturnEstimate({ receipt, options }: { receipt: Receipt; options: Retur
   const [registerReady, setRegisterReady] = useState(false)
   const [registerRejected, setRegisterRejected] = useState(false)
   const [registerRefresh, setRegisterRefresh] = useState(0)
-  const registerRequired = options.registerRequired === true || registerRejected
+  const credit = options.creditAdjustment === true
+  const registerRequired = !credit && (options.registerRequired === true || registerRejected)
   useEffect(() => { if (registerRequired && !registerReady) setConfirmed(false) }, [registerRequired, registerReady])
   const registerPanel = registerRequired && <CashRegisterOpening key={registerRefresh}
     userId={options.userId} businessId={options.businessId} locationId={options.locationId}
@@ -175,7 +177,7 @@ function ReturnEstimate({ receipt, options }: { receipt: Receipt; options: Retur
           locationId: String(options.locationId), requestKey: request.requestKey
         }))
         if (!result.items.length) {
-          setError('No matching posted return found yet. Do not pay cash again. Retry recording with the same request.')
+          setError(credit ? 'No posted credit adjustment found. Retry recording with the same request.' : 'No matching posted return found yet. Do not pay cash again. Retry recording with the same request.')
           return
         }
         finish(result.items[0], request)
@@ -191,16 +193,16 @@ function ReturnEstimate({ receipt, options }: { receipt: Receipt; options: Retur
         setError('Open your cash register and retry the same recording. Do not refund cash again.')
       } else if (cause instanceof ApiResponseError && cause.code === 'RETURN_REJECTED') {
         try { sessionStorage.removeItem(key); setPending(null); setEstimate(null); setConfirmed(false) } catch { /* Keep recovery available. */ }
-        setError(cause.message + ' Reconcile cash already refunded before making any new return.')
+        setError(cause.message + (credit ? ' Recalculate the credit adjustment before retrying.' : ' Reconcile cash already refunded before making any new return.'))
       } else {
         setError((cause instanceof Error ? cause.message : 'Unable to verify return.') +
-          ' Check return history or retry the same recording. Do not refund cash again.')
+          (credit ? ' Check return history or retry the same adjustment.' : ' Check return history or retry the same recording. Do not refund cash again.'))
       }
     } finally { lock.current = false; setBusy(false) }
   }
   if (pending) return <section className="border rounded p-2 mb-3" aria-label="Return recovery">
     <h3 className="h6">Verify previous return</h3>
-    <p>Refund amount: <strong>{receipt.currencyCode} {pending.expectedRefund.toFixed(2)}</strong>. Do not refund cash again.</p>
+    <p>{credit ? "Credit adjustment" : "Refund amount"}: <strong>{receipt.currencyCode} {pending.expectedRefund.toFixed(2)}</strong>. {credit ? "No cash refund." : "Do not refund cash again."}</p>
     {registerPanel}
     {error && <p role="alert" className="text-danger">{error}</p>}
     <div className="d-flex flex-wrap gap-2">
@@ -212,7 +214,7 @@ function ReturnEstimate({ receipt, options }: { receipt: Receipt; options: Retur
     reason.trim().length >= 5 && confirmed && (!registerRequired || registerReady) && selected.every(line => !!dispositions[line.id])
   return <section className="border rounded p-2 mb-3" aria-label="Return estimate">
     <h3 className="h6">Return estimate</h3>
-    <p className="small mb-2">Calculate the amount before confirming a cash refund. No money is transferred by the software.</p>
+    <p className="small mb-2">{credit ? "Reduce unpaid customer credit only. Returns exceeding outstanding require separate refund settlement." : "Calculate the amount before confirming a cash refund. No money is transferred by the software."}</p>
     <button type="button" className="btn btn-outline-secondary btn-sm mb-2" disabled={busy || !receipt.lines.some(line => available(line) > 0)}
       onClick={() => change(Object.fromEntries(receipt.lines.map(line => [line.id, String(available(line))])))}>
       Select remaining quantity
@@ -266,16 +268,16 @@ function ReturnEstimate({ receipt, options }: { receipt: Receipt; options: Retur
       </label>
       <label className="form-check mb-2"><input className="form-check-input" type="checkbox" checked={confirmed && (!registerRequired || registerReady)} disabled={busy || registerRequired && !registerReady}
         onChange={event => setConfirmed(event.target.checked)} />
-        I confirm the stated cash refund has already been settled with the customer.
+        {credit ? "I confirm the goods return and reduction of unpaid credit. No cash refund was issued." : "I confirm the stated cash refund has already been settled with the customer."}
       </label>
       <button className="btn btn-primary" type="button" disabled={!canRecord}
         onClick={() => {
           if (!canRecord || !estimate) return
           void recordReturn({ locationId: options.locationId, requestKey: operationKey(), reason: reason.trim(),
-            expectedRefund: estimate.total, cashRefundConfirmed: true, lines: selected.map(line => ({
+            expectedRefund: estimate.total, cashRefundConfirmed: !credit, ...(credit ? { creditAdjustmentConfirmed: true } : {}), lines: selected.map(line => ({
               lineId: line.id, quantity: Number(quantities[line.id]), restock: dispositions[line.id] === 'restock'
             })) })
-        }}>Record return</button>
+        }}>{credit ? "Record credit return" : "Record return"}</button>
     </div>}
   </section>
 }
@@ -549,7 +551,7 @@ export default function CashReceipt({ receipt, businessName, timeZone, pdfPath, 
   returnNotice?: string
 }) {
   const [showEstimate, setShowEstimate] = useState(() => !!returnEstimate && !!readPending(returnEstimate).request)
-  const [restoredExchange] = useState(() => returnEstimate ? readExchange(returnEstimate) : { pending: null, error: '' })
+  const [restoredExchange] = useState(() => returnEstimate && !returnEstimate.creditAdjustment ? readExchange(returnEstimate) : { pending: null, error: '' })
   const [pendingExchange, setPendingExchange] = useState(restoredExchange.pending)
   const [showExchange, setShowExchange] = useState(!!restoredExchange.pending)
   const returnRecovery = returnEstimate ? readPending(returnEstimate) : null
