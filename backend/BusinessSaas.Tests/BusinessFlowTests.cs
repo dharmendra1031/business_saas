@@ -1652,6 +1652,20 @@ public sealed class BusinessFlowTests
         {
             var db = scope.ServiceProvider.GetRequiredService<AppDbContext>();
             var sub = await db.BusinessSubscriptions.SingleAsync(x => x.BusinessId == firstId);
+            sub.PaidStartsAtUtc = DateTime.UtcNow.AddDays(-10);
+            sub.PaidEndsAtUtc = DateTime.UtcNow.AddDays(3);
+            await db.SaveChangesAsync();
+        }
+        var renewalOverview = await admin.GetFromJsonAsync<JsonElement>("/api/platform/overview");
+        Assert.Equal(1, renewalOverview.GetProperty("expiringPaidCount").GetInt32());
+        Assert.Equal(0, renewalOverview.GetProperty("expiredPaidCount").GetInt32());
+        var renewalRow = renewalOverview.GetProperty("expiringPaid")[0];
+        Assert.Equal(firstId, renewalRow.GetProperty("businessId").GetInt64());
+        Assert.Equal(DateTimeKind.Utc, renewalRow.GetProperty("endsAtUtc").GetDateTime().Kind);
+        using (var scope = factory.Services.CreateScope())
+        {
+            var db = scope.ServiceProvider.GetRequiredService<AppDbContext>();
+            var sub = await db.BusinessSubscriptions.SingleAsync(x => x.BusinessId == firstId);
             sub.PaidEndsAtUtc = DateTime.UtcNow.AddSeconds(-1);
             await db.SaveChangesAsync();
         }
@@ -1666,6 +1680,8 @@ public sealed class BusinessFlowTests
         Assert.Equal("Inactive", expiredCustomer.GetProperty("businesses")[0].GetProperty("accessStatus").GetString());
         var expiredOverview = await admin.GetFromJsonAsync<JsonElement>("/api/platform/overview");
         Assert.Equal(0, expiredOverview.GetProperty("activeSubscriptions").GetInt32());
+        Assert.Equal(1, expiredOverview.GetProperty("expiredPaidCount").GetInt32());
+        Assert.Equal(0, expiredOverview.GetProperty("expiringPaidCount").GetInt32());
         var activeDirectory = await admin.GetFromJsonAsync<JsonElement>(
             "/api/platform/businesses?search=Alpha&status=Active");
         Assert.Equal(0, activeDirectory.GetProperty("total").GetInt32());

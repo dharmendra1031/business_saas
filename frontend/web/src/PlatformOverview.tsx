@@ -24,6 +24,8 @@ interface ExpiringTrial {
   trialEndsAtUtc: string
 }
 
+type ExpiringPaid = Omit<ExpiringTrial, 'trialEndsAtUtc'> & { endsAtUtc: string }
+
 interface PlatformActivity {
   id: number
   actorUserId: number
@@ -44,6 +46,9 @@ interface Overview {
   unassignedBusinesses: number
   expiringTrialCount: number
   expiringTrials: ExpiringTrial[]
+  expiredPaidCount: number
+  expiringPaidCount: number
+  expiringPaid: ExpiringPaid[]
   recentActivity: PlatformActivity[]
 }
 
@@ -143,6 +148,7 @@ interface RecentBusiness {
   ownerEmail: string
   planCode: string | null
   subscriptionStatus: string | null
+  directoryStatus: string
   trialEndsAtUtc: string | null
 }
 
@@ -152,15 +158,47 @@ interface RecentBusinessPage {
 }
 
 function currentStatus(item: RecentBusiness) {
-  if (item.subscriptionStatus === 'Trial' && item.trialEndsAtUtc &&
-    new Date(item.trialEndsAtUtc).getTime() <= Date.now()) return 'Expired Trial'
-  return item.subscriptionStatus ?? 'Unassigned'
+  return item.directoryStatus ?? 'Unknown'
 }
 
 function statusClass(status: string) {
   if (status === 'Active') return 'is-active'
   if (status === 'Trial') return 'is-trial'
   return 'is-muted'
+}
+
+function ExpiryList({ title, count, items, expiredCount, onViewBusiness, onSeeBusinesses }: {
+  title: string; count: number; items: ExpiringPaid[]; expiredCount?: number
+  onViewBusiness: (id: number) => void; onSeeBusinesses: () => void
+}) {
+  return <section className="content-section platform-expiring-card">
+    <div className="platform-panel-heading">
+      <div><h2><Clock3 size={19} /> {title}</h2>
+        <p>Next seven days · {count.toLocaleString()}{expiredCount === undefined ? ' trials' : ' paid subscriptions'}</p>
+        {expiredCount !== undefined && <p>Expired paid periods (not suspended): {expiredCount.toLocaleString()}</p>}</div>
+      <button type="button" className="platform-link-action" onClick={onSeeBusinesses}>
+        Businesses <ArrowRight size={15} />
+      </button>
+    </div>
+    {items.length === 0 ? <p className="platform-empty-inline">No matching expirations in the next seven days.</p> :
+      <div className="table-responsive">
+        <table className="table table-sm platform-table platform-expiring-table">
+          <thead><tr><th scope="col">Business</th><th scope="col">Owner</th>
+            <th scope="col">Expires at</th><th scope="col">Status</th>
+            <th scope="col" className="text-end">Action</th></tr></thead>
+          <tbody>{items.map(item => <tr key={item.businessId}>
+            <td><strong>{item.businessName}</strong>
+              <small className="d-block text-secondary">#{item.businessId} · {item.businessType}</small></td>
+            <td>{item.ownerEmail ?? 'Not available'}</td>
+            <td>{new Date(item.endsAtUtc).toLocaleString()}</td>
+            <td><span className="platform-state-pill is-trial">Expiring</span></td>
+            <td className="text-end"><button type="button" className="btn btn-outline-primary btn-sm"
+              onClick={() => onViewBusiness(item.businessId)}>View</button></td>
+          </tr>)}</tbody>
+        </table>
+      </div>}
+    {count > items.length && <p className="small text-secondary mb-0 mt-2">Showing the nearest {items.length} expirations.</p>}
+  </section>
 }
 
 export type OverviewSubscriptionFilter = 'Active' | 'Trial' | 'TrialExpired'
@@ -335,36 +373,12 @@ export default function PlatformOverview({
         </section>
       </div>
 
-      <section className="content-section platform-expiring-card">
-        <div className="platform-panel-heading">
-          <div><h2><Clock3 size={19} /> Trials Expiring Soon</h2>
-            <p>Next seven days · {summary.expiringTrialCount.toLocaleString()} trials</p></div>
-          <button type="button" className="platform-link-action" onClick={() => onSeeBusinesses()}>
-            Businesses <ArrowRight size={15} />
-          </button>
-        </div>
-        {summary.expiringTrials.length === 0 ?
-          <p className="platform-empty-inline">No business trials are expiring in the next seven days.</p> :
-          <div className="table-responsive">
-            <table className="table table-sm platform-table platform-expiring-table">
-              <thead><tr><th scope="col">Business</th><th scope="col">Owner</th>
-                <th scope="col">Trial ends</th><th scope="col">Status</th>
-                <th scope="col" className="text-end">Action</th></tr></thead>
-              <tbody>{summary.expiringTrials.map(trial => <tr key={trial.businessId}>
-                <td><strong>{trial.businessName}</strong>
-                  <small className="d-block text-secondary">#{trial.businessId} · {trial.businessType}</small></td>
-                <td>{trial.ownerEmail ?? 'Not available'}</td>
-                <td>{new Date(trial.trialEndsAtUtc).toLocaleDateString()}</td>
-                <td><span className="platform-state-pill is-trial">Expiring</span></td>
-                <td className="text-end"><button type="button" className="btn btn-outline-primary btn-sm"
-                  onClick={() => onViewBusiness(trial.businessId)}>View</button></td>
-              </tr>)}</tbody>
-            </table>
-          </div>}
-        {summary.expiringTrialCount > summary.expiringTrials.length && <p className="small text-secondary mb-0 mt-2">
-          Showing the nearest {summary.expiringTrials.length} trial expirations.
-        </p>}
-      </section>
+      <ExpiryList title="Trials Expiring Soon" count={summary.expiringTrialCount}
+        items={summary.expiringTrials.map(({ trialEndsAtUtc, ...item }) => ({ ...item, endsAtUtc: trialEndsAtUtc }))}
+        onViewBusiness={onViewBusiness} onSeeBusinesses={() => onSeeBusinesses()} />
+      <ExpiryList title="Paid Subscriptions Expiring Soon" count={summary.expiringPaidCount}
+        items={summary.expiringPaid} expiredCount={summary.expiredPaidCount}
+        onViewBusiness={onViewBusiness} onSeeBusinesses={() => onSeeBusinesses()} />
       <p className="platform-overview-note">
         Figures are sourced from authorized platform APIs. No demo transactions, assumed revenue or unverified trends are shown.
       </p>

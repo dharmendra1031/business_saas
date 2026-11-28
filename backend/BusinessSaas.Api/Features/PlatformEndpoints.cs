@@ -135,6 +135,28 @@ public static class PlatformEndpoints
                                            trialEndsAtUtc = trial.TrialEndsAtUtc
                                        }).Take(8).ToListAsync();
 
+            // Paid expiry is derived from the recorded period, not a background status update.
+            var paidQuery = db.BusinessSubscriptions.AsNoTracking().Where(x =>
+                x.Status == "Active" && x.PaidPlanVersionId.HasValue &&
+                x.PaidStartsAtUtc != null && x.PaidStartsAtUtc <= now && x.PaidEndsAtUtc != null &&
+                x.PaidEndsAtUtc > x.PaidStartsAtUtc);
+            var expiredPaidCount = await paidQuery.CountAsync(x => x.PaidEndsAtUtc <= now);
+            var expiringPaidQuery = paidQuery.Where(x => x.PaidEndsAtUtc > now && x.PaidEndsAtUtc <= expiringUntil);
+            var expiringPaidCount = await expiringPaidQuery.CountAsync();
+            var expiringPaid = await (from paid in expiringPaidQuery
+                                      join business in db.Businesses.AsNoTracking() on paid.BusinessId equals business.Id
+                                      join owner in db.Users.AsNoTracking() on business.CreatedByUserId equals owner.Id
+                                      join type in db.BusinessTypes.AsNoTracking() on business.BusinessTypeId equals type.Id
+                                      orderby paid.PaidEndsAtUtc, business.Id
+                                      select new
+                                      {
+                                          businessId = business.Id,
+                                          businessName = business.Name,
+                                          ownerEmail = owner.Email,
+                                          businessType = type.Name,
+                                          endsAtUtc = DateTime.SpecifyKind(paid.PaidEndsAtUtc!.Value, DateTimeKind.Utc)
+                                      }).Take(8).ToListAsync();
+
             var recentActivity = await db.PlatformAuditEvents.AsNoTracking()
                 .OrderByDescending(x => x.Id).Take(8)
                 .Select(x => new
@@ -148,7 +170,7 @@ public static class PlatformEndpoints
                 totalCustomers, totalBusinesses, activeSubscriptions, activeTrials, expiredTrials,
                 businessGrowth, businessesByPlan,
                 unassignedBusinesses = Math.Max(0, totalBusinesses - businessesByPlan.Sum(x => x.businessCount)),
-                expiringTrialCount, expiringTrials, recentActivity
+                expiringTrialCount, expiringTrials, expiredPaidCount, expiringPaidCount, expiringPaid, recentActivity
             });
         });
 

@@ -46,7 +46,7 @@ const dashboard = (role, hasProducts = false, pendingApprovals = 0, selectedBusi
 const overview = {
   totalCustomers: 0, totalBusinesses: 0, activeSubscriptions: 0, activeTrials: 0,
   expiredTrials: 0, businessGrowth: [], businessesByPlan: [], unassignedBusinesses: 0,
-  expiringTrialCount: 0, expiringTrials: [], recentActivity: []
+  expiringTrialCount: 0, expiringTrials: [], expiredPaidCount: 0, expiringPaidCount: 0, expiringPaid: [], recentActivity: []
 }
 
 function response(route, status, data) {
