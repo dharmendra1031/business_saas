@@ -1,5 +1,5 @@
 import { useEffect, useRef, useState } from 'react'
-import { api, post, operationKey, type RetailDashboard } from './api'
+import { api, post, operationKey, ApiResponseError, type RetailDashboard } from './api'
 import { moneyCents } from './posMoney'
 import { MasterLookup } from './LookupDialog'
 
@@ -53,7 +53,14 @@ function ClosingDetail({ session, base, canClose, timeZone, onClosed, onBack }: 
         saved.closingReason !== request.reason) throw new Error('Closing confirmation did not match.')
       onClosed()
     } catch (cause) {
-      setError((cause instanceof Error ? cause.message : 'Unable to verify closing.') + ' Check register history before counting or recording again.')
+      if (cause instanceof ApiResponseError && cause.code === 'REGISTER_BALANCE_CHANGED') {
+        // A definite server rejection of this request permits a fresh count. Unknown writes still use the original key.
+        setPending(null); setConfirmed(false); setActual(''); setReason('')
+        setReload(n => n + 1)
+        setError('Cash changed before closing. Review the refreshed summary and recount.')
+      } else {
+        setError((cause instanceof Error ? cause.message : 'Unable to verify closing.') + ' Check register history before counting or recording again.')
+      }
     } finally { lock.current = false; setBusy(false) }
   }
   return <section aria-label="Register closing details">
@@ -96,7 +103,7 @@ function ClosingDetail({ session, base, canClose, timeZone, onClosed, onBack }: 
         <button className="btn btn-primary" type="submit" disabled={busy || (!pending && !valid)}>
           {busy ? 'Closing…' : pending ? 'Retry same closing' : 'Close shift'}
         </button>
-      </form> : <p>Register closing is not released on this host.</p>)}
+      </form> : <p>Register closing is unavailable: check subscription, release state or maintenance.</p>)}
     </>}
   </section>
 }

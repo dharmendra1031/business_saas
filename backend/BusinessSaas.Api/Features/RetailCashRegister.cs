@@ -45,14 +45,29 @@ public static class RetailCashRegister
         return (sessionId, null);
     }
 
-    private static async Task<bool> CanOpen(AppDbContext db, long businessId, IConfiguration config,
+    private static async Task<bool> HasActiveSubscription(AppDbContext db, long businessId,
         CancellationToken cancellationToken)
     {
-        if (!config.GetValue<bool>("RetailCashRegister:OpeningEnabled")) return false;
         var subscription = await db.BusinessSubscriptions.AsNoTracking()
             .SingleOrDefaultAsync(x => x.BusinessId == businessId, cancellationToken);
         return subscription is not null && SubscriptionAccess.CanOperate(subscription, DateTime.UtcNow);
     }
+
+    private static async Task<bool> CanOpen(AppDbContext db, long businessId, IConfiguration config,
+        CancellationToken cancellationToken) =>
+        config.GetValue<bool>("RetailCashRegister:OpeningEnabled") &&
+        await HasActiveSubscription(db, businessId, cancellationToken);
+
+    private static bool ClosingEnabled(IConfiguration config) =>
+        config.GetValue<bool>("RetailCashRegister:ClosingEnabled") &&
+        config.GetValue<bool>("RetailCashRegister:LinkingEnabled");
+
+    private static async Task<bool> CanClose(AppDbContext db, long businessId, IConfiguration config,
+        IWebHostEnvironment environment, CancellationToken cancellationToken) =>
+        ClosingEnabled(config) &&
+        await HasActiveSubscription(db, businessId, cancellationToken) &&
+        await PlatformModuleReleaseEndpoints.Available(db, environment, "POS") &&
+        await PlatformStatusEndpoints.ActiveMaintenance(db) is null;
 
     private static object Detail(RetailCashRegisterSession session) => new
     {
@@ -235,7 +250,8 @@ public static class RetailCashRegister
     }
 
     private static async Task<IResult> List(long businessId, long locationId, ClaimsPrincipal user,
-        AppDbContext db, IConfiguration config, CancellationToken cancellationToken, int page = 1, bool openOnly = true)
+        AppDbContext db, IConfiguration config, IWebHostEnvironment environment, CancellationToken cancellationToken,
+        int page = 1, bool openOnly = true)
     {
         if (!long.TryParse(user.FindFirstValue(ClaimTypes.NameIdentifier), out var actor) ||
             await RetailCashSales.Shop(db, businessId, actor, locationId, ownerOnly: true,
@@ -246,12 +262,12 @@ public static class RetailCashRegister
         if (openOnly) query = query.Where(x => x.ClosedAtUtc == null);
         var items = await query.OrderByDescending(x => x.Id).Skip((page - 1) * 20).Take(21).ToListAsync(cancellationToken);
         return Results.Ok(new { items = items.Take(20).Select(Detail), hasMore = items.Count > 20,
-            canClose = config.GetValue<bool>("RetailCashRegister:ClosingEnabled") &&
-                config.GetValue<bool>("RetailCashRegister:LinkingEnabled") });
+            canClose = await CanClose(db, businessId, config, environment, cancellationToken) });
     }
 
     private static async Task<IResult> Close(long businessId, long sessionId, CloseRequest request,
-        ClaimsPrincipal user, AppDbContext db, IConfiguration config, CancellationToken cancellationToken)
+        ClaimsPrincipal user, AppDbContext db, IConfiguration config, IWebHostEnvironment environment,
+        CancellationToken cancellationToken)
     {
         if (!long.TryParse(user.FindFirstValue(ClaimTypes.NameIdentifier), out var actor))
             return Results.NotFound();
@@ -274,9 +290,13 @@ public static class RetailCashRegister
                 return session.ClosingRequestKey == key && session.ClosedByUserId == actor &&
                     session.ClosingActualCash == actual && session.ClosingExpectedCash == expected && session.ClosingReason == reason
                     ? Results.Ok(Detail(session)) : Results.Conflict(new { message = "Register is already closed. Review its recorded closing." });
-            if (!config.GetValue<bool>("RetailCashRegister:ClosingEnabled") ||
-                !config.GetValue<bool>("RetailCashRegister:LinkingEnabled"))
-                return Results.Conflict(new { message = "Register closing is not released on this host." });
+            // Recheck mutable access rules inside the posting transaction, not only in middleware.
+            if (!await HasActiveSubscription(db, businessId, cancellationToken))
+                return Results.Json(new { message = "Subscription access is unavailable, expired or suspended." }, statusCode: 403);
+            if (!ClosingEnabled(config) || !await PlatformModuleReleaseEndpoints.Available(db, environment, "POS"))
+                return Results.Conflict(new { code = "MODULE_NOT_AVAILABLE", message = "Register closing is not released on this host." });
+            if (await PlatformStatusEndpoints.ActiveMaintenance(db) is not null)
+                return Results.Json(new { code = "PLATFORM_MAINTENANCE", message = "Register closing is unavailable during maintenance." }, statusCode: 503);
             if (session.OpenedAtUtc > DateTime.UtcNow)
                 return Results.Conflict(new { message = "Register opening time requires reconciliation." });
             var (totals, error) = await Calculate(db, session, cancellationToken);

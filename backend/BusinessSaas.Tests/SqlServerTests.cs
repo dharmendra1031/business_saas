@@ -2625,6 +2625,29 @@ public sealed class SqlServerTests(Xunit.Abstractions.ITestOutputHelper output)
         var closingPath = path + "/" + registerId + "/close";
         var closing = new { locationId, expectedCash = 2375m, actualCash = 2370m,
             reason = "Cash count shortage", requestKey = "sql-register-closing-owner" };
+        var shiftListPath = path + "?locationId=" + locationId;
+        Assert.True((await owner.GetFromJsonAsync<JsonElement>(shiftListPath)).GetProperty("canClose").GetBoolean());
+        DateTime originalTrialEnd;
+        using (var scope = factory.Services.CreateScope())
+        {
+            var db = scope.ServiceProvider.GetRequiredService<AppDbContext>();
+            var subscription = await db.BusinessSubscriptions.SingleAsync(x => x.BusinessId == businessId);
+            originalTrialEnd = subscription.TrialEndsAtUtc;
+            subscription.TrialEndsAtUtc = DateTime.UtcNow.AddMinutes(-1);
+            await db.SaveChangesAsync();
+        }
+        Assert.False((await owner.GetFromJsonAsync<JsonElement>(shiftListPath)).GetProperty("canClose").GetBoolean());
+        Assert.Equal(HttpStatusCode.OK, (await owner.GetAsync(path + "/" + registerId + "/summary?locationId=" + locationId)).StatusCode);
+        Assert.Equal(HttpStatusCode.Forbidden, (await Post(owner, closingPath, closing)).StatusCode);
+        using (var scope = factory.Services.CreateScope())
+        {
+            var db = scope.ServiceProvider.GetRequiredService<AppDbContext>();
+            Assert.Null((await db.RetailCashRegisterSessions.SingleAsync(x => x.Id == registerId)).ClosedAtUtc);
+            var subscription = await db.BusinessSubscriptions.SingleAsync(x => x.BusinessId == businessId);
+            subscription.TrialEndsAtUtc = originalTrialEnd;
+            await db.SaveChangesAsync();
+        }
+        Assert.True((await owner.GetFromJsonAsync<JsonElement>(shiftListPath)).GetProperty("canClose").GetBoolean());
         Assert.Equal(HttpStatusCode.NotFound, (await Post(cashier, closingPath, closing)).StatusCode);
         Assert.Equal(HttpStatusCode.NotFound, (await Post(stranger, closingPath, closing)).StatusCode);
         Assert.Equal(HttpStatusCode.BadRequest, (await Post(owner, closingPath, closing with { reason = "" })).StatusCode);
