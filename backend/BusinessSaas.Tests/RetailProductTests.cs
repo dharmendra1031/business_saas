@@ -250,6 +250,12 @@ public sealed class RetailProductTests
             .GetProperty("id").GetInt64();
         Assert.True(productId > 0);
 
+        var barcodeMatch = await owner.GetFromJsonAsync<JsonElement>(path + "?code=890000010001&status=active");
+        Assert.Equal(1, barcodeMatch.GetProperty("total").GetInt32());
+        Assert.Equal(productId, barcodeMatch.GetProperty("items")[0].GetProperty("id").GetInt64());
+        var exactSku = await owner.GetFromJsonAsync<JsonElement>(path + "?code=PEN-100&status=active");
+        Assert.Equal(productId, exactSku.GetProperty("items")[0].GetProperty("id").GetInt64());
+
         var boxId = await CreateId(owner, $"/api/businesses/{businessId}/units",
             new { code = "BOX", name = "Box" });
         object WithConversions(params object[] conversions) => new {

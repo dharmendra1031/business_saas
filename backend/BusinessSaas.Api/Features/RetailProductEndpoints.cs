@@ -29,12 +29,12 @@ public static class RetailProductEndpoints
 
             var term = search?.Trim().ToUpperInvariant() ?? "";
             var exactCode = code?.Trim().ToUpperInvariant() ?? "";
-            if (exactCode.Length > 50 || term.Length > 150 || status is not (null or "" or "all" or "active" or "inactive"))
+            if (exactCode.Length > 64 || term.Length > 150 || status is not (null or "" or "all" or "active" or "inactive"))
                 return Results.BadRequest(new { message = "Invalid search or status filter." });
 
             var query = db.RetailProducts.AsNoTracking().Where(x => x.BusinessId == businessId);
             if (exactCode.Length > 0)
-                query = query.Where(x => x.Sku == exactCode);
+                query = query.Where(x => x.Sku == exactCode || x.Barcode == exactCode);
             else if (term.Length > 0)
                 query = query.Where(x => x.Name.ToUpper().Contains(term) ||
                     x.Sku.Contains(term) || x.Barcode != null && x.Barcode.Contains(term));

@@ -785,6 +785,12 @@ public sealed class AppDbContext(DbContextOptions<AppDbContext> options)
             entity.Property(x => x.Unit).HasMaxLength(20).IsRequired();
             entity.HasIndex(x => x.Barcode).IsUnique().HasFilter("[Barcode] IS NOT NULL");
             entity.HasIndex(x => new { x.NameKey, x.Id });
+            entity.Property<string>("BrandKey").HasMaxLength(80)
+                .HasComputedColumnSql("UPPER([Brand])", stored: true);
+            entity.Property<string>("PackSizeKey").HasMaxLength(40)
+                .HasComputedColumnSql("UPPER([PackSize])", stored: true);
+            entity.HasIndex("NameKey", "BrandKey", "PackSizeKey", "Unit")
+                .IsUnique().HasFilter("[Barcode] IS NULL");
         });
 
         builder.Entity<RetailProduct>(entity =>

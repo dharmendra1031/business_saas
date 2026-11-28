@@ -783,6 +783,12 @@ namespace BusinessSaas.Api.Data.Migrations
                         .HasMaxLength(80)
                         .HasColumnType("nvarchar(80)");
 
+                    b.Property<string>("BrandKey")
+                        .ValueGeneratedOnAddOrUpdate()
+                        .HasMaxLength(80)
+                        .HasColumnType("nvarchar(80)")
+                        .HasComputedColumnSql("UPPER([Brand])", true);
+
                     b.Property<string>("Category")
                         .IsRequired()
                         .HasMaxLength(80)
@@ -809,6 +815,12 @@ namespace BusinessSaas.Api.Data.Migrations
                         .HasMaxLength(40)
                         .HasColumnType("nvarchar(40)");
 
+                    b.Property<string>("PackSizeKey")
+                        .ValueGeneratedOnAddOrUpdate()
+                        .HasMaxLength(40)
+                        .HasColumnType("nvarchar(40)")
+                        .HasComputedColumnSql("UPPER([PackSize])", true);
+
                     b.Property<string>("Unit")
                         .IsRequired()
                         .HasMaxLength(20)
@@ -821,6 +833,10 @@ namespace BusinessSaas.Api.Data.Migrations
                         .HasFilter("[Barcode] IS NOT NULL");
 
                     b.HasIndex("NameKey", "Id");
+
+                    b.HasIndex("NameKey", "BrandKey", "PackSizeKey", "Unit")
+                        .IsUnique()
+                        .HasFilter("[Barcode] IS NULL");
 
                     b.ToTable("GlobalProducts");
                 });

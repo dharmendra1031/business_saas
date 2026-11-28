@@ -318,8 +318,9 @@ export default function RetailPurchases({ businessId, canOperate, locations, rol
     setError('')
     try {
       const result = await api<Page<Product>>(`/businesses/${businessId}/products?code=${encodeURIComponent(code)}&status=active&page=1`)
-      const match = result.items.find(item => item.isActive && item.sku.toUpperCase() === code.toUpperCase())
-      if (match) {
+      // Exact lookup includes both SKU and barcode. Never pick an ambiguous match.
+      const match = result.total === 1 ? result.items[0] : undefined
+      if (match?.isActive) {
         if (lines.some(line => line.productId === match.id)) setError('This item is already in the order.')
         else addLine(match)
       } else {

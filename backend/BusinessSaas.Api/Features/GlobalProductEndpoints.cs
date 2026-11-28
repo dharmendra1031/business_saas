@@ -61,7 +61,8 @@ public static class GlobalProductEndpoints
         if (barcode != null && await others.AnyAsync(x => x.Barcode == barcode, ct))
             return Results.Conflict(new { message = "This manufacturer barcode already exists." });
         if (barcode is null && await others.AnyAsync(x => x.Barcode == null && x.NameKey == key &&
-            x.Brand.ToUpper() == brand.ToUpper() && x.PackSize.ToUpper() == packSize.ToUpper() && x.Unit == unit, ct))
+            EF.Property<string>(x, "BrandKey") == brand.ToUpperInvariant() &&
+            EF.Property<string>(x, "PackSizeKey") == packSize.ToUpperInvariant() && x.Unit == unit, ct))
             return Results.Conflict(new { message = "A matching product already exists. Review the catalogue." });
 
         product.Name = name;
@@ -76,7 +77,7 @@ public static class GlobalProductEndpoints
         try { await db.SaveChangesAsync(ct); }
         catch (DbUpdateException error) when (RetailModule.IsDuplicateKey(error))
         {
-            return Results.Conflict(new { message = "This manufacturer barcode already exists." });
+            return Results.Conflict(new { message = "A matching product or manufacturer barcode already exists. Review the catalogue." });
         }
         return id.HasValue ? Results.Ok(new { product.Id }) :
             Results.Created($"/api/platform/global-products?afterId={product.Id - 1}", new { product.Id });

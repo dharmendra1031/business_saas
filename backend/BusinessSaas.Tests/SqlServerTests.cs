@@ -90,6 +90,10 @@ public sealed class SqlServerTests(Xunit.Abstractions.ITestOutputHelper output)
             Assert.Contains("20261127090000_RetailCashRegisterPostingLinks", await db.Database.GetAppliedMigrationsAsync());
             Assert.Contains("20261127110000_RetailCashRegisterMovements", await db.Database.GetAppliedMigrationsAsync());
             Assert.Contains("20261128100000_GlobalProducts", await db.Database.GetAppliedMigrationsAsync());
+            Assert.Contains("20261128110000_GlobalProductIdentityIndex", await db.Database.GetAppliedMigrationsAsync());
+            Assert.Equal(1, await db.Database.SqlQueryRaw<int>(
+                "SELECT COUNT(*) AS [Value] FROM sys.indexes WHERE object_id = OBJECT_ID('GlobalProducts') " +
+                "AND name = 'IX_GlobalProducts_NameKey_BrandKey_PackSizeKey_Unit' AND is_unique = 1 AND has_filter = 1").SingleAsync());
             Assert.Equal(1, await db.Database.SqlQueryRaw<int>(
                 "SELECT COUNT(*) AS [Value] FROM sys.indexes WHERE object_id = OBJECT_ID('RetailCashReturns') " +
                 "AND name = 'IX_RetailCashReturns_ReplacementSaleId' AND is_unique = 1 AND has_filter = 1").SingleAsync());
@@ -106,6 +110,32 @@ public sealed class SqlServerTests(Xunit.Abstractions.ITestOutputHelper output)
             Assert.Equal(3, indexes.Count);
             Assert.True(await db.Database.CanConnectAsync());
             Assert.True(await db.BusinessTypes.AnyAsync(x => x.Code == "RETAIL" && x.IsSupported));
+        }
+
+        // Independent SQL Server contexts race on the same barcode-less identity.
+        var duplicateName = "CATALOGUE-RACE-" + Guid.NewGuid().ToString("N");
+        async Task<bool> AddCatalogueProduct(string brand, string pack)
+        {
+            using var scope = factory.Services.CreateScope();
+            var db = scope.ServiceProvider.GetRequiredService<AppDbContext>();
+            db.GlobalProducts.Add(new GlobalProduct
+            {
+                Name = duplicateName, NameKey = duplicateName, Brand = brand,
+                PackSize = pack, Unit = "PCS", CreatedAtUtc = DateTime.UtcNow
+            });
+            try { await db.SaveChangesAsync(); return true; }
+            catch (DbUpdateException ex) when (ex.InnerException is SqlException { Number: 2601 or 2627 })
+            { return false; }
+        }
+        var catalogueRace = await Task.WhenAll(
+            AddCatalogueProduct("Example Brand", "70g"), AddCatalogueProduct("EXAMPLE BRAND", "70G"));
+        Assert.Single(catalogueRace.Where(x => x));
+        using (var scope = factory.Services.CreateScope())
+        {
+            var db = scope.ServiceProvider.GetRequiredService<AppDbContext>();
+            Assert.Equal(1, await db.GlobalProducts.CountAsync(x => x.NameKey == duplicateName));
+            // Different package sizes must remain separate identities.
+            Assert.True(await AddCatalogueProduct("Example Brand", "140g"));
         }
 
         await RegisterAndLogin(owner, "sql-owner@example.test");
