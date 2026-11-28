@@ -2042,6 +2042,7 @@ try {
     const base = '**/api/businesses/1/stock/transfers'
     let transfer = null
     let received = 0
+    let returned = 0
     let dispatches = 0
     let receiveAttempts = 0
     let receiptKey = ''
@@ -2063,10 +2064,19 @@ try {
     })
     await t.page.route(base + '/101', route => response(route, 200, { transfer,
       lines: [{ id: 51, productId: 11, name: 'Blue Shirt', unitCode: 'PCS', quantity: 4,
-        received, damaged: 0, missing: 0, remaining: 4 - received }],
-      history: received ? [{ id: 201, transferLineId: 51, quantity: 2, kind: 'Received', reason: '' }] : [] }))
+        received, damaged: 0, missing: 0, returned, remaining: 4 - received - returned }],
+      history: [...(received ? [{ id: 201, transferLineId: 51, quantity: 2, kind: 'Received', reason: '' }] : []), ...(returned ? [{ id: 202, transferLineId: 51, quantity: 2, kind: 'Returned', reason: 'Received back at source' }] : [])] }))
     await t.page.route(base + '/101/receive', route => {
       const body = route.request().postDataJSON()
+      if (body.kind === 'Returned') {
+        assert.equal(body.expectedRemaining, 2)
+        assert.equal(body.quantity, 2)
+        assert.equal(body.reason, 'Received back at source')
+        assert.equal(body.lineId, 51)
+        returned = 2
+        transfer = { ...transfer, status: 'Completed' }
+        return response(route, 200, { id: 202, status: 'Completed' })
+      }
       assert.equal(body.expectedRemaining, 4)
       assert.equal(body.quantity, 2)
       assert.equal(body.lineId, 51)
@@ -2083,6 +2093,7 @@ try {
       items: [{ id: 51, transferId: 101, name: 'Blue Shirt', unitCode: 'PCS',
         fromLocationId: 2, toLocationId: 1, dispatched: 4, remaining: 4 - received }] }))
     await t.login()
+    await t.page.getByRole('button', { name: 'Open navigation' }).click()
     await t.page.locator('.app-sidebar .nav-entry').filter({ hasText: 'Inventory' }).click()
     await t.page.getByRole('button', { name: 'Stock Transfer', exact: true }).click()
     await t.page.getByRole('button', { name: 'New transfer' }).click()
@@ -2108,6 +2119,15 @@ try {
     const report = t.page.getByRole('table', { name: 'In-transit stock' })
     await report.getByText('Blue Shirt · PCS').waitFor()
     assert.equal(await report.locator('tbody tr td').last().innerText(), '2')
+    await report.getByRole('button', { name: '#101' }).click()
+    await t.page.locator('#transfer-line').selectOption('51')
+    await t.page.locator('#transfer-receive-qty').fill('2')
+    await t.page.locator('#transfer-kind').selectOption('Returned')
+    await t.page.locator('#transfer-receive-reason').fill('Received back at source')
+    await t.page.getByRole('button', { name: 'Post receiving' }).click()
+    await t.page.getByRole('heading', { name: 'Transfer #101 — Completed' }).waitFor()
+    assert.equal(returned, 2)
+    assert.equal(await t.page.getByRole('button', { name: 'Post receiving' }).count(), 0)
     assert.ok(await t.page.evaluate(() => document.documentElement.scrollWidth) <= 361)
     await t.check()
     await t.context.close()
