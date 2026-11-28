@@ -1797,7 +1797,7 @@ public sealed class SqlServerTests(Xunit.Abstractions.ITestOutputHelper output)
             exchangeTotals.GetProperty("cashCollected").GetDecimal() - exchangeTotals.GetProperty("cashRefunded").GetDecimal());
 
         // Run competing exchange requests on independent authenticated clients.
-        using var secondOwner = factory.CreateClient();
+        using var secondOwner = factory.CreateClient(clientOptions);
         Assert.Equal(HttpStatusCode.NoContent, (await Post(secondOwner, "/api/auth/login",
             new { email = "sql-retail-flow-owner@example.test", password = "TestPassword123!" })).StatusCode);
 
@@ -1844,7 +1844,7 @@ public sealed class SqlServerTests(Xunit.Abstractions.ITestOutputHelper output)
             using var second = results[1];
             foreach (var response in results)
                 Assert.True(response.StatusCode is HttpStatusCode.OK or HttpStatusCode.Conflict,
-                    await response.Content.ReadAsStringAsync());
+                    $"Unexpected exchange response {(int)response.StatusCode}: {await response.Content.ReadAsStringAsync()}");
             if (!sameKey)
                 Assert.True(results.Count(x => x.StatusCode == HttpStatusCode.OK) <= 1);
             var winner = second.StatusCode == HttpStatusCode.OK ? raceCompetingRequest : raceExchangeRequest;
