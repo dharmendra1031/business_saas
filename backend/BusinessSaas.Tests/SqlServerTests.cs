@@ -2727,6 +2727,9 @@ public sealed class SqlServerTests(Xunit.Abstractions.ITestOutputHelper output)
         var detail = await owner.GetFromJsonAsync<JsonElement>(detailPath);
         var lineId = detail.GetProperty("lines")[0].GetProperty("id").GetInt64();
         Assert.Equal(7m, detail.GetProperty("lines")[0].GetProperty("remaining").GetDecimal());
+        var transit = await owner.GetFromJsonAsync<JsonElement>(path + "/in-transit");
+        Assert.Single(transit.GetProperty("items").EnumerateArray());
+        Assert.Equal(7m, transit.GetProperty("items")[0].GetProperty("remaining").GetDecimal());
         using (var scope = factory.Services.CreateScope())
         {
             var db = scope.ServiceProvider.GetRequiredService<AppDbContext>();
@@ -2739,6 +2742,7 @@ public sealed class SqlServerTests(Xunit.Abstractions.ITestOutputHelper output)
             Post(owner, detailPath + "/receive", receipt with { requestKey = "sql-transfer-receive-002" }));
         Assert.Single(receiveRace.Where(x => x.StatusCode == HttpStatusCode.OK));
         Assert.Single(receiveRace.Where(x => x.StatusCode == HttpStatusCode.Conflict));
+        Assert.Equal(2m, (await owner.GetFromJsonAsync<JsonElement>(path + "/in-transit")).GetProperty("items")[0].GetProperty("remaining").GetDecimal());
         Assert.Equal(HttpStatusCode.OK, (await Post(owner, detailPath + "/receive", receipt with
         {
             requestKey = "sql-transfer-damaged-001", quantity = 2m, kind = "Damaged", reason = "Damaged in transit", expectedRemaining = 2m
@@ -2747,6 +2751,7 @@ public sealed class SqlServerTests(Xunit.Abstractions.ITestOutputHelper output)
         Assert.Equal("Completed", completed.GetProperty("transfer").GetProperty("status").GetString());
         Assert.Equal(0m, completed.GetProperty("lines")[0].GetProperty("remaining").GetDecimal());
         Assert.Equal(2m, completed.GetProperty("lines")[0].GetProperty("damaged").GetDecimal());
+        Assert.Empty((await owner.GetFromJsonAsync<JsonElement>(path + "/in-transit")).GetProperty("items").EnumerateArray());
         using (var scope = factory.Services.CreateScope())
         {
             var db = scope.ServiceProvider.GetRequiredService<AppDbContext>();

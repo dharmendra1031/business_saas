@@ -15,6 +15,7 @@ internal static class RetailStockTransfers
     {
         var transfers = group.MapGroup("/transfers");
         transfers.MapGet("/options", Options);
+        transfers.MapGet("/in-transit", InTransit);
         transfers.MapGet("", List);
         transfers.MapGet("/{id:long}", Read);
         transfers.MapPost("", Create);
@@ -63,6 +64,28 @@ internal static class RetailStockTransfers
         if (pending == true) query = query.Where(x => x.Status != "Completed" && x.Status != "Cancelled");
         var rows = await query.OrderByDescending(x => x.Id).Skip(((page ?? 1) - 1) * 20).Take(21).ToListAsync(ct);
         return Results.Ok(new { items = rows.Take(20), hasMore = rows.Count > 20 });
+    }
+
+    private static async Task<IResult> InTransit(long businessId, int? page, ClaimsPrincipal user,
+        AppDbContext db, CancellationToken ct)
+    {
+        var role = await RetailMasterEndpoints.ReadRole(db, user, businessId, ct);
+        if (role is null) return Results.NotFound();
+        if (page is < 1 or > 100000) return Results.BadRequest();
+        var transfers = Visible(db, businessId, role).AsNoTracking().Where(x => x.Status == "InTransit");
+        var query = from transfer in transfers
+                    join line in db.RetailStockTransferLines.AsNoTracking() on transfer.Id equals line.TransferId
+                    join product in db.RetailProducts.AsNoTracking() on line.ProductId equals product.Id
+                    where product.BusinessId == businessId
+                    let settled = db.RetailStockTransferReceipts.Where(x => x.BusinessId == businessId &&
+                        x.TransferLineId == line.Id).Sum(x => (decimal?)x.Quantity) ?? 0m
+                    where line.Quantity > settled
+                    orderby line.Id descending
+                    select new { line.Id, line.TransferId, line.ProductId, product.Name, line.UnitCode,
+                        transfer.FromLocationId, transfer.ToLocationId, transfer.DispatchedAtUtc,
+                        dispatched = line.Quantity, remaining = line.Quantity - settled };
+        var items = await query.Skip(((page ?? 1) - 1) * 20).Take(21).ToListAsync(ct);
+        return Results.Ok(new { items = items.Take(20), hasMore = items.Count > 20 });
     }
 
     private static async Task<IResult> Read(long businessId, long id, ClaimsPrincipal user, AppDbContext db, CancellationToken ct)

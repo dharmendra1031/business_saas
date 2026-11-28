@@ -2034,6 +2034,86 @@ try {
   }
 
 
+  {
+    const t = await scenario('stock-transfer-dispatch-partial-receive', {
+      role: 'Owner', locationCount: 2, hasProducts: true, width: 360, height: 780
+    })
+    t.page.on('dialog', dialog => dialog.accept())
+    const base = '**/api/businesses/1/stock/transfers'
+    let transfer = null
+    let received = 0
+    let dispatches = 0
+    let receiveAttempts = 0
+    let receiptKey = ''
+    const product = { id: 11, name: 'Blue Shirt', sku: 'BLUE-11', unitCode: 'PCS', availableStock: 10 }
+    await t.page.route(base + '/options', route => response(route, 200, { canWrite: true, isOwner: true,
+      locations: [{ id: 1, name: 'Main Shop', canAccess: true }, { id: 2, name: 'Second Location', canAccess: true }] }))
+    await t.page.route(base + '?*', route => response(route, 200, { items: transfer ? [transfer] : [], hasMore: false }))
+    await t.page.route('**/api/businesses/1/products?*', route =>
+      response(route, 200, { items: [product], total: 1, pageSize: 20 }))
+    await t.page.route(base, route => {
+      const body = route.request().postDataJSON()
+      assert.equal(body.fromLocationId, 2)
+      assert.equal(body.toLocationId, 1)
+      assert.equal(body.dispatchNow, true)
+      assert.deepEqual(body.lines, [{ productId: 11, quantity: 4 }])
+      dispatches++
+      transfer = { id: 101, fromLocationId: 2, toLocationId: 1, reason: body.reason, status: 'InTransit' }
+      return response(route, 200, { id: 101, status: 'InTransit' })
+    })
+    await t.page.route(base + '/101', route => response(route, 200, { transfer,
+      lines: [{ id: 51, productId: 11, name: 'Blue Shirt', unitCode: 'PCS', quantity: 4,
+        received, damaged: 0, missing: 0, remaining: 4 - received }],
+      history: received ? [{ id: 201, transferLineId: 51, quantity: 2, kind: 'Received', reason: '' }] : [] }))
+    await t.page.route(base + '/101/receive', route => {
+      const body = route.request().postDataJSON()
+      assert.equal(body.expectedRemaining, 4)
+      assert.equal(body.quantity, 2)
+      assert.equal(body.lineId, 51)
+      receiveAttempts++
+      if (receiveAttempts === 1) {
+        receiptKey = body.requestKey
+        received = 2
+        return route.abort()
+      }
+      assert.equal(body.requestKey, receiptKey)
+      return response(route, 200, { id: 201, status: 'InTransit' })
+    })
+    await t.page.route(base + '/in-transit?*', route => response(route, 200, { hasMore: false,
+      items: [{ id: 51, transferId: 101, name: 'Blue Shirt', unitCode: 'PCS',
+        fromLocationId: 2, toLocationId: 1, dispatched: 4, remaining: 4 - received }] }))
+    await t.login()
+    await t.page.locator('.app-sidebar .nav-entry').filter({ hasText: 'Inventory' }).click()
+    await t.page.getByRole('button', { name: 'Stock Transfer', exact: true }).click()
+    await t.page.getByRole('button', { name: 'New transfer' }).click()
+    await t.page.getByLabel('From location').selectOption('2')
+    await t.page.getByLabel('To location').selectOption('1')
+    await t.page.getByLabel('Search product / scan barcode').fill('BLUE-11')
+    await t.page.getByRole('button', { name: 'Search', exact: true }).click()
+    await t.page.getByRole('button', { name: 'Add', exact: true }).click()
+    await t.page.getByLabel('Transfer quantity for Blue Shirt').fill('4')
+    await t.page.getByLabel('Transfer reason').fill('Replenish main shop')
+    await t.page.getByRole('button', { name: 'Approve & dispatch' }).click()
+    await t.page.getByRole('heading', { name: 'Transfer #101 — InTransit' }).waitFor()
+    await t.page.locator('#transfer-line').selectOption('51')
+    await t.page.locator('#transfer-receive-qty').fill('2')
+    await t.page.getByRole('button', { name: 'Post receiving' }).click()
+    await t.page.getByRole('button', { name: 'Retry same operation' }).waitFor()
+    await t.page.getByRole('button', { name: 'Retry same operation' }).click()
+    await t.page.getByText('Transfer operation recorded. Status: InTransit', { exact: true }).waitFor()
+    assert.equal(dispatches, 1)
+    assert.equal(receiveAttempts, 2)
+    await t.page.getByRole('button', { name: 'Back to transfers' }).click()
+    await t.page.getByLabel('Show transfers').selectOption('transit')
+    const report = t.page.getByRole('table', { name: 'In-transit stock' })
+    await report.getByText('Blue Shirt · PCS').waitFor()
+    assert.equal(await report.locator('tbody tr td').last().innerText(), '2')
+    assert.ok(await t.page.evaluate(() => document.documentElement.scrollWidth) <= 361)
+    await t.check()
+    await t.context.close()
+    console.log('PASS stock transfer dispatch, partial receiving replay and in-transit report')
+  }
+
   // Business owner: one compact master workspace presents each level independently.
   for (const width of [1366, 360]) {
     const t = await scenario('product-master-levels-' + width, {

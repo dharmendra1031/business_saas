@@ -11,6 +11,7 @@ interface Line { id: number; productId: number; name: string; unitCode: string; 
 interface Receipt { id: number; transferLineId: number; quantity: number; kind: string; reason: string; postedAtUtc: string }
 interface Detail { transfer: Transfer; lines: Line[]; history: Receipt[] }
 interface Page<T> { items: T[]; hasMore: boolean }
+interface TransitLine { id: number; transferId: number; name: string; unitCode: string; fromLocationId: number; toLocationId: number; dispatched: number; remaining: number }
 interface ProductPage { items: Product[]; total: number; pageSize: number }
 interface Pending { path: string; body: object; transferId: number | null; action: string }
 
@@ -39,7 +40,8 @@ export default function RetailStockTransfers({ businessId, userId, canOperate }:
   const [selected, setSelected] = useState<number | null>(recovery.pending?.transferId ?? null)
   const [creating, setCreating] = useState(false)
   const [page, setPage] = useState(1)
-  const [onlyPending, setOnlyPending] = useState(true)
+  const [view, setView] = useState<"pending" | "all" | "transit">("pending")
+  const [transit, setTransit] = useState<Page<TransitLine> | null>(null)
   const [reload, setReload] = useState(0)
   const [error, setError] = useState('')
   const [notice, setNotice] = useState('')
@@ -77,13 +79,19 @@ export default function RetailStockTransfers({ businessId, userId, canOperate }:
         .then(value => { if (!controller.signal.aborted) setDetail(value) })
         .catch(cause => { if (!controller.signal.aborted) setError(errorMessage(cause)) })
     } else if (!creating) {
-      setData(null)
-      api<Page<Transfer>>(base + '?page=' + page + '&pending=' + onlyPending, { signal: controller.signal })
-        .then(value => { if (!controller.signal.aborted) setData(value) })
-        .catch(cause => { if (!controller.signal.aborted) setError(errorMessage(cause)) })
+      setData(null); setTransit(null)
+      if (view === 'transit') {
+        api<Page<TransitLine>>(base + '/in-transit?page=' + page, { signal: controller.signal })
+          .then(value => { if (!controller.signal.aborted) setTransit(value) })
+          .catch(cause => { if (!controller.signal.aborted) setError(errorMessage(cause)) })
+      } else {
+        api<Page<Transfer>>(base + '?page=' + page + '&pending=' + (view === 'pending'), { signal: controller.signal })
+          .then(value => { if (!controller.signal.aborted) setData(value) })
+          .catch(cause => { if (!controller.signal.aborted) setError(errorMessage(cause)) })
+      }
     }
     return () => controller.abort()
-  }, [base, selected, creating, page, onlyPending, reload])
+  }, [base, selected, creating, page, view, reload])
   const sourceAccessible = access(from)
   useEffect(() => {
     setProducts(null); setSearchError('')
@@ -113,7 +121,9 @@ export default function RetailStockTransfers({ businessId, userId, canOperate }:
       sessionStorage.setItem(storageKey, JSON.stringify(request))
       setPending(request)
       const result = await post<{ id: number; status: string }>(request.path, request.body)
-      if (!(result.id > 0) || !['Requested', 'Approved', 'InTransit', 'Completed', 'Cancelled'].includes(result.status))
+      if (!Number.isSafeInteger(result.id) || result.id <= 0 ||
+        (request.transferId !== null && !request.path.endsWith('/receive') && result.id !== request.transferId) ||
+        !['Requested', 'Approved', 'InTransit', 'Completed', 'Cancelled'].includes(result.status))
         throw new Error('Transfer confirmation could not be verified.')
       sessionStorage.removeItem(storageKey)
       setPending(null); setCreating(false); clearDraft()
@@ -156,7 +166,7 @@ export default function RetailStockTransfers({ businessId, userId, canOperate }:
     {pending && <div className="border rounded p-2 mb-3">
       <p className="mb-2">Unresolved operation: {pending.action}. Do not dispatch or receive goods again.</p>
       <button type="button" className="btn btn-sm btn-primary me-2" disabled={!allowed || busy} onClick={() => void send(pending)}>Retry same operation</button>
-      <button type="button" className="btn btn-sm btn-outline-secondary" disabled={busy} onClick={() => { setCreating(false); setSelected(null); setOnlyPending(false); refresh() }}>Review history</button>
+      <button type="button" className="btn btn-sm btn-outline-secondary" disabled={busy} onClick={() => { setCreating(false); setSelected(null); setView("all"); setPage(1); refresh() }}>Review history</button>
       <button type="button" className="btn btn-sm btn-outline-secondary ms-2" disabled={busy} onClick={() => {
         if (!window.confirm('Only discard after verifying the transfer and its stock movements. Discard recovery record?')) return
         try { sessionStorage.removeItem(storageKey); setPending(null); refresh() } catch (cause) { setError(errorMessage(cause)) }
@@ -238,13 +248,30 @@ export default function RetailStockTransfers({ businessId, userId, canOperate }:
     </>}
     {!creating && selected === null && <>
       <div className="d-flex align-items-end gap-2 flex-wrap mb-3">
-        <label className="form-label mb-0">Show transfers<select className="form-select" value={onlyPending ? 'pending' : 'all'} onChange={event => { setOnlyPending(event.target.value === 'pending'); setPage(1) }}>
-          <option value="pending">Pending / in transit</option><option value="all">All history</option></select></label>
+        <label className="form-label mb-0">Show transfers<select className="form-select" value={view} onChange={event => { setView(event.target.value as typeof view); setPage(1); setError('') }}>
+          <option value="pending">Pending transfers</option><option value="transit">In-transit stock</option><option value="all">All history</option></select></label>
         <button type="button" className="btn btn-outline-secondary" onClick={refresh}>Refresh</button>
         {options && options.locations.length > 1 && <button type="button" className="btn btn-primary" disabled={!canEdit} onClick={() => { setFrom(0); setTo(0); clearDraft(); setCreating(true) }}>New transfer</button>}
       </div>
-      {!data && !error && <p role="status">Loading transfers…</p>}
-      {data && <><div className="table-responsive"><table className="table table-sm"><thead><tr><th>Reference</th><th>From</th><th>To</th><th>Status</th><th>Action</th></tr></thead>
+      {view === 'transit' && <>
+        <p className="small">Stock dispatched but not yet received or reconciled. These quantities are not available for sale at either location.</p>
+        {!transit && !error && <p role="status">Loading in-transit stock…</p>}
+        {transit && <>
+          <div className="table-responsive"><table className="table table-sm" aria-label="In-transit stock">
+            <thead><tr><th>Transfer</th><th>Product</th><th>From</th><th>To</th><th>Dispatched</th><th>Remaining</th></tr></thead>
+            <tbody>{transit.items.map(item => <tr key={item.id}>
+              <td><button type="button" className="btn btn-sm btn-outline-secondary"
+                onClick={() => { setSelected(item.transferId); setKind('Received'); setNotice(''); setError('') }}>#{item.transferId}</button></td>
+              <td>{item.name} · {item.unitCode}</td><td>{name(item.fromLocationId)}</td><td>{name(item.toLocationId)}</td>
+              <td>{item.dispatched}</td><td>{item.remaining}</td></tr>)}</tbody>
+          </table></div>
+          {!transit.items.length && <p>No stock in transit.</p>}
+          <div className="d-flex gap-2"><button type="button" className="btn btn-sm btn-outline-secondary" disabled={page <= 1} onClick={() => setPage(n => n - 1)}>Previous</button>
+            <button type="button" className="btn btn-sm btn-outline-secondary" disabled={!transit.hasMore} onClick={() => setPage(n => n + 1)}>Next</button></div>
+        </>}
+      </>}
+      {view !== 'transit' && !data && !error && <p role="status">Loading transfers…</p>}
+      {view !== 'transit' && data && <><div className="table-responsive"><table className="table table-sm"><thead><tr><th>Reference</th><th>From</th><th>To</th><th>Status</th><th>Action</th></tr></thead>
         <tbody>{data.items.map(item => <tr key={item.id}><td>#{item.id}</td><td>{name(item.fromLocationId)}</td><td>{name(item.toLocationId)}</td><td>{item.status}</td>
           <td><button type="button" className="btn btn-sm btn-outline-secondary" onClick={() => { setSelected(item.id); setNotice(''); setError(''); setKind('Received') }}>View</button></td></tr>)}</tbody></table></div>
         {data.items.length === 0 && <p>No matching transfers.</p>}

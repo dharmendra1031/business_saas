@@ -418,7 +418,9 @@ export default function RetailStock({ businessId, locations, canOperate, isOwner
                     <td>
                       {entry.sourceType === 'Receiving' ? 'Goods received' :
                         entry.sourceType === 'CashSaleLine' || entry.sourceType === 'CashSale' ? 'Cash sale' :
-                          entry.sourceType === 'Opening' ? 'Opening stock' : entry.sourceType}
+                          entry.sourceType === 'TransferDispatch' ? 'Stock transfer out' :
+                            entry.sourceType === 'TransferReceive' ? 'Stock transfer in' :
+                              entry.sourceType === 'Opening' ? 'Opening stock' : entry.sourceType}
                       {entry.sourceId > 0 && <small className="product-secondary">
                         {entry.sourceType === 'Receiving' || entry.sourceType === 'CashSaleLine'
                           ? `Source line #${entry.sourceId}` : `Source #${entry.sourceId}`}
