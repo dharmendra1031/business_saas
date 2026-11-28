@@ -7,6 +7,7 @@ import BusinessPostedSales from './BusinessPostedSales'
 import BusinessReturns from './BusinessReturns'
 import BusinessDailySales from './BusinessDailySales'
 import BusinessOutstanding from './BusinessOutstanding'
+import BusinessRegisterClosing from './BusinessRegisterClosing'
 import BusinessBillingSettings from './BusinessBillingSettings'
 import BusinessReceiptSettings from './BusinessReceiptSettings'
 import SubscriptionCheckout from './SubscriptionCheckout'
@@ -25,7 +26,8 @@ const modules = {
     title: 'Reports',
     tabs: [
       { name: 'Sales', Icon: ReceiptText, title: 'Daily Sales Report', description: 'Sales, returns and reconciled payments.' },
-      { name: 'Outstanding', Icon: CreditCard, title: 'Customer Outstanding', description: 'Unpaid credit invoices and overdue aging by business date.' }
+      { name: 'Outstanding', Icon: CreditCard, title: 'Customer Outstanding', description: 'Unpaid credit invoices and overdue aging by business date.' },
+      { name: 'Day Closing', Icon: ReceiptText, title: 'Cash Register Closing', description: 'Review and close individual cash shifts.' }
     ]
   },
   settings: {
@@ -80,6 +82,7 @@ export default function BusinessPreview({ module, dashboard, userId, onBillingUp
         postedSales ? <BusinessPostedSales dashboard={dashboard} userId={userId} /> :
         postedReturns ? <BusinessReturns dashboard={dashboard} /> :
         dailySales ? <BusinessDailySales dashboard={dashboard} /> :
+        module === 'reports' && tab === 2 && dashboard.roleCode === 'Owner' ? <BusinessRegisterClosing key={dashboard.business.id + ':' + userId} dashboard={dashboard} /> :
         outstanding ? <BusinessOutstanding businessId={dashboard.business.id} /> : receiptSettings ?
           <BusinessReceiptSettings businessId={dashboard.business.id} canOperate={dashboard.canOperate}
             onSaved={() => onBillingUpdated?.()} /> :
