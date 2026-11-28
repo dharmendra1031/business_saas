@@ -453,6 +453,7 @@ public sealed class AppDbContext(DbContextOptions<AppDbContext> options)
     public DbSet<RetailCreditPayment> RetailCreditPayments => Set<RetailCreditPayment>();
     public DbSet<RetailCashRegisterSession> RetailCashRegisterSessions => Set<RetailCashRegisterSession>();
     public DbSet<RetailCashRegisterMovement> RetailCashRegisterMovements => Set<RetailCashRegisterMovement>();
+    public DbSet<GlobalProduct> GlobalProducts => Set<GlobalProduct>();
     public DbSet<RetailProduct> RetailProducts => Set<RetailProduct>();
     public DbSet<RetailProductUnit> RetailProductUnits => Set<RetailProductUnit>();
     public DbSet<RetailSupplier> RetailSuppliers => Set<RetailSupplier>();
@@ -771,6 +772,19 @@ public sealed class AppDbContext(DbContextOptions<AppDbContext> options)
             entity.HasIndex(x => new { x.BusinessId, x.NameKey }).IsUnique();
             entity.HasOne<Business>().WithMany()
                 .HasForeignKey(x => x.BusinessId).OnDelete(DeleteBehavior.Cascade);
+        });
+
+        builder.Entity<GlobalProduct>(entity =>
+        {
+            entity.Property(x => x.Name).HasMaxLength(150).IsRequired();
+            entity.Property(x => x.NameKey).HasMaxLength(150).IsRequired();
+            entity.Property(x => x.Barcode).HasMaxLength(14);
+            entity.Property(x => x.Brand).HasMaxLength(80).IsRequired();
+            entity.Property(x => x.Category).HasMaxLength(80).IsRequired();
+            entity.Property(x => x.PackSize).HasMaxLength(40).IsRequired();
+            entity.Property(x => x.Unit).HasMaxLength(20).IsRequired();
+            entity.HasIndex(x => x.Barcode).IsUnique().HasFilter("[Barcode] IS NOT NULL");
+            entity.HasIndex(x => new { x.NameKey, x.Id });
         });
 
         builder.Entity<RetailProduct>(entity =>

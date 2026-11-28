@@ -89,6 +89,7 @@ public sealed class SqlServerTests(Xunit.Abstractions.ITestOutputHelper output)
             Assert.Contains("20261126190000_RetailCashRegisterSessions", await db.Database.GetAppliedMigrationsAsync());
             Assert.Contains("20261127090000_RetailCashRegisterPostingLinks", await db.Database.GetAppliedMigrationsAsync());
             Assert.Contains("20261127110000_RetailCashRegisterMovements", await db.Database.GetAppliedMigrationsAsync());
+            Assert.Contains("20261128100000_GlobalProducts", await db.Database.GetAppliedMigrationsAsync());
             Assert.Equal(1, await db.Database.SqlQueryRaw<int>(
                 "SELECT COUNT(*) AS [Value] FROM sys.indexes WHERE object_id = OBJECT_ID('RetailCashReturns') " +
                 "AND name = 'IX_RetailCashReturns_ReplacementSaleId' AND is_unique = 1 AND has_filter = 1").SingleAsync());

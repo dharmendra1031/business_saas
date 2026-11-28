@@ -21,6 +21,7 @@ public static class RetailModule
         {
             app.MapRetailCashSales();
             app.MapRetailCashRegister();
+            app.MapGlobalProductEndpoints();
         }
     }
 

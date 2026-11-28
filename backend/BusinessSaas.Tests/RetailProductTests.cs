@@ -61,6 +61,27 @@ public sealed class RetailProductTests
             await db.SaveChangesAsync();
         }
 
+        using (var scope = factory.Services.CreateScope())
+        {
+            var db = scope.ServiceProvider.GetRequiredService<AppDbContext>();
+            db.GlobalProducts.AddRange(
+                new GlobalProduct { Name = "Maggi 70g", NameKey = "MAGGI 70G",
+                    Barcode = "08901234567890", Brand = "Maggi", Category = "Noodles",
+                    PackSize = "70g", Unit = "PCS", CreatedAtUtc = DateTime.UtcNow },
+                new GlobalProduct { Name = "Maggi retired", NameKey = "MAGGI RETIRED",
+                    Unit = "PCS", IsActive = false, CreatedAtUtc = DateTime.UtcNow });
+            await db.SaveChangesAsync();
+        }
+        var cataloguePath = $"/api/businesses/{businessId}/global-products";
+        var catalogue = await owner.GetFromJsonAsync<JsonElement>(cataloguePath + "?search=maggi");
+        Assert.Single(catalogue.GetProperty("items").EnumerateArray());
+        Assert.Equal("Maggi 70g", catalogue.GetProperty("items")[0].GetProperty("name").GetString());
+        Assert.Equal(HttpStatusCode.NotFound, (await other.GetAsync(cataloguePath + "?search=maggi")).StatusCode);
+        Assert.Equal(HttpStatusCode.NotFound, (await cashier.GetAsync(cataloguePath + "?search=maggi")).StatusCode);
+        Assert.Equal(HttpStatusCode.Forbidden, (await Post(owner, "/api/platform/global-products",
+            new { name = "Unauthorized", unit = "PCS" })).StatusCode);
+        Assert.Equal(HttpStatusCode.BadRequest, (await owner.GetAsync(cataloguePath + "?barcode=123")).StatusCode);
+
         var defaultOptions = await owner.GetFromJsonAsync<JsonElement>(
             $"/api/businesses/{businessId}/products/options");
         var generalId = defaultOptions.GetProperty("categories").EnumerateArray()
