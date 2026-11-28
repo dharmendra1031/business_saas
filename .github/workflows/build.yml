@@ -43,6 +43,10 @@ jobs:
             dotnet test backend/BusinessSaas.Tests/BusinessSaas.Tests.csproj --configuration Release --no-build --filter "FullyQualifiedName~$case"
             if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
           }
+      - name: Measure concurrent RDLC rendering baseline
+        env:
+          RDLC_TEST_OUTPUT: ${{ github.workspace }}/rdlc-samples/concurrent
+        run: dotnet test backend/BusinessSaas.Tests/BusinessSaas.Tests.csproj --configuration Release --no-build --filter "Renderer=ConcurrentWindows"
       - uses: actions/setup-python@v5
         with:
           python-version: "3.12"

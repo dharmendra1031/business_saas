@@ -79,3 +79,26 @@ for path in credit:
         if path.name.startswith("Thermal80"):
             assert pdf[0].rect.height * 25.4 / 72 <= 150, path.name
         print(path.name, "credit invoice original amount, due date and customer verified")
+
+# Bounded concurrent renderer pilot: verify each synthetic receipt's identity,
+# line content, amount and page width; never inspect merchant production data.
+concurrent = root / "concurrent"
+for count in (1, 10, 25):
+    metadata = json.loads((concurrent / f"{count:03}.json").read_text(encoding="utf-8"))
+    assert metadata["count"] == count and metadata["failures"] == 0
+    paths = sorted(concurrent.glob(f"{count:03}-*.pdf"))
+    assert len(paths) == count, (count, len(paths))
+    for i, path in enumerate(paths, 1):
+        assert path.name == f"{count:03}-{i:03}.pdf", path.name
+        with pymupdf.open(path) as pdf:
+            text = " ".join(" ".join(page.get_text().split()) for page in pdf)
+            shops = set(re.findall(r"Benchmark Shop (\d{3})\b", text))
+            items = re.findall(r"Benchmark Item (\d{3})-(\d+)\b", text)
+            assert shops == {f"{i:03}"}, (path.name, shops)
+            assert items == [(f"{i:03}", str(n)) for n in range(1, 6)], (path.name, items)
+            assert f"INR {5 * i:.2f}" in text.replace(",", ""), path.name
+            assert text.count("TOTAL PAYABLE") == 1, path.name
+            for page in pdf:
+                width = page.rect.width * 25.4 / 72
+                assert abs(width - (80 if i % 2 else 210)) < 1, (path.name, width)
+    print("Concurrent renderer baseline (warm process, synthetic data):", json.dumps(metadata))
