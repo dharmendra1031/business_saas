@@ -10,7 +10,7 @@ public static class PlatformModuleReleaseEndpoints
     private static readonly (string Code, string Name)[] Modules =
     [
         ("CATALOG", "Catalog & Products"), ("PURCHASE", "Purchase Orders"),
-        ("INVENTORY", "Inventory & Stock"), ("POS", "POS Cash Sales")
+        ("INVENTORY", "Inventory & Stock"), ("POS", "POS & Cash Register")
     ];
     private static readonly string[] States =
         ["Available", "Coming Soon", "Under Construction", "Paused", "Retired"];
@@ -34,22 +34,32 @@ public static class PlatformModuleReleaseEndpoints
     internal static IEnumerable<string> ModulesForWrite(string[] parts)
     {
         if (parts.Length < 2) yield break;
-        switch (parts[1])
+        // ASP.NET routes are case-insensitive. Gate the same paths regardless of casing.
+        var route = parts.Select(x => x.ToLowerInvariant()).ToArray();
+        switch (route[1])
         {
             case "categories": case "units": case "brands": case "products":
-            case "suppliers": case "customers":
+            case "suppliers": case "global-products":
                 yield return "CATALOG"; break;
+            case "customers":
+                yield return "CATALOG";
+                if (route.Length == 6 && route[3] == "credit-invoices" && route[5] == "payments")
+                    yield return "POS";
+                break;
             case "purchase-orders":
                 yield return "PURCHASE";
-                if (parts.Length >= 6 && parts[^1] == "post" &&
-                    parts.Contains("receivings"))
+                if (route.Length == 6 && route[3] == "receivings" &&
+                    route[5] is "post" or "returns")
                     yield return "INVENTORY";
                 break;
             case "stock":
                 yield return "INVENTORY"; break;
-            case "cash-sales":
+            case "cash-sales": case "credit-sales":
                 yield return "POS";
                 yield return "INVENTORY";
+                break;
+            case "cash-register":
+                yield return "POS";
                 break;
         }
     }

@@ -2213,10 +2213,63 @@ public sealed class BusinessFlowTests
                 new { productId = 1, quantity = 1m })).StatusCode);
         Assert.Equal(HttpStatusCode.OK, (await owner.GetAsync(
             $"/api/businesses/{businessId}/dashboard")).StatusCode);
+        async Task AssertBlocked(string path, string code = "MODULE_NOT_AVAILABLE")
+        {
+            var response = await Post(owner, $"/api/businesses/{businessId}/" + path, new { });
+            Assert.Equal(code == "MODULE_NOT_AVAILABLE" ? HttpStatusCode.Conflict : HttpStatusCode.ServiceUnavailable,
+                response.StatusCode);
+            Assert.Equal(code, (await response.Content.ReadFromJsonAsync<JsonElement>()).GetProperty("code").GetString());
+        }
+        // Valid endpoint routes; request bodies intentionally empty because middleware must deny
+        // before endpoint binding, posting or any financial mutations.
+        await AssertBlocked("purchase-orders/1/receivings/1/returns");
+        await AssertBlocked("PURCHASE-ORDERS/1/RECEIVINGS/1/POST/");
+        await AssertBlocked("credit-sales");
+        await AssertBlocked("credit-sales/business-invoices/1/returns");
         Assert.Equal(HttpStatusCode.OK, (await Post(admin, modulePath + "/INVENTORY/release", new {
             state = "Available", expectedRevision = 1,
             reason = "Inventory release restored after gate verification"
         })).StatusCode);
+
+        Assert.Equal(HttpStatusCode.OK, (await Post(admin, modulePath + "/POS/release", new {
+            state = "Paused", expectedRevision = 0, reason = "Pause all point of sale financial posting"
+        })).StatusCode);
+        await AssertBlocked("credit-sales");
+        await AssertBlocked("CASH-REGISTER/open/");
+        await AssertBlocked("cash-register/1/close");
+        await AssertBlocked("cash-register/1/movements");
+        await AssertBlocked("customers/1/credit-invoices/1/payments");
+        Assert.Equal(HttpStatusCode.OK, (await owner.GetAsync(
+            $"/api/businesses/{businessId}/dashboard")).StatusCode);
+        Assert.Equal(HttpStatusCode.OK, (await Post(admin, modulePath + "/POS/release", new {
+            state = "Available", expectedRevision = 1, reason = "Restore verified development POS release"
+        })).StatusCode);
+        Assert.Equal(HttpStatusCode.OK, (await Post(admin, modulePath + "/CATALOG/release", new {
+            state = "Paused", expectedRevision = 2, reason = "Verify global catalogue adoption gate"
+        })).StatusCode);
+        await AssertBlocked("GLOBAL-PRODUCTS/1/ADOPT/");
+        Assert.Equal(HttpStatusCode.OK, (await Post(admin, modulePath + "/CATALOG/release", new {
+            state = "Available", expectedRevision = 3, reason = "Restore catalogue after adoption gate test"
+        })).StatusCode);
+        Assert.Equal(HttpStatusCode.OK, (await Post(admin, modulePath + "/PURCHASE/release", new {
+            state = "Paused", expectedRevision = 0, reason = "Verify supplier financial document gate"
+        })).StatusCode);
+        await AssertBlocked("purchase-orders/1/receivings/1/supplier-account");
+        await AssertBlocked("purchase-orders/1/receivings/1/returns");
+        Assert.Equal(HttpStatusCode.OK, (await Post(admin, modulePath + "/PURCHASE/release", new {
+            state = "Available", expectedRevision = 1, reason = "Restore purchase financial operations"
+        })).StatusCode);
+
+        // No subscription must fail closed while authorized historical reads remain possible.
+        using (var scope = factory.Services.CreateScope())
+        {
+            var db = scope.ServiceProvider.GetRequiredService<AppDbContext>();
+            await db.BusinessSubscriptions.Where(x => x.BusinessId == businessId).ExecuteDeleteAsync();
+        }
+        Assert.Equal(HttpStatusCode.Forbidden,
+            (await Post(owner, $"/api/businesses/{businessId}/categories", new { name = "Missing subscription blocked" })).StatusCode);
+        Assert.Equal(HttpStatusCode.NotFound,
+            (await Post(outsider, $"/api/businesses/{businessId}/categories", new { name = "Missing subscription hidden" })).StatusCode);
 
         Assert.Equal(HttpStatusCode.OK,
             (await owner.GetAsync($"/api/businesses/{businessId}/dashboard")).StatusCode);

@@ -215,7 +215,7 @@ app.Use(async (context, next) =>
 {
     if (context.Request.Path.StartsWithSegments("/api/businesses", out var rest))
     {
-        var parts = rest.Value?.TrimStart('/').Split('/') ?? [];
+        var parts = rest.Value?.Trim('/').Split('/') ?? [];
         if (parts.Length >= 2 && long.TryParse(parts[0], out var businessId) &&
             long.TryParse(context.User.FindFirst(System.Security.Claims.ClaimTypes.NameIdentifier)?.Value,
                 out var actorId))
@@ -266,14 +266,15 @@ app.Use(async (context, next) =>
     if (context.Request.Method is "POST" or "PUT" or "PATCH" or "DELETE" &&
         context.Request.Path.StartsWithSegments("/api/businesses", out var rest))
     {
-        var path = rest.Value?.TrimStart('/').Split('/') ?? [];
+        var path = rest.Value?.Trim('/').Split('/') ?? [];
         if (path.Length >= 2 && long.TryParse(path[0], out var businessId) &&
-            !(path[1] == "billing" && path.Length >= 3 && path[2] == "checkout"))
+            !(path.Length == 3 && path[1].Equals("billing", StringComparison.OrdinalIgnoreCase) &&
+                path[2].Equals("checkout", StringComparison.OrdinalIgnoreCase)))
         {
             var db = context.RequestServices.GetRequiredService<AppDbContext>();
             var subscription = await db.BusinessSubscriptions.AsNoTracking()
-                .SingleOrDefaultAsync(x => x.BusinessId == businessId);
-            if (subscription is not null && !SubscriptionAccess.CanOperate(subscription, DateTime.UtcNow))
+                .SingleOrDefaultAsync(x => x.BusinessId == businessId, context.RequestAborted);
+            if (subscription is null || !SubscriptionAccess.CanOperate(subscription, DateTime.UtcNow))
             {
                 // Never disclose a tenant's subscription status to a non-member.
                 if (!long.TryParse(context.User.FindFirst(System.Security.Claims.ClaimTypes.NameIdentifier)?.Value,
@@ -288,7 +289,7 @@ app.Use(async (context, next) =>
                 context.Response.StatusCode = StatusCodes.Status403Forbidden;
                 await context.Response.WriteAsJsonAsync(new
                 {
-                    message = "Subscription access has expired or been suspended."
+                    message = "Subscription access is unavailable, expired or suspended."
                 });
                 return;
             }
