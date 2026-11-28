@@ -106,7 +106,7 @@ function CustomerCreditLedger({ path, userId, businessId, onClose }: { path: str
             <button type="button" className="btn btn-sm btn-outline-secondary" disabled={!ledger.hasMore}
               onClick={() => setPage(x => x + 1)}>Next</button>
           </div>}</>}
-        <p className="small mb-0 mt-2">Payments reduce the original invoice balance. Cash drawer updates and payment receipt printing are not available yet.</p>
+        <p className="small mb-0 mt-2">Payments reduce the original invoice balance. When register linking is enabled, cash collections update the linked register balance. Payment receipt printing is not available yet.</p>
       </>}
   </section>
 }

@@ -211,6 +211,10 @@ try {
   await captureResponsive(page, 'purchase-posted', page.getByRole('heading', { name: 'Receiving history' }))
   console.log('PASS browser purchase approval and receiving, with stock unchanged before posting')
 
+  const ownerRegister = await get(prefix + '/cash-register/current?locationId=' + source.id)
+  assert.ok(ownerRegister.session, 'SQL fixture must retain the open owner register')
+  const ownerRegisterSummaryPath = prefix + '/cash-register/' + ownerRegister.session.id + '/summary?locationId=' + source.id
+  const beforeCreditRegister = await get(ownerRegisterSummaryPath)
   await page.locator('.app-sidebar .nav-entry').filter({ hasText: 'Open POS Checkout' }).click()
   await page.getByRole('region', { name: 'Point of Sale checkout' }).waitFor()
   await page.locator('#pos-location').click()
@@ -234,6 +238,9 @@ try {
   assert.equal(credit.total, 20)
   assert.equal(credit.outstanding, 20)
   assert.equal((await stock(source.id)).quantity, 0.5)
+  const afterCreditRegister = await get(ownerRegisterSummaryPath)
+  assert.equal(afterCreditRegister.expectedCash, beforeCreditRegister.expectedCash)
+  assert.equal(afterCreditRegister.cashSales, beforeCreditRegister.cashSales)
   await captureResponsive(page, 'credit-posted', page.getByRole('region', { name: 'Credit invoice' }))
   await page.getByRole('button', { name: 'New sale' }).click()
   await page.getByRole('button', { name: 'Exit POS' }).click()
@@ -255,6 +262,9 @@ try {
   await page.getByText(/Return #\d+ recorded: INR 10\.00/).waitFor()
   assert.equal((await get(creditPath + '?locationId=' + source.id)).outstanding, 10)
   assert.equal((await stock(source.id)).quantity, 1.5)
+  const afterReturnRegister = await get(ownerRegisterSummaryPath)
+  assert.equal(afterReturnRegister.expectedCash, beforeCreditRegister.expectedCash)
+  assert.equal(afterReturnRegister.cashRefunds, beforeCreditRegister.cashRefunds)
   await captureResponsive(page, 'credit-return', page.getByRole('region', { name: 'Credit invoice' }))
 
   await page.locator('.app-sidebar .nav-entry').filter({ hasText: 'Customers' }).click()
@@ -279,6 +289,11 @@ try {
   assert.equal(settled.paid, 10)
   assert.equal(settled.returned, 10)
   assert.equal(settled.outstanding, 0)
+  const afterCollectionRegister = await get(ownerRegisterSummaryPath)
+  assert.equal(Math.round(afterCollectionRegister.creditCollections * 100), Math.round(beforeCreditRegister.creditCollections * 100) + 1000)
+  assert.equal(Math.round(afterCollectionRegister.expectedCash * 100), Math.round(beforeCreditRegister.expectedCash * 100) + 1000)
+  assert.equal(afterCollectionRegister.cashSales, beforeCreditRegister.cashSales)
+  assert.equal(afterCollectionRegister.cashRefunds, beforeCreditRegister.cashRefunds)
   assert.equal((await stock(source.id)).quantity, 1.5)
   assert.equal((await stock(destination.id)).quantity, 2)
   await captureResponsive(page, 'credit-settled-ledger', page.getByRole('button', { name: 'Payments #' + credit.id, exact: true }))
@@ -299,7 +314,11 @@ try {
     const memberList = await outsiderContext.request.get(base + '/api/businesses')
     assert.equal(memberList.status(), 200)
     assert.ok(!(await memberList.json()).some(item => item.id === business.id))
-    for (const restricted of [prefix + '/stock/locations/' + source.id, path, prefix + '/stock/transfers']) {
+    for (const restricted of [
+      prefix + '/stock/locations/' + source.id, path, prefix + '/stock/transfers',
+      creditPath + '?locationId=' + source.id, prefix + '/customers/' + credit.customerId + '/credit-ledger',
+      collectionPath, ownerRegisterSummaryPath
+    ]) {
       assert.equal((await outsiderContext.request.get(base + '/api' + restricted)).status(), 404, restricted)
     }
     console.log('PASS real authenticated non-member denied access to known retail stock and transfer IDs')
