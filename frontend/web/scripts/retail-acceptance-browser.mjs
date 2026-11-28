@@ -7,6 +7,16 @@ import { chromium } from 'playwright'
 const base = 'https://127.0.0.1:5173'
 const output = new URL('../qa-acceptance/', import.meta.url)
 await mkdir(output, { recursive: true })
+const viewportWidths = [360, 768, 1366, 1920]
+async function captureResponsive(page, name, ready) {
+  for (const width of viewportWidths) {
+    await page.setViewportSize({ width, height: 780 })
+    await ready.waitFor({ state: 'visible' })
+    await page.evaluate(() => new Promise(resolve => requestAnimationFrame(() => requestAnimationFrame(resolve))))
+    await page.screenshot({ path: new URL(name + '-' + width + '.png', output).pathname, fullPage: true })
+    assert.ok(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth + 1), name + ' page overflow at ' + width)
+  }
+}
 const browser = await chromium.launch({ headless: true })
 try {
   // Only the locally generated, one-day CI certificate is untrusted.
@@ -82,13 +92,8 @@ try {
   const completed = await get(path)
   assert.equal(completed.lines[0].remaining, 0)
   assert.equal(completed.lines[0].received, 1)
-  for (const width of [360, 768, 1366]) {
-    await page.setViewportSize({ width, height: 780 })
-    await page.getByRole('heading', { name: 'Transfer #' + transfer.id + ' — Completed' }).waitFor()
-    assert.ok(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth + 1), 'Horizontal page overflow at ' + width)
-    await page.screenshot({ path: new URL('transfer-' + width + '.png', output).pathname, fullPage: true })
-  }
-  console.log('PASS real HTTPS browser dispatch and receiving, SQL-backed balances and 3 viewport checks')
+  await captureResponsive(page, 'transfer', page.getByRole('heading', { name: 'Transfer #' + transfer.id + ' — Completed' }))
+  console.log('PASS real HTTPS browser dispatch and receiving, SQL-backed balances and 4 viewport checks')
 
   // The earlier SQL test closed the cashier's first shift. Start a new one through the real UI.
   const cashierContext = await browser.newContext({ ignoreHTTPSErrors: true, viewport: { width: 1366, height: 768 } })
@@ -118,7 +123,10 @@ try {
     await cashierPage.getByRole('button', { name: 'Add exact barcode or SKU' }).click()
     await cashierPage.getByRole('spinbutton', { name: 'Quantity of SQL Pack Test' }).waitFor()
     await cashierPage.getByRole('button', { name: /Pay \/ Checkout/ }).click()
-    await cashierPage.getByRole('dialog', { name: 'Complete Payment' }).waitFor()
+    const paymentDialog = cashierPage.getByRole('dialog', { name: 'Complete Payment' })
+    await paymentDialog.waitFor()
+    await captureResponsive(cashierPage, 'cashier-payment', paymentDialog)
+    await cashierPage.setViewportSize({ width: 1366, height: 768 })
     await cashierPage.getByLabel('Cash received').fill('10')
     const sale = cashierPage.waitForResponse(r => r.url().endsWith('/cash-sales') && r.request().method() === 'POST')
     await cashierPage.getByRole('button', { name: 'Save Only' }).click()
@@ -137,6 +145,7 @@ try {
     assert.equal((await cashierContext.request.get(base + '/api' + summaryPath)).status(), 404)
     assert.equal((await cashierContext.request.get(base + '/api' + prefix + '/stock/transfers')).status(), 404)
     await cashierPage.screenshot({ path: new URL('cashier-posted-sale.png', output).pathname, fullPage: true })
+    await captureResponsive(cashierPage, 'cashier-posted-sale', cashierPage.getByRole('button', { name: 'New sale' }))
     // Close the new cashier shift using the separately authenticated Owner UI.
     await page.locator('.app-sidebar .nav-entry').filter({ hasText: 'Reports' }).click()
     await page.getByRole('tab', { name: 'Day Closing' }).click()
@@ -163,14 +172,32 @@ try {
     const recorded = history.items.find(item => item.id === shift.id)
     assert.equal(recorded.variance, -5)
     assert.ok(recorded.closedAtUtc)
-    for (const width of [360, 768, 1366]) {
-      await page.setViewportSize({ width, height: 780 })
-      assert.ok(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth + 1), 'Closing overflow at ' + width)
-      await page.screenshot({ path: new URL('closing-' + width + '.png', output).pathname, fullPage: true })
-    }
+    await captureResponsive(page, 'closing', page.getByText(/Expected INR 110\.00 · Counted INR 105\.00 · Variance INR -5\.00/))
     console.log('PASS real cashier opening, cash sale, tenant role restrictions and owner closing with shortage')
   } finally {
     await cashierContext.close()
+  }
+  // A separately authenticated non-member must not gain access by reusing known document IDs.
+  const outsiderContext = await browser.newContext({ ignoreHTTPSErrors: true })
+  try {
+    const outsiderPage = await outsiderContext.newPage()
+    outsiderPage.on('pageerror', error => errors.push(error.message))
+    await outsiderPage.goto(base)
+    await outsiderPage.getByRole('heading', { name: 'Sign in' }).waitFor()
+    await outsiderPage.getByLabel('Email address').fill('sql-retail-flow-stranger@example.test')
+    await outsiderPage.getByLabel('Password').fill('TestPassword123!')
+    const outsiderLogin = outsiderPage.waitForResponse(r => r.url().endsWith('/api/auth/login') && r.request().method() === 'POST')
+    await outsiderPage.getByRole('button', { name: /^Sign in/ }).click()
+    assert.equal((await outsiderLogin).status(), 204)
+    const memberList = await outsiderContext.request.get(base + '/api/businesses')
+    assert.equal(memberList.status(), 200)
+    assert.ok(!(await memberList.json()).some(item => item.id === business.id))
+    for (const restricted of [prefix + '/stock/locations/' + source.id, path, prefix + '/stock/transfers']) {
+      assert.equal((await outsiderContext.request.get(base + '/api' + restricted)).status(), 404, restricted)
+    }
+    console.log('PASS real authenticated non-member denied access to known retail stock and transfer IDs')
+  } finally {
+    await outsiderContext.close()
   }
   assert.deepEqual(errors, [])
   await context.close()
