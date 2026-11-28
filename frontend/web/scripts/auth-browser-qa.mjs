@@ -2913,6 +2913,9 @@ try {
         await reportRow.getByText('19.20', { exact: true }).waitFor()
         let closedShift = null
         let closingWrites = 0
+        let closingAttempts = 0
+        let firstClosingKey = ''
+        let registerSales = 80
         const shift = { id: 101, actorUserId: 7, currencyCode: 'INR', locationId: 1,
           openingCash: 100, openedAtUtc: '2026-11-23T06:00:00Z', closedAtUtc: null,
           closingExpectedCash: null, closingActualCash: null, variance: null, closingReason: null,
@@ -2921,18 +2924,26 @@ try {
           response(route, 200, { items: closedShift ? [closedShift] : [shift], hasMore: false, canClose: true }))
         await t.page.route('**/api/businesses/1/cash-register/101/summary?*', route =>
           response(route, 200, { sessionId: 101, currencyCode: 'INR', openingCash: 100,
-            cashSales: 80, cashRefunds: 5, netExchangeSettlement: 0, creditCollections: 10,
-            cashIn: 20, cashOut: 5, expectedCash: 200 }))
+            cashSales: registerSales, cashRefunds: 5, netExchangeSettlement: 0, creditCollections: 10,
+            cashIn: 20, cashOut: 5, expectedCash: 120 + registerSales }))
         await t.page.route('**/api/businesses/1/cash-register/101/close', route => {
           const request = route.request().postDataJSON()
-          assert.equal(request.expectedCash, 200)
-          assert.equal(request.actualCash, 195)
+          closingAttempts++
+          if (closingAttempts === 1) {
+            assert.equal(request.expectedCash, 200)
+            firstClosingKey = request.requestKey
+            registerSales = 90
+            return response(route, 409, { code: 'REGISTER_BALANCE_CHANGED', message: 'Register cash changed.' })
+          }
+          assert.notEqual(request.requestKey, firstClosingKey)
+          assert.equal(request.expectedCash, 210)
+          assert.equal(request.actualCash, 205)
           assert.equal(request.reason, 'Counted cash shortage')
           assert.equal(request.locationId, 1)
           assert.ok(request.requestKey.length >= 12)
           closingWrites++
-          closedShift = { ...shift, closedAtUtc: '2026-11-23T08:00:00Z', closingExpectedCash: 200,
-            closingActualCash: 195, variance: -5, closingReason: request.reason, closedByUserId: 7,
+          closedShift = { ...shift, closedAtUtc: '2026-11-23T08:00:00Z', closingExpectedCash: 210,
+            closingActualCash: 205, variance: -5, closingReason: request.reason, closedByUserId: 7,
             closingRequestKey: request.requestKey }
           return response(route, 200, closedShift)
         })
@@ -2944,11 +2955,19 @@ try {
         await t.page.getByLabel('Variance reason (required for differences)').fill('Counted cash shortage')
         await t.page.getByRole('checkbox', { name: /I counted this shift/ }).check()
         await t.page.getByRole('button', { name: 'Close shift', exact: true }).click()
+        await t.page.getByText('Cash changed before closing. Review the refreshed summary and recount.').waitFor()
+        await t.page.getByText('INR 210.00', { exact: true }).waitFor()
+        assert.equal(await t.page.getByLabel('Actual counted cash').inputValue(), '')
+        await t.page.getByLabel('Actual counted cash').fill('205')
+        await t.page.getByLabel('Variance reason (required for differences)').fill('Counted cash shortage')
+        await t.page.getByRole('checkbox', { name: /I counted this shift/ }).check()
+        await t.page.getByRole('button', { name: 'Close shift', exact: true }).click()
         await t.page.getByText('Shift #101 closed successfully.').waitFor()
         await t.page.getByRole('button', { name: 'View closing' }).click()
-        await t.page.getByText(/Expected INR 200.00 · Counted INR 195.00 · Variance INR -5.00/).waitFor()
+        await t.page.getByText(/Expected INR 210.00 · Counted INR 205.00 · Variance INR -5.00/).waitFor()
         assert.equal(await t.page.getByRole('button', { name: 'Close shift', exact: true }).count(), 0)
         assert.equal(closingWrites, 1)
+        assert.equal(closingAttempts, 2)
         await t.page.getByRole('tab', { name: 'Sales', exact: true }).click()
         console.log('PASS owner register closing verifies shortage reason, one write and immutable closing history')
       }

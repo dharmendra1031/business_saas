@@ -27,6 +27,7 @@ function ClosingDetail({ session, base, canClose, timeZone, onClosed, onBack }: 
   const [busy, setBusy] = useState(false)
   const [reload, setReload] = useState(0)
   const [pending, setPending] = useState<CloseRequest | null>(null)
+  const [recount, setRecount] = useState(false)
   const lock = useRef(false)
   useEffect(() => {
     const controller = new AbortController()
@@ -45,7 +46,7 @@ function ClosingDetail({ session, base, canClose, timeZone, onClosed, onBack }: 
     if (lock.current || !canClose || session.closedAtUtc || (!pending && !valid) || !summary) return
     const request = pending ?? { locationId: session.locationId, expectedCash: summary.expectedCash,
       actualCash: cents / 100, reason: reason.trim(), requestKey: operationKey() }
-    lock.current = true; setBusy(true); setError(''); setPending(request)
+    lock.current = true; setBusy(true); setError(''); setRecount(false); setPending(request)
     try {
       const saved = await post<Session>(base + '/' + session.id + '/close', request)
       if (saved.id !== session.id || !saved.closedAtUtc || saved.closingRequestKey !== request.requestKey ||
@@ -57,7 +58,7 @@ function ClosingDetail({ session, base, canClose, timeZone, onClosed, onBack }: 
         // A definite server rejection of this request permits a fresh count. Unknown writes still use the original key.
         setPending(null); setConfirmed(false); setActual(''); setReason('')
         setReload(n => n + 1)
-        setError('Cash changed before closing. Review the refreshed summary and recount.')
+        setRecount(true)
       } else {
         setError((cause instanceof Error ? cause.message : 'Unable to verify closing.') + ' Check register history before counting or recording again.')
       }
@@ -76,6 +77,7 @@ function ClosingDetail({ session, base, canClose, timeZone, onClosed, onBack }: 
         : <p>Historical closure has no counted-cash snapshot.</p>}
     </div>}
     {error && <p role="alert" className="text-danger">{error}</p>}
+    {recount && <p role="status">Cash changed before closing. Review the refreshed summary and recount.</p>}
     {!summary && !error && <p role="status">Reconciling posted cash…</p>}
     {!summary && error && <button className="btn btn-sm btn-outline-secondary" onClick={() => setReload(n => n + 1)}>Retry summary</button>}
     {summary && <>
