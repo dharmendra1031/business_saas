@@ -95,6 +95,7 @@ public sealed class SqlServerTests(Xunit.Abstractions.ITestOutputHelper output)
             Assert.Contains("20261128130000_RetailGlobalProductLink", await db.Database.GetAppliedMigrationsAsync());
             Assert.Contains("20261128140000_RetailPurchaseReturns", await db.Database.GetAppliedMigrationsAsync());
             Assert.Contains("20261128150000_RetailSupplierDocuments", await db.Database.GetAppliedMigrationsAsync());
+            Assert.Contains("20261128160000_RetailRegisterClosing", await db.Database.GetAppliedMigrationsAsync());
             Assert.Equal(1, await db.Database.SqlQueryRaw<int>(
                 "SELECT COUNT(*) AS [Value] FROM sys.columns WHERE object_id = OBJECT_ID('RetailProducts') " +
                 "AND name = 'GlobalProductId' AND is_nullable = 1").SingleAsync());
@@ -2509,6 +2510,7 @@ public sealed class SqlServerTests(Xunit.Abstractions.ITestOutputHelper output)
             builder.UseSetting("RetailCashRegister:OpeningEnabled", "true");
             builder.UseSetting("RetailCashRegister:LinkingEnabled", "true");
             builder.UseSetting("RetailCashRegister:MovementsEnabled", "true");
+            builder.UseSetting("RetailCashRegister:ClosingEnabled", "true");
             builder.ConfigureServices(services =>
             {
                 services.RemoveAll<DbContextOptions<AppDbContext>>();
@@ -2620,6 +2622,33 @@ public sealed class SqlServerTests(Xunit.Abstractions.ITestOutputHelper output)
             Assert.False(await db.RetailCashSales.AnyAsync(x => x.BusinessId == businessId));
             Assert.Equal(2, await db.RetailCashRegisterMovements.CountAsync(x => x.RegisterSessionId == registerId));
         }
+        var closingPath = path + "/" + registerId + "/close";
+        var closing = new { locationId, expectedCash = 2375m, actualCash = 2370m,
+            reason = "Cash count shortage", requestKey = "sql-register-closing-owner" };
+        Assert.Equal(HttpStatusCode.NotFound, (await Post(cashier, closingPath, closing)).StatusCode);
+        Assert.Equal(HttpStatusCode.NotFound, (await Post(stranger, closingPath, closing)).StatusCode);
+        Assert.Equal(HttpStatusCode.BadRequest, (await Post(owner, closingPath, closing with { reason = "" })).StatusCode);
+        Assert.Equal(HttpStatusCode.Conflict, (await Post(owner, closingPath, closing with { expectedCash = 2374m })).StatusCode);
+        var closeRace = await Task.WhenAll(Post(owner, closingPath, closing),
+            Post(secondOwner, closingPath, closing with { requestKey = "sql-register-closing-competing" }));
+        Assert.True(closeRace.Count(x => x.StatusCode == HttpStatusCode.OK) <= 1);
+        Assert.All(closeRace, x => Assert.True(x.StatusCode is HttpStatusCode.OK or HttpStatusCode.Conflict));
+        var closeWinner = closeRace[1].StatusCode == HttpStatusCode.OK
+            ? closing with { requestKey = "sql-register-closing-competing" } : closing;
+        var closed = await Post(owner, closingPath, closeWinner);
+        Assert.Equal(HttpStatusCode.OK, closed.StatusCode);
+        var snapshot = await closed.Content.ReadFromJsonAsync<JsonElement>();
+        Assert.Equal(-5m, snapshot.GetProperty("variance").GetDecimal());
+        Assert.Equal(2370m, snapshot.GetProperty("closingActualCash").GetDecimal());
+        Assert.Equal(HttpStatusCode.Conflict, (await Post(owner, closingPath, closeWinner with { actualCash = 2375m })).StatusCode);
+        Assert.Equal(HttpStatusCode.Conflict, (await Post(owner, movementPath, movement with { requestKey = "sql-closed-new-movement" })).StatusCode);
+        Assert.Equal(HttpStatusCode.OK, (await Post(owner, movementPath, movement)).StatusCode);
+        Assert.Equal(JsonValueKind.Null, (await owner.GetFromJsonAsync<JsonElement>(current)).GetProperty("session").ValueKind);
+        var history = await owner.GetFromJsonAsync<JsonElement>(path + "?locationId=" + locationId + "&openOnly=false");
+        Assert.Contains(history.GetProperty("items").EnumerateArray(), x =>
+            x.GetProperty("id").GetInt64() == registerId && x.GetProperty("variance").GetDecimal() == -5m);
+        Assert.Equal(HttpStatusCode.OK, (await Post(owner, path + "/open",
+            opening with { requestKey = "sql-register-after-closing" })).StatusCode);
     }
 
     private static async Task RegisterAndLogin(HttpClient client, string email)

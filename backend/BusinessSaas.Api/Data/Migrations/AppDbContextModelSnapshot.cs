@@ -2131,6 +2131,11 @@ namespace BusinessSaas.Api.Data.Migrations
                     b.Property<long>("ActorUserId").HasColumnType("bigint");
                     b.Property<long>("BusinessId").HasColumnType("bigint");
                     b.Property<DateTime?>("ClosedAtUtc").HasColumnType("datetime2");
+                    b.Property<decimal?>("ClosingExpectedCash").HasPrecision(18, 2).HasColumnType("decimal(18,2)");
+                    b.Property<decimal?>("ClosingActualCash").HasPrecision(18, 2).HasColumnType("decimal(18,2)");
+                    b.Property<long?>("ClosedByUserId").HasColumnType("bigint");
+                    b.Property<string>("ClosingRequestKey").HasMaxLength(80).HasColumnType("nvarchar(80)");
+                    b.Property<string>("ClosingReason").HasMaxLength(200).HasColumnType("nvarchar(200)");
                     b.Property<string>("CurrencyCode").IsRequired().HasMaxLength(3).HasColumnType("nvarchar(3)");
                     b.Property<long>("LocationId").HasColumnType("bigint");
                     b.Property<DateTime>("OpenedAtUtc").HasColumnType("datetime2");
@@ -2141,8 +2146,13 @@ namespace BusinessSaas.Api.Data.Migrations
                     b.HasIndex("LocationId");
                     b.HasIndex("BusinessId", "RequestKey").IsUnique();
                     b.HasIndex("BusinessId", "LocationId", "ActorUserId").IsUnique().HasFilter("[ClosedAtUtc] IS NULL");
-                    b.ToTable("RetailCashRegisterSessions", t => t.HasCheckConstraint("CK_RetailCashRegisterSessions_AmountsAndDates",
-                        "[OpeningCash] >= 0 AND ([ClosedAtUtc] IS NULL OR [ClosedAtUtc] >= [OpenedAtUtc])"));
+                    b.HasIndex("ClosedByUserId");
+                    b.ToTable("RetailCashRegisterSessions", t =>
+                    {
+                        t.HasCheckConstraint("CK_RetailCashRegisterSessions_AmountsAndDates",
+                            "[OpeningCash] >= 0 AND ([ClosedAtUtc] IS NULL OR [ClosedAtUtc] >= [OpenedAtUtc])");
+                        t.HasCheckConstraint("CK_RetailCashRegisterSessions_Closing", "[ClosingExpectedCash] IS NULL AND [ClosingActualCash] IS NULL AND [ClosedByUserId] IS NULL AND [ClosingRequestKey] IS NULL AND [ClosingReason] IS NULL OR ([ClosedAtUtc] IS NOT NULL AND [ClosingExpectedCash] IS NOT NULL AND [ClosingActualCash] IS NOT NULL AND [ClosingActualCash] >= 0 AND [ClosedByUserId] IS NOT NULL AND [ClosingRequestKey] IS NOT NULL AND [ClosingReason] IS NOT NULL)");
+                    });
                 });
 
             modelBuilder.Entity("BusinessSaas.Api.Data.RetailCreditPayment", b =>
@@ -2174,6 +2184,8 @@ namespace BusinessSaas.Api.Data.Migrations
 
             modelBuilder.Entity("BusinessSaas.Api.Data.RetailCashRegisterSession", b =>
                 {
+                    b.HasOne("BusinessSaas.Api.Data.AppUser", null).WithMany().HasForeignKey("ClosedByUserId")
+                        .OnDelete(DeleteBehavior.Restrict);
                     b.HasOne("BusinessSaas.Api.Data.AppUser", null).WithMany().HasForeignKey("ActorUserId")
                         .OnDelete(DeleteBehavior.Restrict).IsRequired();
                     b.HasOne("BusinessSaas.Api.Data.Business", null).WithMany().HasForeignKey("BusinessId")

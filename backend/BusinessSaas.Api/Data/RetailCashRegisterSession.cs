@@ -11,6 +11,11 @@ public sealed class RetailCashRegisterSession
     public decimal OpeningCash { get; set; }
     public DateTime OpenedAtUtc { get; set; }
     public DateTime? ClosedAtUtc { get; set; }
+    public decimal? ClosingExpectedCash { get; set; }
+    public decimal? ClosingActualCash { get; set; }
+    public long? ClosedByUserId { get; set; }
+    public string? ClosingRequestKey { get; set; }
+    public string? ClosingReason { get; set; }
 }
 
 // Immutable non-sale cash movement; the register supplies tenant, location and currency.

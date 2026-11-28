@@ -965,8 +965,17 @@ public sealed class AppDbContext(DbContextOptions<AppDbContext> options)
             entity.Property(x => x.CurrencyCode).HasMaxLength(3).IsRequired();
             entity.Property(x => x.RequestKey).HasMaxLength(80).IsRequired();
             entity.Property(x => x.OpeningCash).HasPrecision(18, 2);
-            entity.ToTable(t => t.HasCheckConstraint("CK_RetailCashRegisterSessions_AmountsAndDates",
-                "[OpeningCash] >= 0 AND ([ClosedAtUtc] IS NULL OR [ClosedAtUtc] >= [OpenedAtUtc])"));
+            entity.Property(x => x.ClosingExpectedCash).HasPrecision(18, 2);
+            entity.Property(x => x.ClosingActualCash).HasPrecision(18, 2);
+            entity.Property(x => x.ClosingRequestKey).HasMaxLength(80);
+            entity.Property(x => x.ClosingReason).HasMaxLength(200);
+            entity.HasOne<AppUser>().WithMany().HasForeignKey(x => x.ClosedByUserId).OnDelete(DeleteBehavior.Restrict);
+            entity.ToTable(t =>
+            {
+                t.HasCheckConstraint("CK_RetailCashRegisterSessions_AmountsAndDates",
+                    "[OpeningCash] >= 0 AND ([ClosedAtUtc] IS NULL OR [ClosedAtUtc] >= [OpenedAtUtc])");
+                t.HasCheckConstraint("CK_RetailCashRegisterSessions_Closing", "[ClosingExpectedCash] IS NULL AND [ClosingActualCash] IS NULL AND [ClosedByUserId] IS NULL AND [ClosingRequestKey] IS NULL AND [ClosingReason] IS NULL OR ([ClosedAtUtc] IS NOT NULL AND [ClosingExpectedCash] IS NOT NULL AND [ClosingActualCash] IS NOT NULL AND [ClosingActualCash] >= 0 AND [ClosedByUserId] IS NOT NULL AND [ClosingRequestKey] IS NOT NULL AND [ClosingReason] IS NOT NULL)");
+            });
             entity.HasIndex(x => new { x.BusinessId, x.RequestKey }).IsUnique();
             entity.HasIndex(x => new { x.BusinessId, x.LocationId, x.ActorUserId })
                 .IsUnique().HasFilter("[ClosedAtUtc] IS NULL");
