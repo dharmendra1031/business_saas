@@ -17,6 +17,8 @@ public static class RetailPurchaseEndpoints
         var group = app.MapGroup("/api/businesses/{businessId:long}/purchase-orders")
             .RequireAuthorization();
 
+        group.MapGet("/{orderId:long}/receivings/{receivingId:long}/supplier-account", RetailSupplierAccounts.ReadReceiving);
+        group.MapPost("/{orderId:long}/receivings/{receivingId:long}/supplier-account", RetailSupplierAccounts.Post);
         group.MapGet("/{orderId:long}/receivings/{receivingId:long}/returns", RetailPurchaseReturns.Read);
         group.MapPost("/{orderId:long}/receivings/{receivingId:long}/returns", RetailPurchaseReturns.Post);
 

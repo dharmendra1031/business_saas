@@ -16,6 +16,8 @@ public static class RetailContactEndpoints
         var suppliers = app.MapGroup("/api/businesses/{businessId:long}/suppliers")
             .RequireAuthorization();
 
+        suppliers.MapGet("/{supplierId:long}/ledger", RetailSupplierAccounts.ReadLedger);
+
         suppliers.MapGet("", async (long businessId, string? search, int? page, bool? activeOnly,
             ClaimsPrincipal user, AppDbContext db, CancellationToken cancellationToken) =>
         {

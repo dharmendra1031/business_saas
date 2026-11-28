@@ -687,6 +687,33 @@ public sealed class RetailPurchaseTests
         Assert.Equal(returnedId, (await retryReturn.Content.ReadFromJsonAsync<JsonElement>()).GetProperty("id").GetInt64());
         Assert.Equal(HttpStatusCode.Conflict, (await Send(owner, returnsPath,
             purchaseReturn with { quantity = 2m })).StatusCode);
+        var accountPath = receipts + "/" + receipt40 + "/supplier-account";
+        var invoice = new { kind = "Invoice", amount = 3200m, reference = "SUP-INV-001",
+            requestKey = "supplier-invoice-test-001", purchaseReturnId = (long?)null, expectedOutstanding = 0m, confirmed = true };
+        Assert.Equal(HttpStatusCode.NotFound, (await Send(other, accountPath, invoice)).StatusCode);
+        Assert.Equal(HttpStatusCode.NotFound, (await Send(manager, accountPath, invoice)).StatusCode);
+        Assert.Equal(HttpStatusCode.OK, (await Send(owner, accountPath, invoice)).StatusCode);
+        Assert.Equal(HttpStatusCode.OK, (await Send(owner, accountPath, invoice)).StatusCode);
+        Assert.Equal(HttpStatusCode.Conflict, (await Send(owner, accountPath, invoice with
+            { requestKey = "supplier-invoice-test-002", expectedOutstanding = 3200m })).StatusCode);
+        var credit = invoice with { kind = "CreditNote", amount = 80m, reference = "SUP-CN-001",
+            requestKey = "supplier-credit-test-001", purchaseReturnId = (long?)returnedId, expectedOutstanding = 3200m };
+        Assert.Equal(HttpStatusCode.OK, (await Send(owner, accountPath, credit)).StatusCode);
+        var payment = invoice with { kind = "Payment", amount = 2000m, reference = "BANK-001",
+            requestKey = "supplier-payment-test-001", expectedOutstanding = 3120m };
+        Assert.Equal(HttpStatusCode.OK, (await Send(owner, accountPath, payment)).StatusCode);
+        Assert.Equal(HttpStatusCode.OK, (await Send(owner, accountPath, payment)).StatusCode);
+        Assert.Equal(HttpStatusCode.Conflict, (await Send(owner, accountPath, payment with
+            { requestKey = "supplier-payment-test-002", reference = "BANK-002", amount = 1121m, expectedOutstanding = 1120m })).StatusCode);
+        var account = await owner.GetFromJsonAsync<JsonElement>(accountPath);
+        Assert.Equal(1120m, account.GetProperty("outstanding").GetDecimal());
+        var supplierLedger = $"/api/businesses/{businessId}/suppliers/{supplierId}/ledger";
+        var ledger = await owner.GetFromJsonAsync<JsonElement>(supplierLedger);
+        Assert.Equal(1120m, ledger.GetProperty("totals")[0].GetProperty("outstanding").GetDecimal());
+        Assert.Equal(3, ledger.GetProperty("items").GetArrayLength());
+        Assert.Equal(HttpStatusCode.NotFound, (await manager.GetAsync(supplierLedger)).StatusCode);
+        Assert.Equal(HttpStatusCode.NotFound, (await other.GetAsync(supplierLedger)).StatusCode);
+
         var afterReturn = await owner.GetFromJsonAsync<JsonElement>(returnsPath);
         Assert.Equal(1m, afterReturn.GetProperty("lines")[0].GetProperty("returned").GetDecimal());
         Assert.Equal(39m, afterReturn.GetProperty("lines")[0].GetProperty("remaining").GetDecimal());

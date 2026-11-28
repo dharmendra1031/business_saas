@@ -435,6 +435,22 @@ public sealed class RetailPurchaseReturn
     public DateTime PostedAtUtc { get; set; } = DateTime.UtcNow;
 }
 
+public sealed class RetailSupplierDocument
+{
+    public long Id { get; set; }
+    public long BusinessId { get; set; }
+    public long SupplierId { get; set; }
+    public long ReceivingId { get; set; }
+    public long ActorUserId { get; set; }
+    public long? PurchaseReturnId { get; set; }
+    public string Kind { get; set; } = "";
+    public string CurrencyCode { get; set; } = "";
+    public decimal Amount { get; set; }
+    public string Reference { get; set; } = "";
+    public string RequestKey { get; set; } = "";
+    public DateTime PostedAtUtc { get; set; } = DateTime.UtcNow;
+}
+
 public sealed class AppDbContext(DbContextOptions<AppDbContext> options)
     : IdentityUserContext<AppUser, long>(options)
 {
@@ -479,6 +495,7 @@ public sealed class AppDbContext(DbContextOptions<AppDbContext> options)
     public DbSet<RetailReceiving> RetailReceivings => Set<RetailReceiving>();
     public DbSet<RetailReceivingLine> RetailReceivingLines => Set<RetailReceivingLine>();
     public DbSet<RetailPurchaseReturn> RetailPurchaseReturns => Set<RetailPurchaseReturn>();
+    public DbSet<RetailSupplierDocument> RetailSupplierDocuments => Set<RetailSupplierDocument>();
 
     protected override void OnModelCreating(ModelBuilder builder)
     {
@@ -1088,6 +1105,28 @@ public sealed class AppDbContext(DbContextOptions<AppDbContext> options)
                 .HasForeignKey(x => x.CreatedByUserId).OnDelete(DeleteBehavior.Restrict);
             entity.HasOne<AppUser>().WithMany()
                 .HasForeignKey(x => x.PostedByUserId).OnDelete(DeleteBehavior.Restrict);
+        });
+
+        builder.Entity<RetailSupplierDocument>(entity =>
+        {
+            entity.Property(x => x.Kind).HasMaxLength(12).IsRequired();
+            entity.Property(x => x.CurrencyCode).HasMaxLength(3).IsRequired();
+            entity.Property(x => x.Reference).HasMaxLength(120).IsRequired();
+            entity.Property(x => x.RequestKey).HasMaxLength(80).IsRequired();
+            entity.Property(x => x.Amount).HasPrecision(18, 2);
+            entity.HasIndex(x => new { x.BusinessId, x.RequestKey }).IsUnique();
+            entity.HasIndex(x => new { x.BusinessId, x.SupplierId, x.Kind, x.Reference }).IsUnique();
+            entity.HasIndex(x => x.ReceivingId).IsUnique().HasFilter("[Kind] = 'Invoice'");
+            entity.HasIndex(x => x.PurchaseReturnId).IsUnique().HasFilter("[PurchaseReturnId] IS NOT NULL");
+            entity.HasIndex(x => x.SupplierId);
+            entity.HasIndex(x => x.ActorUserId);
+            entity.HasIndex(x => new { x.ReceivingId, x.Kind });
+            entity.HasOne<Business>().WithMany().HasForeignKey(x => x.BusinessId).OnDelete(DeleteBehavior.Restrict);
+            entity.HasOne<RetailSupplier>().WithMany().HasForeignKey(x => x.SupplierId).OnDelete(DeleteBehavior.Restrict);
+            entity.HasOne<RetailReceiving>().WithMany().HasForeignKey(x => x.ReceivingId).OnDelete(DeleteBehavior.Restrict);
+            entity.HasOne<AppUser>().WithMany().HasForeignKey(x => x.ActorUserId).OnDelete(DeleteBehavior.Restrict);
+            entity.HasOne<RetailPurchaseReturn>().WithMany().HasForeignKey(x => x.PurchaseReturnId).OnDelete(DeleteBehavior.Restrict);
+            entity.ToTable(t => t.HasCheckConstraint("CK_RetailSupplierDocuments_KindAmount", "[Amount] > 0 AND (([Kind] = 'CreditNote' AND [PurchaseReturnId] IS NOT NULL) OR ([Kind] IN ('Invoice', 'Payment') AND [PurchaseReturnId] IS NULL))"));
         });
 
         builder.Entity<RetailPurchaseReturn>(entity =>

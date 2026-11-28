@@ -94,6 +94,7 @@ public sealed class SqlServerTests(Xunit.Abstractions.ITestOutputHelper output)
             Assert.Contains("20261128120000_GlobalProductAuditRevision", await db.Database.GetAppliedMigrationsAsync());
             Assert.Contains("20261128130000_RetailGlobalProductLink", await db.Database.GetAppliedMigrationsAsync());
             Assert.Contains("20261128140000_RetailPurchaseReturns", await db.Database.GetAppliedMigrationsAsync());
+            Assert.Contains("20261128150000_RetailSupplierDocuments", await db.Database.GetAppliedMigrationsAsync());
             Assert.Equal(1, await db.Database.SqlQueryRaw<int>(
                 "SELECT COUNT(*) AS [Value] FROM sys.columns WHERE object_id = OBJECT_ID('RetailProducts') " +
                 "AND name = 'GlobalProductId' AND is_nullable = 1").SingleAsync());

@@ -2219,6 +2219,44 @@ namespace BusinessSaas.Api.Data.Migrations
                     b.HasOne("BusinessSaas.Api.Data.AppUser", null).WithMany().HasForeignKey("ActorUserId")
                         .OnDelete(DeleteBehavior.Restrict).IsRequired();
                 });
+            modelBuilder.Entity("BusinessSaas.Api.Data.RetailSupplierDocument", b =>
+                {
+                    b.Property<long>("Id").ValueGeneratedOnAdd().HasColumnType("bigint");
+                    SqlServerPropertyBuilderExtensions.UseIdentityColumn(b.Property<long>("Id"));
+                    b.Property<long>("BusinessId").HasColumnType("bigint");
+                    b.Property<long>("SupplierId").HasColumnType("bigint");
+                    b.Property<long>("ReceivingId").HasColumnType("bigint");
+                    b.Property<long>("ActorUserId").HasColumnType("bigint");
+                    b.Property<long?>("PurchaseReturnId").HasColumnType("bigint");
+                    b.Property<string>("Kind").IsRequired().HasMaxLength(12).HasColumnType("nvarchar(12)");
+                    b.Property<string>("CurrencyCode").IsRequired().HasMaxLength(3).HasColumnType("nvarchar(3)");
+                    b.Property<decimal>("Amount").HasPrecision(18, 2).HasColumnType("decimal(18,2)");
+                    b.Property<string>("Reference").IsRequired().HasMaxLength(120).HasColumnType("nvarchar(120)");
+                    b.Property<string>("RequestKey").IsRequired().HasMaxLength(80).HasColumnType("nvarchar(80)");
+                    b.Property<DateTime>("PostedAtUtc").HasColumnType("datetime2");
+                    b.HasKey("Id");
+                    b.HasIndex("BusinessId", "RequestKey").IsUnique();
+                    b.HasIndex("BusinessId", "SupplierId", "Kind", "Reference").IsUnique();
+                    b.HasIndex("ReceivingId").IsUnique().HasFilter("[Kind] = 'Invoice'");
+                    b.HasIndex("PurchaseReturnId").IsUnique().HasFilter("[PurchaseReturnId] IS NOT NULL");
+                    b.HasIndex("SupplierId");
+                    b.HasIndex("ActorUserId");
+                    b.HasIndex("ReceivingId", "Kind");
+                    b.ToTable("RetailSupplierDocuments", t => t.HasCheckConstraint("CK_RetailSupplierDocuments_KindAmount", "[Amount] > 0 AND (([Kind] = 'CreditNote' AND [PurchaseReturnId] IS NOT NULL) OR ([Kind] IN ('Invoice', 'Payment') AND [PurchaseReturnId] IS NULL))"));
+                });
+            modelBuilder.Entity("BusinessSaas.Api.Data.RetailSupplierDocument", b =>
+                {
+                    b.HasOne("BusinessSaas.Api.Data.Business", null).WithMany().HasForeignKey("BusinessId")
+                        .OnDelete(DeleteBehavior.Restrict).IsRequired();
+                    b.HasOne("BusinessSaas.Api.Data.RetailSupplier", null).WithMany().HasForeignKey("SupplierId")
+                        .OnDelete(DeleteBehavior.Restrict).IsRequired();
+                    b.HasOne("BusinessSaas.Api.Data.RetailReceiving", null).WithMany().HasForeignKey("ReceivingId")
+                        .OnDelete(DeleteBehavior.Restrict).IsRequired();
+                    b.HasOne("BusinessSaas.Api.Data.AppUser", null).WithMany().HasForeignKey("ActorUserId")
+                        .OnDelete(DeleteBehavior.Restrict).IsRequired();
+                    b.HasOne("BusinessSaas.Api.Data.RetailPurchaseReturn", null).WithMany().HasForeignKey("PurchaseReturnId")
+                        .OnDelete(DeleteBehavior.Restrict);
+                });
 #pragma warning restore 612, 618
         }
     }
