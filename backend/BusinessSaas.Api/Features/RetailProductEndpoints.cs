@@ -34,7 +34,11 @@ public static class RetailProductEndpoints
 
             var query = db.RetailProducts.AsNoTracking().Where(x => x.BusinessId == businessId);
             if (exactCode.Length > 0)
-                query = query.Where(x => x.Sku == exactCode || x.Barcode == exactCode);
+            {
+                var forms = GlobalProductEndpoints.BarcodeForms(exactCode);
+                query = query.Where(x => x.Sku == exactCode || x.Barcode == exactCode ||
+                    x.GlobalProductId != null && x.Barcode != null && forms.Contains(x.Barcode));
+            }
             else if (term.Length > 0)
                 query = query.Where(x => x.Name.ToUpper().Contains(term) ||
                     x.Sku.Contains(term) || x.Barcode != null && x.Barcode.Contains(term));
@@ -192,6 +196,8 @@ public static class RetailProductEndpoints
 
                 var sku = request.Sku!.Trim().ToUpperInvariant();
                 var barcode = NormalizeBarcode(request.Barcode);
+                if (product.GlobalProductId != null && (product.UnitId != request.UnitId || product.Barcode != barcode))
+                    return Results.Conflict(new { message = "Catalogue-linked barcode and stock unit cannot change." });
                 if (await db.RetailProducts.AnyAsync(x => x.BusinessId == businessId &&
                     x.Id != productId && (x.Sku == sku || barcode != null && x.Barcode == barcode)))
                     return Results.Conflict(new { message = "SKU or barcode is already used in this business." });
@@ -273,7 +279,7 @@ public static class RetailProductEndpoints
                     x.SalePrice)).ToList(),
              locationId.HasValue ? (db.RetailStockBalances.Where(balance =>
                  balance.BusinessId == businessId && balance.LocationId == locationId &&
-                 balance.ProductId == product.Id).Select(balance => (decimal?)balance.Quantity).FirstOrDefault() ?? 0m) : null);
+                 balance.ProductId == product.Id).Select(balance => (decimal?)balance.Quantity).FirstOrDefault() ?? 0m) : null, product.GlobalProductId);
 
     private static async Task<bool> ValidReferences(AppDbContext db, long businessId,
         long categoryId, long unitId, long? brandId, bool requireActive,
@@ -381,7 +387,7 @@ public static class RetailProductEndpoints
     private sealed record ProductItem(long Id, string Name, string Sku, string? Barcode,
         long CategoryId, string CategoryName, long UnitId, string UnitCode,
         decimal SalePrice, string TaxClassification, bool IsActive, decimal? ReorderLevel,
-        long? BrandId, string? BrandName, List<ConversionItem> Conversions, decimal? AvailableStock);
+        long? BrandId, string? BrandName, List<ConversionItem> Conversions, decimal? AvailableStock, long? GlobalProductId);
 
     private sealed record ConversionItem(long UnitId, decimal Factor, string? UnitCode, bool IsActive, decimal? SalePrice);
 }

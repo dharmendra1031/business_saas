@@ -6,7 +6,8 @@ import RetailPurchases from './RetailPurchases'
 
 export type RetailSection = 'products' | 'masters' | 'suppliers' | 'customers' | 'stock' | 'purchases'
 
-export default function RetailCatalog({ section, businessId, canOperate, currencyCode, locations, roleCode, approvalsOnly, initialStockAlertLocationId, userId }: {
+export default function RetailCatalog({ section, businessId, canOperate, currencyCode, locations, roleCode, approvalsOnly, initialStockAlertLocationId, userId, globalCatalogueEnabled = false }: {
+  globalCatalogueEnabled?: boolean
   userId: number
   approvalsOnly: boolean
   initialStockAlertLocationId: number | null
@@ -19,7 +20,7 @@ export default function RetailCatalog({ section, businessId, canOperate, currenc
 }) {
   switch (section) {
     case 'products':
-      return <RetailProducts businessId={businessId} canOperate={canOperate} currencyCode={currencyCode} />
+      return <RetailProducts globalCatalogueEnabled={globalCatalogueEnabled} businessId={businessId} canOperate={canOperate} currencyCode={currencyCode} />
     case 'masters':
       return <RetailMasters businessId={businessId} canOperate={canOperate} />
     case 'stock':
@@ -27,7 +28,7 @@ export default function RetailCatalog({ section, businessId, canOperate, currenc
         locations={locations} isOwner={roleCode === 'Owner'}
         initialAlertLocationId={initialStockAlertLocationId} />
     case 'purchases':
-      return <RetailPurchases initialApprovalsOnly={approvalsOnly} businessId={businessId} canOperate={canOperate}
+      return <RetailPurchases globalCatalogueEnabled={globalCatalogueEnabled} initialApprovalsOnly={approvalsOnly} businessId={businessId} canOperate={canOperate}
         locations={locations} roleCode={roleCode} currencyCode={currencyCode} />
     case 'suppliers':
     case 'customers':

@@ -4,6 +4,7 @@ import { api, post, operationKey, SessionExpiredError } from './api'
 import { baseQuantity } from './stockQuantity'
 import LookupDialog, { MasterLookup } from './LookupDialog'
 import { ActionButton } from './ActionFeedback'
+import GlobalProductPicker from './GlobalProductPicker'
 
 interface Supplier {
   id: number
@@ -88,7 +89,8 @@ function message(error: unknown): string {
   return error instanceof Error ? error.message : 'Unable to complete the request.'
 }
 
-export default function RetailPurchases({ businessId, canOperate, locations, roleCode, currencyCode, initialApprovalsOnly }: {
+export default function RetailPurchases({ businessId, canOperate, locations, roleCode, currencyCode, initialApprovalsOnly, globalCatalogueEnabled = false }: {
+  globalCatalogueEnabled?: boolean
   initialApprovalsOnly: boolean
   businessId: number
   canOperate: boolean
@@ -113,6 +115,7 @@ export default function RetailPurchases({ businessId, canOperate, locations, rol
   const [supplierSearch, setSupplierSearch] = useState('')
   const [supplierName, setSupplierName] = useState('')
   const [lookup, setLookup] = useState<'supplier' | 'product' | null>(null)
+  const [catalogueOpen, setCatalogueOpen] = useState(false)
   const [resolving, setResolving] = useState(false)
   const [lookupPage, setLookupPage] = useState(1)
   const [lookupTotal, setLookupTotal] = useState(0)
@@ -324,7 +327,8 @@ export default function RetailPurchases({ businessId, canOperate, locations, rol
         if (lines.some(line => line.productId === match.id)) setError('This item is already in the order.')
         else addLine(match)
       } else {
-        openLookup('product')
+        if (result.total === 0 && globalCatalogueEnabled && canOperate) setCatalogueOpen(true)
+        else openLookup('product')
       }
     } catch (cause) {
       if (!(cause instanceof SessionExpiredError)) setError(message(cause))
@@ -356,7 +360,7 @@ export default function RetailPurchases({ businessId, canOperate, locations, rol
 
   async function createOrder(event: FormEvent<HTMLFormElement>) {
     event.preventDefault()
-    if (!canOperate || busy || resolving || lookup || addingSupplier || supplierFormOpen) return
+    if (!canOperate || busy || resolving || lookup || addingSupplier || supplierFormOpen || catalogueOpen) return
     const approveNow = roleCode === 'Owner' &&
       (event.nativeEvent as SubmitEvent).submitter?.getAttribute('data-action') !== 'draft'
     if (!locationId || !supplierId || lines.length === 0 || lines.length > 50 ||
@@ -589,6 +593,8 @@ export default function RetailPurchases({ businessId, canOperate, locations, rol
               </tbody>
             </table>
           </div>
+          {globalCatalogueEnabled && canOperate && lines.length < 50 && <button type="button" className="btn btn-sm btn-outline-secondary" disabled={busy || resolving}
+            onClick={() => setCatalogueOpen(true)}>Add from Global Catalogue</button>}
           {lines.length >= 50 && <p className="field-help" role="status">Maximum 50 products per purchase order.</p>}
           {lines.length > 0 && <p className="text-end mb-0">
             <strong>Total: {money(lines.reduce((sum, line) =>
@@ -630,6 +636,8 @@ export default function RetailPurchases({ businessId, canOperate, locations, rol
           onClose={() => setLookup(null)} />}
       </form>}
 
+      {creating && catalogueOpen && canOperate && <GlobalProductPicker businessId={businessId} currencyCode={currencyCode} initialSearch={productSearch}
+        onClose={() => setCatalogueOpen(false)} onSelect={product => { setCatalogueOpen(false); addLine(product) }} />}
       {creating && supplierFormOpen && <dialog ref={supplierDialog} className="entry-dialog" aria-labelledby="new-supplier-heading"
         onCancel={event => { event.preventDefault(); if (!supplierSaving.current) closeSupplierForm() }}
         onKeyDownCapture={event => {

@@ -1,3 +1,4 @@
+using System.Data;
 using System.Security.Claims;
 using System.Text.Json;
 using BusinessSaas.Api.Data;
@@ -36,7 +37,112 @@ public static class GlobalProductEndpoints
                 return Results.BadRequest(new { message = "Enter a product name or barcode." });
             return await Search(db.GlobalProducts.AsNoTracking().Where(x => x.IsActive), search, barcode, afterId, ct);
         }).RequireAuthorization();
+        app.MapPost("/api/businesses/{businessId:long}/global-products/{globalId:long}/adopt", Adopt).RequireAuthorization();
     }
+
+    private static async Task<IResult> Adopt(long businessId, long globalId, AdoptionRequest request,
+        ClaimsPrincipal user, AppDbContext db, CancellationToken ct)
+    {
+        await using var transaction = await db.Database.BeginTransactionAsync(IsolationLevel.Serializable, ct);
+        try
+        {
+            var denied = await RetailMasterEndpoints.CheckAccess(db, user, businessId, true, ct);
+            if (denied is not null) return denied;
+            var existing = await db.RetailProducts.AsNoTracking().SingleOrDefaultAsync(x =>
+                x.BusinessId == businessId && x.GlobalProductId == globalId, ct);
+            if (existing is not null)
+                return Results.Ok(new { existing.Id, existing.IsActive, existing.SalePrice });
+            if (request.SalePrice is null or <= 0 or > 9999999999.99m ||
+                decimal.Round(request.SalePrice.Value, 2) != request.SalePrice.Value)
+                return Results.BadRequest(new { message = "Enter a positive selling price with at most two decimals." });
+            var global = await db.GlobalProducts.AsNoTracking().SingleOrDefaultAsync(x => x.Id == globalId && x.IsActive, ct);
+            if (global is null) return Results.NotFound();
+            if (request.ExpectedRevision != global.Revision)
+                return Results.Conflict(new { message = "Catalogue product changed. Search again." });
+            if (global.Unit.Length is < 1 or > 12 || !global.Unit.All(ch => char.IsAsciiLetterOrDigit(ch) || ch == '-'))
+                return Results.Conflict(new { message = "Catalogue stock unit needs review." });
+            var codes = BarcodeForms(global.Barcode);
+            var matches = await db.RetailProducts.Where(x => x.BusinessId == businessId &&
+                (x.Barcode != null && codes.Contains(x.Barcode) || codes.Contains(x.Sku)))
+                .Take(2).ToListAsync(ct);
+            if (matches.Count != 0)
+            {
+                var local = matches[0];
+                if (!request.LinkExisting || matches.Count != 1 || local.GlobalProductId != null || !local.IsActive ||
+                    local.Barcode == null || !codes.Contains(local.Barcode) ||
+                    !await db.RetailUnits.AnyAsync(x => x.Id == local.UnitId && x.BusinessId == businessId &&
+                        x.IsActive && x.Code == global.Unit, ct))
+                    return Results.Conflict(new { message = "Local code already exists. Review barcode and unit before linking." });
+                local.GlobalProductId = globalId;
+                await db.SaveChangesAsync(ct);
+                await transaction.CommitAsync(ct);
+                return Results.Ok(new { local.Id, local.IsActive, local.SalePrice });
+            }
+            if (global.Barcode is null && await db.RetailProducts.AnyAsync(x => x.BusinessId == businessId &&
+                x.Name.ToUpper() == global.NameKey, ct))
+                return Results.Conflict(new { message = "A local product has the same name. Review the identity first." });
+            var unit = await db.RetailUnits.SingleOrDefaultAsync(x => x.BusinessId == businessId && x.Code == global.Unit, ct);
+            if (unit is null)
+            {
+                var unitName = global.Unit.Length == 1 ? global.Unit + " UNIT" : global.Unit;
+                if (await db.RetailUnits.AnyAsync(x => x.BusinessId == businessId && x.NameKey == unitName, ct))
+                    return Results.Conflict(new { message = "Local unit name conflicts with the catalogue unit." });
+                unit = new RetailUnit { BusinessId = businessId, Code = global.Unit, Name = unitName, NameKey = unitName };
+                db.RetailUnits.Add(unit);
+            }
+            if (!unit.IsActive) return Results.Conflict(new { message = "Activate the matching local unit first." });
+            var categoryName = global.Category.Length >= 2 ? global.Category : "General";
+            var categoryKey = categoryName.ToUpperInvariant();
+            var category = await db.RetailCategories.SingleOrDefaultAsync(x => x.BusinessId == businessId && x.NameKey == categoryKey, ct);
+            if (category is null)
+            {
+                category = new RetailCategory { BusinessId = businessId, Name = categoryName, NameKey = categoryKey };
+                db.RetailCategories.Add(category);
+            }
+            if (!category.IsActive) return Results.Conflict(new { message = "Activate the matching local category first." });
+            RetailBrand? brand = null;
+            if (global.Brand.Length >= 2)
+            {
+                var key = global.Brand.ToUpperInvariant();
+                brand = await db.RetailBrands.SingleOrDefaultAsync(x => x.BusinessId == businessId && x.NameKey == key, ct);
+                if (brand is null)
+                {
+                    brand = new RetailBrand { BusinessId = businessId, Name = global.Brand, NameKey = key };
+                    db.RetailBrands.Add(brand);
+                }
+                if (!brand.IsActive) return Results.Conflict(new { message = "Activate the matching local brand first." });
+            }
+            await db.SaveChangesAsync(ct);
+            var product = new RetailProduct
+            {
+                BusinessId = businessId, GlobalProductId = globalId, Name = global.Name, Barcode = global.Barcode,
+                Sku = "AUTO-" + Guid.NewGuid().ToString("N"), UnitId = unit.Id, CategoryId = category.Id,
+                BrandId = brand?.Id, SalePrice = request.SalePrice.Value
+            };
+            db.RetailProducts.Add(product);
+            await db.SaveChangesAsync(ct);
+            product.Sku = $"AUTO-{product.Id}";
+            await db.SaveChangesAsync(ct);
+            await transaction.CommitAsync(ct);
+            return Results.Created($"/api/businesses/{businessId}/products/{product.Id}",
+                new { product.Id, product.IsActive, product.SalePrice });
+        }
+        catch (Exception error) when (StockPosting.IsSqlConflict(error) ||
+            error is DbUpdateException update && RetailModule.IsDuplicateKey(update))
+        {
+            return Results.Conflict(new { message = "Product or masters are being updated. Retry the same catalogue selection." });
+        }
+    }
+
+    internal static string[] BarcodeForms(string? value)
+    {
+        var canonical = CanonicalBarcode(value);
+        return canonical is null ? [] : new[] { 8, 12, 13, 14 }.Where(length =>
+            canonical[..(14 - length)].All(ch => ch == '0'))
+            .Select(length => canonical[(14 - length)..]).ToArray();
+    }
+
+    private sealed record AdoptionRequest(decimal? SalePrice, int ExpectedRevision, bool LinkExisting = false);
 
     private static async Task<IResult> Save(AppDbContext db, long? id, ProductRequest request, long actorId, CancellationToken ct)
     {

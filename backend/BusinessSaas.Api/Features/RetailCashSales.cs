@@ -922,14 +922,18 @@ public static class RetailCashSales
                 x.TaxClassification == "");
         // Exact scans use the existing business/SKU and business/barcode indexes.
         // Both matches must be returned if a SKU collides with another product's barcode.
+        var forms = GlobalProductEndpoints.BarcodeForms(term);
         var matches = exact
-            ? eligible.Where(x => x.Sku == term || x.Barcode == term)
+            ? eligible.Where(x => x.Sku == term || x.Barcode == term ||
+                x.GlobalProductId != null && x.Barcode != null && forms.Contains(x.Barcode))
                 .OrderBy(x => x.Id).Take(2)
             : term.Length == 0
                 ? eligible.OrderBy(x => x.Name).ThenBy(x => x.Id).Take(30)
                 : eligible.Where(x => x.Name.ToUpper().Contains(term) ||
-                    x.Sku.Contains(term) || x.Barcode == term)
-                    .OrderByDescending(x => x.Barcode == term || x.Sku == term)
+                    x.Sku.Contains(term) || x.Barcode == term ||
+                    x.GlobalProductId != null && x.Barcode != null && forms.Contains(x.Barcode))
+                    .OrderByDescending(x => x.Barcode == term || x.Sku == term ||
+                        x.GlobalProductId != null && x.Barcode != null && forms.Contains(x.Barcode))
                     .ThenBy(x => x.Name).ThenBy(x => x.Id).Take(30);
         var allowAlternates = config.GetValue<bool>("RetailSales:AlternateUnitsEnabled");
         var products = await matches.Select(x => new { x.Id, x.Name, x.Sku, x.Barcode, x.SalePrice,

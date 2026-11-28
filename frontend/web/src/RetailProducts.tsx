@@ -5,9 +5,11 @@ import { classificationPath, classificationTrail } from './retailClassification'
 import { ActionButton, useActionFeedback } from './ActionFeedback'
 import { moneyCents } from './posMoney'
 import { MasterLookup } from './LookupDialog'
+import GlobalProductPicker from './GlobalProductPicker'
 
 interface Product {
   id: number
+  globalProductId?: number | null
   name: string
   sku: string
   barcode: string | null
@@ -68,7 +70,8 @@ function errorMessage(error: unknown): string {
   return error instanceof Error ? error.message : 'Request failed. Please try again.'
 }
 
-export default function RetailProducts({ businessId, canOperate, currencyCode }: {
+export default function RetailProducts({ businessId, canOperate, currencyCode, globalCatalogueEnabled = false }: {
+  globalCatalogueEnabled?: boolean
   businessId: number
   canOperate: boolean
   currencyCode: string
@@ -94,6 +97,7 @@ export default function RetailProducts({ businessId, canOperate, currencyCode }:
   const [form, setForm] = useState<ProductForm>(initialForm)
   const [editingId, setEditingId] = useState<number | null>(null)
   const [formOpen, setFormOpen] = useState(false)
+  const [catalogueOpen, setCatalogueOpen] = useState(false)
   const [reload, setReload] = useState(0)
   const [loading, setLoading] = useState(true)
   const [optionsLoading, setOptionsLoading] = useState(true)
@@ -352,11 +356,14 @@ export default function RetailProducts({ businessId, canOperate, currencyCode }:
         <h2>Products</h2>
         <div className="business-module-actions">
           {!formOpen && !loading && !loadError && total > 0 && <span className="business-module-count">{total.toLocaleString()} products</span>}
+          {canOperate && !formOpen && globalCatalogueEnabled && <button type="button" className="btn btn-outline-secondary" onClick={() => setCatalogueOpen(true)}>Global Catalogue</button>}
           {canOperate && !formOpen && <button type="button" className="btn btn-primary"
             disabled={!!optionsError || optionsLoading} onClick={startCreate}><Plus size={17} /> Add Product</button>}
         </div>
       </div>
 
+      {catalogueOpen && canOperate && <GlobalProductPicker businessId={businessId} currencyCode={currencyCode}
+        onClose={() => setCatalogueOpen(false)} onSelect={() => { setCatalogueOpen(false); setReload(value => value + 1); setOptionsReload(value => value + 1) }} />}
       {!canOperate && <div className="alert alert-warning" role="status">
         Your subscription is inactive. Products are read-only.
       </div>}
@@ -417,8 +424,8 @@ export default function RetailProducts({ businessId, canOperate, currencyCode }:
             <MasterLookup id="product-unit" title="Select stock unit" value={form.unitId} emptyLabel="Select unit"
               options={[...options.units, ...(!unitSelected && form.unitId > 0
                 ? [{ id: form.unitId, name: 'Previous unit (inactive)' }] : [])]}
-              onChange={id => changeForm('unitId', id)} />
-            <button type="button" className="btn btn-sm btn-link" onClick={() => beginInline('units')}>+ Add unit</button>
+              disabled={products.some(item => item.id === editingId && item.globalProductId != null)} onChange={id => changeForm('unitId', id)} />
+            {!products.some(item => item.id === editingId && item.globalProductId != null) && <button type="button" className="btn btn-sm btn-link" onClick={() => beginInline('units')}>+ Add unit</button>}
           </div>
           <div>
             <label className="form-label" htmlFor="product-brand">Brand (optional)</label>
@@ -440,7 +447,7 @@ export default function RetailProducts({ businessId, canOperate, currencyCode }:
           <div>
             <label className="form-label" htmlFor="product-barcode">Barcode</label>
             <input id="product-barcode" className="form-control" maxLength={64}
-              autoComplete="off" value={form.barcode}
+              autoComplete="off" value={form.barcode} readOnly={products.some(item => item.id === editingId && item.globalProductId != null)}
               onChange={event => changeForm('barcode', event.target.value)} />
           </div>
           <div>

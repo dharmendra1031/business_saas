@@ -178,7 +178,7 @@ public sealed class SqlServerTests(Xunit.Abstractions.ITestOutputHelper output)
         Assert.Equal(HttpStatusCode.BadRequest,
             (await Post(admin, catalogue, CatalogueItem("036000291453"))).StatusCode);
         Assert.Equal(HttpStatusCode.Created,
-            (await Post(admin, catalogue, CatalogueItem("96385074", "QA GTIN8 item"))).StatusCode);
+            (await Post(admin, catalogue, CatalogueItem("96385074", "QA GTIN8 item", unit: "BOX"))).StatusCode);
         var gtin8 = await admin.GetFromJsonAsync<JsonElement>(catalogue + "?barcode=00000096385074");
         Assert.Single(gtin8.GetProperty("items").EnumerateArray());
         var url = catalogue + "/" + globalId;
@@ -259,6 +259,32 @@ public sealed class SqlServerTests(Xunit.Abstractions.ITestOutputHelper output)
             (await owner.GetAsync($"/api/businesses/{ids[0]}/dashboard")).StatusCode);
         Assert.Equal(HttpStatusCode.NotFound,
             (await stranger.GetAsync($"/api/businesses/{ids[0]}/dashboard")).StatusCode);
+
+
+        var activeGlobalId = gtin8.GetProperty("items")[0].GetProperty("id").GetInt64();
+        var adoptUrl = $"/api/businesses/{ids[0]}/global-products/{activeGlobalId}/adopt";
+        var adoption = new { salePrice = 15m, expectedRevision = 1 };
+        Assert.Equal(HttpStatusCode.NotFound, (await Post(stranger, adoptUrl, adoption)).StatusCode);
+        Assert.Equal(HttpStatusCode.NotFound, (await Post(owner,
+            $"/api/businesses/{ids[0]}/global-products/{globalId}/adopt", adoption)).StatusCode);
+        Assert.Equal(HttpStatusCode.Conflict, (await Post(owner, adoptUrl,
+            new { salePrice = 15m, expectedRevision = 0 })).StatusCode);
+        var adopted = await Post(owner, adoptUrl, adoption);
+        Assert.Equal(HttpStatusCode.Created, adopted.StatusCode);
+        var localId = (await adopted.Content.ReadFromJsonAsync<JsonElement>()).GetProperty("id").GetInt64();
+        var repeated = await Post(owner, adoptUrl, new { salePrice = 99m, expectedRevision = 1 });
+        Assert.Equal(HttpStatusCode.OK, repeated.StatusCode);
+        Assert.Equal(localId, (await repeated.Content.ReadFromJsonAsync<JsonElement>()).GetProperty("id").GetInt64());
+        var lookup = await owner.GetFromJsonAsync<JsonElement>($"/api/businesses/{ids[0]}/products?code=96385074");
+        Assert.Equal(localId, lookup.GetProperty("items")[0].GetProperty("id").GetInt64());
+        using (var scope = factory.Services.CreateScope())
+        {
+            var db = scope.ServiceProvider.GetRequiredService<AppDbContext>();
+            var linked = await db.RetailProducts.SingleAsync(x => x.BusinessId == ids[0] && x.GlobalProductId == activeGlobalId);
+            Assert.Equal(15m, linked.SalePrice);
+            Assert.False(await db.RetailStockMovements.AnyAsync(x => x.ProductId == localId));
+            Assert.False(await db.RetailStockBalances.AnyAsync(x => x.ProductId == localId));
+        }
 
         var changedPayload = await Post(admin, "/api/platform/businesses", new
         {

@@ -555,7 +555,7 @@ export default function App() {
                 key={user.id + '-' + dashboard.business.id} userId={user.id} dashboard={dashboard}
                 onExit={() => dashboard.roleCode === 'Cashier' ? void loadBusinesses() : navigateRetail('overview')} />}
               {isRetailSection(retailPage) && dashboard.roleCode !== 'Cashier' && user &&
-                <RetailCatalog userId={user.id} key={user.id + '-' + dashboard.business.id + '-' + retailPage} section={retailPage} approvalsOnly={approvalList}
+                <RetailCatalog globalCatalogueEnabled={user.globalCatalogueEnabled} userId={user.id} key={user.id + '-' + dashboard.business.id + '-' + retailPage} section={retailPage} approvalsOnly={approvalList}
                   businessId={dashboard.business.id} canOperate={dashboard.canOperate}
                   currencyCode={dashboard.business.currencyCode} locations={dashboard.locations}
                   roleCode={dashboard.roleCode} initialStockAlertLocationId={stockAlertLocationId} />}
