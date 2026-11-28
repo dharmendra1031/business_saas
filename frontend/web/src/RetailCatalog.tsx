@@ -24,7 +24,7 @@ export default function RetailCatalog({ section, businessId, canOperate, currenc
     case 'masters':
       return <RetailMasters businessId={businessId} canOperate={canOperate} />
     case 'stock':
-      return <RetailStock businessId={businessId} canOperate={canOperate}
+      return <RetailStock userId={userId} businessId={businessId} canOperate={canOperate}
         locations={locations} isOwner={roleCode === 'Owner'}
         initialAlertLocationId={initialStockAlertLocationId} />
     case 'purchases':

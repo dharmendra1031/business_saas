@@ -2,6 +2,7 @@ import { useEffect, useRef, useState, type FormEvent } from 'react'
 import { MasterLookup } from './LookupDialog'
 import { api, post, SessionExpiredError } from './api'
 import RetailStockAdjustments from './RetailStockAdjustments'
+import RetailStockTransfers from './RetailStockTransfers'
 import { Boxes, MapPin, Search } from 'lucide-react'
 
 interface Location {
@@ -103,7 +104,8 @@ function message(error: unknown): string {
   return error instanceof Error ? error.message : 'Request failed. Please try again.'
 }
 
-export default function RetailStock({ businessId, locations, canOperate, isOwner, initialAlertLocationId }: {
+export default function RetailStock({ businessId, locations, canOperate, isOwner, initialAlertLocationId, userId }: {
+  userId: number
   businessId: number
   locations: Location[]
   canOperate: boolean
@@ -124,6 +126,7 @@ export default function RetailStock({ businessId, locations, canOperate, isOwner
   const [opening, setOpening] = useState<StockItem | null>(null)
   const [adjusting, setAdjusting] = useState<StockItem | null>(null)
   const [adjustmentsOpen, setAdjustmentsOpen] = useState(false)
+  const [transfersOpen, setTransfersOpen] = useState(false)
   const [quantity, setQuantity] = useState('')
   const [saving, setSaving] = useState(false)
   const [saveError, setSaveError] = useState('')
@@ -240,6 +243,15 @@ export default function RetailStock({ businessId, locations, canOperate, isOwner
       <h2>Stock</h2><p>No assigned business location is available.</p>
     </section>
 
+  if (transfersOpen) return <section className="content-section retail-masters business-module-card" aria-label="Stock transfer">
+    <div className="masters-heading business-module-heading"><h2>Inventory</h2></div>
+    <div className="d-flex gap-2 mb-3" role="group" aria-label="Inventory sections">
+      <button type="button" className="btn btn-sm btn-outline-secondary" onClick={() => { setTransfersOpen(false); setReload(value => value + 1) }}>Stock</button>
+      <button type="button" className="btn btn-sm btn-primary" aria-pressed="true">Stock Transfer</button>
+    </div>
+    <RetailStockTransfers key={businessId + ':' + userId} businessId={businessId} userId={userId} canOperate={canOperate} />
+  </section>
+
   return (
     <section className="content-section retail-masters business-module-card retail-stock-list" aria-label="Retail stock">
       <div className="masters-heading business-module-heading">
@@ -256,6 +268,11 @@ export default function RetailStock({ businessId, locations, canOperate, isOwner
         </div>
       </div>
 
+      <div className="d-flex gap-2 mb-3" role="group" aria-label="Inventory sections">
+        <button type="button" className="btn btn-sm btn-primary" aria-pressed="true">Stock</button>
+        <button type="button" className="btn btn-sm btn-outline-secondary" disabled={saving || !!opening || adjustmentsOpen}
+          onClick={() => setTransfersOpen(true)}>Stock Transfer</button>
+      </div>
       {!canOperate && <div className="alert alert-warning" role="status">
         Your subscription is inactive. Stock is read-only.
       </div>}
