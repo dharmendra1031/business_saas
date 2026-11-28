@@ -196,11 +196,19 @@ public static class RetailContactEndpoints
                                      group payment by sale.CurrencyCode into amounts
                                      select new { CurrencyCode = amounts.Key, Paid = amounts.Sum(p => p.Amount) })
                 .ToDictionaryAsync(x => x.CurrencyCode, x => x.Paid, cancellationToken);
+            var credits = await (from returned in db.RetailCashReturns.AsNoTracking()
+                                 join sale in invoices on returned.SaleId equals sale.Id
+                                 where returned.BusinessId == businessId
+                                 group returned by sale.CurrencyCode into amounts
+                                 select new { CurrencyCode = amounts.Key, Returned = amounts.Sum(r => r.Total) })
+                .ToDictionaryAsync(x => x.CurrencyCode, x => x.Returned, cancellationToken);
             var items = await invoices.OrderByDescending(x => x.Id).Skip((page - 1) * size)
                 .Take(size + 1).Select(x => new { x.Id, x.LocationId, x.LocationName, x.CurrencyCode,
                     Debit = x.Total, x.CreditDueDate, PostedAtUtc = DateTime.SpecifyKind(x.PostedAtUtc, DateTimeKind.Utc),
                     Paid = db.RetailCreditPayments.Where(p => p.BusinessId == businessId && p.SaleId == x.Id)
-                        .Sum(p => (decimal?)p.Amount) ?? 0m
+                        .Sum(p => (decimal?)p.Amount) ?? 0m,
+                    Returned = db.RetailCashReturns.Where(r => r.BusinessId == businessId && r.SaleId == x.Id)
+                        .Sum(r => (decimal?)r.Total) ?? 0m
                 }).ToListAsync(cancellationToken);
             await tx.CommitAsync(cancellationToken);
             return Results.Ok(new { customerId, customer.Name, customer.CreditLimit,
@@ -209,9 +217,10 @@ public static class RetailContactEndpoints
                     await RetailMasterEndpoints.CheckAccess(db, user, businessId, true, cancellationToken) is null,
                 totals = billed.Select(x => new { x.CurrencyCode, x.Debit, x.InvoiceCount,
                     Paid = collections.GetValueOrDefault(x.CurrencyCode),
-                    Outstanding = x.Debit - collections.GetValueOrDefault(x.CurrencyCode) }),
+                    Returned = credits.GetValueOrDefault(x.CurrencyCode),
+                    Outstanding = x.Debit - collections.GetValueOrDefault(x.CurrencyCode) - credits.GetValueOrDefault(x.CurrencyCode) }),
                 items = items.Take(size).Select(x => new { x.Id, x.LocationId, x.LocationName, x.CurrencyCode,
-                    x.Debit, x.Paid, Outstanding = x.Debit - x.Paid, x.CreditDueDate, x.PostedAtUtc }),
+                    x.Debit, x.Paid, x.Returned, Outstanding = x.Debit - x.Paid - x.Returned, x.CreditDueDate, x.PostedAtUtc }),
                 hasMore = items.Count > size });
         });
 

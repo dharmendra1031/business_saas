@@ -31,12 +31,21 @@ public static class RetailCashSales
         group.MapGet("/business-receipts/{receiptId:long}/pdf", BusinessReceiptPdf);
         group.MapGet("/daily-report", DailyReport);
         group.MapPost("", Post);
-        // Isolated pilot: no cashier credit UI or owner settings activation yet.
+        // Owner-only credit pilot.
         var credit = app.MapGroup("/api/businesses/{businessId:long}/credit-sales").RequireAuthorization();
         credit.MapPost("", PostCredit);
         credit.MapGet("/receipt", FindCreditReceipt);
         credit.MapGet("/business-invoices/{receiptId:long}", BusinessCreditInvoice);
         credit.MapGet("/business-invoices/{receiptId:long}/pdf", CreditInvoicePdf);
+        credit.MapPost("/business-invoices/{receiptId:long}/return-estimate", (long businessId, long receiptId,
+            ReturnEstimateRequest request, ClaimsPrincipal user, AppDbContext db, IConfiguration config) =>
+            EstimateReturnCore(businessId, receiptId, request, user, db, config, credit: true));
+        credit.MapPost("/business-invoices/{receiptId:long}/returns", (long businessId, long receiptId,
+            ReturnRequest request, ClaimsPrincipal user, AppDbContext db, IConfiguration config) =>
+            PostReturnCore(businessId, receiptId, request, user, db, config, credit: true));
+        credit.MapGet("/business-invoices/{receiptId:long}/returns", (long businessId, long locationId, long receiptId,
+            ClaimsPrincipal user, AppDbContext db, int? page, string? requestKey) =>
+            ReturnHistoryCore(businessId, locationId, receiptId, user, db, page ?? 1, requestKey, credit: true));
     }
 
     internal static async Task<Business?> Shop(AppDbContext db, long businessId, long actor, long locationId,
@@ -76,8 +85,7 @@ public static class RetailCashSales
             x.BusinessId == businessId && x.CashierId == actor && x.LocationId == locationId &&
             x.RequestKey == requestKey && x.CreditDueDate != null, cancellationToken);
         if (sale is null) return Results.NotFound();
-        var paid = await CreditCollections.PaidAsync(db, businessId, sale.Id, cancellationToken) ?? 0m;
-        return Results.Ok(Receipt(sale, creditPaid: paid));
+        return await ReadCreditReceipt(db, sale, cancellationToken);
     }
 
     private static async Task<IResult> BusinessCreditInvoice(long businessId, long receiptId, long locationId,
@@ -88,7 +96,17 @@ public static class RetailCashSales
         var sale = await db.RetailCashSales.AsNoTracking().Include(x => x.Lines).SingleOrDefaultAsync(x =>
             x.BusinessId == businessId && x.Id == receiptId && x.LocationId == locationId && x.CreditDueDate != null, cancellationToken);
         if (sale is null) return Results.NotFound();
-        return Results.Ok(Receipt(sale, creditPaid: await CreditCollections.PaidAsync(db, businessId, sale.Id, cancellationToken) ?? 0m));
+        return await ReadCreditReceipt(db, sale, cancellationToken);
+    }
+
+    private static async Task<IResult> ReadCreditReceipt(AppDbContext db, RetailCashSale sale,
+        CancellationToken cancellationToken = default)
+    {
+        var earlier = await ReturnedLines(db, sale.BusinessId, sale.Id, cancellationToken);
+        if (!ReturnLinesMatchSale(sale, earlier))
+            return Results.Conflict(new { message = "Return lines require reconciliation." });
+        var paid = await CreditCollections.PaidAsync(db, sale.BusinessId, sale.Id, cancellationToken) ?? 0m;
+        return Results.Ok(Receipt(sale, earlier, creditPaid: paid));
     }
 
     private static async Task<IResult> Latest(long businessId, long locationId, ClaimsPrincipal user, AppDbContext db)
@@ -132,7 +150,7 @@ public static class RetailCashSales
             sale.Tendered, sale.Total, sale.CurrencyCode, sale.CustomerId, sale.CustomerName,
             sale.BusinessName, sale.LocationName, sale.TimeZoneId, sale.CreditDueDate,
             paymentMethod = sale.CreditDueDate.HasValue ? "Credit" : "Cash",
-            outstanding = sale.CreditDueDate.HasValue ? sale.Total - creditPaid : 0m,
+            outstanding = sale.CreditDueDate.HasValue ? sale.Total - creditPaid - (returns?.Sum(x => x.Amount) ?? 0m) : 0m,
             printAvailable = OperatingSystem.IsWindows(),
             Exchange = exchange is null ? null : new { OriginalSaleId = exchange.SaleId, ReturnId = exchange.Id,
                 ReturnTotal = exchange.Total, Difference = exchange.NetCashSettlement },
@@ -240,15 +258,23 @@ public static class RetailCashSales
     public sealed record ReturnEstimateRequest(long LocationId, List<ReturnEstimateLine>? Lines);
 
     // Read-only estimate of the original sale; not a refund authorization or posting.
-    private static async Task<IResult> EstimateReturn(long businessId, long receiptId,
-        ReturnEstimateRequest request, ClaimsPrincipal user, AppDbContext db, IConfiguration config)
+    private static Task<IResult> EstimateReturn(long businessId, long receiptId,
+        ReturnEstimateRequest request, ClaimsPrincipal user, AppDbContext db, IConfiguration config) =>
+        EstimateReturnCore(businessId, receiptId, request, user, db, config, credit: false);
+
+    private static bool ReturnEnabled(IConfiguration config, bool credit) =>
+        config.GetValue<bool>("RetailReturns:PostingEnabled") &&
+        (!credit || config.GetValue<bool>("RetailCredit:ReturnsEnabled"));
+
+    private static async Task<IResult> EstimateReturnCore(long businessId, long receiptId,
+        ReturnEstimateRequest request, ClaimsPrincipal user, AppDbContext db, IConfiguration config, bool credit)
     {
         if (!long.TryParse(user.FindFirstValue(ClaimTypes.NameIdentifier), out var actor) ||
             await Shop(db, businessId, actor, request.LocationId, ownerOnly: true) is null)
             return Results.NotFound();
 
-        var sale = await CashOnly(db).Include(x => x.Lines)
-            .SingleOrDefaultAsync(x => x.Id == receiptId && x.BusinessId == businessId &&
+        var sale = await db.RetailCashSales.AsNoTracking().Where(x => (x.CreditDueDate != null) == credit)
+            .Include(x => x.Lines).SingleOrDefaultAsync(x => x.Id == receiptId && x.BusinessId == businessId &&
                 x.LocationId == request.LocationId);
         if (sale is null) return Results.NotFound();
         if (await db.RetailCashReturns.AnyAsync(x => x.BusinessId == businessId && x.ReplacementSaleId == receiptId))
@@ -279,7 +305,13 @@ public static class RetailCashSales
             estimates.Add(new { item.LineId, item.Quantity, Amount = amount });
             total += amount;
         }
-        return Results.Ok(new { receiptId, sale.CurrencyCode, total, lines = estimates, canPost = config.GetValue<bool>("RetailReturns:PostingEnabled") });
+        if (credit)
+        {
+            var paid = await CreditCollections.PaidAsync(db, businessId, sale.Id) ?? 0m;
+            if (total > sale.Total - paid - earlier.Sum(x => x.Amount))
+                return Results.Conflict(new { message = "Return exceeds unpaid credit. A separate refund settlement is required." });
+        }
+        return Results.Ok(new { receiptId, sale.CurrencyCode, total, lines = estimates, canPost = ReturnEnabled(config, credit) });
     }
 
     public sealed record ExchangeEstimateRequest(long LocationId, List<ReturnItem>? Returns, List<Item>? Replacements);
@@ -602,14 +634,18 @@ public static class RetailCashSales
         }
     }
 
-    private static async Task<IResult> ReturnHistory(long businessId, long locationId, long receiptId,
-        ClaimsPrincipal user, AppDbContext db, int page = 1, string? requestKey = null)
+    private static Task<IResult> ReturnHistory(long businessId, long locationId, long receiptId,
+        ClaimsPrincipal user, AppDbContext db, int page = 1, string? requestKey = null) =>
+        ReturnHistoryCore(businessId, locationId, receiptId, user, db, page, requestKey, credit: false);
+
+    private static async Task<IResult> ReturnHistoryCore(long businessId, long locationId, long receiptId,
+        ClaimsPrincipal user, AppDbContext db, int page, string? requestKey, bool credit)
     {
         if (!long.TryParse(user.FindFirstValue(ClaimTypes.NameIdentifier), out var actor) ||
             await Shop(db, businessId, actor, locationId, ownerOnly: true) is null)
             return Results.NotFound();
-        var sale = await CashOnly(db).Where(x => x.Id == receiptId && x.BusinessId == businessId &&
-                x.LocationId == locationId)
+        var sale = await db.RetailCashSales.AsNoTracking().Where(x => (x.CreditDueDate != null) == credit &&
+                x.Id == receiptId && x.BusinessId == businessId && x.LocationId == locationId)
             .Select(x => new { LineIds = x.Lines.Select(line => line.Id).ToList() }).SingleOrDefaultAsync();
         if (sale is null) return Results.NotFound();
         if (page is < 1 or > 100000 || requestKey is { Length: > 80 })
@@ -633,7 +669,7 @@ public static class RetailCashSales
 
     public sealed record ReturnItem(long LineId, decimal Quantity, bool Restock);
     public sealed record ReturnRequest(long LocationId, string RequestKey, string Reason,
-        decimal ExpectedRefund, bool CashRefundConfirmed, List<ReturnItem>? Lines);
+        decimal ExpectedRefund, bool CashRefundConfirmed, List<ReturnItem>? Lines, bool CreditAdjustmentConfirmed = false);
 
     private static decimal OriginalAmount(RetailCashSaleLine line) => line.LineTotal ??
         decimal.Round(line.Quantity * line.UnitPrice, 2, MidpointRounding.AwayFromZero);
@@ -655,8 +691,12 @@ public static class RetailCashSales
 
     // Owner-only development pilot. Confirmation records an actual cash refund,
     // not a provider payout or authorization to dispense cash.
-    private static async Task<IResult> PostReturn(long businessId, long receiptId, ReturnRequest request,
-        ClaimsPrincipal user, AppDbContext db, IConfiguration config)
+    private static Task<IResult> PostReturn(long businessId, long receiptId, ReturnRequest request,
+        ClaimsPrincipal user, AppDbContext db, IConfiguration config) =>
+        PostReturnCore(businessId, receiptId, request, user, db, config, credit: false);
+
+    private static async Task<IResult> PostReturnCore(long businessId, long receiptId, ReturnRequest request,
+        ClaimsPrincipal user, AppDbContext db, IConfiguration config, bool credit)
     {
         if (!long.TryParse(user.FindFirstValue(ClaimTypes.NameIdentifier), out var actor))
             return Results.NotFound();
@@ -667,17 +707,17 @@ public static class RetailCashSales
                 decimal.Round(x.Quantity, 3) != x.Quantity) ||
             items.Select(x => x.LineId).Distinct().Count() != items.Count ||
             string.IsNullOrWhiteSpace(request.RequestKey) || request.RequestKey.Length is < 12 or > 80 ||
-            reason.Length is < 5 or > 200 || !request.CashRefundConfirmed ||
+            reason.Length is < 5 or > 200 || request.CashRefundConfirmed == credit || request.CreditAdjustmentConfirmed != credit ||
             request.ExpectedRefund < 0 || decimal.Round(request.ExpectedRefund, 2) != request.ExpectedRefund)
-            return Results.BadRequest(new { message = "Provide unique lines, valid quantities, reason and confirmed cash refund amount." });
+            return Results.BadRequest(new { message = "Provide unique lines, valid quantities, reason and confirmation of the correct settlement type." });
 
         await using var tx = await db.Database.BeginTransactionAsync(IsolationLevel.Serializable);
         try
         {
             if (await Shop(db, businessId, actor, request.LocationId, ownerOnly: true) is null)
                 return Results.NotFound();
-            var sale = await CashOnly(db).Include(x => x.Lines)
-                .SingleOrDefaultAsync(x => x.Id == receiptId && x.BusinessId == businessId && x.LocationId == request.LocationId);
+            var sale = await db.RetailCashSales.AsNoTracking().Where(x => (x.CreditDueDate != null) == credit)
+                .Include(x => x.Lines).SingleOrDefaultAsync(x => x.Id == receiptId && x.BusinessId == businessId && x.LocationId == request.LocationId);
             if (sale is null) return Results.NotFound();
             var prior = await db.RetailCashReturns.AsNoTracking().Include(x => x.Lines)
                 .Where(x => x.BusinessId == businessId && x.RequestKey == request.RequestKey).SingleOrDefaultAsync();
@@ -690,8 +730,13 @@ public static class RetailCashSales
                     return Results.Conflict(new { message = "Return key belongs to a different transaction." });
                 return Results.Ok(prior);
             }
-            if (!config.GetValue<bool>("RetailReturns:PostingEnabled"))
+            if (!ReturnEnabled(config, credit))
                 return Results.Conflict(new { message = "Return posting is not enabled on this development host." });
+            if (credit)
+            {
+                var denied = await RetailMasterEndpoints.CheckAccess(db, user, businessId, true, ownerOnly: true);
+                if (denied is not null) return denied;
+            }
             if (await db.RetailCashReturns.AnyAsync(x => x.BusinessId == businessId && x.ReplacementSaleId == receiptId))
                 return Results.Conflict(new { message = "Replacement invoice returns require reconciliation." });
             if (sale.Lines.Count == 0 || sale.Lines.Any(x => x.Quantity <= 0 || OriginalAmount(x) < 0) ||
@@ -717,17 +762,27 @@ public static class RetailCashSales
             if (record.Total != request.ExpectedRefund)
                 return Results.Conflict(new { code = "RETURN_REJECTED", message = "Refund amount changed. Verify remaining return balance." });
 
-            var (registerId, registerError) = await RetailCashRegister.PostingSession(db, config,
-                businessId, sale.LocationId, actor, sale.CurrencyCode);
-            if (registerError is not null) return registerError;
-            record.RegisterSessionId = registerId;
+            if (credit)
+            {
+                var paid = await CreditCollections.PaidAsync(db, businessId, sale.Id) ?? 0m;
+                var credited = await CreditCollections.ReturnedAsync(db, businessId, sale.Id) ?? 0m;
+                if (credited != earlier.Sum(x => x.Amount) || record.Total > sale.Total - paid - credited)
+                    return Results.Conflict(new { code = "RETURN_REJECTED", message = "Return exceeds unpaid credit or requires reconciliation. Separate refund settlement is required." });
+            }
+            else
+            {
+                var (registerId, registerError) = await RetailCashRegister.PostingSession(db, config,
+                    businessId, sale.LocationId, actor, sale.CurrencyCode);
+                if (registerError is not null) return registerError;
+                record.RegisterSessionId = registerId;
+            }
             db.RetailCashReturns.Add(record);
             await db.SaveChangesAsync();
             foreach (var line in record.Lines.Where(x => x.Restock).OrderBy(x => original[x.SaleLineId].ProductId))
             {
                 if (await StockPosting.ApplyAsync(db, businessId, sale.LocationId, original[line.SaleLineId].ProductId,
                     line.Quantity * (original[line.SaleLineId].ConversionFactor ?? 1m),
-                    "CashReturnLine", line.Id, actor, reason: reason) is null)
+                    credit ? "CreditReturnLine" : "CashReturnLine", line.Id, actor, reason: reason) is null)
                     return Results.Conflict(new { message = "Stock restoration failed; return was not posted." });
             }
             await tx.CommitAsync();
@@ -1107,8 +1162,7 @@ public static class RetailCashSales
                 // Never hide a committed receipt or double-post when settings changed mid-retry.
                 context.Response.Headers["Server-Timing"] = FormattableString.Invariant(
                     $"sale-replay;dur={Stopwatch.GetElapsedTime(started).TotalMilliseconds:F1}");
-                var creditPaid = isCredit ? await CreditCollections.PaidAsync(db, businessId, previous.Id) ?? 0m : 0m;
-                return Results.Ok(Receipt(previous, creditPaid: creditPaid));
+                return isCredit ? await ReadCreditReceipt(db, previous) : Results.Ok(Receipt(previous));
             }
             if (isCredit && (!config.GetValue<bool>("RetailCredit:PostingEnabled") ||
                 !config.GetValue<bool>("RetailCredit:CollectionsEnabled") || !shop.CreditSalesEnabled))
@@ -1158,11 +1212,14 @@ public static class RetailCashSales
                 var creditInvoices = CreditCollections.Invoices(db, businessId, customer!.Id);
                 if (await creditInvoices.AnyAsync(x => (x.CurrencyCode != shop.CurrencyCode || x.CreditDueDate < today) &&
                     x.Total > (db.RetailCreditPayments.Where(p => p.BusinessId == businessId && p.SaleId == x.Id)
-                        .Sum(p => (decimal?)p.Amount) ?? 0m)))
+                        .Sum(p => (decimal?)p.Amount) ?? 0m) +
+                        (db.RetailCashReturns.Where(r => r.BusinessId == businessId && r.SaleId == x.Id)
+                        .Sum(r => (decimal?)r.Total) ?? 0m)))
                     return Results.Conflict(new { code = "CREDIT_OVERDUE", message = "Outstanding overdue or different-currency credit must be resolved first." });
                 var billed = await creditInvoices.SumAsync(x => (decimal?)x.Total) ?? 0m;
                 var paid = await CreditCollections.CustomerPayments(db, businessId, customer.Id).SumAsync(x => (decimal?)x.Amount) ?? 0m;
-                var outstanding = billed - paid;
+                var credited = await CreditCollections.CustomerReturns(db, businessId, customer.Id).SumAsync(x => (decimal?)x.Total) ?? 0m;
+                var outstanding = billed - paid - credited;
                 if (customer!.CreditLimit <= 0 || sale.Total > customer.CreditLimit - outstanding)
                     return Results.Conflict(new { code = "CREDIT_LIMIT_EXCEEDED", message = "Customer credit limit would be exceeded." });
             }

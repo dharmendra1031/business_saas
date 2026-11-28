@@ -544,6 +544,7 @@ public sealed class SqlServerTests(Xunit.Abstractions.ITestOutputHelper output)
             builder.UseSetting("RetailCashRegister:LinkingEnabled", "true");
             builder.UseSetting("RetailCredit:PostingEnabled", "true");
             builder.UseSetting("RetailCredit:CollectionsEnabled", "true");
+            builder.UseSetting("RetailCredit:ReturnsEnabled", "true");
             builder.ConfigureServices(services =>
             {
                 services.RemoveAll<DbContextOptions<AppDbContext>>();
@@ -1895,6 +1896,72 @@ public sealed class SqlServerTests(Xunit.Abstractions.ITestOutputHelper output)
             var cashierCash = cashDocuments.Where(x => !replacementIds.Contains(x.Id)).Sum(x => x.Total);
             Assert.Equal(cashierCash, cashierSummary.GetProperty("cashSales").GetDecimal());
             Assert.Equal(100m + cashierCash, cashierSummary.GetProperty("expectedCash").GetDecimal());
+        }
+
+        Assert.Equal(HttpStatusCode.OK, (await Put(owner, billingSettingsPath, new {
+            cashSalesEnabled = true, creditSalesEnabled = true, expectedRevision = 4,
+            reason = "Enable credit return regression checkout"
+        })).StatusCode);
+        var cashBeforeCreditReturn = await owner.GetFromJsonAsync<JsonElement>(RegisterSummary(ownerRegisterId));
+        var creditReturnResponse = await Post(owner, creditPath, creditRequest with { requestKey = "sql-credit-return-sale-20261128" });
+        Assert.Equal(HttpStatusCode.OK, creditReturnResponse.StatusCode);
+        var returnInvoice = await creditReturnResponse.Content.ReadFromJsonAsync<JsonElement>();
+        var returnInvoiceId = returnInvoice.GetProperty("id").GetInt64();
+        var creditReturnLine = returnInvoice.GetProperty("lines")[0].GetProperty("id").GetInt64();
+        var creditReturnPath = creditPath + "/business-invoices/" + returnInvoiceId;
+        var adjustment = new {
+            locationId, requestKey = "sql-credit-return-20261128-a", reason = "Customer returned unpaid item",
+            expectedRefund = 10m, cashRefundConfirmed = false, creditAdjustmentConfirmed = true,
+            lines = new[] { new { lineId = creditReturnLine, quantity = 1m, restock = true } }
+        };
+        Assert.Equal(HttpStatusCode.NotFound, (await Post(cashier, creditReturnPath + "/returns", adjustment)).StatusCode);
+        Assert.Equal(HttpStatusCode.NotFound, (await Post(stranger, creditReturnPath + "/returns", adjustment)).StatusCode);
+        Assert.Equal(HttpStatusCode.BadRequest, (await Post(owner, creditReturnPath + "/returns",
+            adjustment with { cashRefundConfirmed = true })).StatusCode);
+        var settledAdjustment = adjustment with { requestKey = "sql-credit-return-settled",
+            lines = new[] { new { lineId = creditInvoice.GetProperty("lines")[0].GetProperty("id").GetInt64(), quantity = 1m, restock = true } } };
+        Assert.Equal(HttpStatusCode.Conflict, (await Post(owner, creditPath + "/business-invoices/" + creditId + "/returns", settledAdjustment)).StatusCode);
+        var estimate = await Post(owner, creditReturnPath + "/return-estimate", new {
+            locationId, lines = new[] { new { lineId = creditReturnLine, quantity = 1m } }
+        });
+        Assert.Equal(HttpStatusCode.OK, estimate.StatusCode);
+        Assert.Equal(10m, (await estimate.Content.ReadFromJsonAsync<JsonElement>()).GetProperty("total").GetDecimal());
+        var adjustmentResult = await Post(owner, creditReturnPath + "/returns", adjustment);
+        Assert.Equal(HttpStatusCode.OK, adjustmentResult.StatusCode);
+        var adjustmentId = (await adjustmentResult.Content.ReadFromJsonAsync<JsonElement>()).GetProperty("id").GetInt64();
+        var adjustmentReplay = await Post(owner, creditReturnPath + "/returns", adjustment);
+        Assert.Equal(HttpStatusCode.OK, adjustmentReplay.StatusCode);
+        Assert.Equal(adjustmentId, (await adjustmentReplay.Content.ReadFromJsonAsync<JsonElement>()).GetProperty("id").GetInt64());
+        var adjustedInvoice = await owner.GetFromJsonAsync<JsonElement>(creditReturnPath + "?locationId=" + locationId);
+        Assert.Equal(10m, adjustedInvoice.GetProperty("outstanding").GetDecimal());
+        var adjustedLedger = await owner.GetFromJsonAsync<JsonElement>(creditLedgerPath);
+        Assert.Equal(10m, adjustedLedger.GetProperty("totals")[0].GetProperty("returned").GetDecimal());
+        Assert.Equal(10m, adjustedLedger.GetProperty("totals")[0].GetProperty("outstanding").GetDecimal());
+        var adjustedReport = await owner.GetFromJsonAsync<JsonElement>(outstandingPath);
+        Assert.Equal(10m, adjustedReport.GetProperty("totals")[0].GetProperty("outstanding").GetDecimal());
+        var adjustedPaymentPath = prefix + "/customers/" + creditCustomerId + "/credit-invoices/" + returnInvoiceId + "/payments";
+        Assert.Equal(HttpStatusCode.Conflict, (await Post(owner, adjustedPaymentPath, payment with {
+            requestKey = "sql-credit-return-stale-collection", amount = 10m, expectedOutstanding = 20m
+        })).StatusCode);
+        var secondAdjustment = adjustment with { requestKey = "sql-credit-return-20261128-b" };
+        var adjustmentRace = await Task.WhenAll(Post(owner, creditReturnPath + "/returns", secondAdjustment),
+            Post(owner, creditReturnPath + "/returns", secondAdjustment with { requestKey = "sql-credit-return-20261128-c" }));
+        Assert.Single(adjustmentRace, x => x.StatusCode == HttpStatusCode.OK);
+        Assert.Single(adjustmentRace, x => x.StatusCode == HttpStatusCode.Conflict);
+        var fullyReturned = await owner.GetFromJsonAsync<JsonElement>(creditReturnPath + "?locationId=" + locationId);
+        Assert.Equal(0m, fullyReturned.GetProperty("outstanding").GetDecimal());
+        var cashAfterCreditReturn = await owner.GetFromJsonAsync<JsonElement>(RegisterSummary(ownerRegisterId));
+        Assert.Equal(cashBeforeCreditReturn.GetProperty("expectedCash").GetDecimal(), cashAfterCreditReturn.GetProperty("expectedCash").GetDecimal());
+        Assert.Equal(cashBeforeCreditReturn.GetProperty("cashRefunds").GetDecimal(), cashAfterCreditReturn.GetProperty("cashRefunds").GetDecimal());
+        using (var scope = factory.Services.CreateScope())
+        {
+            var db = scope.ServiceProvider.GetRequiredService<AppDbContext>();
+            Assert.Equal(2, await db.RetailCashReturns.CountAsync(x => x.SaleId == returnInvoiceId && x.RegisterSessionId == null));
+            Assert.Equal(20m, await db.RetailCashReturns.Where(x => x.SaleId == returnInvoiceId).SumAsync(x => x.Total));
+            Assert.Equal(2, await db.RetailStockMovements.CountAsync(x => x.BusinessId == businessId &&
+                x.ProductId == packProductId && x.SourceType == "CreditReturnLine"));
+            Assert.Equal(3.5m, await db.RetailStockBalances.Where(x => x.BusinessId == businessId && x.LocationId == locationId &&
+                x.ProductId == packProductId).Select(x => x.Quantity).SingleAsync());
         }
     }
 

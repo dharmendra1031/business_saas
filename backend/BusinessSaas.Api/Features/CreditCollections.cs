@@ -24,6 +24,17 @@ public static class CreditCollections
     internal static Task<decimal?> PaidAsync(AppDbContext db, long businessId, long saleId, CancellationToken cancellationToken = default) =>
         Payments(db, businessId, saleId).SumAsync(x => (decimal?)x.Amount, cancellationToken);
 
+    internal static IQueryable<RetailCashReturn> CustomerReturns(AppDbContext db, long businessId, long customerId) =>
+        from returned in db.RetailCashReturns.AsNoTracking()
+        join sale in Invoices(db, businessId, customerId) on returned.SaleId equals sale.Id
+        where returned.BusinessId == businessId
+        select returned;
+
+    internal static Task<decimal?> ReturnedAsync(AppDbContext db, long businessId, long saleId,
+        CancellationToken cancellationToken = default) =>
+        db.RetailCashReturns.Where(x => x.BusinessId == businessId && x.SaleId == saleId)
+            .SumAsync(x => (decimal?)x.Total, cancellationToken);
+
     private sealed record PaymentRequest(string RequestKey, decimal Amount, decimal ExpectedOutstanding,
         bool CashReceivedConfirmed);
 
@@ -76,7 +87,8 @@ public static class CreditCollections
                 if (denied is not null) return denied;
 
                 var paid = await PaidAsync(db, businessId, saleId) ?? 0m;
-                var outstanding = sale.Total - paid;
+                var returned = await ReturnedAsync(db, businessId, saleId) ?? 0m;
+                var outstanding = sale.Total - paid - returned;
                 if (outstanding != request.ExpectedOutstanding || request.Amount > outstanding)
                     return Results.Conflict(new { message = "Invoice outstanding changed. Reconcile the cash received before recording another payment." });
                 var (registerId, registerError) = await RetailCashRegister.PostingSession(db, config,
@@ -123,6 +135,9 @@ public static class CreditCollections
             var paidByInvoice = db.RetailCreditPayments.AsNoTracking()
                 .Where(x => x.BusinessId == businessId).GroupBy(x => x.SaleId)
                 .Select(g => new { SaleId = g.Key, Paid = (decimal?)g.Sum(x => x.Amount) });
+            var returnedByInvoice = db.RetailCashReturns.AsNoTracking()
+                .Where(x => x.BusinessId == businessId).GroupBy(x => x.SaleId)
+                .Select(g => new { SaleId = g.Key, Returned = (decimal?)g.Sum(x => x.Total) });
             var customers = db.RetailCustomers.AsNoTracking().Where(x => x.BusinessId == businessId);
             if (term.Length > 0)
                 customers = customers.Where(x => x.NameKey.Contains(term) || x.Phone.Contains(term));
@@ -130,8 +145,10 @@ public static class CreditCollections
                            join customer in customers on sale.CustomerId equals (long?)customer.Id
                            join payment in paidByInvoice on sale.Id equals payment.SaleId into payments
                            from payment in payments.DefaultIfEmpty()
+                           join returned in returnedByInvoice on sale.Id equals returned.SaleId into credits
+                           from returned in credits.DefaultIfEmpty()
                            where sale.BusinessId == businessId && sale.CreditDueDate != null
-                           let outstanding = sale.Total - (payment.Paid ?? 0m)
+                           let outstanding = sale.Total - (payment.Paid ?? 0m) - (returned.Returned ?? 0m)
                            where outstanding > 0 && (!overdueOnly || sale.CreditDueDate < today)
                            select new { CustomerId = customer.Id, customer.Name, customer.IsActive,
                                sale.CurrencyCode, DueDate = sale.CreditDueDate!.Value, Outstanding = outstanding };
