@@ -255,7 +255,7 @@ export default function RetailProducts({ businessId, canOperate, currencyCode, g
           : 'Product updated successfully.', () => editingId === null
             ? post<{ id: number }>(basePath, body)
             : api<{ id: number }>(`${basePath}/${editingId}`, { method: 'PUT', body: JSON.stringify(body) }))
-      if (embedded && onCreated) {
+      if (embedded) {
         setSavedId(result.id)
         await verifyCreated(result.id)
         return
