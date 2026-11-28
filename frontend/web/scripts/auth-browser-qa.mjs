@@ -2895,7 +2895,7 @@ try {
         await t.page.getByRole('tab', { name: 'Invoices', exact: true }).click()
       }
       if (label === 'Reports') {
-        assert.equal(await t.page.getByRole('tab').count(), 2, 'Only released reports should be shown')
+        assert.deepEqual(await t.page.getByRole('tab').allTextContents().then(items => items.map(x => x.trim())), ['Sales', 'Outstanding', 'Day Closing'], 'Only integrated reports should be shown')
         await t.page.route('**/api/businesses/1/cash-sales/daily-report?*', route => {
           const params = new URL(route.request().url()).searchParams
           assert.equal(params.get('locationId'), '1')
@@ -2911,6 +2911,46 @@ try {
         assert.equal(await reportRow.getByText('24.00', { exact: true }).count(), 2)
         assert.equal(await reportRow.getByText('4.80', { exact: true }).count(), 2)
         await reportRow.getByText('19.20', { exact: true }).waitFor()
+        let closedShift = null
+        let closingWrites = 0
+        const shift = { id: 101, actorUserId: 7, currencyCode: 'INR', locationId: 1,
+          openingCash: 100, openedAtUtc: '2026-11-23T06:00:00Z', closedAtUtc: null,
+          closingExpectedCash: null, closingActualCash: null, variance: null, closingReason: null,
+          closedByUserId: null, closingRequestKey: null }
+        await t.page.route('**/api/businesses/1/cash-register?*', route =>
+          response(route, 200, { items: closedShift ? [closedShift] : [shift], hasMore: false, canClose: true }))
+        await t.page.route('**/api/businesses/1/cash-register/101/summary?*', route =>
+          response(route, 200, { sessionId: 101, currencyCode: 'INR', openingCash: 100,
+            cashSales: 80, cashRefunds: 5, netExchangeSettlement: 0, creditCollections: 10,
+            cashIn: 20, cashOut: 5, expectedCash: 200 }))
+        await t.page.route('**/api/businesses/1/cash-register/101/close', route => {
+          const request = route.request().postDataJSON()
+          assert.equal(request.expectedCash, 200)
+          assert.equal(request.actualCash, 195)
+          assert.equal(request.reason, 'Counted cash shortage')
+          assert.equal(request.locationId, 1)
+          assert.ok(request.requestKey.length >= 12)
+          closingWrites++
+          closedShift = { ...shift, closedAtUtc: '2026-11-23T08:00:00Z', closingExpectedCash: 200,
+            closingActualCash: 195, variance: -5, closingReason: request.reason, closedByUserId: 7,
+            closingRequestKey: request.requestKey }
+          return response(route, 200, closedShift)
+        })
+        await t.page.getByRole('tab', { name: 'Day Closing' }).click()
+        await t.page.getByRole('button', { name: 'Review shift' }).click()
+        await t.page.getByLabel('Actual counted cash').fill('195')
+        await t.page.getByRole('checkbox', { name: /I counted this shift/ }).check()
+        assert.equal(await t.page.getByRole('button', { name: 'Close shift', exact: true }).isEnabled(), false)
+        await t.page.getByLabel('Variance reason (required for differences)').fill('Counted cash shortage')
+        await t.page.getByRole('checkbox', { name: /I counted this shift/ }).check()
+        await t.page.getByRole('button', { name: 'Close shift', exact: true }).click()
+        await t.page.getByText('Shift #101 closed successfully.').waitFor()
+        await t.page.getByRole('button', { name: 'View closing' }).click()
+        await t.page.getByText(/Expected INR 200.00 · Counted INR 195.00 · Variance INR -5.00/).waitFor()
+        assert.equal(await t.page.getByRole('button', { name: 'Close shift', exact: true }).count(), 0)
+        assert.equal(closingWrites, 1)
+        await t.page.getByRole('tab', { name: 'Sales', exact: true }).click()
+        console.log('PASS owner register closing verifies shortage reason, one write and immutable closing history')
       }
       if (label === 'Business Settings') {
         let subscriptionReads = 0
