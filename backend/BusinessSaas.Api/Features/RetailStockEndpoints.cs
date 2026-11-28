@@ -108,6 +108,48 @@ public static class RetailStockEndpoints
             return Results.Ok(new { items, total, page = currentPage, pageSize = PageSize });
         });
 
+        group.MapGet("/locations/{locationId:long}/reconciliation/{productId:long}", async (
+            long businessId, long locationId, long productId, ClaimsPrincipal user,
+            AppDbContext db, CancellationToken cancellationToken) =>
+        {
+            var denied = await CheckLocation(db, user, businessId, locationId, false, cancellationToken);
+            if (denied is not null) return denied;
+            await using var transaction = await db.Database.BeginTransactionAsync(
+                IsolationLevel.Serializable, cancellationToken);
+            try
+            {
+                if (!await db.RetailProducts.AsNoTracking().AnyAsync(x =>
+                    x.BusinessId == businessId && x.Id == productId, cancellationToken))
+                    return Results.NotFound();
+                var balance = await db.RetailStockBalances.AsNoTracking().Where(x =>
+                    x.BusinessId == businessId && x.LocationId == locationId && x.ProductId == productId)
+                    .Select(x => (decimal?)x.Quantity).SingleOrDefaultAsync(cancellationToken);
+                var movements = db.RetailStockMovements.AsNoTracking().Where(x =>
+                    x.BusinessId == businessId && x.LocationId == locationId && x.ProductId == productId);
+                var ledger = await movements.GroupBy(x => x.ProductId).Select(g => new
+                {
+                    Count = g.Count(), Quantity = g.Sum(x => x.QuantityChange)
+                }).SingleOrDefaultAsync(cancellationToken);
+                var latest = await movements.OrderByDescending(x => x.Id)
+                    .Select(x => (decimal?)x.BalanceAfter).FirstOrDefaultAsync(cancellationToken);
+                var ledgerQuantity = ledger?.Quantity ?? 0m;
+                var difference = (balance ?? 0m) - ledgerQuantity;
+                var status = balance is null && ledger is null ? "NotInitialized" :
+                    balance.HasValue && ledger is not null && difference == 0m && balance == latest
+                        ? "Matched" : "Mismatch";
+                await transaction.CommitAsync(cancellationToken);
+                return Results.Ok(new
+                {
+                    productId, locationId, status, recordedQuantity = balance,
+                    ledgerQuantity, latestBalance = latest, difference, movementCount = ledger?.Count ?? 0
+                });
+            }
+            catch (Exception error) when (StockPosting.IsSqlConflict(error))
+            {
+                return Results.Conflict(new { message = "Stock is changing. Check reconciliation again." });
+            }
+        });
+
         group.MapPost("/locations/{locationId:long}/opening", async (long businessId,
             long locationId, OpeningStockRequest request, ClaimsPrincipal user, AppDbContext db) =>
         {

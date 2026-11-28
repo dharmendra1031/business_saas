@@ -50,6 +50,55 @@ interface MovementPage {
   pageSize: number
 }
 
+interface Reconciliation {
+  status: 'Matched' | 'Mismatch' | 'NotInitialized'
+  recordedQuantity: number | null
+  ledgerQuantity: number
+  latestBalance: number | null
+  difference: number
+  movementCount: number
+}
+
+function StockReconciliation({ path }: { path: string }) {
+  const [result, setResult] = useState<Reconciliation | null>(null)
+  const [request, setRequest] = useState(0)
+  const [busy, setBusy] = useState(false)
+  const [error, setError] = useState('')
+  useEffect(() => {
+    if (!request) return
+    const controller = new AbortController()
+    setBusy(true)
+    setResult(null)
+    setError('')
+    api<Reconciliation>(path, { signal: controller.signal })
+      .then(value => { if (!controller.signal.aborted) setResult(value) })
+      .catch(cause => { if (!controller.signal.aborted && !(cause instanceof SessionExpiredError)) setError(message(cause)) })
+      .finally(() => { if (!controller.signal.aborted) setBusy(false) })
+    return () => controller.abort()
+  }, [path, request])
+  return <div className="border rounded p-2 mb-3">
+    <div className="d-flex flex-wrap gap-2 align-items-center justify-content-between">
+      <strong>Stock reconciliation</strong>
+      <button type="button" className="btn btn-sm btn-outline-secondary" disabled={busy}
+        onClick={() => setRequest(value => value + 1)}>{busy ? 'Checking…' : 'Check stock balance'}</button>
+    </div>
+    {error && <p className="text-danger small mb-0 mt-2" role="alert">{error}</p>}
+    {result && <div role="status" className="mt-2">
+      <strong className={result.status === 'Mismatch' ? 'text-danger' : ''}>
+        {result.status === 'Matched' ? 'Balance matches ledger totals' :
+          result.status === 'Mismatch' ? 'Stock difference requires review' : 'Stock not initialized'}
+      </strong>
+      <div className="row g-2 small mt-1">
+        <div className="col-6">Recorded: {result.recordedQuantity?.toFixed(3) ?? '—'}</div>
+        <div className="col-6">Ledger total: {result.ledgerQuantity.toFixed(3)}</div>
+        <div className="col-6">Last posted balance: {result.latestBalance?.toFixed(3) ?? '—'}</div>
+        <div className="col-6">Difference: {result.difference.toFixed(3)}</div>
+      </div>
+      <p className="small mb-0 mt-1">{result.movementCount} movements checked for totals. No stock is changed.</p>
+    </div>}
+  </div>
+}
+
 function message(error: unknown): string {
   return error instanceof Error ? error.message : 'Request failed. Please try again.'
 }
@@ -335,6 +384,8 @@ export default function RetailStock({ businessId, locations, canOperate, isOwner
           <button type="button" className="btn btn-sm btn-outline-secondary"
             onClick={() => setHistoryProductId(null)}>Back to inventory</button>
         </div>
+        <StockReconciliation key={basePath + '/' + historyProductId + '/' + reload}
+          path={basePath + '/reconciliation/' + historyProductId} />
         {historyError && <div className="alert alert-danger" role="alert">{historyError}</div>}
         {historyLoading ? <p role="status">Loading movements…</p>
           : historyError ? null

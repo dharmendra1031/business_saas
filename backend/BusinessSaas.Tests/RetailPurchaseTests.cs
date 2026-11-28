@@ -271,6 +271,17 @@ public sealed class RetailPurchaseTests
                 .Select(x => x.Quantity).SingleAsync());
         }
 
+        var reconciliationUrl = $"/api/businesses/{businessId}/stock/locations/{locationId}/reconciliation/{productId}";
+        var reconciliation = await owner.GetFromJsonAsync<JsonElement>(reconciliationUrl);
+        Assert.Equal("Matched", reconciliation.GetProperty("status").GetString());
+        Assert.Equal(100m, reconciliation.GetProperty("recordedQuantity").GetDecimal());
+        Assert.Equal(100m, reconciliation.GetProperty("ledgerQuantity").GetDecimal());
+        Assert.Equal(0m, reconciliation.GetProperty("difference").GetDecimal());
+        Assert.Equal(2, reconciliation.GetProperty("movementCount").GetInt32());
+        Assert.Equal(HttpStatusCode.OK, (await manager.GetAsync(reconciliationUrl)).StatusCode);
+        Assert.Equal(HttpStatusCode.NotFound, (await cashier.GetAsync(reconciliationUrl)).StatusCode);
+        Assert.Equal(HttpStatusCode.NotFound, (await other.GetAsync(reconciliationUrl)).StatusCode);
+
         var sales = $"/api/businesses/{businessId}/cash-sales";
         var cashSale = new { locationId, productId, quantity = 3, expectedUnitPrice = 150m,
             tendered = 500m, requestKey = "cash-receipt-retry-001" };

@@ -403,6 +403,16 @@ public sealed class SqlServerTests(Xunit.Abstractions.ITestOutputHelper output)
                 .First().BalanceAfter);
         }
 
+        // This fixture deliberately seeded a balance without an opening ledger entry.
+        // Reconciliation must report the missing 90 units, never silently repair them.
+        var reconciliationUrl = $"/api/businesses/{ids[0]}/stock/locations/{locationId}/reconciliation/{productId}";
+        var reconciliation = await owner.GetFromJsonAsync<JsonElement>(reconciliationUrl);
+        Assert.Equal("Mismatch", reconciliation.GetProperty("status").GetString());
+        Assert.Equal(0m, reconciliation.GetProperty("recordedQuantity").GetDecimal());
+        Assert.Equal(-90m, reconciliation.GetProperty("ledgerQuantity").GetDecimal());
+        Assert.Equal(90m, reconciliation.GetProperty("difference").GetDecimal());
+        Assert.Equal(HttpStatusCode.NotFound, (await stranger.GetAsync(reconciliationUrl)).StatusCode);
+
         var ordersPath = $"/api/businesses/{ids[0]}/purchase-orders";
         var supplier = await Post(owner, $"/api/businesses/{ids[0]}/suppliers",
             new { name = "SQL Purchase Supplier", phone = "9999999988", email = "" });
