@@ -2269,6 +2269,95 @@ namespace BusinessSaas.Api.Data.Migrations
                     b.HasOne("BusinessSaas.Api.Data.RetailPurchaseReturn", null).WithMany().HasForeignKey("PurchaseReturnId")
                         .OnDelete(DeleteBehavior.Restrict);
                 });
+            modelBuilder.Entity("BusinessSaas.Api.Data.RetailStockTransfer", b =>
+                {
+                    b.Property<long>("Id").ValueGeneratedOnAdd().HasColumnType("bigint");
+                    SqlServerPropertyBuilderExtensions.UseIdentityColumn(b.Property<long>("Id"));
+                    b.Property<long>("BusinessId").HasColumnType("bigint");
+                    b.Property<long>("FromLocationId").HasColumnType("bigint");
+                    b.Property<long>("ToLocationId").HasColumnType("bigint");
+                    b.Property<long>("RequestedByUserId").HasColumnType("bigint");
+                    b.Property<long?>("ApprovedByUserId").HasColumnType("bigint");
+                    b.Property<long?>("DispatchedByUserId").HasColumnType("bigint");
+                    b.Property<string>("RequestKey").IsRequired().HasMaxLength(80).HasColumnType("nvarchar(80)");
+                    b.Property<string>("Status").IsRequired().HasMaxLength(20).HasColumnType("nvarchar(20)");
+                    b.Property<string>("Reason").IsRequired().HasMaxLength(200).HasColumnType("nvarchar(200)");
+                    b.Property<DateTime>("RequestedAtUtc").HasColumnType("datetime2");
+                    b.Property<DateTime?>("ApprovedAtUtc").HasColumnType("datetime2");
+                    b.Property<DateTime?>("DispatchedAtUtc").HasColumnType("datetime2");
+                    b.HasKey("Id");
+                    b.HasIndex("BusinessId", "RequestKey").IsUnique();
+                    b.HasIndex("BusinessId", "FromLocationId", "Id");
+                    b.HasIndex("BusinessId", "ToLocationId", "Id");
+                    b.HasIndex("FromLocationId");
+                    b.HasIndex("ToLocationId");
+                    b.HasIndex("RequestedByUserId");
+                    b.HasIndex("ApprovedByUserId");
+                    b.HasIndex("DispatchedByUserId");
+                    b.ToTable("RetailStockTransfers", t => t.HasCheckConstraint("CK_RetailStockTransfers_Valid", "[FromLocationId] <> [ToLocationId] AND [Status] IN ('Requested','Approved','InTransit','Completed','Cancelled')"));
+                });
+            modelBuilder.Entity("BusinessSaas.Api.Data.RetailStockTransferLine", b =>
+                {
+                    b.Property<long>("Id").ValueGeneratedOnAdd().HasColumnType("bigint");
+                    SqlServerPropertyBuilderExtensions.UseIdentityColumn(b.Property<long>("Id"));
+                    b.Property<long>("TransferId").HasColumnType("bigint");
+                    b.Property<long>("ProductId").HasColumnType("bigint");
+                    b.Property<decimal>("Quantity").HasPrecision(18, 3).HasColumnType("decimal(18,3)");
+                    b.Property<string>("UnitCode").IsRequired().HasMaxLength(12).HasColumnType("nvarchar(12)");
+                    b.HasKey("Id");
+                    b.HasIndex("TransferId", "ProductId").IsUnique();
+                    b.HasIndex("ProductId");
+                    b.ToTable("RetailStockTransferLines", t => t.HasCheckConstraint("CK_RetailStockTransferLines_Valid", "[Quantity] > 0"));
+                });
+            modelBuilder.Entity("BusinessSaas.Api.Data.RetailStockTransferReceipt", b =>
+                {
+                    b.Property<long>("Id").ValueGeneratedOnAdd().HasColumnType("bigint");
+                    SqlServerPropertyBuilderExtensions.UseIdentityColumn(b.Property<long>("Id"));
+                    b.Property<long>("TransferLineId").HasColumnType("bigint");
+                    b.Property<long>("BusinessId").HasColumnType("bigint");
+                    b.Property<long>("ActorUserId").HasColumnType("bigint");
+                    b.Property<decimal>("Quantity").HasPrecision(18, 3).HasColumnType("decimal(18,3)");
+                    b.Property<string>("Kind").IsRequired().HasMaxLength(12).HasColumnType("nvarchar(12)");
+                    b.Property<string>("RequestKey").IsRequired().HasMaxLength(80).HasColumnType("nvarchar(80)");
+                    b.Property<string>("Reason").IsRequired().HasMaxLength(200).HasColumnType("nvarchar(200)");
+                    b.Property<DateTime>("PostedAtUtc").HasColumnType("datetime2");
+                    b.HasKey("Id");
+                    b.HasIndex("BusinessId", "RequestKey").IsUnique();
+                    b.HasIndex("TransferLineId");
+                    b.HasIndex("ActorUserId");
+                    b.ToTable("RetailStockTransferReceipts", t => t.HasCheckConstraint("CK_RetailStockTransferReceipts_Valid", "[Quantity] > 0 AND [Kind] IN ('Received','Damaged','Missing')"));
+                });
+            modelBuilder.Entity("BusinessSaas.Api.Data.RetailStockTransfer", b =>
+                {
+                    b.HasOne("BusinessSaas.Api.Data.Business", null).WithMany().HasForeignKey("BusinessId")
+                        .OnDelete(DeleteBehavior.Restrict).IsRequired();
+                    b.HasOne("BusinessSaas.Api.Data.BusinessLocation", null).WithMany().HasForeignKey("FromLocationId")
+                        .OnDelete(DeleteBehavior.Restrict).IsRequired();
+                    b.HasOne("BusinessSaas.Api.Data.BusinessLocation", null).WithMany().HasForeignKey("ToLocationId")
+                        .OnDelete(DeleteBehavior.Restrict).IsRequired();
+                    b.HasOne("BusinessSaas.Api.Data.AppUser", null).WithMany().HasForeignKey("RequestedByUserId")
+                        .OnDelete(DeleteBehavior.Restrict).IsRequired();
+                    b.HasOne("BusinessSaas.Api.Data.AppUser", null).WithMany().HasForeignKey("ApprovedByUserId")
+                        .OnDelete(DeleteBehavior.Restrict);
+                    b.HasOne("BusinessSaas.Api.Data.AppUser", null).WithMany().HasForeignKey("DispatchedByUserId")
+                        .OnDelete(DeleteBehavior.Restrict);
+                });
+            modelBuilder.Entity("BusinessSaas.Api.Data.RetailStockTransferLine", b =>
+                {
+                    b.HasOne("BusinessSaas.Api.Data.RetailStockTransfer", null).WithMany().HasForeignKey("TransferId")
+                        .OnDelete(DeleteBehavior.Restrict).IsRequired();
+                    b.HasOne("BusinessSaas.Api.Data.RetailProduct", null).WithMany().HasForeignKey("ProductId")
+                        .OnDelete(DeleteBehavior.Restrict).IsRequired();
+                });
+            modelBuilder.Entity("BusinessSaas.Api.Data.RetailStockTransferReceipt", b =>
+                {
+                    b.HasOne("BusinessSaas.Api.Data.RetailStockTransferLine", null).WithMany().HasForeignKey("TransferLineId")
+                        .OnDelete(DeleteBehavior.Restrict).IsRequired();
+                    b.HasOne("BusinessSaas.Api.Data.Business", null).WithMany().HasForeignKey("BusinessId")
+                        .OnDelete(DeleteBehavior.Restrict).IsRequired();
+                    b.HasOne("BusinessSaas.Api.Data.AppUser", null).WithMany().HasForeignKey("ActorUserId")
+                        .OnDelete(DeleteBehavior.Restrict).IsRequired();
+                });
 #pragma warning restore 612, 618
         }
     }

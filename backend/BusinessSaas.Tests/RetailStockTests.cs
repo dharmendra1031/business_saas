@@ -283,6 +283,41 @@ public sealed class RetailStockTests
                 x.BusinessId == businessId && x.Status == "Approved"));
         }
 
+        var transfers = $"/api/businesses/{businessId}/stock/transfers";
+        var transferRequest = new { fromLocationId = locationId, toLocationId = secondLocationId,
+            reason = "Replenish branch", requestKey = "stock-transfer-test-001", dispatchNow = false,
+            lines = new[] { new { productId = product, quantity = 1m } } };
+        Assert.Equal(HttpStatusCode.NotFound, (await Send(cashier, HttpMethod.Post, transfers, transferRequest)).StatusCode);
+        Assert.Equal(HttpStatusCode.NotFound, (await Send(other, HttpMethod.Post, transfers, transferRequest)).StatusCode);
+        var requested = await Send(manager, HttpMethod.Post, transfers, transferRequest);
+        Assert.Equal(HttpStatusCode.OK, requested.StatusCode);
+        var transferId = (await requested.Content.ReadFromJsonAsync<JsonElement>()).GetProperty("id").GetInt64();
+        var transferPath = transfers + "/" + transferId;
+        Assert.Equal(HttpStatusCode.NotFound, (await Send(manager, HttpMethod.Post, transferPath + "/approve", new { })).StatusCode);
+        Assert.Equal(HttpStatusCode.OK, (await Send(owner, HttpMethod.Post, transferPath + "/approve", new { })).StatusCode);
+        var beforeTransfer = (await owner.GetFromJsonAsync<JsonElement>(path + "?search=stock-100")).GetProperty("items")[0].GetProperty("quantity").GetDecimal();
+        Assert.Equal(HttpStatusCode.OK, (await Send(manager, HttpMethod.Post, transferPath + "/dispatch", new { })).StatusCode);
+        Assert.Equal(HttpStatusCode.OK, (await Send(manager, HttpMethod.Post, transferPath + "/dispatch", new { })).StatusCode);
+        var inTransit = await owner.GetFromJsonAsync<JsonElement>(transferPath);
+        var transferLineId = inTransit.GetProperty("lines")[0].GetProperty("id").GetInt64();
+        Assert.Equal(1m, inTransit.GetProperty("lines")[0].GetProperty("remaining").GetDecimal());
+        var received = new { lineId = transferLineId, quantity = 0.5m, kind = "Received", reason = "",
+            expectedRemaining = 1m, requestKey = "stock-transfer-receive-001" };
+        Assert.Equal(HttpStatusCode.NotFound, (await Send(manager, HttpMethod.Post, transferPath + "/receive", received)).StatusCode);
+        Assert.Equal(HttpStatusCode.OK, (await Send(owner, HttpMethod.Post, transferPath + "/receive", received)).StatusCode);
+        Assert.Equal(HttpStatusCode.OK, (await Send(owner, HttpMethod.Post, transferPath + "/receive", received)).StatusCode);
+        var partial = await owner.GetFromJsonAsync<JsonElement>(transferPath);
+        Assert.Equal(0.5m, partial.GetProperty("lines")[0].GetProperty("remaining").GetDecimal());
+        Assert.Equal(HttpStatusCode.Conflict, (await Send(owner, HttpMethod.Post, transferPath + "/receive",
+            received with { requestKey = "stock-transfer-receive-over", quantity = 1m, expectedRemaining = 0.5m })).StatusCode);
+        Assert.Equal(HttpStatusCode.OK, (await Send(owner, HttpMethod.Post, transferPath + "/receive",
+            received with { requestKey = "stock-transfer-receive-002", expectedRemaining = 0.5m })).StatusCode);
+        var completed = await owner.GetFromJsonAsync<JsonElement>(transferPath);
+        Assert.Equal("Completed", completed.GetProperty("transfer").GetProperty("status").GetString());
+        Assert.Equal(0m, completed.GetProperty("lines")[0].GetProperty("remaining").GetDecimal());
+        Assert.Equal(beforeTransfer - 1m, (await owner.GetFromJsonAsync<JsonElement>(path + "?search=stock-100")).GetProperty("items")[0].GetProperty("quantity").GetDecimal());
+        Assert.Equal(1m, (await owner.GetFromJsonAsync<JsonElement>($"/api/businesses/{businessId}/stock/locations/{secondLocationId}?search=stock-100")).GetProperty("items")[0].GetProperty("quantity").GetDecimal());
+
         using (var scope = factory.Services.CreateScope())
         {
             var db = scope.ServiceProvider.GetRequiredService<AppDbContext>();

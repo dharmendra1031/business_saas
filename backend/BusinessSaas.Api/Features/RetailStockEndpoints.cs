@@ -15,6 +15,8 @@ public static class RetailStockEndpoints
         var group = app.MapGroup("/api/businesses/{businessId:long}/stock")
             .RequireAuthorization();
 
+        RetailStockTransfers.Map(group);
+
         group.MapGet("/locations/{locationId:long}", async (long businessId, long locationId,
             string? search, int? page, bool? alertsOnly, ClaimsPrincipal user, AppDbContext db, CancellationToken cancellationToken) =>
         {

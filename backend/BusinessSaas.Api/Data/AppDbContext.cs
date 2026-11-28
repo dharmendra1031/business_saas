@@ -451,6 +451,45 @@ public sealed class RetailSupplierDocument
     public DateTime PostedAtUtc { get; set; } = DateTime.UtcNow;
 }
 
+public sealed class RetailStockTransfer
+{
+    public long Id { get; set; }
+    public long BusinessId { get; set; }
+    public long FromLocationId { get; set; }
+    public long ToLocationId { get; set; }
+    public long RequestedByUserId { get; set; }
+    public long? ApprovedByUserId { get; set; }
+    public long? DispatchedByUserId { get; set; }
+    public string RequestKey { get; set; } = "";
+    public string Status { get; set; } = "";
+    public string Reason { get; set; } = "";
+    public DateTime RequestedAtUtc { get; set; }
+    public DateTime? ApprovedAtUtc { get; set; }
+    public DateTime? DispatchedAtUtc { get; set; }
+}
+
+public sealed class RetailStockTransferLine
+{
+    public long Id { get; set; }
+    public long TransferId { get; set; }
+    public long ProductId { get; set; }
+    public decimal Quantity { get; set; }
+    public string UnitCode { get; set; } = "";
+}
+
+public sealed class RetailStockTransferReceipt
+{
+    public long Id { get; set; }
+    public long TransferLineId { get; set; }
+    public long BusinessId { get; set; }
+    public long ActorUserId { get; set; }
+    public decimal Quantity { get; set; }
+    public string Kind { get; set; } = "";
+    public string RequestKey { get; set; } = "";
+    public string Reason { get; set; } = "";
+    public DateTime PostedAtUtc { get; set; }
+}
+
 public sealed class AppDbContext(DbContextOptions<AppDbContext> options)
     : IdentityUserContext<AppUser, long>(options)
 {
@@ -489,6 +528,9 @@ public sealed class AppDbContext(DbContextOptions<AppDbContext> options)
     public DbSet<RetailCustomer> RetailCustomers => Set<RetailCustomer>();
     public DbSet<RetailStockBalance> RetailStockBalances => Set<RetailStockBalance>();
     public DbSet<RetailStockMovement> RetailStockMovements => Set<RetailStockMovement>();
+    public DbSet<RetailStockTransfer> RetailStockTransfers => Set<RetailStockTransfer>();
+    public DbSet<RetailStockTransferLine> RetailStockTransferLines => Set<RetailStockTransferLine>();
+    public DbSet<RetailStockTransferReceipt> RetailStockTransferReceipts => Set<RetailStockTransferReceipt>();
     public DbSet<RetailStockAdjustment> RetailStockAdjustments => Set<RetailStockAdjustment>();
     public DbSet<RetailPurchaseOrder> RetailPurchaseOrders => Set<RetailPurchaseOrder>();
     public DbSet<RetailPurchaseOrderLine> RetailPurchaseOrderLines => Set<RetailPurchaseOrderLine>();
@@ -1023,6 +1065,54 @@ public sealed class AppDbContext(DbContextOptions<AppDbContext> options)
                 .OnDelete(DeleteBehavior.Restrict);
             entity.HasOne<RetailCashSaleLine>().WithMany().HasForeignKey(x => x.SaleLineId)
                 .OnDelete(DeleteBehavior.Restrict);
+        });
+
+        builder.Entity<RetailStockTransfer>(entity =>
+        {
+            entity.Property(x => x.RequestKey).HasMaxLength(80).IsRequired();
+            entity.Property(x => x.Status).HasMaxLength(20).IsRequired();
+            entity.Property(x => x.Reason).HasMaxLength(200).IsRequired();
+            entity.HasIndex(x => new { x.BusinessId, x.RequestKey }).IsUnique();
+            entity.HasIndex(x => new { x.BusinessId, x.FromLocationId, x.Id });
+            entity.HasIndex(x => new { x.BusinessId, x.ToLocationId, x.Id });
+            entity.HasIndex(x => x.FromLocationId);
+            entity.HasIndex(x => x.ToLocationId);
+            entity.HasIndex(x => x.RequestedByUserId);
+            entity.HasIndex(x => x.ApprovedByUserId);
+            entity.HasIndex(x => x.DispatchedByUserId);
+            entity.HasOne<Business>().WithMany().HasForeignKey(x => x.BusinessId).OnDelete(DeleteBehavior.Restrict);
+            entity.HasOne<BusinessLocation>().WithMany().HasForeignKey(x => x.FromLocationId).OnDelete(DeleteBehavior.Restrict);
+            entity.HasOne<BusinessLocation>().WithMany().HasForeignKey(x => x.ToLocationId).OnDelete(DeleteBehavior.Restrict);
+            entity.HasOne<AppUser>().WithMany().HasForeignKey(x => x.RequestedByUserId).OnDelete(DeleteBehavior.Restrict);
+            entity.HasOne<AppUser>().WithMany().HasForeignKey(x => x.ApprovedByUserId).OnDelete(DeleteBehavior.Restrict);
+            entity.HasOne<AppUser>().WithMany().HasForeignKey(x => x.DispatchedByUserId).OnDelete(DeleteBehavior.Restrict);
+            entity.ToTable(t => t.HasCheckConstraint("CK_RetailStockTransfers_Valid", "[FromLocationId] <> [ToLocationId] AND [Status] IN ('Requested','Approved','InTransit','Completed','Cancelled')"));
+        });
+
+        builder.Entity<RetailStockTransferLine>(entity =>
+        {
+            entity.Property(x => x.Quantity) .HasPrecision(18, 3);
+            entity.Property(x => x.UnitCode).HasMaxLength(12).IsRequired();
+            entity.HasIndex(x => new { x.TransferId, x.ProductId }).IsUnique();
+            entity.HasIndex(x => x.ProductId);
+            entity.HasOne<RetailStockTransfer>().WithMany().HasForeignKey(x => x.TransferId).OnDelete(DeleteBehavior.Restrict);
+            entity.HasOne<RetailProduct>().WithMany().HasForeignKey(x => x.ProductId).OnDelete(DeleteBehavior.Restrict);
+            entity.ToTable(t => t.HasCheckConstraint("CK_RetailStockTransferLines_Valid", "[Quantity] > 0"));
+        });
+
+        builder.Entity<RetailStockTransferReceipt>(entity =>
+        {
+            entity.Property(x => x.Quantity) .HasPrecision(18, 3);
+            entity.Property(x => x.Kind).HasMaxLength(12).IsRequired();
+            entity.Property(x => x.RequestKey).HasMaxLength(80).IsRequired();
+            entity.Property(x => x.Reason).HasMaxLength(200).IsRequired();
+            entity.HasIndex(x => new { x.BusinessId, x.RequestKey }).IsUnique();
+            entity.HasIndex(x => x.TransferLineId);
+            entity.HasIndex(x => x.ActorUserId);
+            entity.HasOne<RetailStockTransferLine>().WithMany().HasForeignKey(x => x.TransferLineId).OnDelete(DeleteBehavior.Restrict);
+            entity.HasOne<Business>().WithMany().HasForeignKey(x => x.BusinessId).OnDelete(DeleteBehavior.Restrict);
+            entity.HasOne<AppUser>().WithMany().HasForeignKey(x => x.ActorUserId).OnDelete(DeleteBehavior.Restrict);
+            entity.ToTable(t => t.HasCheckConstraint("CK_RetailStockTransferReceipts_Valid", "[Quantity] > 0 AND [Kind] IN ('Received','Damaged','Missing')"));
         });
 
         builder.Entity<RetailStockMovement>(entity =>
