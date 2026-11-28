@@ -11,9 +11,10 @@ interface Product {
   packSize: string
   unit: string
   isActive: boolean
+  revision: number
 }
 interface ProductPage { items: Product[]; nextAfterId: number | null }
-type ProductForm = Omit<Product, 'id' | 'barcode'> & { barcode: string }
+type ProductForm = Omit<Product, 'id' | 'barcode' | 'revision'> & { barcode: string; expectedRevision?: number }
 const empty: ProductForm = { name: '', barcode: '', brand: '', category: '', packSize: '', unit: 'PCS', isActive: true }
 const fields = [
   ['name', 'Product name', 150], ['barcode', 'Manufacturer barcode (optional)', 14],
@@ -66,7 +67,7 @@ export default function PlatformGlobalProducts() {
   function open(product?: Product) {
     setEditing(product?.id ?? null)
     setForm(product ? { name: product.name, barcode: product.barcode ?? '', brand: product.brand,
-      category: product.category, packSize: product.packSize, unit: product.unit, isActive: product.isActive } : { ...empty })
+      category: product.category, packSize: product.packSize, unit: product.unit, isActive: product.isActive, expectedRevision: product.revision } : { ...empty })
     setUncertain(false)
   }
 
@@ -103,9 +104,11 @@ export default function PlatformGlobalProducts() {
               <label className="form-label" htmlFor={'global-' + field}>{label}</label>
               <input id={'global-' + field} className="form-control" maxLength={max}
                 required={field === 'name' || field === 'unit'} value={form[field]}
+                readOnly={editing !== null && (field === 'barcode' || field === 'packSize' || field === 'unit')}
                 onChange={event => setForm(current => current && ({ ...current, [field]: event.target.value }))} />
             </div>)}
           </div>
+          {editing !== null && <p className="form-hint mt-2">Barcode, pack size and unit cannot be changed in an existing product.</p>}
           <label className="form-check mt-3"><input className="form-check-input" type="checkbox" checked={form.isActive}
             onChange={event => setForm(current => current && ({ ...current, isActive: event.target.checked }))} /> Active</label>
         </fieldset>

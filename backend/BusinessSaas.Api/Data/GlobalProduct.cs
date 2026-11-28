@@ -11,5 +11,6 @@ public sealed class GlobalProduct
     public string PackSize { get; set; } = "";
     public string Unit { get; set; } = "";
     public bool IsActive { get; set; } = true;
+    public int Revision { get; set; }
     public DateTime CreatedAtUtc { get; set; }
 }

@@ -183,12 +183,12 @@ namespace BusinessSaas.Api.Data.Migrations
                         .HasColumnType("nvarchar(250)");
 
                     b.Property<string>("PreviousValue")
-                        .HasMaxLength(100)
-                        .HasColumnType("nvarchar(100)");
+                        .HasMaxLength(3000)
+                        .HasColumnType("nvarchar(3000)");
 
                     b.Property<string>("NewValue")
-                        .HasMaxLength(100)
-                        .HasColumnType("nvarchar(100)");
+                        .HasMaxLength(3000)
+                        .HasColumnType("nvarchar(3000)");
 
                     b.Property<long?>("TargetId").HasColumnType("bigint");
 
@@ -820,6 +820,10 @@ namespace BusinessSaas.Api.Data.Migrations
                         .HasMaxLength(40)
                         .HasColumnType("nvarchar(40)")
                         .HasComputedColumnSql("UPPER([PackSize])", true);
+
+                    b.Property<int>("Revision")
+                        .IsConcurrencyToken()
+                        .HasColumnType("int");
 
                     b.Property<string>("Unit")
                         .IsRequired()

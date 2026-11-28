@@ -487,8 +487,8 @@ public sealed class AppDbContext(DbContextOptions<AppDbContext> options)
             entity.Property(x => x.Action).HasMaxLength(60).IsRequired();
             entity.Property(x => x.TargetType).HasMaxLength(40).IsRequired();
             entity.Property(x => x.Reason).HasMaxLength(250);
-            entity.Property(x => x.PreviousValue).HasMaxLength(100);
-            entity.Property(x => x.NewValue).HasMaxLength(100);
+            entity.Property(x => x.PreviousValue).HasMaxLength(3000);
+            entity.Property(x => x.NewValue).HasMaxLength(3000);
             entity.HasIndex(x => new { x.CreatedAtUtc, x.Id });
             entity.HasOne<AppUser>().WithMany()
                 .HasForeignKey(x => x.ActorUserId).OnDelete(DeleteBehavior.Restrict);
@@ -776,6 +776,7 @@ public sealed class AppDbContext(DbContextOptions<AppDbContext> options)
 
         builder.Entity<GlobalProduct>(entity =>
         {
+            entity.Property(x => x.Revision).IsConcurrencyToken();
             entity.Property(x => x.Name).HasMaxLength(150).IsRequired();
             entity.Property(x => x.NameKey).HasMaxLength(150).IsRequired();
             entity.Property(x => x.Barcode).HasMaxLength(14);

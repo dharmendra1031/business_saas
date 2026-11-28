@@ -1,4 +1,5 @@
 using System.Security.Claims;
+using System.Text.Json;
 using BusinessSaas.Api.Data;
 using Microsoft.EntityFrameworkCore;
 
@@ -18,12 +19,12 @@ public static class GlobalProductEndpoints
 
         platform.MapPost("", (ProductRequest request, ClaimsPrincipal user, IConfiguration configuration,
             AppDbContext db, CancellationToken ct) => PlatformOwner.IsOwner(user, configuration)
-                ? Save(db, null, request, ct) : Task.FromResult<IResult>(Results.Forbid()));
+                ? Save(db, null, request, long.Parse(user.FindFirstValue(ClaimTypes.NameIdentifier)!), ct) : Task.FromResult<IResult>(Results.Forbid()));
 
         platform.MapPut("/{id:long}", (long id, ProductRequest request, ClaimsPrincipal user,
             IConfiguration configuration, AppDbContext db, CancellationToken ct) =>
             PlatformOwner.IsOwner(user, configuration)
-                ? Save(db, id, request, ct) : Task.FromResult<IResult>(Results.Forbid()));
+                ? Save(db, id, request, long.Parse(user.FindFirstValue(ClaimTypes.NameIdentifier)!), ct) : Task.FromResult<IResult>(Results.Forbid()));
 
         app.MapGet("/api/businesses/{businessId:long}/global-products", async (long businessId,
             string? search, string? barcode, long? afterId, ClaimsPrincipal user, AppDbContext db,
@@ -37,7 +38,7 @@ public static class GlobalProductEndpoints
         }).RequireAuthorization();
     }
 
-    private static async Task<IResult> Save(AppDbContext db, long? id, ProductRequest request, CancellationToken ct)
+    private static async Task<IResult> Save(AppDbContext db, long? id, ProductRequest request, long actorId, CancellationToken ct)
     {
         var name = Clean(request.Name);
         var brand = Clean(request.Brand);
@@ -55,8 +56,15 @@ public static class GlobalProductEndpoints
             ? await db.GlobalProducts.SingleOrDefaultAsync(x => x.Id == id.Value, ct)
             : new GlobalProduct { CreatedAtUtc = DateTime.UtcNow };
         if (product is null) return Results.NotFound();
-        if (id.HasValue && request.IsActive is null)
-            return Results.BadRequest(new { message = "Select the product status." });
+        if (id.HasValue && (request.IsActive is null || request.ExpectedRevision is null))
+            return Results.BadRequest(new { message = "Select the product status and reload its revision." });
+        if (id.HasValue && product.Revision != request.ExpectedRevision)
+            return Results.Conflict(new { message = "Product changed elsewhere. Reload before editing." });
+        // Freeze pack identity before tenant adoption exists; corrections require an explicit future workflow.
+        if (id.HasValue && (product.Barcode != barcode ||
+            !string.Equals(product.PackSize, packSize, StringComparison.OrdinalIgnoreCase) || product.Unit != unit))
+            return Results.Conflict(new { message = "Barcode, pack size and stock unit are fixed. Create a distinct product or request an audited correction." });
+        var previous = id.HasValue ? AuditValue(product) : null;
         var others = db.GlobalProducts.Where(x => x.Id != product.Id);
         if (barcode != null && await others.AnyAsync(x => x.Barcode == barcode, ct))
             return Results.Conflict(new { message = "This manufacturer barcode already exists." });
@@ -73,15 +81,42 @@ public static class GlobalProductEndpoints
         product.PackSize = packSize;
         product.Unit = unit;
         product.IsActive = request.IsActive ?? true;
+        var current = AuditValue(product);
+        if (id.HasValue && previous == current)
+            return Results.Ok(new { product.Id, product.Revision });
+        product.Revision++;
         if (!id.HasValue) db.GlobalProducts.Add(product);
-        try { await db.SaveChangesAsync(ct); }
+        await using var transaction = await db.Database.BeginTransactionAsync(ct);
+        try
+        {
+            await db.SaveChangesAsync(ct);
+            db.PlatformAuditEvents.Add(new PlatformAuditEvent
+            {
+                ActorUserId = actorId,
+                Action = id.HasValue ? "GlobalProduct.Updated" : "GlobalProduct.Created",
+                TargetType = "GlobalProduct", TargetId = product.Id,
+                PreviousValue = previous, NewValue = current
+            });
+            await db.SaveChangesAsync(ct);
+            await transaction.CommitAsync(ct);
+        }
+        catch (DbUpdateConcurrencyException)
+        {
+            return Results.Conflict(new { message = "Product changed elsewhere. Reload before editing." });
+        }
         catch (DbUpdateException error) when (RetailModule.IsDuplicateKey(error))
         {
             return Results.Conflict(new { message = "A matching product or manufacturer barcode already exists. Review the catalogue." });
         }
-        return id.HasValue ? Results.Ok(new { product.Id }) :
-            Results.Created($"/api/platform/global-products?afterId={product.Id - 1}", new { product.Id });
+        return id.HasValue ? Results.Ok(new { product.Id, product.Revision }) :
+            Results.Created($"/api/platform/global-products?afterId={product.Id - 1}", new { product.Id, product.Revision });
     }
+
+    private static string AuditValue(GlobalProduct product) => JsonSerializer.Serialize(new
+    {
+        product.Name, product.Barcode, product.Brand, product.Category,
+        product.PackSize, product.Unit, product.IsActive
+    });
 
     private static async Task<IResult> Search(IQueryable<GlobalProduct> query, string? search,
         string? barcode, long? afterId, CancellationToken ct)
@@ -95,7 +130,7 @@ public static class GlobalProductEndpoints
         if (term.Length > 0) query = query.Where(x => x.NameKey.StartsWith(term));
         if (afterId.HasValue) query = query.Where(x => x.Id > afterId.Value);
         var items = await query.OrderBy(x => x.Id).Take(21)
-            .Select(x => new { x.Id, x.Name, x.Barcode, x.Brand, x.Category, x.PackSize, x.Unit, x.IsActive })
+            .Select(x => new { x.Id, x.Name, x.Barcode, x.Brand, x.Category, x.PackSize, x.Unit, x.IsActive, x.Revision })
             .ToListAsync(ct);
         var hasMore = items.Count > 20;
         if (hasMore) items.RemoveAt(20);
@@ -118,5 +153,5 @@ public static class GlobalProductEndpoints
     }
 
     private sealed record ProductRequest(string? Name, string? Barcode, string? Brand,
-        string? Category, string? PackSize, string? Unit, bool? IsActive = null);
+        string? Category, string? PackSize, string? Unit, bool? IsActive = null, int? ExpectedRevision = null);
 }

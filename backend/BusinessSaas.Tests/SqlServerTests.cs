@@ -91,6 +91,7 @@ public sealed class SqlServerTests(Xunit.Abstractions.ITestOutputHelper output)
             Assert.Contains("20261127110000_RetailCashRegisterMovements", await db.Database.GetAppliedMigrationsAsync());
             Assert.Contains("20261128100000_GlobalProducts", await db.Database.GetAppliedMigrationsAsync());
             Assert.Contains("20261128110000_GlobalProductIdentityIndex", await db.Database.GetAppliedMigrationsAsync());
+            Assert.Contains("20261128120000_GlobalProductAuditRevision", await db.Database.GetAppliedMigrationsAsync());
             Assert.Equal(1, await db.Database.SqlQueryRaw<int>(
                 "SELECT COUNT(*) AS [Value] FROM sys.indexes WHERE object_id = OBJECT_ID('GlobalProducts') " +
                 "AND name = 'IX_GlobalProducts_NameKey_BrandKey_PackSizeKey_Unit' AND is_unique = 1 AND has_filter = 1").SingleAsync());
@@ -144,6 +145,61 @@ public sealed class SqlServerTests(Xunit.Abstractions.ITestOutputHelper output)
         using var admin = factory.CreateClient();
         await BusinessFlowTests.SignInProvisioningAdmin(factory.Services, admin,
             "sql-platform-admin@example.test", "sql-owner@example.test");
+
+        const string catalogue = "/api/platform/global-products";
+        object CatalogueItem(string barcode, string name = "QA Catalogue item", string pack = "70g",
+            string unit = "PCS", bool active = true, int? revision = null) =>
+            new { name, barcode, brand = "QA Brand", category = "QA Grocery", packSize = pack,
+                unit, isActive = active, expectedRevision = revision };
+        var created = await Post(admin, catalogue, CatalogueItem("036000291452"));
+        Assert.Equal(HttpStatusCode.Created, created.StatusCode);
+        var createdBody = await created.Content.ReadFromJsonAsync<JsonElement>();
+        var globalId = createdBody.GetProperty("id").GetInt64();
+        var revision = createdBody.GetProperty("revision").GetInt32();
+        Assert.Equal(1, revision);
+        foreach (var barcode in new[] { "036000291452", "0036000291452", "00036000291452" })
+        {
+            var page = await admin.GetFromJsonAsync<JsonElement>(catalogue + "?barcode=" + barcode);
+            Assert.Equal(globalId, page.GetProperty("items")[0].GetProperty("id").GetInt64());
+        }
+        Assert.Equal(HttpStatusCode.Conflict,
+            (await Post(admin, catalogue, CatalogueItem("0036000291452"))).StatusCode);
+        Assert.Equal(HttpStatusCode.BadRequest,
+            (await Post(admin, catalogue, CatalogueItem("036000291453"))).StatusCode);
+        Assert.Equal(HttpStatusCode.Created,
+            (await Post(admin, catalogue, CatalogueItem("96385074", "QA GTIN8 item"))).StatusCode);
+        var gtin8 = await admin.GetFromJsonAsync<JsonElement>(catalogue + "?barcode=00000096385074");
+        Assert.Single(gtin8.GetProperty("items").EnumerateArray());
+        var url = catalogue + "/" + globalId;
+        Assert.Equal(HttpStatusCode.Conflict, (await Put(admin, url,
+            CatalogueItem("036000291452", pack: "140g", revision: revision))).StatusCode);
+        Assert.Equal(HttpStatusCode.Conflict, (await Put(admin, url,
+            CatalogueItem("036000291452", unit: "KG", revision: revision))).StatusCode);
+        Assert.Equal(HttpStatusCode.Conflict, (await Put(admin, url,
+            CatalogueItem("96385074", revision: revision))).StatusCode);
+        Assert.Equal(HttpStatusCode.Forbidden, (await Put(owner, url,
+            CatalogueItem("036000291452", revision: revision))).StatusCode);
+        Assert.Equal(HttpStatusCode.OK, (await Put(admin, url,
+            CatalogueItem("0036000291452", name: "QA Catalogue corrected", active: false, revision: revision))).StatusCode);
+        Assert.Equal(HttpStatusCode.Conflict, (await Put(admin, url,
+            CatalogueItem("036000291452", name: "Stale change", revision: revision))).StatusCode);
+        using (var scope = factory.Services.CreateScope())
+        {
+            var db = scope.ServiceProvider.GetRequiredService<AppDbContext>();
+            var stored = await db.GlobalProducts.SingleAsync(x => x.Id == globalId);
+            Assert.Equal(2, stored.Revision);
+            Assert.False(stored.IsActive);
+            Assert.Equal("QA Catalogue corrected", stored.Name);
+            var audit = await db.PlatformAuditEvents.Where(x => x.TargetType == "GlobalProduct" &&
+                x.TargetId == globalId).OrderBy(x => x.Id).ToListAsync();
+            Assert.Equal(2, audit.Count);
+            Assert.Equal("GlobalProduct.Created", audit[0].Action);
+            Assert.Null(audit[0].PreviousValue);
+            Assert.Equal("GlobalProduct.Updated", audit[1].Action);
+            Assert.Contains("QA Catalogue item", audit[1].PreviousValue);
+            Assert.Contains("QA Catalogue corrected", audit[1].NewValue);
+            Assert.True(audit[1].ActorUserId > 0);
+        }
 
         var creation = new
         {
