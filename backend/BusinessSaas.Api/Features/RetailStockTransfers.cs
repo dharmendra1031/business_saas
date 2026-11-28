@@ -69,6 +69,7 @@ internal static class RetailStockTransfers
     {
         var role = await RetailMasterEndpoints.ReadRole(db, user, businessId, ct);
         if (role is null) return Results.NotFound();
+        await using var tx = await db.Database.BeginTransactionAsync(IsolationLevel.Serializable, ct);
         var transfer = await Visible(db, businessId, role).AsNoTracking().SingleOrDefaultAsync(x => x.Id == id, ct);
         if (transfer is null) return Results.NotFound();
         var lines = await (from l in db.RetailStockTransferLines.AsNoTracking()
@@ -76,6 +77,8 @@ internal static class RetailStockTransfers
                            where l.TransferId == id && p.BusinessId == businessId
                            orderby l.Id
                            select new { l.Id, l.ProductId, p.Name, l.UnitCode, l.Quantity }).ToListAsync(ct);
+        if (lines.Count == 0 || lines.Count != await db.RetailStockTransferLines.CountAsync(x => x.TransferId == id, ct))
+            return Results.Conflict(new { message = "Transfer lines require reconciliation." });
         var totals = await (from e in db.RetailStockTransferReceipts.AsNoTracking()
                             join l in db.RetailStockTransferLines on e.TransferLineId equals l.Id
                             where l.TransferId == id && e.BusinessId == businessId
@@ -85,6 +88,9 @@ internal static class RetailStockTransfers
                              join l in db.RetailStockTransferLines on e.TransferLineId equals l.Id
                              where l.TransferId == id && e.BusinessId == businessId
                              orderby e.Id descending select e).Take(50).ToListAsync(ct);
+        if (lines.Any(l => totals.Where(x => x.TransferLineId == l.Id).Sum(x => x.Quantity) > l.Quantity))
+            return Results.Conflict(new { message = "Transfer receipts require reconciliation." });
+        await tx.CommitAsync(ct);
         return Results.Ok(new { transfer, lines = lines.Select(l => new
         {
             l.Id, l.ProductId, l.Name, l.UnitCode, l.Quantity,

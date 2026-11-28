@@ -96,6 +96,7 @@ public sealed class SqlServerTests(Xunit.Abstractions.ITestOutputHelper output)
             Assert.Contains("20261128140000_RetailPurchaseReturns", await db.Database.GetAppliedMigrationsAsync());
             Assert.Contains("20261128150000_RetailSupplierDocuments", await db.Database.GetAppliedMigrationsAsync());
             Assert.Contains("20261128160000_RetailRegisterClosing", await db.Database.GetAppliedMigrationsAsync());
+            Assert.Contains("20261128170000_RetailStockTransfers", await db.Database.GetAppliedMigrationsAsync());
             Assert.Equal(1, await db.Database.SqlQueryRaw<int>(
                 "SELECT COUNT(*) AS [Value] FROM sys.columns WHERE object_id = OBJECT_ID('RetailProducts') " +
                 "AND name = 'GlobalProductId' AND is_nullable = 1").SingleAsync());
@@ -2672,6 +2673,88 @@ public sealed class SqlServerTests(Xunit.Abstractions.ITestOutputHelper output)
             x.GetProperty("id").GetInt64() == registerId && x.GetProperty("variance").GetDecimal() == -5m);
         Assert.Equal(HttpStatusCode.OK, (await Post(owner, path + "/open",
             opening with { requestKey = "sql-register-after-closing" })).StatusCode);
+    }
+
+    [Fact]
+    [Trait("Database", "SqlServer")]
+    public async Task Stock_transfer_concurrent_dispatch_and_receiving_conserve_stock()
+    {
+        var connectionString = Environment.GetEnvironmentVariable("SQLSERVER_TEST_CONNECTION");
+        if (string.IsNullOrWhiteSpace(connectionString)) return;
+        using var factory = new WebApplicationFactory<Program>().WithWebHostBuilder(builder =>
+        {
+            builder.UseEnvironment("Development");
+            builder.ConfigureServices(services =>
+            {
+                services.RemoveAll<DbContextOptions<AppDbContext>>();
+                services.RemoveAll<IDbContextOptionsConfiguration<AppDbContext>>();
+                services.AddDbContext<AppDbContext>(options => options.UseSqlServer(connectionString));
+            });
+        });
+        using var owner = factory.CreateClient();
+        await RegisterAndLogin(owner, "sql-transfer-owner@example.test");
+        var businessId = await BusinessFixtures.SeedAsync(factory.Services, owner, "Transfer Shop", "sql-transfer-20261128");
+        long from, to, productId;
+        using (var scope = factory.Services.CreateScope())
+        {
+            var db = scope.ServiceProvider.GetRequiredService<AppDbContext>();
+            from = await db.BusinessLocations.Where(x => x.BusinessId == businessId).Select(x => x.Id).SingleAsync();
+            var branch = new BusinessLocation { BusinessId = businessId, Name = "Second Branch", Code = "BR2", IsPrimary = false };
+            var product = new RetailProduct
+            {
+                BusinessId = businessId, Name = "Transfer item", Sku = "TRANSFER-1", SalePrice = 10m,
+                CategoryId = await db.RetailCategories.Where(x => x.BusinessId == businessId).Select(x => x.Id).SingleAsync(),
+                UnitId = await db.RetailUnits.Where(x => x.BusinessId == businessId).Select(x => x.Id).SingleAsync()
+            };
+            db.BusinessLocations.Add(branch);
+            db.RetailProducts.Add(product);
+            await db.SaveChangesAsync();
+            to = branch.Id; productId = product.Id;
+        }
+        var stock = $"/api/businesses/{businessId}/stock";
+        Assert.Equal(HttpStatusCode.Created, (await Post(owner, stock + "/locations/" + from + "/opening",
+            new { productId, quantity = 10m })).StatusCode);
+        var path = stock + "/transfers";
+        var request = new { fromLocationId = from, toLocationId = to, reason = "Restock branch",
+            requestKey = "sql-transfer-dispatch-001", dispatchNow = true, lines = new[] { new { productId, quantity = 7m } } };
+        var race = await Task.WhenAll(Post(owner, path, request),
+            Post(owner, path, request with { requestKey = "sql-transfer-dispatch-002" }));
+        Assert.Single(race.Where(x => x.StatusCode == HttpStatusCode.OK));
+        Assert.Single(race.Where(x => x.StatusCode == HttpStatusCode.Conflict));
+        var winner = race.Single(x => x.StatusCode == HttpStatusCode.OK);
+        var transferId = (await winner.Content.ReadFromJsonAsync<JsonElement>()).GetProperty("id").GetInt64();
+        var detailPath = path + "/" + transferId;
+        var detail = await owner.GetFromJsonAsync<JsonElement>(detailPath);
+        var lineId = detail.GetProperty("lines")[0].GetProperty("id").GetInt64();
+        Assert.Equal(7m, detail.GetProperty("lines")[0].GetProperty("remaining").GetDecimal());
+        using (var scope = factory.Services.CreateScope())
+        {
+            var db = scope.ServiceProvider.GetRequiredService<AppDbContext>();
+            Assert.Equal(3m, await db.RetailStockBalances.Where(x => x.BusinessId == businessId && x.LocationId == from)
+                .Select(x => x.Quantity).SingleAsync());
+            Assert.False(await db.RetailStockBalances.AnyAsync(x => x.BusinessId == businessId && x.LocationId == to));
+        }
+        var receipt = new { lineId, quantity = 5m, kind = "Received", reason = "", requestKey = "sql-transfer-receive-001", expectedRemaining = 7m };
+        var receiveRace = await Task.WhenAll(Post(owner, detailPath + "/receive", receipt),
+            Post(owner, detailPath + "/receive", receipt with { requestKey = "sql-transfer-receive-002" }));
+        Assert.Single(receiveRace.Where(x => x.StatusCode == HttpStatusCode.OK));
+        Assert.Single(receiveRace.Where(x => x.StatusCode == HttpStatusCode.Conflict));
+        Assert.Equal(HttpStatusCode.OK, (await Post(owner, detailPath + "/receive", receipt with
+        {
+            requestKey = "sql-transfer-damaged-001", quantity = 2m, kind = "Damaged", reason = "Damaged in transit", expectedRemaining = 2m
+        })).StatusCode);
+        var completed = await owner.GetFromJsonAsync<JsonElement>(detailPath);
+        Assert.Equal("Completed", completed.GetProperty("transfer").GetProperty("status").GetString());
+        Assert.Equal(0m, completed.GetProperty("lines")[0].GetProperty("remaining").GetDecimal());
+        Assert.Equal(2m, completed.GetProperty("lines")[0].GetProperty("damaged").GetDecimal());
+        using (var scope = factory.Services.CreateScope())
+        {
+            var db = scope.ServiceProvider.GetRequiredService<AppDbContext>();
+            Assert.Equal(1, await db.RetailStockTransfers.CountAsync(x => x.BusinessId == businessId));
+            Assert.Equal(8m, await db.RetailStockBalances.Where(x => x.BusinessId == businessId && x.ProductId == productId).SumAsync(x => x.Quantity));
+            Assert.Equal(1, await db.RetailStockMovements.CountAsync(x => x.BusinessId == businessId && x.SourceType == "TransferDispatch"));
+            Assert.Equal(1, await db.RetailStockMovements.CountAsync(x => x.BusinessId == businessId && x.SourceType == "TransferReceive"));
+        }
     }
 
     private static async Task RegisterAndLogin(HttpClient client, string email)
