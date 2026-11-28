@@ -375,11 +375,13 @@ export default function App() {
             ['overview', 'Dashboard', LayoutDashboard],
             ['customers', 'Customers', Users],
             ['businesses', 'Businesses', Building2],
+            ['global-products', 'Global Products', Package],
             ['plans', 'Plans & Billing', CreditCard],
             ['settings', 'Platform Settings', Settings2],
             ['audit', 'Security & Audit', ShieldCheck],
             ['operations', 'Operations', Activity]
-          ] as const).map(([section, label, Icon]) => <button key={section}
+          ] as const).filter(([section]) => section !== 'global-products' || user?.globalCatalogueEnabled)
+            .map(([section, label, Icon]) => <button key={section}
                 ref={section === 'overview' && user?.isPlatformOwner ? businessNav : undefined}
                 type="button"
                 className={`nav-entry${page === 'platform' && platformSection === section ? ' active' : ''}`}

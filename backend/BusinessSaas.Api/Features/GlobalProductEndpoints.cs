@@ -16,37 +16,14 @@ public static class GlobalProductEndpoints
             return await Search(db.GlobalProducts.AsNoTracking(), search, barcode, afterId, ct);
         });
 
-        platform.MapPost("", async (ProductRequest request, ClaimsPrincipal user, IConfiguration configuration,
-            AppDbContext db, CancellationToken ct) =>
-        {
-            if (!PlatformOwner.IsOwner(user, configuration)) return Results.Forbid();
-            var name = Clean(request.Name);
-            var brand = Clean(request.Brand);
-            var category = Clean(request.Category);
-            var packSize = Clean(request.PackSize);
-            var unit = Clean(request.Unit).ToUpperInvariant();
-            var key = name.ToUpperInvariant();
-            var barcode = CanonicalBarcode(request.Barcode);
-            if (name.Length is < 2 or > 150 || key.Length > 150 || brand.Length > 80 ||
-                category.Length > 80 || packSize.Length > 40 || unit.Length is < 1 or > 20 ||
-                (!string.IsNullOrWhiteSpace(request.Barcode) && barcode is null))
-                return Results.BadRequest(new { message = "Enter a valid product name, unit and optional GTIN." });
-            if (barcode != null && await db.GlobalProducts.AnyAsync(x => x.Barcode == barcode, ct))
-                return Results.Conflict(new { message = "This manufacturer barcode already exists." });
+        platform.MapPost("", (ProductRequest request, ClaimsPrincipal user, IConfiguration configuration,
+            AppDbContext db, CancellationToken ct) => PlatformOwner.IsOwner(user, configuration)
+                ? Save(db, null, request, ct) : Task.FromResult<IResult>(Results.Forbid()));
 
-            var product = new GlobalProduct
-            {
-                Name = name, NameKey = key, Barcode = barcode, Brand = brand, Category = category,
-                PackSize = packSize, Unit = unit, CreatedAtUtc = DateTime.UtcNow
-            };
-            db.GlobalProducts.Add(product);
-            try { await db.SaveChangesAsync(ct); }
-            catch (DbUpdateException error) when (RetailModule.IsDuplicateKey(error))
-            {
-                return Results.Conflict(new { message = "This manufacturer barcode already exists." });
-            }
-            return Results.Created($"/api/platform/global-products?afterId={product.Id - 1}", new { product.Id });
-        });
+        platform.MapPut("/{id:long}", (long id, ProductRequest request, ClaimsPrincipal user,
+            IConfiguration configuration, AppDbContext db, CancellationToken ct) =>
+            PlatformOwner.IsOwner(user, configuration)
+                ? Save(db, id, request, ct) : Task.FromResult<IResult>(Results.Forbid()));
 
         app.MapGet("/api/businesses/{businessId:long}/global-products", async (long businessId,
             string? search, string? barcode, long? afterId, ClaimsPrincipal user, AppDbContext db,
@@ -58,6 +35,51 @@ public static class GlobalProductEndpoints
                 return Results.BadRequest(new { message = "Enter a product name or barcode." });
             return await Search(db.GlobalProducts.AsNoTracking().Where(x => x.IsActive), search, barcode, afterId, ct);
         }).RequireAuthorization();
+    }
+
+    private static async Task<IResult> Save(AppDbContext db, long? id, ProductRequest request, CancellationToken ct)
+    {
+        var name = Clean(request.Name);
+        var brand = Clean(request.Brand);
+        var category = Clean(request.Category);
+        var packSize = Clean(request.PackSize);
+        var unit = Clean(request.Unit).ToUpperInvariant();
+        var key = name.ToUpperInvariant();
+        var barcode = CanonicalBarcode(request.Barcode);
+        if (name.Length is < 2 or > 150 || key.Length > 150 || brand.Length > 80 ||
+            category.Length > 80 || packSize.Length > 40 || unit.Length is < 1 or > 20 ||
+            (!string.IsNullOrWhiteSpace(request.Barcode) && barcode is null))
+            return Results.BadRequest(new { message = "Enter a valid product name, unit and optional GTIN." });
+
+        var product = id.HasValue
+            ? await db.GlobalProducts.SingleOrDefaultAsync(x => x.Id == id.Value, ct)
+            : new GlobalProduct { CreatedAtUtc = DateTime.UtcNow };
+        if (product is null) return Results.NotFound();
+        if (id.HasValue && request.IsActive is null)
+            return Results.BadRequest(new { message = "Select the product status." });
+        var others = db.GlobalProducts.Where(x => x.Id != product.Id);
+        if (barcode != null && await others.AnyAsync(x => x.Barcode == barcode, ct))
+            return Results.Conflict(new { message = "This manufacturer barcode already exists." });
+        if (barcode is null && await others.AnyAsync(x => x.Barcode == null && x.NameKey == key &&
+            x.Brand.ToUpper() == brand.ToUpper() && x.PackSize.ToUpper() == packSize.ToUpper() && x.Unit == unit, ct))
+            return Results.Conflict(new { message = "A matching product already exists. Review the catalogue." });
+
+        product.Name = name;
+        product.NameKey = key;
+        product.Barcode = barcode;
+        product.Brand = brand;
+        product.Category = category;
+        product.PackSize = packSize;
+        product.Unit = unit;
+        product.IsActive = request.IsActive ?? true;
+        if (!id.HasValue) db.GlobalProducts.Add(product);
+        try { await db.SaveChangesAsync(ct); }
+        catch (DbUpdateException error) when (RetailModule.IsDuplicateKey(error))
+        {
+            return Results.Conflict(new { message = "This manufacturer barcode already exists." });
+        }
+        return id.HasValue ? Results.Ok(new { product.Id }) :
+            Results.Created($"/api/platform/global-products?afterId={product.Id - 1}", new { product.Id });
     }
 
     private static async Task<IResult> Search(IQueryable<GlobalProduct> query, string? search,
@@ -95,5 +117,5 @@ public static class GlobalProductEndpoints
     }
 
     private sealed record ProductRequest(string? Name, string? Barcode, string? Brand,
-        string? Category, string? PackSize, string? Unit);
+        string? Category, string? PackSize, string? Unit, bool? IsActive = null);
 }

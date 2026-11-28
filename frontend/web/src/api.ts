@@ -3,6 +3,7 @@ export interface User {
   email: string
   isPlatformOwner: boolean
   mfaVerified: boolean
+  globalCatalogueEnabled?: boolean
 }
 
 export interface BusinessType {

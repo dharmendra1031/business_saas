@@ -203,13 +203,14 @@ public static class AuthEndpoints
             return Results.NoContent();
         }).RequireRateLimiting("mfa");
 
-        group.MapGet("/me", (ClaimsPrincipal principal, IConfiguration configuration) =>
+        group.MapGet("/me", (ClaimsPrincipal principal, IConfiguration configuration, IWebHostEnvironment environment) =>
             Results.Ok(new
             {
                 id = long.Parse(principal.FindFirstValue(ClaimTypes.NameIdentifier)!),
                 email = principal.Identity?.Name,
                 isPlatformOwner = PlatformOwner.IsConfiguredOwner(principal, configuration),
-                mfaVerified = PlatformOwner.IsOwner(principal, configuration)
+                mfaVerified = PlatformOwner.IsOwner(principal, configuration),
+                globalCatalogueEnabled = environment.IsDevelopment()
             })).RequireAuthorization();
 
         group.MapPost("/logout", async (ClaimsPrincipal principal,
