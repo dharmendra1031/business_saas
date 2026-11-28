@@ -1110,7 +1110,8 @@ public static class RetailCashSales
                 var creditPaid = isCredit ? await CreditCollections.PaidAsync(db, businessId, previous.Id) ?? 0m : 0m;
                 return Results.Ok(Receipt(previous, creditPaid: creditPaid));
             }
-            if (isCredit && (!config.GetValue<bool>("RetailCredit:PostingEnabled") || !shop.CreditSalesEnabled))
+            if (isCredit && (!config.GetValue<bool>("RetailCredit:PostingEnabled") ||
+                !config.GetValue<bool>("RetailCredit:CollectionsEnabled") || !shop.CreditSalesEnabled))
                 return Results.Conflict(new { code = "CREDIT_NOT_RELEASED", message = "Credit sales are not enabled." });
             if (!isCredit && !shop.CashSalesEnabled)
                 return Results.Conflict(new { code = "CASH_SALES_DISABLED",

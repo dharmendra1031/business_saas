@@ -1147,6 +1147,40 @@ try {
   }
 
   {
+    const t = await scenario('owner-credit-settings-released', {
+      role: 'Owner', hasProducts: true, ownerPos: true
+    })
+    let credit = false
+    let revision = 0
+    let saves = 0
+    await t.page.route('**/api/businesses/1/billing-settings', async route => {
+      const settings = () => ({ cashSalesEnabled: true, creditSalesEnabled: credit,
+        creditAvailable: true, revision, salesPaused: false })
+      if (route.request().method() === 'GET') return response(route, 200, settings())
+      const body = route.request().postDataJSON()
+      assert.equal(body.expectedRevision, revision)
+      assert.equal(body.cashSalesEnabled, true)
+      credit = body.creditSalesEnabled
+      revision++
+      saves++
+      return response(route, 200, { settings: settings(), unchanged: false })
+    })
+    await t.login()
+    await t.page.locator('.business-preview-nav').filter({ hasText: 'Business Settings' }).click()
+    await t.page.getByRole('tab', { name: 'Billing & Payments' }).click()
+    const toggle = t.page.locator('#billing-credit-toggle')
+    await toggle.check()
+    await t.page.getByLabel('Reason for changing payment options').fill('Owner approved customer credit pilot')
+    await t.page.getByRole('button', { name: 'Save payment settings' }).click()
+    await t.page.locator('.action-feedback--success').waitFor()
+    assert.equal(saves, 1)
+    assert.equal(credit, true)
+    await t.check()
+    await t.context.close()
+    console.log('PASS owner can enable credit only when released by host')
+  }
+
+  {
     const t = await scenario('owner-save-failure-retains-input', {
       role: 'Owner', hasProducts: true, ownerPos: true, width: 360, height: 780
     })

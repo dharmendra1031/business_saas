@@ -741,6 +741,11 @@ public sealed class RetailPurchaseTests
                 desired.footerText, expectedRevision = 1, desired.reason
             })).StatusCode);
         Assert.Equal(HttpStatusCode.OK, (await owner.GetAsync(printPath)).StatusCode);
+        Assert.Equal(HttpStatusCode.Forbidden, (await Put(owner, settingsPath, new {
+            cashSalesEnabled = false, creditSalesEnabled = false, expectedRevision = 2,
+            reason = "Expired business cannot change payment settings"
+        })).StatusCode);
+        Assert.Equal(HttpStatusCode.OK, (await owner.GetAsync(settingsPath)).StatusCode);
         Assert.Equal(HttpStatusCode.Forbidden,
             (await Send(owner, orders, valid)).StatusCode);
         Assert.Equal(HttpStatusCode.OK, (await owner.GetAsync(orders)).StatusCode);

@@ -970,10 +970,11 @@ public sealed class SqlServerTests(Xunit.Abstractions.ITestOutputHelper output)
         var billingSettingsPath = prefix + "/billing-settings";
         var defaultSettings = await owner.GetFromJsonAsync<JsonElement>(billingSettingsPath);
         Assert.True(defaultSettings.GetProperty("cashSalesEnabled").GetBoolean());
-        Assert.False(defaultSettings.GetProperty("creditAvailable").GetBoolean());
+        Assert.True(defaultSettings.GetProperty("creditAvailable").GetBoolean());
+        Assert.False(defaultSettings.GetProperty("creditSalesEnabled").GetBoolean());
         Assert.Equal(HttpStatusCode.Conflict, (await Put(owner, billingSettingsPath,
             new { cashSalesEnabled = true, creditSalesEnabled = true,
-                expectedRevision = 0, reason = "Do not release credit without verified ledger" })).StatusCode);
+                expectedRevision = 99, reason = "Stale revision cannot enable credit" })).StatusCode);
         using var disabledSettings = await Put(owner, billingSettingsPath, new {
             cashSalesEnabled = false, creditSalesEnabled = false, expectedRevision = 0,
             reason = "Pause cash checkout during register verification"
@@ -1406,8 +1407,7 @@ public sealed class SqlServerTests(Xunit.Abstractions.ITestOutputHelper output)
             Assert.False(await db.RetailCashReturns.AnyAsync(x => x.BusinessId == businessId &&
                 x.RequestKey == "sql-invalid-fraction-return-20261125"));
         }
-        // The credit pilot requires both gates; enable the business setting only
-        // inside this disposable test database, never through public billing settings.
+        // The credit pilot requires both host gates and explicit Owner approval.
         var creditCustomerId = await Created(prefix + "/customers", new { name = "SQL Credit Customer", phone = "1234567890", email = "" });
         var creditPath = prefix + "/credit-sales";
         var creditLedgerPath = prefix + "/customers/" + creditCustomerId + "/credit-ledger";
@@ -1416,12 +1416,16 @@ public sealed class SqlServerTests(Xunit.Abstractions.ITestOutputHelper output)
             dueDate = creditDate.AddDays(7),
             lines = new[] { new { productId = packProductId, quantity = 2m, expectedUnitPrice = 10m, expectedBaseUnitCode = "SQPCS" } } };
         Assert.Equal(HttpStatusCode.Conflict, (await Post(owner, creditPath, creditRequest)).StatusCode);
-        using (var scope = factory.Services.CreateScope())
-        {
-            var db = scope.ServiceProvider.GetRequiredService<AppDbContext>();
-            await db.Businesses.Where(x => x.Id == businessId).ExecuteUpdateAsync(x =>
-                x.SetProperty(b => b.CreditSalesEnabled, true));
-        }
+        var enableCredit = new { cashSalesEnabled = true, creditSalesEnabled = true,
+            expectedRevision = 2, reason = "Owner approved credit checkout pilot" };
+        Assert.Equal(HttpStatusCode.NotFound, (await Put(cashier, billingSettingsPath, enableCredit)).StatusCode);
+        Assert.Equal(HttpStatusCode.NotFound, (await Put(stranger, billingSettingsPath, enableCredit)).StatusCode);
+        Assert.Equal(HttpStatusCode.OK, (await Put(owner, billingSettingsPath, enableCredit)).StatusCode);
+        var creditSettings = await owner.GetFromJsonAsync<JsonElement>(billingSettingsPath);
+        Assert.True(creditSettings.GetProperty("creditSalesEnabled").GetBoolean());
+        Assert.Equal(3, creditSettings.GetProperty("revision").GetInt32());
+        var creditDashboard = await owner.GetFromJsonAsync<JsonElement>(prefix + "/dashboard");
+        Assert.True(creditDashboard.GetProperty("creditPaymentEnabled").GetBoolean());
         Assert.Equal(HttpStatusCode.Conflict, (await Post(owner, creditPath, creditRequest)).StatusCode);
         Assert.Equal(HttpStatusCode.OK, (await Put(owner, prefix + "/customers/" + creditCustomerId + "/credit-limit",
             new { limit = 25m, expectedLimit = 0m, reason = "Approved test credit limit" })).StatusCode);
@@ -1487,9 +1491,11 @@ public sealed class SqlServerTests(Xunit.Abstractions.ITestOutputHelper output)
             Assert.Single(await db.RetailCashSales.Where(x => x.BusinessId == businessId && x.CreditDueDate != null).ToListAsync());
             Assert.Single(await db.RetailStockMovements.Where(x => x.BusinessId == businessId &&
                 x.ProductId == packProductId && x.SourceType == "CreditSaleLine").ToListAsync());
-            await db.Businesses.Where(x => x.Id == businessId).ExecuteUpdateAsync(x =>
-                x.SetProperty(b => b.CreditSalesEnabled, false));
         }
+        Assert.Equal(HttpStatusCode.OK, (await Put(owner, billingSettingsPath, new {
+            cashSalesEnabled = true, creditSalesEnabled = false, expectedRevision = 3,
+            reason = "Pause new credit while collecting existing invoices"
+        })).StatusCode);
         Assert.Equal(HttpStatusCode.OK, (await owner.GetAsync(creditLedgerPath)).StatusCode);
         Assert.Equal(HttpStatusCode.OK, (await Post(owner, creditPath, creditRequest)).StatusCode);
         Assert.Equal(HttpStatusCode.Conflict, (await Post(owner, creditPath,

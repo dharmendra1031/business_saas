@@ -16,12 +16,13 @@ export default function BusinessBillingSettings({ businessId, canOperate, onSave
   const { run } = useActionFeedback()
   const [settings, setSettings] = useState<BillingSettings | null>(null)
   const [cashEnabled, setCashEnabled] = useState(true)
+  const [creditEnabled, setCreditEnabled] = useState(false)
   const [reason, setReason] = useState('')
   const [busy, setBusy] = useState(false)
   const [error, setError] = useState('')
   const [reload, setReload] = useState(0)
   const [needsRefresh, setNeedsRefresh] = useState(false)
-  const changed = !!settings && cashEnabled !== settings.cashSalesEnabled
+  const changed = !!settings && (cashEnabled !== settings.cashSalesEnabled || creditEnabled !== settings.creditSalesEnabled)
 
   useEffect(() => {
     let active = true
@@ -33,6 +34,7 @@ export default function BusinessBillingSettings({ businessId, canOperate, onSave
         if (!active) return
         setSettings(result)
         setCashEnabled(result.cashSalesEnabled)
+        setCreditEnabled(result.creditSalesEnabled)
       })
       .catch(cause => { if (active) setError(cause instanceof Error ? cause.message : 'Unable to load settings.') })
     return () => { active = false }
@@ -52,13 +54,14 @@ export default function BusinessBillingSettings({ businessId, canOperate, onSave
           method: 'PUT',
           body: JSON.stringify({
             cashSalesEnabled: cashEnabled,
-            creditSalesEnabled: false,
+            creditSalesEnabled: creditEnabled,
             expectedRevision: settings.revision,
             reason: reason.trim()
           })
         }))
       setSettings(result.settings)
       setCashEnabled(result.settings.cashSalesEnabled)
+      setCreditEnabled(result.settings.creditSalesEnabled)
       setReason('')
       onSaved()
     } catch (cause) {
@@ -96,18 +99,23 @@ export default function BusinessBillingSettings({ businessId, canOperate, onSave
       </div>
       <div className="form-check form-switch mb-3">
         <input id="billing-credit-toggle" className="form-check-input" type="checkbox"
-          checked={settings.creditSalesEnabled} disabled
-          aria-describedby="billing-credit-help" readOnly />
+          checked={creditEnabled}
+          disabled={!canOperate || busy || (!settings.creditAvailable && !creditEnabled)}
+          aria-describedby="billing-credit-help" onChange={event => setCreditEnabled(event.target.checked)} />
         <label htmlFor="billing-credit-toggle" className="form-check-label">
           <strong>Customer Credit / Udhar</strong>
         </label>
         <p id="billing-credit-help" className="small text-body-secondary mb-0">
-          Under construction. Credit can be switched on only after customer balances, due dates,
-          payment collections and financial ledger checks are released.
+          {settings.creditAvailable
+            ? 'Allow Owner credit checkout for customers with approved limits. Existing collections remain accessible when new credit is off.'
+            : 'Under construction. Credit requires both sales and collection release gates.'}
         </p>
       </div>
-      {!cashEnabled && <p className="alert alert-warning" role="status">
+      {!cashEnabled && !(creditEnabled && settings.creditAvailable) && <p className="alert alert-warning" role="status">
         New checkout will be paused. You can switch Cash back on later; old receipts are retained.
+      </p>}
+      {!cashEnabled && creditEnabled && settings.creditAvailable && <p className="alert alert-warning" role="status">
+        Cash checkout is off. Only the Owner can post credit sales.
       </p>}
       <label className="form-label" htmlFor="billing-change-reason">Reason for changing payment options</label>
       <textarea className="form-control mb-3" id="billing-change-reason" rows={2}

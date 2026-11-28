@@ -190,10 +190,8 @@ public static class BusinessEndpoints
                 cashRegisterOpeningEnabled = environment.IsDevelopment() && details.TypeCode == "RETAIL" &&
                     (roleCode == "Owner" || roleCode == "Cashier") && config.GetValue<bool>("RetailCashRegister:OpeningEnabled"),
                 cashPaymentEnabled = details.CashSalesEnabled,
-                creditPaymentEnabled = environment.IsDevelopment() && roleCode == "Owner" &&
-                    details.TypeCode == "RETAIL" && details.CreditSalesEnabled &&
-                    config.GetValue<bool>("RetailCredit:PostingEnabled") &&
-                    config.GetValue<bool>("RetailCredit:CollectionsEnabled"),
+                creditPaymentEnabled = roleCode == "Owner" && details.TypeCode == "RETAIL" &&
+                    details.CreditSalesEnabled && RetailBillingSettingsEndpoints.CreditAvailable(config, environment),
                 receiptAutoOpen = details.ReceiptAutoOpen && environment.IsDevelopment() && OperatingSystem.IsWindows() });
         });
     }

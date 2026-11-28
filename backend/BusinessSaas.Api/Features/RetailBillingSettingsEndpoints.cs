@@ -13,27 +13,28 @@ public static class RetailBillingSettingsEndpoints
         var group = app.MapGroup("/api/businesses/{businessId:long}/billing-settings")
             .RequireAuthorization();
 
-        group.MapGet("", async (long businessId, ClaimsPrincipal user, AppDbContext db) =>
+        group.MapGet("", async (long businessId, ClaimsPrincipal user, AppDbContext db, IConfiguration config, IWebHostEnvironment environment) =>
         {
             if (await OwnerId(db, businessId, user) is null) return Results.NotFound();
             var business = await db.Businesses.AsNoTracking().SingleAsync(x => x.Id == businessId);
-            return Results.Ok(View(business));
+            return Results.Ok(View(business, CreditAvailable(config, environment)));
         });
 
         group.MapPut("", async (long businessId, BillingSettingsRequest request,
-            ClaimsPrincipal user, AppDbContext db) =>
+            ClaimsPrincipal user, AppDbContext db, IConfiguration config, IWebHostEnvironment environment) =>
         {
             var actorId = await OwnerId(db, businessId, user);
             if (actorId is null) return Results.NotFound();
             if (request.ExpectedRevision < 0 || request.Reason?.Trim().Length is not (>= 10 and <= 200))
                 return Results.BadRequest(new { message = "Enter a 10–200 character change reason and valid revision." });
-            // Credit cannot be advertised or turned on until the customer receivable
-            // and collection flows are implemented, tested and explicitly released.
-            if (request.CreditSalesEnabled)
+            var creditAvailable = CreditAvailable(config, environment);
+            if (request.CreditSalesEnabled && !creditAvailable)
                 return Results.Conflict(new { code = "CREDIT_NOT_RELEASED",
-                    message = "Customer Credit is not released. Keep it off until its ledger and collections are ready." });
+                    message = "Customer Credit requires both sales and collection release gates." });
 
             await using var tx = await db.Database.BeginTransactionAsync(IsolationLevel.Serializable);
+            var denied = await RetailMasterEndpoints.CheckAccess(db, user, businessId, true, ownerOnly: true);
+            if (denied is not null) return denied;
             var business = await db.Businesses.AsNoTracking()
                 .SingleOrDefaultAsync(x => x.Id == businessId);
             if (business is null) return Results.NotFound();
@@ -43,14 +44,14 @@ public static class RetailBillingSettingsEndpoints
 
             if (business.CashSalesEnabled == request.CashSalesEnabled &&
                 business.CreditSalesEnabled == request.CreditSalesEnabled)
-                return Results.Ok(new { settings = View(business), unchanged = true });
+                return Results.Ok(new { settings = View(business, creditAvailable), unchanged = true });
 
             var nextRevision = business.BillingSettingsRevision + 1;
             var changed = await db.Businesses.Where(x => x.Id == businessId &&
                     x.BillingSettingsRevision == request.ExpectedRevision)
                 .ExecuteUpdateAsync(setters => setters
                     .SetProperty(x => x.CashSalesEnabled, request.CashSalesEnabled)
-                    .SetProperty(x => x.CreditSalesEnabled, false)
+                    .SetProperty(x => x.CreditSalesEnabled, request.CreditSalesEnabled)
                     .SetProperty(x => x.BillingSettingsRevision, nextRevision));
             if (changed != 1)
                 return Results.Conflict(new { code = "BILLING_SETTINGS_CHANGED",
@@ -60,16 +61,16 @@ public static class RetailBillingSettingsEndpoints
                 ActorUserId = actorId.Value, Action = "Business.BillingSettingsChanged",
                 TargetType = "Business", TargetId = businessId,
                 PreviousValue = $"cash={business.CashSalesEnabled};credit={business.CreditSalesEnabled}",
-                NewValue = $"cash={request.CashSalesEnabled};credit=false",
+                NewValue = $"cash={request.CashSalesEnabled};credit={request.CreditSalesEnabled}",
                 Reason = request.Reason.Trim()
             });
             await db.SaveChangesAsync();
             await tx.CommitAsync();
 
             business.CashSalesEnabled = request.CashSalesEnabled;
-            business.CreditSalesEnabled = false;
+            business.CreditSalesEnabled = request.CreditSalesEnabled;
             business.BillingSettingsRevision = nextRevision;
-            return Results.Ok(new { settings = View(business), unchanged = false });
+            return Results.Ok(new { settings = View(business, creditAvailable), unchanged = false });
         });
 
         var rendererAvailable = app.Environment.IsDevelopment() && OperatingSystem.IsWindows();
@@ -277,12 +278,16 @@ public static class RetailBillingSettingsEndpoints
         (System.Net.Mail.MailAddress.TryCreate(value.Trim(), out var address) &&
             string.Equals(address.Address, value.Trim(), StringComparison.OrdinalIgnoreCase));
 
-    private static object View(Business business) => new {
+    internal static bool CreditAvailable(IConfiguration config, IWebHostEnvironment environment) =>
+        environment.IsDevelopment() && config.GetValue<bool>("RetailCredit:PostingEnabled") &&
+        config.GetValue<bool>("RetailCredit:CollectionsEnabled");
+
+    private static object View(Business business, bool creditAvailable) => new {
         cashSalesEnabled = business.CashSalesEnabled,
         creditSalesEnabled = business.CreditSalesEnabled,
-        creditAvailable = false,
+        creditAvailable,
         revision = business.BillingSettingsRevision,
-        salesPaused = !business.CashSalesEnabled && !business.CreditSalesEnabled
+        salesPaused = !business.CashSalesEnabled && !(business.CreditSalesEnabled && creditAvailable)
     };
 
     internal static async Task<long?> OwnerId(AppDbContext db, long businessId, ClaimsPrincipal user, CancellationToken cancellationToken = default)
