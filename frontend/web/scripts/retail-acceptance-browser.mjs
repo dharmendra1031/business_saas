@@ -178,17 +178,22 @@ try {
     await cashierContext.close()
   }
   // Continue with the same SQL-backed product through purchase, unpaid credit, return and collection.
-  await page.locator('.app-sidebar .nav-entry').filter({ hasText: 'Purchase Orders' }).click()
-  await page.getByRole('button', { name: 'New Purchase Order' }).click()
-  await page.locator('#purchase-location').click()
-  await page.locator('#purchase-location-search-option-' + source.id).click()
-  await page.getByRole('button', { name: 'Search suppliers' }).click()
-  await page.getByLabel('Supplier name, phone or email').fill('SQL Retail Supplier')
-  await page.getByRole('dialog', { name: 'Search suppliers' }).getByRole('button', { name: 'SQL Retail Supplier', exact: true }).click()
-  await page.getByLabel('Item code or name').fill('SQL-PACK-TEST')
-  await page.getByLabel('Item code or name').press('Enter')
-  await page.getByLabel('SQL Pack Test quantity').fill('2')
-  await page.getByLabel('SQL Pack Test unit cost').fill('4')
+  async function preparePurchase(actorPage, quantity) {
+    await actorPage.locator('.app-sidebar .nav-entry').filter({ hasText: 'Purchase Orders' }).click()
+    await actorPage.getByRole('button', { name: 'New Purchase Order' }).click()
+    if (await actorPage.locator('#purchase-location').count()) {
+      await actorPage.locator('#purchase-location').click()
+      await actorPage.locator('#purchase-location-search-option-' + source.id).click()
+    }
+    await actorPage.getByRole('button', { name: 'Search suppliers' }).click()
+    await actorPage.getByLabel('Supplier name, phone or email').fill('SQL Retail Supplier')
+    await actorPage.getByRole('dialog', { name: 'Search suppliers' }).getByRole('button', { name: 'SQL Retail Supplier', exact: true }).click()
+    await actorPage.getByLabel('Item code or name').fill('SQL-PACK-TEST')
+    await actorPage.getByLabel('Item code or name').press('Enter')
+    await actorPage.getByLabel('SQL Pack Test quantity').fill(String(quantity))
+    await actorPage.getByLabel('SQL Pack Test unit cost').fill('4')
+  }
+  await preparePurchase(page, 2)
   const purchaseCreated = page.waitForResponse(r => r.url().endsWith('/purchase-orders') && r.request().method() === 'POST')
   await page.getByRole('button', { name: 'Save & Approve' }).click()
   const purchaseResponse = await purchaseCreated
@@ -298,6 +303,90 @@ try {
   assert.equal((await stock(destination.id)).quantity, 2)
   await captureResponsive(page, 'credit-settled-ledger', page.getByRole('button', { name: 'Payments #' + credit.id, exact: true }))
   console.log('PASS real browser purchase, unpaid credit sale, restocked return and settled customer ledger')
+
+
+  // Manager submits a draft, Owner approves, then Manager receives it in the primary location.
+  const managerContext = await browser.newContext({ ignoreHTTPSErrors: true, viewport: { width: 1366, height: 780 } })
+  try {
+    const managerPage = await managerContext.newPage()
+    managerPage.on('pageerror', error => errors.push(error.message))
+    await managerPage.goto(base)
+    await managerPage.getByRole('heading', { name: 'Sign in' }).waitFor()
+    await managerPage.getByLabel('Email address').fill('sql-retail-flow-manager@example.test')
+    await managerPage.getByLabel('Password').fill('TestPassword123!')
+    const managerLogin = managerPage.waitForResponse(r => r.url().endsWith('/api/auth/login') && r.request().method() === 'POST')
+    await managerPage.getByRole('button', { name: /^Sign in/ }).click()
+    assert.equal((await managerLogin).status(), 204)
+    const managerGet = async path => {
+      const response = await managerContext.request.get(base + '/api' + path)
+      assert.equal(response.status(), 200, path)
+      return response.json()
+    }
+    await managerPage.getByRole('heading', { name: 'Business Overview' }).waitFor()
+    const managerDashboard = await managerGet(prefix + '/dashboard')
+    assert.equal(managerDashboard.roleCode, 'Manager')
+    assert.deepEqual(managerDashboard.locations.map(l => l.id), [source.id])
+    assert.ok(managerDashboard.cashSalesToday == null)
+    assert.ok(managerDashboard.stockAlerts == null)
+    for (const label of ['Sales & Returns', 'Reports', 'Staff & Access', 'Business Settings']) {
+      assert.equal(await managerPage.locator('.app-sidebar .nav-entry').filter({ hasText: label }).count(), 0, label)
+    }
+    assert.equal(await managerPage.getByText("Today's Cash Sales", { exact: true }).count(), 0)
+    assert.equal(await managerPage.getByLabel('Recent recorded cash sales').count(), 0)
+    for (const restricted of [prefix + '/stock/locations/' + destination.id, creditPath + '?locationId=' + source.id,
+      prefix + '/customers/' + credit.customerId + '/credit-ledger', ownerRegisterSummaryPath]) {
+      assert.equal((await managerContext.request.get(base + '/api' + restricted)).status(), 404, restricted)
+    }
+    await captureResponsive(managerPage, 'manager-dashboard', managerPage.getByRole('heading', { name: 'Business Overview' }))
+    await managerPage.setViewportSize({ width: 1366, height: 780 })
+    await preparePurchase(managerPage, 1)
+    const draftPosted = managerPage.waitForResponse(r => r.url().endsWith('/purchase-orders') && r.request().method() === 'POST')
+    await managerPage.getByRole('button', { name: 'Submit for Approval' }).click()
+    const draftResponse = await draftPosted
+    assert.equal(draftResponse.status(), 201)
+    const draft = await draftResponse.json()
+    const draftPath = prefix + '/purchase-orders/' + draft.id
+    await managerPage.getByText('Awaiting owner approval', { exact: true }).waitFor()
+    assert.equal((await managerGet(draftPath)).status, 'Draft')
+    assert.equal(await managerPage.getByRole('button', { name: 'Approve purchase order' }).count(), 0)
+    assert.equal(await managerPage.getByRole('button', { name: 'Receive goods' }).count(), 0)
+    const csrfResponse = await managerContext.request.get(base + '/api/auth/csrf')
+    assert.equal(csrfResponse.status(), 200)
+    const { token } = await csrfResponse.json()
+    assert.ok(token)
+    const deniedApproval = await managerContext.request.post(base + '/api' + draftPath + '/approve',
+      { headers: { 'X-CSRF-TOKEN': token }, data: {} })
+    assert.equal(deniedApproval.status(), 404)
+    assert.equal((await get(draftPath)).status, 'Draft')
+    assert.equal((await stock(source.id)).quantity, 1.5)
+
+    await page.locator('.app-sidebar .nav-entry').filter({ hasText: 'Purchase Orders' }).click()
+    const draftRow = page.getByRole('row').filter({ has: page.getByRole('cell', { name: '#' + draft.id, exact: true }) })
+    await draftRow.getByRole('button', { name: 'Details' }).click()
+    const approved = page.waitForResponse(r => r.url().endsWith('/purchase-orders/' + draft.id + '/approve') && r.request().method() === 'POST')
+    await page.getByRole('button', { name: 'Approve purchase order' }).click()
+    assert.equal((await approved).status(), 200)
+    await page.getByRole('button', { name: 'Receive goods' }).waitFor()
+    assert.equal((await get(draftPath)).status, 'Approved')
+    assert.equal((await stock(source.id)).quantity, 1.5)
+
+    await managerPage.getByRole('button', { name: 'Back to orders' }).click()
+    const approvedRow = managerPage.getByRole('row').filter({ has: managerPage.getByRole('cell', { name: '#' + draft.id, exact: true }) })
+    await approvedRow.getByRole('button', { name: 'Details' }).click()
+    await managerPage.getByRole('button', { name: 'Receive goods' }).click()
+    await managerPage.getByRole('button', { name: 'Receive all remaining' }).click()
+    const managerReceiving = managerPage.waitForResponse(r => r.url().includes('/purchase-orders/' + draft.id + '/receivings/') && r.url().endsWith('/post') && r.request().method() === 'POST')
+    await managerPage.getByRole('button', { name: 'Receive & Post Stock' }).click()
+    assert.equal((await managerReceiving).status(), 200)
+    await managerPage.getByText(/posted\. Stock and remaining PO quantity updated\./).waitFor()
+    assert.equal((await get(draftPath)).lines[0].remainingQuantity, 0)
+    assert.equal((await stock(source.id)).quantity, 2.5)
+    assert.equal((await stock(destination.id)).quantity, 2)
+    await captureResponsive(managerPage, 'manager-receiving', managerPage.getByRole('heading', { name: 'Receiving history' }))
+    console.log('PASS real Manager draft, denied self-approval, Owner approval, Manager receiving and location/financial restrictions')
+  } finally {
+    await managerContext.close()
+  }
 
   // A separately authenticated non-member must not gain access by reusing known document IDs.
   const outsiderContext = await browser.newContext({ ignoreHTTPSErrors: true })

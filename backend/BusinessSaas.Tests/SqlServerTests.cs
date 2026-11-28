@@ -573,7 +573,7 @@ public sealed class SqlServerTests(Xunit.Abstractions.ITestOutputHelper output)
             await db.Database.MigrateAsync();
             var users = scope.ServiceProvider.GetRequiredService<Microsoft.AspNetCore.Identity.UserManager<AppUser>>();
             foreach (var email in new[] { "sql-retail-flow-owner@example.test", "sql-retail-flow-cashier@example.test",
-                "sql-retail-flow-stranger@example.test" })
+                "sql-retail-flow-stranger@example.test", "sql-retail-flow-manager@example.test" })
             {
                 var created = await users.CreateAsync(new AppUser { UserName = email, Email = email,
                     EmailConfirmed = true }, "TestPassword123!");
@@ -604,6 +604,12 @@ public sealed class SqlServerTests(Xunit.Abstractions.ITestOutputHelper output)
             db.BusinessUsers.Add(new BusinessUser
             {
                 BusinessId = businessId, UserId = cashierId, RoleCode = "Cashier"
+            });
+            var managerId = await db.Users.Where(x => x.Email == "sql-retail-flow-manager@example.test")
+                .Select(x => x.Id).SingleAsync();
+            db.BusinessUsers.Add(new BusinessUser
+            {
+                BusinessId = businessId, UserId = managerId, RoleCode = "Manager"
             });
             await db.SaveChangesAsync();
         }
