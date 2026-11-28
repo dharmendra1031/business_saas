@@ -1086,7 +1086,7 @@ public sealed class AppDbContext(DbContextOptions<AppDbContext> options)
             entity.HasOne<AppUser>().WithMany().HasForeignKey(x => x.RequestedByUserId).OnDelete(DeleteBehavior.Restrict);
             entity.HasOne<AppUser>().WithMany().HasForeignKey(x => x.ApprovedByUserId).OnDelete(DeleteBehavior.Restrict);
             entity.HasOne<AppUser>().WithMany().HasForeignKey(x => x.DispatchedByUserId).OnDelete(DeleteBehavior.Restrict);
-            entity.ToTable(t => t.HasCheckConstraint("CK_RetailStockTransfers_Valid", "[FromLocationId] <> [ToLocationId] AND [Status] IN ('Requested','Approved','InTransit','Completed','Cancelled')"));
+            entity.ToTable(t => t.HasCheckConstraint("CK_RetailStockTransfers_Valid", "[FromLocationId] <> [ToLocationId] AND [Status] IN ('Draft','Requested','Approved','InTransit','Completed','Cancelled')"));
         });
 
         builder.Entity<RetailStockTransferLine>(entity =>

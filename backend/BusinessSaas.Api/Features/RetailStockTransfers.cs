@@ -8,7 +8,7 @@ namespace BusinessSaas.Api.Features;
 internal static class RetailStockTransfers
 {
     internal sealed record Item(long ProductId, decimal Quantity);
-    internal sealed record CreateRequest(long FromLocationId, long ToLocationId, string? Reason, string? RequestKey, List<Item>? Lines, bool DispatchNow = false);
+    internal sealed record CreateRequest(long FromLocationId, long ToLocationId, string? Reason, string? RequestKey, List<Item>? Lines, bool DispatchNow = false, bool SaveDraft = false);
     internal sealed record ReceiveRequest(long LineId, decimal Quantity, string? Kind, string? Reason, string? RequestKey, decimal ExpectedRemaining);
 
     internal static void Map(RouteGroupBuilder group)
@@ -19,6 +19,7 @@ internal static class RetailStockTransfers
         transfers.MapGet("", List);
         transfers.MapGet("/{id:long}", Read);
         transfers.MapPost("", Create);
+        transfers.MapPost("/{id:long}/submit", Submit);
         transfers.MapPost("/{id:long}/approve", Approve);
         transfers.MapPost("/{id:long}/dispatch", Dispatch);
         transfers.MapPost("/{id:long}/cancel", Cancel);
@@ -131,7 +132,7 @@ internal static class RetailStockTransfers
     {
         var reason = request.Reason?.Trim() ?? "";
         var key = request.RequestKey?.Trim() ?? "";
-        if (request.FromLocationId <= 0 || request.ToLocationId <= 0 || request.FromLocationId == request.ToLocationId ||
+        if (request.SaveDraft && request.DispatchNow || request.FromLocationId <= 0 || request.ToLocationId <= 0 || request.FromLocationId == request.ToLocationId ||
             reason.Length is < 3 or > 200 || key.Length is < 16 or > 80 || request.Lines is not { Count: > 0 and <= 50 } ||
             request.Lines.Any(x => x.ProductId <= 0 || !StockPosting.ValidBaseQuantity(x.Quantity, 1m)) ||
             request.Lines.Select(x => x.ProductId).Distinct().Count() != request.Lines.Count)
@@ -166,7 +167,7 @@ internal static class RetailStockTransfers
             if (products.Count != ids.Length) return Results.NotFound();
             var transfer = new RetailStockTransfer { BusinessId = businessId, FromLocationId = request.FromLocationId,
                 ToLocationId = request.ToLocationId, RequestedByUserId = actor, Reason = reason, RequestKey = key,
-                Status = "Requested", RequestedAtUtc = DateTime.UtcNow };
+                Status = request.SaveDraft ? "Draft" : "Requested", RequestedAtUtc = DateTime.UtcNow };
             db.RetailStockTransfers.Add(transfer);
             await db.SaveChangesAsync(ct);
             var linesToSave = request.Lines.OrderBy(x => x.ProductId).Select(x => new RetailStockTransferLine
@@ -206,6 +207,8 @@ internal static class RetailStockTransfers
         return null;
     }
 
+    private static Task<IResult> Submit(long businessId, long id, ClaimsPrincipal user, AppDbContext db, IWebHostEnvironment environment, CancellationToken ct)
+        => Transition(businessId, id, "submit", user, db, environment, ct);
     private static Task<IResult> Approve(long businessId, long id, ClaimsPrincipal user, AppDbContext db, IWebHostEnvironment environment, CancellationToken ct)
         => Transition(businessId, id, "approve", user, db, environment, ct);
     private static Task<IResult> Dispatch(long businessId, long id, ClaimsPrincipal user, AppDbContext db, IWebHostEnvironment environment, CancellationToken ct)
@@ -224,10 +227,17 @@ internal static class RetailStockTransfers
             var transfer = await Visible(db, businessId, role).SingleOrDefaultAsync(x => x.Id == id, ct);
             if (transfer is null) return Results.NotFound();
             var denied = await WriteAccess(db, user, businessId, environment, ct,
-                action == "dispatch" ? transfer.FromLocationId : null, ownerOnly: action != "dispatch");
+                action == "dispatch" ? transfer.FromLocationId : null, ownerOnly: action is not ("dispatch" or "submit"));
             if (denied is not null) return denied;
             var actor = long.Parse(user.FindFirstValue(ClaimTypes.NameIdentifier)!);
-            if (action == "approve" && transfer.Status == "Requested")
+            if (action == "submit")
+            {
+                if (role != "Owner" && transfer.RequestedByUserId != actor) return Results.NotFound();
+                if (transfer.Status == "Draft") transfer.Status = "Requested";
+                else if (transfer.Status != "Requested")
+                    return Results.Conflict(new { message = "Draft has already progressed. Review transfer history." });
+            }
+            else if (action == "approve" && transfer.Status == "Requested")
             {
                 transfer.ApprovedByUserId = actor; transfer.ApprovedAtUtc = DateTime.UtcNow; transfer.Status = "Approved";
             }
@@ -237,7 +247,7 @@ internal static class RetailStockTransfers
                 var failure = await PostDispatch(db, transfer, lines, actor, ct);
                 if (failure is not null) return failure;
             }
-            else if (action == "cancel" && transfer.Status is "Requested" or "Approved")
+            else if (action == "cancel" && transfer.Status is "Draft" or "Requested" or "Approved")
                 transfer.Status = "Cancelled";
             else if (!(action == "approve" && transfer.ApprovedAtUtc != null ||
                 action == "dispatch" && transfer.DispatchedAtUtc != null || action == "cancel" && transfer.Status == "Cancelled"))

@@ -2294,7 +2294,7 @@ namespace BusinessSaas.Api.Data.Migrations
                     b.HasIndex("RequestedByUserId");
                     b.HasIndex("ApprovedByUserId");
                     b.HasIndex("DispatchedByUserId");
-                    b.ToTable("RetailStockTransfers", t => t.HasCheckConstraint("CK_RetailStockTransfers_Valid", "[FromLocationId] <> [ToLocationId] AND [Status] IN ('Requested','Approved','InTransit','Completed','Cancelled')"));
+                    b.ToTable("RetailStockTransfers", t => t.HasCheckConstraint("CK_RetailStockTransfers_Valid", "[FromLocationId] <> [ToLocationId] AND [Status] IN ('Draft','Requested','Approved','InTransit','Completed','Cancelled')"));
                 });
             modelBuilder.Entity("BusinessSaas.Api.Data.RetailStockTransferLine", b =>
                 {

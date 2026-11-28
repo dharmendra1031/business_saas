@@ -6,7 +6,7 @@ interface Location { id: number; name: string; canAccess: boolean }
 interface Options { locations: Location[]; canWrite: boolean; isOwner: boolean }
 interface Product { id: number; name: string; sku: string; unitCode: string; availableStock: number | null }
 interface DraftLine extends Product { quantity: string }
-interface Transfer { id: number; fromLocationId: number; toLocationId: number; status: string; reason: string; requestedAtUtc: string }
+interface Transfer { id: number; fromLocationId: number; toLocationId: number; status: string; reason: string; requestedAtUtc: string; requestedByUserId: number }
 interface Line { id: number; productId: number; name: string; unitCode: string; quantity: number; received: number; damaged: number; missing: number; returned?: number; remaining: number }
 interface Receipt { id: number; transferLineId: number; quantity: number; kind: string; reason: string; postedAtUtc: string }
 interface Detail { transfer: Transfer; lines: Line[]; history: Receipt[] }
@@ -28,7 +28,7 @@ export default function RetailStockTransfers({ businessId, userId, canOperate }:
       if (!raw) return { pending: null as Pending | null, error: '' }
       const pending = JSON.parse(raw) as Pending
       if (typeof pending.path !== 'string' || !pending.body || typeof pending.body !== 'object' ||
-        !(pending.path === base || /^\/\d+\/(approve|dispatch|receive|cancel)$/.test(pending.path.slice(base.length)) && pending.path.startsWith(base)))
+        !(pending.path === base || /^\/\d+\/(submit|approve|dispatch|receive|cancel)$/.test(pending.path.slice(base.length)) && pending.path.startsWith(base)))
         throw new Error()
       return { pending, error: '' }
     } catch { return { pending: null as Pending | null, error: 'Saved transfer request cannot be read. Reconcile history before posting another.' } }
@@ -123,7 +123,7 @@ export default function RetailStockTransfers({ businessId, userId, canOperate }:
       const result = await post<{ id: number; status: string }>(request.path, request.body)
       if (!Number.isSafeInteger(result.id) || result.id <= 0 ||
         (request.transferId !== null && !request.path.endsWith('/receive') && result.id !== request.transferId) ||
-        !['Requested', 'Approved', 'InTransit', 'Completed', 'Cancelled'].includes(result.status))
+        !['Draft', 'Requested', 'Approved', 'InTransit', 'Completed', 'Cancelled'].includes(result.status))
         throw new Error('Transfer confirmation could not be verified.')
       sessionStorage.removeItem(storageKey)
       setPending(null); setCreating(false); clearDraft()
@@ -135,12 +135,12 @@ export default function RetailStockTransfers({ businessId, userId, canOperate }:
   }
   const validDraft = from > 0 && to > 0 && from !== to && (access(from) || access(to)) &&
     reason.trim().length >= 3 && draft.length > 0 && draft.every(l => baseQuantity(Number(l.quantity), 1) !== null)
-  function submitTransfer(event: FormEvent, dispatchNow: boolean) {
+  function submitTransfer(event: FormEvent, dispatchNow: boolean, saveDraft = false) {
     event.preventDefault()
     if (!validDraft || pending || !allowed) return
     if (dispatchNow && !window.confirm('Confirm that these goods are physically being dispatched from the source location.')) return
-    void send({ path: base, transferId: null, action: dispatchNow ? 'Approve & dispatch' : 'Request transfer',
-      body: { fromLocationId: from, toLocationId: to, reason: reason.trim(), requestKey: operationKey(), dispatchNow,
+    void send({ path: base, transferId: null, action: saveDraft ? 'Save draft' : dispatchNow ? 'Approve & dispatch' : 'Request transfer',
+      body: { fromLocationId: from, toLocationId: to, reason: reason.trim(), requestKey: operationKey(), dispatchNow, saveDraft,
         lines: draft.map(x => ({ productId: x.id, quantity: Number(x.quantity) })) } })
   }
   function transition(action: string) {
@@ -212,7 +212,7 @@ export default function RetailStockTransfers({ businessId, userId, canOperate }:
             <td><button type="button" className="btn btn-sm btn-outline-secondary" onClick={() => setDraft(rows => rows.filter(x => x.id !== l.id))}>Remove</button></td></tr>)}</tbody></table></div>
         <label htmlFor="transfer-reason" className="form-label">Transfer reason</label><input id="transfer-reason" required minLength={3} maxLength={200}
           className="form-control mb-2" value={reason} onChange={event => setReason(event.target.value)} />
-        <div className="d-flex gap-2 flex-wrap"><button type="submit" className="btn btn-outline-primary" disabled={!validDraft}>Submit request</button>
+        <div className="d-flex gap-2 flex-wrap"><button type="button" className="btn btn-outline-secondary" disabled={!validDraft} onClick={event => submitTransfer(event, false, true)}>Save draft</button><button type="submit" className="btn btn-outline-primary" disabled={!validDraft}>Submit request</button>
           {options.isOwner && <button type="button" className="btn btn-primary" disabled={!validDraft || draft.some(l => l.availableStock == null || Number(l.quantity) > l.availableStock)}
             onClick={event => submitTransfer(event, true)}>Approve &amp; dispatch</button>}</div>
       </fieldset>
@@ -223,9 +223,10 @@ export default function RetailStockTransfers({ businessId, userId, canOperate }:
       {detail && <><h3 className="h5">Transfer #{detail.transfer.id} — {detail.transfer.status}</h3>
         <p>{name(detail.transfer.fromLocationId)} → {name(detail.transfer.toLocationId)} · {detail.transfer.reason}</p>
         <div className="d-flex gap-2 flex-wrap mb-2">
+          {canEdit && detail.transfer.status === 'Draft' && (options?.isOwner || detail.transfer.requestedByUserId === userId) && <button type="button" className="btn btn-primary" onClick={() => transition('submit')}>Submit draft</button>}
           {canEdit && options?.isOwner && detail.transfer.status === 'Requested' && <button type="button" className="btn btn-primary" onClick={() => transition('approve')}>Approve</button>}
           {canEdit && access(detail.transfer.fromLocationId) && detail.transfer.status === 'Approved' && <button type="button" className="btn btn-primary" onClick={() => transition('dispatch')}>Dispatch stock</button>}
-          {canEdit && options?.isOwner && ['Requested', 'Approved'].includes(detail.transfer.status) && <button type="button" className="btn btn-outline-secondary" onClick={() => transition('cancel')}>Cancel transfer</button>}
+          {canEdit && options?.isOwner && ['Draft', 'Requested', 'Approved'].includes(detail.transfer.status) && <button type="button" className="btn btn-outline-secondary" onClick={() => transition('cancel')}>Cancel transfer</button>}
         </div>
         <div className="table-responsive"><table className="table table-sm">
           <thead><tr><th>Product</th><th>Requested</th><th>Received</th><th>Damaged</th><th>Missing</th><th>Returned to source</th><th>In transit</th></tr></thead>

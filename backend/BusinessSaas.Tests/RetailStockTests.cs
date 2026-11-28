@@ -289,6 +289,24 @@ public sealed class RetailStockTests
             lines = new[] { new { productId = product, quantity = 1m } } };
         Assert.Equal(HttpStatusCode.NotFound, (await Send(cashier, HttpMethod.Post, transfers, transferRequest)).StatusCode);
         Assert.Equal(HttpStatusCode.NotFound, (await Send(other, HttpMethod.Post, transfers, transferRequest)).StatusCode);
+        var draftBalance = (await owner.GetFromJsonAsync<JsonElement>(path + "?search=stock-100")).GetProperty("items")[0].GetProperty("quantity").GetDecimal();
+        var savedDraft = await Send(manager, HttpMethod.Post, transfers, new {
+            fromLocationId = locationId, toLocationId = secondLocationId, reason = "Save draft before submission",
+            requestKey = "stock-transfer-draft-001", saveDraft = true,
+            lines = new[] { new { productId = product, quantity = 1m } }
+        });
+        Assert.Equal(HttpStatusCode.OK, savedDraft.StatusCode);
+        var draftBody = await savedDraft.Content.ReadFromJsonAsync<JsonElement>();
+        Assert.Equal("Draft", draftBody.GetProperty("status").GetString());
+        var draftPath = transfers + "/" + draftBody.GetProperty("id").GetInt64();
+        Assert.Equal(HttpStatusCode.Conflict, (await Send(owner, HttpMethod.Post, draftPath + "/approve", new { })).StatusCode);
+        Assert.Equal(HttpStatusCode.Conflict, (await Send(owner, HttpMethod.Post, draftPath + "/dispatch", new { })).StatusCode);
+        Assert.Equal(HttpStatusCode.NotFound, (await Send(other, HttpMethod.Post, draftPath + "/submit", new { })).StatusCode);
+        Assert.Equal(HttpStatusCode.OK, (await Send(manager, HttpMethod.Post, draftPath + "/submit", new { })).StatusCode);
+        Assert.Equal(HttpStatusCode.OK, (await Send(manager, HttpMethod.Post, draftPath + "/submit", new { })).StatusCode);
+        Assert.Equal("Requested", (await owner.GetFromJsonAsync<JsonElement>(draftPath)).GetProperty("transfer").GetProperty("status").GetString());
+        Assert.Equal(HttpStatusCode.OK, (await Send(owner, HttpMethod.Post, draftPath + "/cancel", new { })).StatusCode);
+        Assert.Equal(draftBalance, (await owner.GetFromJsonAsync<JsonElement>(path + "?search=stock-100")).GetProperty("items")[0].GetProperty("quantity").GetDecimal());
         var requested = await Send(manager, HttpMethod.Post, transfers, transferRequest);
         Assert.Equal(HttpStatusCode.OK, requested.StatusCode);
         var transferId = (await requested.Content.ReadFromJsonAsync<JsonElement>()).GetProperty("id").GetInt64();
