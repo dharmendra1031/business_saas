@@ -7,6 +7,7 @@ import { ActionButton } from './ActionFeedback'
 import GlobalProductPicker from './GlobalProductPicker'
 import RetailProducts from './RetailProducts'
 import PurchaseReturn from './PurchaseReturn'
+import SupplierAccount from './SupplierAccount'
 
 interface Supplier {
   id: number
@@ -91,7 +92,8 @@ function message(error: unknown): string {
   return error instanceof Error ? error.message : 'Unable to complete the request.'
 }
 
-export default function RetailPurchases({ businessId, canOperate, locations, roleCode, currencyCode, initialApprovalsOnly, globalCatalogueEnabled = false }: {
+export default function RetailPurchases({ businessId, canOperate, locations, roleCode, currencyCode, initialApprovalsOnly, globalCatalogueEnabled = false, userId }: {
+  userId: number
   globalCatalogueEnabled?: boolean
   initialApprovalsOnly: boolean
   businessId: number
@@ -165,6 +167,7 @@ export default function RetailPurchases({ businessId, canOperate, locations, rol
   const [receiving, setReceiving] = useState<Record<number, string>>({})
   const [receivingOpen, setReceivingOpen] = useState(false)
   const [returnReceiptId, setReturnReceiptId] = useState<number | null>(null)
+  const [accountReceiptId, setAccountReceiptId] = useState<number | null>(null)
   const basePath = `/businesses/${businessId}/purchase-orders`
   const money = (amount: number) =>
     new Intl.NumberFormat('en-IN', { style: 'currency', currency: currencyCode }).format(amount)
@@ -805,13 +808,18 @@ export default function RetailPurchases({ businessId, canOperate, locations, rol
                           disabled={busy || !validLines}
                           onClick={() => void postReceiving(receipt.id)}>Post stock</button>}
                         {roleCode === 'Owner' && receipt.status === 'Posted' && <button type="button" className="btn btn-sm btn-outline-secondary"
-                          disabled={busy} onClick={() => setReturnReceiptId(receipt.id)}>Returns</button>}</td>
+                          disabled={busy} onClick={() => setReturnReceiptId(receipt.id)}>Returns</button>}
+                        {roleCode === 'Owner' && receipt.status === 'Posted' && <button type="button" className="btn btn-sm btn-outline-secondary ms-1"
+                          disabled={busy} onClick={() => setAccountReceiptId(receipt.id)}>Supplier account</button>}</td>
                     </tr>
                   })}</tbody>
                 </table>
               </div>}
           </div>
         </>}
+        {detail && accountReceiptId !== null && <SupplierAccount key={detail.id + ':' + accountReceiptId}
+          path={basePath + '/' + detail.id + '/receivings/' + accountReceiptId + '/supplier-account'}
+          receiptId={accountReceiptId} userId={userId} onClose={() => setAccountReceiptId(null)} />}
         {detail && returnReceiptId !== null && <PurchaseReturn key={detail.id + ':' + returnReceiptId}
           path={basePath + '/' + detail.id + '/receivings/' + returnReceiptId + '/returns'}
           receiptId={returnReceiptId} canOperate={canOperate} onClose={() => setReturnReceiptId(null)} />}

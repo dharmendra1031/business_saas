@@ -3,6 +3,7 @@ import { api, post, SessionExpiredError } from './api'
 import { ActionButton, useActionFeedback } from './ActionFeedback'
 import { moneyCents } from './posMoney'
 import CreditPayment, { readCollection, type CreditInvoice, type PendingCollection } from './CreditPayment'
+import SupplierAccount from './SupplierAccount'
 
 type ContactType = 'suppliers' | 'customers'
 
@@ -128,6 +129,7 @@ export default function RetailContacts({ businessId, canOperate, type, isOwner, 
   const [editingId, setEditingId] = useState<number | null>(null)
   const [formOpen, setFormOpen] = useState(false)
   const [ledgerCustomer, setLedgerCustomer] = useState<number | null>(null)
+  const [ledgerSupplier, setLedgerSupplier] = useState<number | null>(null)
   const [originalLimit, setOriginalLimit] = useState<number | null>(null)
   const [creditLimit, setCreditLimit] = useState('')
   const [creditReason, setCreditReason] = useState('')
@@ -349,6 +351,8 @@ export default function RetailContacts({ businessId, canOperate, type, isOwner, 
         </form>
       </dialog>}
 
+      {supplier && isOwner && ledgerSupplier !== null && <SupplierAccount key={basePath + ledgerSupplier}
+        path={basePath + '/' + ledgerSupplier + '/ledger'} userId={userId} onClose={() => setLedgerSupplier(null)} />}
       {!supplier && isOwner && ledgerCustomer !== null &&
         <CustomerCreditLedger key={basePath + '/' + ledgerCustomer}
           path={basePath + '/' + ledgerCustomer + '/credit-ledger'} userId={userId} businessId={businessId} onClose={() => setLedgerCustomer(null)} />}
@@ -377,7 +381,7 @@ export default function RetailContacts({ businessId, canOperate, type, isOwner, 
                   <th scope="col">Name</th><th scope="col">Phone</th><th scope="col">Email</th>
                   {!supplier && isOwner && <th scope="col" className="text-end">Credit limit ({currencyCode})</th>}
                   <th scope="col">Status</th>
-                  {(canOperate || (!supplier && isOwner)) && <th scope="col" className="text-end">Action</th>}
+                  {(canOperate || isOwner) && <th scope="col" className="text-end">Action</th>}
                 </tr></thead>
                 <tbody>{items.map(item => <tr key={item.id}>
                   <td><strong>{item.name}</strong></td>
@@ -385,12 +389,14 @@ export default function RetailContacts({ businessId, canOperate, type, isOwner, 
                   <td>{item.email || '—'}</td>
                   {!supplier && isOwner && <td className="text-end">{item.creditLimit == null ? '—' : item.creditLimit.toFixed(2)}</td>}
                   <td>{item.isActive ? 'Active' : 'Inactive'}</td>
-                  {(canOperate || (!supplier && isOwner)) && <td className="text-end">
+                  {(canOperate || isOwner) && <td className="text-end">
                     <div className="d-flex flex-wrap justify-content-end gap-1">
                       {canOperate && <button type="button" className="btn btn-sm btn-outline-secondary"
                         disabled={saving} onClick={() => edit(item)} aria-label={`Edit ${item.name}`}>Edit</button>}
                       {!supplier && isOwner && <button type="button" className="btn btn-sm btn-outline-secondary"
                         onClick={() => setLedgerCustomer(item.id)} aria-label={`Credit ledger for ${item.name}`}>Ledger</button>}
+                       {supplier && isOwner && <button type="button" className="btn btn-sm btn-outline-secondary"
+                         onClick={() => setLedgerSupplier(item.id)} aria-label={`Supplier ledger for ${item.name}`}>Ledger</button>}
                     </div>
                   </td>}
                 </tr>)}</tbody>

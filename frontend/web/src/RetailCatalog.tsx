@@ -28,7 +28,7 @@ export default function RetailCatalog({ section, businessId, canOperate, currenc
         locations={locations} isOwner={roleCode === 'Owner'}
         initialAlertLocationId={initialStockAlertLocationId} />
     case 'purchases':
-      return <RetailPurchases globalCatalogueEnabled={globalCatalogueEnabled} initialApprovalsOnly={approvalsOnly} businessId={businessId} canOperate={canOperate}
+      return <RetailPurchases userId={userId} globalCatalogueEnabled={globalCatalogueEnabled} initialApprovalsOnly={approvalsOnly} businessId={businessId} canOperate={canOperate}
         locations={locations} roleCode={roleCode} currencyCode={currencyCode} />
     case 'suppliers':
     case 'customers':
