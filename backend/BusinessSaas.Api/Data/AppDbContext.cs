@@ -286,6 +286,7 @@ public sealed class RetailProduct
 {
     public long Id { get; set; }
     public long BusinessId { get; set; }
+    public long? GlobalProductId { get; set; }
     public long CategoryId { get; set; }
     public long UnitId { get; set; }
     public long? BrandId { get; set; }
@@ -806,6 +807,10 @@ public sealed class AppDbContext(DbContextOptions<AppDbContext> options)
             entity.Property(x => x.TaxClassification).HasMaxLength(30).IsRequired();
             entity.HasIndex(x => new { x.BusinessId, x.Name, x.Id });
             entity.HasIndex(x => new { x.BusinessId, x.Sku }).IsUnique();
+            entity.HasIndex(x => new { x.BusinessId, x.GlobalProductId })
+                .IsUnique().HasFilter("[GlobalProductId] IS NOT NULL");
+            entity.HasOne<GlobalProduct>().WithMany()
+                .HasForeignKey(x => x.GlobalProductId).OnDelete(DeleteBehavior.Restrict);
             entity.HasIndex(x => new { x.BusinessId, x.Barcode })
                 .IsUnique().HasFilter("[Barcode] IS NOT NULL");
             entity.HasOne<Business>().WithMany()

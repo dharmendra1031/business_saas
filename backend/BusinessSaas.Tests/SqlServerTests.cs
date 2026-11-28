@@ -92,6 +92,17 @@ public sealed class SqlServerTests(Xunit.Abstractions.ITestOutputHelper output)
             Assert.Contains("20261128100000_GlobalProducts", await db.Database.GetAppliedMigrationsAsync());
             Assert.Contains("20261128110000_GlobalProductIdentityIndex", await db.Database.GetAppliedMigrationsAsync());
             Assert.Contains("20261128120000_GlobalProductAuditRevision", await db.Database.GetAppliedMigrationsAsync());
+            Assert.Contains("20261128130000_RetailGlobalProductLink", await db.Database.GetAppliedMigrationsAsync());
+            Assert.Equal(1, await db.Database.SqlQueryRaw<int>(
+                "SELECT COUNT(*) AS [Value] FROM sys.columns WHERE object_id = OBJECT_ID('RetailProducts') " +
+                "AND name = 'GlobalProductId' AND is_nullable = 1").SingleAsync());
+            Assert.Equal(1, await db.Database.SqlQueryRaw<int>(
+                "SELECT COUNT(*) AS [Value] FROM sys.indexes WHERE object_id = OBJECT_ID('RetailProducts') " +
+                "AND name = 'IX_RetailProducts_BusinessId_GlobalProductId' AND is_unique = 1 AND has_filter = 1").SingleAsync());
+            Assert.Equal(1, await db.Database.SqlQueryRaw<int>(
+                "SELECT COUNT(*) AS [Value] FROM sys.foreign_keys WHERE parent_object_id = OBJECT_ID('RetailProducts') " +
+                "AND referenced_object_id = OBJECT_ID('GlobalProducts') AND name = 'FK_RetailProducts_GlobalProducts_GlobalProductId' " +
+                "AND delete_referential_action = 0").SingleAsync());
             Assert.Equal(1, await db.Database.SqlQueryRaw<int>(
                 "SELECT COUNT(*) AS [Value] FROM sys.indexes WHERE object_id = OBJECT_ID('GlobalProducts') " +
                 "AND name = 'IX_GlobalProducts_NameKey_BrandKey_PackSizeKey_Unit' AND is_unique = 1 AND has_filter = 1").SingleAsync());

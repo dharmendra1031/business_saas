@@ -865,6 +865,9 @@ namespace BusinessSaas.Api.Data.Migrations
                     b.Property<long>("CategoryId")
                         .HasColumnType("bigint");
 
+                    b.Property<long?>("GlobalProductId")
+                        .HasColumnType("bigint");
+
                     b.Property<bool>("IsActive")
                         .HasColumnType("bit");
 
@@ -900,6 +903,10 @@ namespace BusinessSaas.Api.Data.Migrations
                         .IsUnique()
                         .HasFilter("[Barcode] IS NOT NULL");
 
+                    b.HasIndex("BusinessId", "GlobalProductId")
+                        .IsUnique()
+                        .HasFilter("[GlobalProductId] IS NOT NULL");
+
                     b.HasIndex("BusinessId", "Name", "Id");
 
                     b.HasIndex("BusinessId", "Sku")
@@ -908,6 +915,8 @@ namespace BusinessSaas.Api.Data.Migrations
                     b.HasIndex("BrandId");
 
                     b.HasIndex("CategoryId");
+
+                    b.HasIndex("GlobalProductId");
 
                     b.HasIndex("UnitId");
 
@@ -1619,6 +1628,11 @@ namespace BusinessSaas.Api.Data.Migrations
                     b.HasOne("BusinessSaas.Api.Data.RetailBrand", null)
                         .WithMany()
                         .HasForeignKey("BrandId")
+                        .OnDelete(DeleteBehavior.Restrict);
+
+                    b.HasOne("BusinessSaas.Api.Data.GlobalProduct", null)
+                        .WithMany()
+                        .HasForeignKey("GlobalProductId")
                         .OnDelete(DeleteBehavior.Restrict);
 
                     b.HasOne("BusinessSaas.Api.Data.RetailUnit", null)
