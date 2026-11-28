@@ -166,7 +166,7 @@ public static class RetailCashSales
     {
         var started = Stopwatch.GetTimestamp();
         if (!long.TryParse(user.FindFirstValue(ClaimTypes.NameIdentifier), out var actor) ||
-            await Shop(db, businessId, actor, locationId, ownerOnly) is not { } business)
+            await Shop(db, businessId, actor, locationId, ownerOnly, context.RequestAborted) is not { } business)
             return Results.NotFound();
 
         // Posted receipts are immutable. Split the collection load so the receipt's
@@ -175,7 +175,6 @@ public static class RetailCashSales
             .AsSplitQuery().Include(x => x.Lines)
             .SingleOrDefaultAsync(x => x.Id == receiptId && x.BusinessId == businessId &&
                 x.LocationId == locationId && (ownerOnly || x.CashierId == actor), context.RequestAborted);
-        var loaded = Stopwatch.GetTimestamp();
         if (sale is null) return Results.NotFound();
         var exchange = credit ? null : await db.RetailCashReturns.AsNoTracking().SingleOrDefaultAsync(x =>
             x.BusinessId == businessId && x.ReplacementSaleId == sale.Id, context.RequestAborted);
@@ -183,6 +182,7 @@ public static class RetailCashSales
             x.BusinessId == businessId && x.LocationId == locationId && x.CurrencyCode == sale.CurrencyCode,
             context.RequestAborted))
             return Results.Conflict(new { message = "Exchange requires reconciliation." });
+        var loaded = Stopwatch.GetTimestamp();
         if (!OperatingSystem.IsWindows())
             return Results.Problem("RDLC PDF printing requires a Windows report host.", statusCode: 503);
         try
