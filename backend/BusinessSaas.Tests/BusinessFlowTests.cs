@@ -7,6 +7,8 @@ using System.Text.Json;
 using BusinessSaas.Api.Data;
 using BusinessSaas.Api.Features;
 using Microsoft.AspNetCore.Hosting;
+using Microsoft.AspNetCore.Routing;
+using Microsoft.AspNetCore.Http;
 using Microsoft.AspNetCore.Mvc.Testing;
 using Microsoft.Data.Sqlite;
 using Microsoft.EntityFrameworkCore;
@@ -1813,6 +1815,36 @@ public sealed class BusinessFlowTests
         factory.Services.GetRequiredService<IConfiguration>()["Platform:OwnerUserId"] = "0";
         Assert.Equal(HttpStatusCode.Forbidden,
             (await owner.GetAsync("/api/platform/license-access")).StatusCode);
+    }
+
+    [Theory]
+    [InlineData("Production", false)]
+    [InlineData("Staging", false)]
+    [InlineData("RetailAcceptance", true)]
+    public async Task Retail_acceptance_routes_are_explicit_and_registration_remains_disabled(string environment, bool pilot)
+    {
+        using var factory = new WebApplicationFactory<Program>().WithWebHostBuilder(builder =>
+        {
+            builder.UseEnvironment(environment);
+            builder.UseSetting("RetailAcceptance:Enabled", "true");
+            builder.UseSetting("Payments:AllowLive", "false");
+            builder.UseSetting("Razorpay:Mode", "Test");
+            builder.UseSetting("ConnectionStrings:Default",
+                "Server=localhost;Database=BusinessSaasUnused;Trusted_Connection=True;Encrypt=False");
+        });
+        using var client = factory.CreateClient(new WebApplicationFactoryClientOptions
+        {
+            BaseAddress = new Uri("https://localhost")
+        });
+        var routes = factory.Services.GetRequiredService<EndpointDataSource>().Endpoints
+            .OfType<RouteEndpoint>().Select(x => x.RoutePattern.RawText ?? "").ToArray();
+        Assert.Equal(pilot, routes.Any(x => x.Contains("/cash-sales", StringComparison.Ordinal)));
+        Assert.Equal(pilot, routes.Any(x => x.Contains("/credit-sales", StringComparison.Ordinal)));
+        Assert.Equal(pilot, routes.Any(x => x.Contains("/cash-register", StringComparison.Ordinal)));
+        Assert.Equal(pilot, routes.Any(x => x.Contains("/global-products", StringComparison.Ordinal)));
+        var options = await client.GetFromJsonAsync<JsonElement>("/api/auth/options");
+        Assert.False(options.GetProperty("canRegister").GetBoolean());
+        Assert.Equal(HttpStatusCode.ServiceUnavailable, (await client.GetAsync("/api/ready")).StatusCode);
     }
 
     [Fact]

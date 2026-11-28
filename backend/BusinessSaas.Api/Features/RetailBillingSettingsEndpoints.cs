@@ -73,7 +73,7 @@ public static class RetailBillingSettingsEndpoints
             return Results.Ok(new { settings = View(business, creditAvailable), unchanged = false });
         });
 
-        var rendererAvailable = app.Environment.IsDevelopment() && OperatingSystem.IsWindows();
+        var rendererAvailable = RetailModule.PilotEnabled(app.Environment) && OperatingSystem.IsWindows();
         // A static, source-controlled RDLC consumes these parameters; never edit
         // report XML at runtime and never allow required financial fields to hide.
         var receipt = app.MapGroup("/api/businesses/{businessId:long}/receipt-settings")
@@ -279,7 +279,7 @@ public static class RetailBillingSettingsEndpoints
             string.Equals(address.Address, value.Trim(), StringComparison.OrdinalIgnoreCase));
 
     internal static bool CreditAvailable(IConfiguration config, IWebHostEnvironment environment) =>
-        environment.IsDevelopment() && config.GetValue<bool>("RetailCredit:PostingEnabled") &&
+        RetailModule.PilotEnabled(environment) && config.GetValue<bool>("RetailCredit:PostingEnabled") &&
         config.GetValue<bool>("RetailCredit:CollectionsEnabled");
 
     private static object View(Business business, bool creditAvailable) => new {

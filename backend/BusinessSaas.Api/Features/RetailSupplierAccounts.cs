@@ -62,7 +62,7 @@ internal static class RetailSupplierAccounts
             .Where(x => !query.Any(d => d.PurchaseReturnId == x.Id))
             .OrderBy(x => x.Id).Take(100).Select(x => new { x.Id, x.Quantity, x.Reason }).ToListAsync(ct);
         var items = await Page(requestKey is null ? query : query.Where(x => x.RequestKey == requestKey), page ?? 1, ct);
-        var canPost = environment.IsDevelopment() &&
+        var canPost = RetailModule.PilotEnabled(environment) &&
             await RetailMasterEndpoints.CheckAccess(db, user, businessId, true, ct, order.LocationId, ownerOnly: true) is null;
         await transaction.CommitAsync(ct);
         return Results.Ok(new { invoiceId = invoice?.Id, currencyCode = currency, billed = invoice?.Amount ?? 0m,
@@ -117,7 +117,7 @@ internal static class RetailSupplierAccounts
                     existing.Reference == reference && existing.PurchaseReturnId == request.PurchaseReturnId
                     ? Results.Ok(Confirmation(existing))
                     : Results.Conflict(new { message = "Document request key is already in use." });
-            if (!environment.IsDevelopment()) return Results.Conflict(new { message = "Supplier financial posting is not released." });
+            if (!RetailModule.PilotEnabled(environment)) return Results.Conflict(new { message = "Supplier financial posting is not released." });
             denied = await RetailMasterEndpoints.CheckAccess(db, user, businessId, true, ct, order.LocationId, ownerOnly: true);
             if (denied is not null) return denied;
             var query = Documents(db, businessId).Where(x => x.ReceivingId == receivingId);

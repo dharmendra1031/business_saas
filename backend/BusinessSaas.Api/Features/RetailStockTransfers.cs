@@ -38,7 +38,7 @@ internal static class RetailStockTransfers
     {
         var denied = await RetailMasterEndpoints.CheckAccess(db, user, businessId, true, ct, locationId, ownerOnly);
         if (denied is not null) return denied;
-        if (!environment.IsDevelopment() || !await PlatformModuleReleaseEndpoints.Available(db, environment, "INVENTORY"))
+        if (!RetailModule.PilotEnabled(environment) || !await PlatformModuleReleaseEndpoints.Available(db, environment, "INVENTORY"))
             return Results.Conflict(new { message = "Stock transfer posting is not released." });
         if (await PlatformStatusEndpoints.ActiveMaintenance(db) is not null)
             return Results.Json(new { message = "Stock transfer is unavailable during maintenance." }, statusCode: 503);

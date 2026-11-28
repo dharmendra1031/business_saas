@@ -210,7 +210,7 @@ public static class AuthEndpoints
                 email = principal.Identity?.Name,
                 isPlatformOwner = PlatformOwner.IsConfiguredOwner(principal, configuration),
                 mfaVerified = PlatformOwner.IsOwner(principal, configuration),
-                globalCatalogueEnabled = environment.IsDevelopment()
+                globalCatalogueEnabled = RetailModule.PilotEnabled(environment)
             })).RequireAuthorization();
 
         group.MapPost("/logout", async (ClaimsPrincipal principal,

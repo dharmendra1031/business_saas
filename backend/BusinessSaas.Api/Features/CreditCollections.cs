@@ -62,7 +62,7 @@ public static class CreditCollections
             ClaimsPrincipal user, AppDbContext db, IConfiguration config, IWebHostEnvironment environment) =>
         {
             var actor = await RetailBillingSettingsEndpoints.OwnerId(db, businessId, user);
-            if (actor is null || !environment.IsDevelopment()) return Results.NotFound();
+            if (actor is null || !RetailModule.PilotEnabled(environment)) return Results.NotFound();
             if (string.IsNullOrWhiteSpace(request.RequestKey) || request.RequestKey.Length is < 12 or > 80 ||
                 request.Amount <= 0 || request.Amount > 9999999999999999.99m ||
                 decimal.Round(request.Amount, 2) != request.Amount ||

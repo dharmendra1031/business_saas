@@ -116,9 +116,9 @@ public static class BusinessEndpoints
                 x.BusinessId == businessId && x.Status == "Draft") : 0;
 
             OwnerCashSalesToday? cashSalesToday = null;
-            // Cash posting is currently development-only; never present these as
+            // Cash posting is restricted to approved pilot hosts; never present these as
             // all-channel production sales or disclose financial data to cashiers.
-            if (roleCode == "Owner" && environment.IsDevelopment() && details.TypeCode == "RETAIL")
+            if (roleCode == "Owner" && RetailModule.PilotEnabled(environment) && details.TypeCode == "RETAIL")
             {
                 var nowUtc = DateTime.UtcNow;
                 var zone = TimeZoneInfo.FindSystemTimeZoneById(details.TimeZoneId);
@@ -184,15 +184,15 @@ public static class BusinessEndpoints
 
             return Results.Ok(new { hasProducts, hasInitializedStock, pendingApprovals, cashSalesToday, stockAlerts,
                 business = details, roleCode, locations, subscription, accessStatus,
-                canOperate, cashSaleEnabled = environment.IsDevelopment(),
-                cashRegisterRequired = environment.IsDevelopment() && details.TypeCode == "RETAIL" &&
+                canOperate, cashSaleEnabled = RetailModule.PilotEnabled(environment),
+                cashRegisterRequired = RetailModule.PilotEnabled(environment) && details.TypeCode == "RETAIL" &&
                     config.GetValue<bool>("RetailCashRegister:LinkingEnabled"),
-                cashRegisterOpeningEnabled = environment.IsDevelopment() && details.TypeCode == "RETAIL" &&
+                cashRegisterOpeningEnabled = RetailModule.PilotEnabled(environment) && details.TypeCode == "RETAIL" &&
                     (roleCode == "Owner" || roleCode == "Cashier") && config.GetValue<bool>("RetailCashRegister:OpeningEnabled"),
                 cashPaymentEnabled = details.CashSalesEnabled,
                 creditPaymentEnabled = roleCode == "Owner" && details.TypeCode == "RETAIL" &&
                     details.CreditSalesEnabled && RetailBillingSettingsEndpoints.CreditAvailable(config, environment),
-                receiptAutoOpen = details.ReceiptAutoOpen && environment.IsDevelopment() && OperatingSystem.IsWindows() });
+                receiptAutoOpen = details.ReceiptAutoOpen && RetailModule.PilotEnabled(environment) && OperatingSystem.IsWindows() });
         });
     }
 

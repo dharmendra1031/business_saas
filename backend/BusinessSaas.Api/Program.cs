@@ -12,6 +12,13 @@ using Microsoft.EntityFrameworkCore;
 
 var builder = WebApplication.CreateBuilder(args);
 
+// Acceptance is opt-in and never permits live payment. It is not a production switch.
+if (builder.Environment.IsEnvironment("RetailAcceptance") &&
+    (!builder.Configuration.GetValue<bool>("RetailAcceptance:Enabled") ||
+     builder.Configuration.GetValue<bool>("Payments:AllowLive") ||
+     !string.Equals(builder.Configuration["Razorpay:Mode"], "Test", StringComparison.OrdinalIgnoreCase)))
+    throw new InvalidOperationException("RetailAcceptance requires explicit enablement and test-only payments.");
+
 var connectionString = builder.Configuration.GetConnectionString("Default");
 if (string.IsNullOrWhiteSpace(connectionString))
     throw new InvalidOperationException("ConnectionStrings:Default is required.");

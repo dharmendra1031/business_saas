@@ -8,6 +8,10 @@ namespace BusinessSaas.Api.Features;
 // own module without changing Retail endpoints or Retail tables.
 public static class RetailModule
 {
+    // Explicit, isolated acceptance host; do not relax identity, database or HTTPS rules.
+    internal static bool PilotEnabled(IWebHostEnvironment environment) =>
+        environment.IsDevelopment() || environment.IsEnvironment("RetailAcceptance");
+
     public static void MapRetailModule(this WebApplication app)
     {
         app.MapRetailMasterEndpoints();
@@ -17,7 +21,7 @@ public static class RetailModule
         app.MapRetailStockEndpoints();
         app.MapRetailAdjustmentEndpoints();
         app.MapRetailPurchaseEndpoints();
-        if (app.Environment.IsDevelopment())
+        if (PilotEnabled(app.Environment))
         {
             app.MapRetailCashSales();
             app.MapRetailCashRegister();

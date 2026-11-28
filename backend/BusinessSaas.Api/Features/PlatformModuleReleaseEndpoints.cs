@@ -18,7 +18,7 @@ public static class PlatformModuleReleaseEndpoints
     private static bool Installed(string code, IWebHostEnvironment environment) =>
         code switch {
             "CATALOG" or "PURCHASE" or "INVENTORY" => true,
-            "POS" => environment.IsDevelopment(),
+            "POS" => RetailModule.PilotEnabled(environment),
             _ => false
         };
 
