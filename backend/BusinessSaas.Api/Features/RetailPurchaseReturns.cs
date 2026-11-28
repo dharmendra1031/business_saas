@@ -20,8 +20,16 @@ internal static class RetailPurchaseReturns
         where receipt.Id == receivingId && receipt.BusinessId == businessId && receipt.Status == "Posted" &&
               order.Id == orderId && order.BusinessId == businessId && ordered.PurchaseOrderId == orderId &&
               product.BusinessId == businessId && unit.BusinessId == businessId && supplier.BusinessId == businessId
-        select new ReceiptLine(line.Id, order.LocationId, product.Id, product.Name,
-            line.Quantity, ordered.ConversionFactor ?? 1m, ordered.SelectedUnitCode ?? unit.Code);
+        select new ReceiptLine
+        {
+            Id = line.Id,
+            LocationId = order.LocationId,
+            ProductId = product.Id,
+            Name = product.Name,
+            Quantity = line.Quantity,
+            Factor = ordered.ConversionFactor ?? 1m,
+            UnitCode = ordered.SelectedUnitCode ?? unit.Code
+        };
 
     internal static async Task<IResult> Read(long businessId, long orderId, long receivingId,
         ClaimsPrincipal user, AppDbContext db, CancellationToken ct)
@@ -111,6 +119,14 @@ internal static class RetailPurchaseReturns
 
     internal sealed record ReturnRequest(long ReceivingLineId, decimal Quantity, decimal ExpectedReturned,
         string? RequestKey, string? Reason);
-    private sealed record ReceiptLine(long Id, long LocationId, long ProductId, string Name,
-        decimal Quantity, decimal Factor, string UnitCode);
+    private sealed class ReceiptLine
+    {
+        public long Id { get; init; }
+        public long LocationId { get; init; }
+        public long ProductId { get; init; }
+        public string Name { get; init; } = "";
+        public decimal Quantity { get; init; }
+        public decimal Factor { get; init; }
+        public string UnitCode { get; init; } = "";
+    }
 }
