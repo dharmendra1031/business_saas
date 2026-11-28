@@ -98,6 +98,7 @@ public sealed class SqlServerTests(Xunit.Abstractions.ITestOutputHelper output)
             Assert.Contains("20261128160000_RetailRegisterClosing", await db.Database.GetAppliedMigrationsAsync());
             Assert.Contains("20261128170000_RetailStockTransfers", await db.Database.GetAppliedMigrationsAsync());
             Assert.Contains("20261128180000_RetailTransferReturn", await db.Database.GetAppliedMigrationsAsync());
+            Assert.Contains("20261128190000_RetailTransferDraft", await db.Database.GetAppliedMigrationsAsync());
             Assert.Equal(1, await db.Database.SqlQueryRaw<int>(
                 "SELECT COUNT(*) AS [Value] FROM sys.columns WHERE object_id = OBJECT_ID('RetailProducts') " +
                 "AND name = 'GlobalProductId' AND is_nullable = 1").SingleAsync());
@@ -2739,6 +2740,29 @@ public sealed class SqlServerTests(Xunit.Abstractions.ITestOutputHelper output)
             Assert.False(await db.RetailStockBalances.AnyAsync(x => x.BusinessId == businessId && x.LocationId == to));
         }
         var receipt = new { lineId, quantity = 5m, kind = "Received", reason = "", requestKey = "sql-transfer-receive-001", expectedRemaining = 7m };
+        // A corrupted or missing dispatch must never create destination inventory.
+        using (var scope = factory.Services.CreateScope())
+        {
+            var db = scope.ServiceProvider.GetRequiredService<AppDbContext>();
+            var movement = await db.RetailStockMovements.SingleAsync(x => x.BusinessId == businessId &&
+                x.SourceType == "TransferDispatch" && x.SourceId == lineId);
+            movement.QuantityChange = -6m;
+            await db.SaveChangesAsync();
+        }
+        var invalidDispatch = await Post(owner, detailPath + "/receive", receipt);
+        Assert.Equal(HttpStatusCode.Conflict, invalidDispatch.StatusCode);
+        Assert.Equal("TRANSFER_RECONCILIATION_REQUIRED",
+            (await invalidDispatch.Content.ReadFromJsonAsync<JsonElement>()).GetProperty("code").GetString());
+        using (var scope = factory.Services.CreateScope())
+        {
+            var db = scope.ServiceProvider.GetRequiredService<AppDbContext>();
+            Assert.False(await db.RetailStockTransferReceipts.AnyAsync(x => x.BusinessId == businessId));
+            Assert.False(await db.RetailStockBalances.AnyAsync(x => x.BusinessId == businessId && x.LocationId == to));
+            var movement = await db.RetailStockMovements.SingleAsync(x => x.BusinessId == businessId &&
+                x.SourceType == "TransferDispatch" && x.SourceId == lineId);
+            movement.QuantityChange = -7m;
+            await db.SaveChangesAsync();
+        }
         var receiveRace = await Task.WhenAll(Post(owner, detailPath + "/receive", receipt),
             Post(owner, detailPath + "/receive", receipt with { requestKey = "sql-transfer-receive-002" }));
         Assert.Single(receiveRace.Where(x => x.StatusCode == HttpStatusCode.OK));

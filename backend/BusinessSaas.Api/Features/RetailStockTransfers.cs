@@ -281,11 +281,22 @@ internal static class RetailStockTransfers
             if (denied is not null) return denied;
             var line = await db.RetailStockTransferLines.SingleOrDefaultAsync(x => x.TransferId == id && x.Id == request.LineId, ct);
             if (line is null) return Results.NotFound();
+            var actor = long.Parse(user.FindFirstValue(ClaimTypes.NameIdentifier)!);
             var previous = await db.RetailStockTransferReceipts.AsNoTracking().SingleOrDefaultAsync(x => x.BusinessId == businessId && x.RequestKey == key, ct);
             if (previous is not null)
-                return previous.TransferLineId == line.Id && previous.Quantity == request.Quantity && previous.Kind == request.Kind && previous.Reason == reason
+                return previous.ActorUserId == actor && previous.TransferLineId == line.Id &&
+                    previous.Quantity == request.Quantity && previous.Kind == request.Kind && previous.Reason == reason
                     ? Results.Ok(new { previous.Id, transfer.Status }) : Results.Conflict(new { message = "Receiving request key already used." });
             if (transfer.Status != "InTransit") return Results.Conflict(new { message = "Transfer is not in transit." });
+            // Receiving must be backed by the original, exact source stock deduction.
+            if (transfer.DispatchedByUserId is null || transfer.DispatchedAtUtc is null ||
+                !await db.RetailStockMovements.AsNoTracking().AnyAsync(x =>
+                    x.BusinessId == businessId && x.LocationId == transfer.FromLocationId &&
+                    x.ProductId == line.ProductId && x.SourceType == "TransferDispatch" &&
+                    x.SourceId == line.Id && x.QuantityChange == -line.Quantity &&
+                    x.ActorUserId == transfer.DispatchedByUserId, ct))
+                return Results.Conflict(new { code = "TRANSFER_RECONCILIATION_REQUIRED",
+                    message = "Original stock dispatch requires reconciliation. No receiving was posted." });
             var settled = await db.RetailStockTransferReceipts.Where(x => x.BusinessId == businessId && x.TransferLineId == line.Id)
                 .SumAsync(x => x.Quantity, ct);
             if (line.Quantity - settled != request.ExpectedRemaining || request.Quantity > line.Quantity - settled)
@@ -294,7 +305,6 @@ internal static class RetailStockTransfers
                 where p.BusinessId == businessId && p.Id == line.ProductId && u.BusinessId == businessId &&
                     u.Code == line.UnitCode select p.Id).AnyAsync(ct))
                 return Results.Conflict(new { message = "Product base unit requires reconciliation." });
-            var actor = long.Parse(user.FindFirstValue(ClaimTypes.NameIdentifier)!);
             var entry = new RetailStockTransferReceipt { BusinessId = businessId, TransferLineId = line.Id,
                 ActorUserId = actor, Quantity = request.Quantity, Kind = request.Kind!, Reason = reason,
                 RequestKey = key, PostedAtUtc = DateTime.UtcNow };
