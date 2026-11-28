@@ -17,6 +17,9 @@ public static class RetailPurchaseEndpoints
         var group = app.MapGroup("/api/businesses/{businessId:long}/purchase-orders")
             .RequireAuthorization();
 
+        group.MapGet("/{orderId:long}/receivings/{receivingId:long}/returns", RetailPurchaseReturns.Read);
+        group.MapPost("/{orderId:long}/receivings/{receivingId:long}/returns", RetailPurchaseReturns.Post);
+
         group.MapGet("", async (long businessId, int? page, bool? draftOnly,
             ClaimsPrincipal user, AppDbContext db, CancellationToken cancellationToken) =>
         {

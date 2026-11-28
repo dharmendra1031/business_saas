@@ -2193,6 +2193,32 @@ namespace BusinessSaas.Api.Data.Migrations
                     b.HasOne("BusinessSaas.Api.Data.AppUser", null).WithMany().HasForeignKey("ActorUserId")
                         .OnDelete(DeleteBehavior.Restrict).IsRequired();
                 });
+            modelBuilder.Entity("BusinessSaas.Api.Data.RetailPurchaseReturn", b =>
+                {
+                    b.Property<long>("Id").ValueGeneratedOnAdd().HasColumnType("bigint");
+                    SqlServerPropertyBuilderExtensions.UseIdentityColumn(b.Property<long>("Id"));
+                    b.Property<long>("BusinessId").HasColumnType("bigint");
+                    b.Property<long>("ReceivingLineId").HasColumnType("bigint");
+                    b.Property<long>("ActorUserId").HasColumnType("bigint");
+                    b.Property<decimal>("Quantity").HasPrecision(18, 3).HasColumnType("decimal(18,3)");
+                    b.Property<string>("RequestKey").IsRequired().HasMaxLength(80).HasColumnType("nvarchar(80)");
+                    b.Property<string>("Reason").IsRequired().HasMaxLength(200).HasColumnType("nvarchar(200)");
+                    b.Property<DateTime>("PostedAtUtc").HasColumnType("datetime2");
+                    b.HasKey("Id");
+                    b.HasIndex("ActorUserId");
+                    b.HasIndex("BusinessId", "RequestKey").IsUnique();
+                    b.HasIndex("ReceivingLineId", "BusinessId");
+                    b.ToTable("RetailPurchaseReturns", t => t.HasCheckConstraint("CK_RetailPurchaseReturns_Quantity", "[Quantity] > 0"));
+                });
+            modelBuilder.Entity("BusinessSaas.Api.Data.RetailPurchaseReturn", b =>
+                {
+                    b.HasOne("BusinessSaas.Api.Data.Business", null).WithMany().HasForeignKey("BusinessId")
+                        .OnDelete(DeleteBehavior.Restrict).IsRequired();
+                    b.HasOne("BusinessSaas.Api.Data.RetailReceivingLine", null).WithMany().HasForeignKey("ReceivingLineId")
+                        .OnDelete(DeleteBehavior.Restrict).IsRequired();
+                    b.HasOne("BusinessSaas.Api.Data.AppUser", null).WithMany().HasForeignKey("ActorUserId")
+                        .OnDelete(DeleteBehavior.Restrict).IsRequired();
+                });
 #pragma warning restore 612, 618
         }
     }

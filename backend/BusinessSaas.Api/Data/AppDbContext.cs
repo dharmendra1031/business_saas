@@ -423,6 +423,18 @@ public sealed class RetailReceivingLine
     public decimal Quantity { get; set; }
 }
 
+public sealed class RetailPurchaseReturn
+{
+    public long Id { get; set; }
+    public long BusinessId { get; set; }
+    public long ReceivingLineId { get; set; }
+    public long ActorUserId { get; set; }
+    public decimal Quantity { get; set; }
+    public string RequestKey { get; set; } = "";
+    public string Reason { get; set; } = "";
+    public DateTime PostedAtUtc { get; set; } = DateTime.UtcNow;
+}
+
 public sealed class AppDbContext(DbContextOptions<AppDbContext> options)
     : IdentityUserContext<AppUser, long>(options)
 {
@@ -466,6 +478,7 @@ public sealed class AppDbContext(DbContextOptions<AppDbContext> options)
     public DbSet<RetailPurchaseOrderLine> RetailPurchaseOrderLines => Set<RetailPurchaseOrderLine>();
     public DbSet<RetailReceiving> RetailReceivings => Set<RetailReceiving>();
     public DbSet<RetailReceivingLine> RetailReceivingLines => Set<RetailReceivingLine>();
+    public DbSet<RetailPurchaseReturn> RetailPurchaseReturns => Set<RetailPurchaseReturn>();
 
     protected override void OnModelCreating(ModelBuilder builder)
     {
@@ -1075,6 +1088,19 @@ public sealed class AppDbContext(DbContextOptions<AppDbContext> options)
                 .HasForeignKey(x => x.CreatedByUserId).OnDelete(DeleteBehavior.Restrict);
             entity.HasOne<AppUser>().WithMany()
                 .HasForeignKey(x => x.PostedByUserId).OnDelete(DeleteBehavior.Restrict);
+        });
+
+        builder.Entity<RetailPurchaseReturn>(entity =>
+        {
+            entity.Property(x => x.Quantity).HasPrecision(18, 3);
+            entity.Property(x => x.RequestKey).HasMaxLength(80).IsRequired();
+            entity.Property(x => x.Reason).HasMaxLength(200).IsRequired();
+            entity.HasIndex(x => new { x.BusinessId, x.RequestKey }).IsUnique();
+            entity.HasIndex(x => new { x.ReceivingLineId, x.BusinessId });
+            entity.HasOne<Business>().WithMany().HasForeignKey(x => x.BusinessId).OnDelete(DeleteBehavior.Restrict);
+            entity.HasOne<RetailReceivingLine>().WithMany().HasForeignKey(x => x.ReceivingLineId).OnDelete(DeleteBehavior.Restrict);
+            entity.HasOne<AppUser>().WithMany().HasForeignKey(x => x.ActorUserId).OnDelete(DeleteBehavior.Restrict);
+            entity.ToTable(t => t.HasCheckConstraint("CK_RetailPurchaseReturns_Quantity", "[Quantity] > 0"));
         });
 
         builder.Entity<RetailReceivingLine>(entity =>

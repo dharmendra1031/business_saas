@@ -93,6 +93,7 @@ public sealed class SqlServerTests(Xunit.Abstractions.ITestOutputHelper output)
             Assert.Contains("20261128110000_GlobalProductIdentityIndex", await db.Database.GetAppliedMigrationsAsync());
             Assert.Contains("20261128120000_GlobalProductAuditRevision", await db.Database.GetAppliedMigrationsAsync());
             Assert.Contains("20261128130000_RetailGlobalProductLink", await db.Database.GetAppliedMigrationsAsync());
+            Assert.Contains("20261128140000_RetailPurchaseReturns", await db.Database.GetAppliedMigrationsAsync());
             Assert.Equal(1, await db.Database.SqlQueryRaw<int>(
                 "SELECT COUNT(*) AS [Value] FROM sys.columns WHERE object_id = OBJECT_ID('RetailProducts') " +
                 "AND name = 'GlobalProductId' AND is_nullable = 1").SingleAsync());
@@ -502,6 +503,26 @@ public sealed class SqlServerTests(Xunit.Abstractions.ITestOutputHelper output)
                 x.BusinessId == ids[0] && x.ProductId == productId &&
                 x.SourceType == "Receiving"));
         }
+        var postedReceivingId = competingReceipts[0].StatusCode == HttpStatusCode.OK ? receiptA : receiptB;
+        var returnsPath = orderPath + "/receivings/" + postedReceivingId + "/returns";
+        var eligible = await owner.GetFromJsonAsync<JsonElement>(returnsPath);
+        var receivingLineId = eligible.GetProperty("lines")[0].GetProperty("id").GetInt64();
+        var purchaseReturn = new { receivingLineId, quantity = 50m, expectedReturned = 0m,
+            requestKey = "sql-purchase-return-20261128-a", reason = "Supplier return" };
+        var competingReturns = await Task.WhenAll(Post(owner, returnsPath, purchaseReturn),
+            Post(owner, returnsPath, purchaseReturn with { requestKey = "sql-purchase-return-20261128-b" }));
+        Assert.Single(competingReturns.Where(x => x.StatusCode == HttpStatusCode.OK));
+        Assert.Single(competingReturns.Where(x => x.StatusCode == HttpStatusCode.Conflict));
+        using (var scope = factory.Services.CreateScope())
+        {
+            var db = scope.ServiceProvider.GetRequiredService<AppDbContext>();
+            Assert.Equal(1, await db.RetailPurchaseReturns.CountAsync(x => x.BusinessId == ids[0] && x.ReceivingLineId == receivingLineId));
+            Assert.Equal(20m, await db.RetailStockBalances.Where(x => x.BusinessId == ids[0] &&
+                x.LocationId == locationId && x.ProductId == productId).Select(x => x.Quantity).SingleAsync());
+            Assert.Equal(1, await db.RetailStockMovements.CountAsync(x => x.BusinessId == ids[0] &&
+                x.ProductId == productId && x.SourceType == "PurchaseReturn"));
+        }
+
     }
 
 

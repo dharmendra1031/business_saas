@@ -6,6 +6,7 @@ import LookupDialog, { MasterLookup } from './LookupDialog'
 import { ActionButton } from './ActionFeedback'
 import GlobalProductPicker from './GlobalProductPicker'
 import RetailProducts from './RetailProducts'
+import PurchaseReturn from './PurchaseReturn'
 
 interface Supplier {
   id: number
@@ -163,6 +164,7 @@ export default function RetailPurchases({ businessId, canOperate, locations, rol
   const [detailError, setDetailError] = useState('')
   const [receiving, setReceiving] = useState<Record<number, string>>({})
   const [receivingOpen, setReceivingOpen] = useState(false)
+  const [returnReceiptId, setReturnReceiptId] = useState<number | null>(null)
   const basePath = `/businesses/${businessId}/purchase-orders`
   const money = (amount: number) =>
     new Intl.NumberFormat('en-IN', { style: 'currency', currency: currencyCode }).format(amount)
@@ -801,13 +803,18 @@ export default function RetailPurchases({ businessId, canOperate, locations, rol
                       <td>{canOperate && receipt.status === 'Draft' &&
                         <button type="button" className="btn btn-sm btn-outline-primary"
                           disabled={busy || !validLines}
-                          onClick={() => void postReceiving(receipt.id)}>Post stock</button>}</td>
+                          onClick={() => void postReceiving(receipt.id)}>Post stock</button>}
+                        {roleCode === 'Owner' && receipt.status === 'Posted' && <button type="button" className="btn btn-sm btn-outline-secondary"
+                          disabled={busy} onClick={() => setReturnReceiptId(receipt.id)}>Returns</button>}</td>
                     </tr>
                   })}</tbody>
                 </table>
               </div>}
           </div>
         </>}
+        {detail && returnReceiptId !== null && <PurchaseReturn key={detail.id + ':' + returnReceiptId}
+          path={basePath + '/' + detail.id + '/receivings/' + returnReceiptId + '/returns'}
+          receiptId={returnReceiptId} canOperate={canOperate} onClose={() => setReturnReceiptId(null)} />}
         {detail && receivingOpen && <form aria-label="Goods receiving" aria-busy={busy} onSubmit={event => void saveReceiving(event)}>
                 <button className="btn btn-outline-secondary" type="button" disabled={busy} onClick={() => setReceiving(
                   Object.fromEntries(detail.lines.filter(x => x.remainingQuantity > 0).map(x => [x.id, String(x.remainingQuantity)]))

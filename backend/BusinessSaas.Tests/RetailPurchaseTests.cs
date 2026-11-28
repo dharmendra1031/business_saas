@@ -670,6 +670,36 @@ public sealed class RetailPurchaseTests
                 x.Action == "Business.ReceiptSettingsChanged"));
         }
 
+        var returnsPath = receipts + "/" + receipt40 + "/returns";
+        var eligible = await owner.GetFromJsonAsync<JsonElement>(returnsPath);
+        var receivingLineId = eligible.GetProperty("lines")[0].GetProperty("id").GetInt64();
+        var purchaseReturn = new { receivingLineId, quantity = 1m, expectedReturned = 0m,
+            requestKey = "purchase-return-test-20261128", reason = "Damaged packaging" };
+        Assert.Equal(HttpStatusCode.NotFound, (await Send(manager, returnsPath, purchaseReturn)).StatusCode);
+        Assert.Equal(HttpStatusCode.NotFound, (await Send(other, returnsPath, purchaseReturn)).StatusCode);
+        Assert.Equal(HttpStatusCode.Conflict, (await Send(owner, returnsPath,
+            purchaseReturn with { quantity = 41m })).StatusCode);
+        var returnResponse = await Send(owner, returnsPath, purchaseReturn);
+        Assert.Equal(HttpStatusCode.OK, returnResponse.StatusCode);
+        var returnedId = (await returnResponse.Content.ReadFromJsonAsync<JsonElement>()).GetProperty("id").GetInt64();
+        var retryReturn = await Send(owner, returnsPath, purchaseReturn);
+        Assert.Equal(HttpStatusCode.OK, retryReturn.StatusCode);
+        Assert.Equal(returnedId, (await retryReturn.Content.ReadFromJsonAsync<JsonElement>()).GetProperty("id").GetInt64());
+        Assert.Equal(HttpStatusCode.Conflict, (await Send(owner, returnsPath,
+            purchaseReturn with { quantity = 2m })).StatusCode);
+        var afterReturn = await owner.GetFromJsonAsync<JsonElement>(returnsPath);
+        Assert.Equal(1m, afterReturn.GetProperty("lines")[0].GetProperty("returned").GetDecimal());
+        Assert.Equal(39m, afterReturn.GetProperty("lines")[0].GetProperty("remaining").GetDecimal());
+        using (var scope = factory.Services.CreateScope())
+        {
+            var db = scope.ServiceProvider.GetRequiredService<AppDbContext>();
+            var movement = await db.RetailStockMovements.SingleAsync(x => x.BusinessId == businessId &&
+                x.SourceType == "PurchaseReturn" && x.SourceId == returnedId);
+            Assert.Equal(-1m, movement.QuantityChange);
+            Assert.Equal(40m, await db.RetailReceivingLines.Where(x => x.Id == receivingLineId)
+                .Select(x => x.Quantity).SingleAsync());
+        }
+
         using (var scope = factory.Services.CreateScope())
         {
             var db = scope.ServiceProvider.GetRequiredService<AppDbContext>();
