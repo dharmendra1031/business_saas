@@ -97,6 +97,77 @@ jobs:
           echo "SQLSERVER_TEST_CONNECTION=Server=127.0.0.1,14333;Database=BusinessSaasCi;User Id=sa;Password=$password;Encrypt=True;TrustServerCertificate=True;Connect Timeout=15" >> "$GITHUB_ENV"
       - name: SQL Server migration and tenant integration test
         run: dotnet test backend/BusinessSaas.Tests/BusinessSaas.Tests.csproj --configuration Release --filter "Database=SqlServer" --logger "console;verbosity=minimal" --logger "trx;LogFileName=sql-server.trx" --results-directory "${{ runner.temp }}/sql-test-results"
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+          cache: npm
+          cache-dependency-path: frontend/web/package-lock.json
+      - name: Install real browser acceptance runner
+        working-directory: frontend/web
+        run: |
+          npm ci --no-audit --no-fund
+          npm install --no-save --package-lock=false playwright@1.56.1
+          npx playwright install --with-deps --only-shell chromium
+      - name: Run browser against actual HTTPS API and SQL Server
+        shell: bash
+        run: |
+          set -eu
+          certdir="$RUNNER_TEMP/retail-acceptance-tls"
+          mkdir -p "$certdir/keys"
+          password="$(openssl rand -hex 24)"
+          echo "::add-mask::$password"
+          openssl req -x509 -newkey rsa:2048 -nodes -days 1 -subj "/CN=localhost" \
+            -addext "subjectAltName=DNS:localhost,IP:127.0.0.1" \
+            -keyout "$certdir/key.pem" -out "$certdir/cert.pem" 2>/dev/null
+          openssl pkcs12 -export -inkey "$certdir/key.pem" -in "$certdir/cert.pem" \
+            -out "$certdir/host.pfx" -passout "pass:$password"
+          export DOTNET_ENVIRONMENT=RetailAcceptance ASPNETCORE_ENVIRONMENT=RetailAcceptance
+          export RetailAcceptance__Enabled=true Payments__Enabled=false Payments__AllowLive=false Razorpay__Mode=Test
+          export ConnectionStrings__Default="$SQLSERVER_TEST_CONNECTION"
+          export ASPNETCORE_URLS=https://127.0.0.1:5081
+          export ASPNETCORE_Kestrel__Certificates__Default__Path="$certdir/host.pfx"
+          export ASPNETCORE_Kestrel__Certificates__Default__Password="$password"
+          export DataProtection__KeyDirectory="$certdir/keys" DataProtection__CertificatePath="$certdir/host.pfx"
+          export DataProtection__CertificatePassword="$password"
+          export RetailCashRegister__OpeningEnabled=true RetailCashRegister__LinkingEnabled=true RetailCashRegister__ClosingEnabled=true
+          export RetailReturns__PostingEnabled=true RetailExchanges__PostingEnabled=true RetailSales__AlternateUnitsEnabled=true
+          export RetailCredit__PostingEnabled=true RetailCredit__CollectionsEnabled=true RetailCredit__ReturnsEnabled=true
+          dotnet run --project backend/BusinessSaas.Api --configuration Release --no-build --no-launch-profile > "$RUNNER_TEMP/retail-acceptance-api.log" 2>&1 &
+          api_pid=$!
+          trap 'kill "$api_pid" ${vite_pid:-} 2>/dev/null || true' EXIT
+          for i in $(seq 1 60); do
+            if curl -kfsS https://127.0.0.1:5081/api/ready >/dev/null 2>&1; then break; fi
+            if ! kill -0 "$api_pid" 2>/dev/null; then echo "Acceptance API exited"; exit 1; fi
+            sleep 1
+          done
+          curl -kfsS https://127.0.0.1:5081/api/ready
+          cd frontend/web
+          export RETAIL_QA_CERTDIR="$certdir"
+          cat > .ci-vite.config.mjs <<'EOF'
+          import { readFileSync } from 'node:fs'
+          import react from '@vitejs/plugin-react'
+          const dir = process.env.RETAIL_QA_CERTDIR
+          export default { plugins: [react()], server: {
+            https: { key: readFileSync(dir + '/key.pem'), cert: readFileSync(dir + '/cert.pem') },
+            proxy: { '/api': { target: 'https://127.0.0.1:5081', secure: false } }
+          } }
+          EOF
+          npm run dev -- --config .ci-vite.config.mjs --port 5173 --strictPort > "$RUNNER_TEMP/retail-acceptance-vite.log" 2>&1 &
+          vite_pid=$!
+          for i in $(seq 1 60); do
+            if curl -kfsS https://127.0.0.1:5173/api/ready >/dev/null 2>&1; then break; fi
+            sleep 1
+          done
+          curl -kfsS https://127.0.0.1:5173/api/ready
+          node scripts/retail-acceptance-browser.mjs
+      - name: Upload real browser acceptance screenshots
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: retail-acceptance-browser-screenshots
+          path: frontend/web/qa-acceptance/
+          if-no-files-found: warn
+          retention-days: 7
       - name: Report SQL Server test failures
         if: failure()
         shell: bash
