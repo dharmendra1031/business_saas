@@ -59,7 +59,9 @@ Test access with a restricted staging account; compare business/member counts an
 - Monitor `/api/health` (process alive) separately from `/api/ready` (DB reachable; migrations applied).
 - Confirm email verification, authorization, concurrent write tests, deployment rollback and production monitoring before allowing actual merchants.
 
-The repository CI proves database migrations/integration against disposable SQL Server, **not** a production backup or restore.
+The Build workflow now includes a disposable SQL Server backup/restore rehearsal after real browser acceptance. It backs up the populated CI database with checksums, verifies and restores it to a separate CI database, runs DBCC CHECKDB, and compares all user tables and their rows, including migration history and posted financial/stock records. The test must pass in CI before it counts as evidence. It never uploads backups or runs against a merchant database. See [retail-ci-restore.sql](../scripts/retail-ci-restore.sql).
+
+This does not prove production recovery: actual off-host encrypted storage, retention, credentials, transaction-log backup policy, restore onto the intended staging server, application restart and measured RPO/RTO still require operator acceptance.
 
 ## Staging measurement before deployment
 

@@ -161,6 +161,15 @@ jobs:
           done
           curl -kfsS https://127.0.0.1:5173/api/ready
           node scripts/retail-acceptance-browser.mjs
+      - name: Rehearse SQL backup and restore with posted retail data
+        shell: bash
+        run: |
+          docker exec -i business-saas-sql bash -ec '
+            export SQLCMDPASSWORD="$MSSQL_SA_PASSWORD"
+            tool=/opt/mssql-tools18/bin/sqlcmd
+            if [ ! -x "$tool" ]; then tool=/opt/mssql-tools/bin/sqlcmd; fi
+            exec "$tool" -S localhost -U sa -C -b -r1 -d master
+          ' < scripts/retail-ci-restore.sql
       - name: Upload real browser acceptance screenshots
         if: always()
         uses: actions/upload-artifact@v4
