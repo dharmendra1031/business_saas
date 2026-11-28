@@ -286,6 +286,24 @@ public sealed class SqlServerTests(Xunit.Abstractions.ITestOutputHelper output)
             Assert.False(await db.RetailStockBalances.AnyAsync(x => x.ProductId == localId));
         }
 
+        var raceGlobal = await Post(admin, catalogue, CatalogueItem("", "QA Concurrent adoption", unit: "BOX"));
+        Assert.Equal(HttpStatusCode.Created, raceGlobal.StatusCode);
+        var raceGlobalId = (await raceGlobal.Content.ReadFromJsonAsync<JsonElement>()).GetProperty("id").GetInt64();
+        var raceUrl = $"/api/businesses/{ids[0]}/global-products/{raceGlobalId}/adopt";
+        var adoptionRace = await Task.WhenAll(Post(owner, raceUrl, adoption), Post(owner, raceUrl, adoption));
+        Assert.Contains(adoptionRace, x => x.StatusCode == HttpStatusCode.Created);
+        Assert.All(adoptionRace, x => Assert.True(x.StatusCode is HttpStatusCode.Created or HttpStatusCode.OK or HttpStatusCode.Conflict));
+        var recovered = await Post(owner, raceUrl, adoption);
+        Assert.Equal(HttpStatusCode.OK, recovered.StatusCode);
+        var raceId = (await recovered.Content.ReadFromJsonAsync<JsonElement>()).GetProperty("id").GetInt64();
+        using (var scope = factory.Services.CreateScope())
+        {
+            var db = scope.ServiceProvider.GetRequiredService<AppDbContext>();
+            Assert.Equal(raceId, await db.RetailProducts.Where(x => x.BusinessId == ids[0] &&
+                x.GlobalProductId == raceGlobalId).Select(x => x.Id).SingleAsync());
+            Assert.False(await db.RetailStockMovements.AnyAsync(x => x.ProductId == raceId));
+        }
+
         var changedPayload = await Post(admin, "/api/platform/businesses", new
         {
             name = "Not The Same Business",

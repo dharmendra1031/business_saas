@@ -100,10 +100,12 @@ public static class RetailProductEndpoints
             if (!ValidBarcode(code))
                 return Results.BadRequest(new { message = "Enter a valid barcode." });
 
-            var matches = db.RetailProducts.AsNoTracking()
-                .Where(x => x.BusinessId == businessId && x.Barcode == code && x.IsActive);
-            var product = await ProductDetails(db, matches, businessId).SingleOrDefaultAsync(cancellationToken);
-            return product is null ? Results.NotFound() : Results.Ok(product);
+            var forms = GlobalProductEndpoints.BarcodeForms(code);
+            var matches = db.RetailProducts.AsNoTracking().Where(x => x.BusinessId == businessId && x.IsActive &&
+                (x.Barcode == code || x.GlobalProductId != null && x.Barcode != null && forms.Contains(x.Barcode)));
+            var products = await ProductDetails(db, matches.OrderBy(x => x.Id).Take(2), businessId).ToListAsync(cancellationToken);
+            return products.Count > 1 ? Results.Conflict(new { message = "Barcode matches multiple products. Select by SKU." }) :
+                products.Count == 0 ? Results.NotFound() : Results.Ok(products[0]);
         });
 
         group.MapGet("/{productId:long}", async (long businessId, long productId,

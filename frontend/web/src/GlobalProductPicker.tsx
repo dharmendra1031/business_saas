@@ -7,7 +7,8 @@ interface Item { id: number; name: string; barcode: string | null; brand: string
 interface Page { items: Item[]; nextAfterId: number | null }
 export interface AdoptedProduct { id: number; name: string; sku: string; unitCode: string; isActive: boolean; conversions?: { unitId: number; factor: number; unitCode?: string; isActive?: boolean }[] }
 
-export default function GlobalProductPicker({ businessId, currencyCode, initialSearch = '', onClose, onSelect }: {
+export default function GlobalProductPicker({ businessId, currencyCode, initialSearch = '', onClose, onSelect, onPrivateProduct }: {
+  onPrivateProduct?: () => void
   businessId: number; currencyCode: string; initialSearch?: string; onClose: () => void; onSelect: (product: AdoptedProduct) => void
 }) {
   const dialog = useRef<HTMLDialogElement>(null)
@@ -66,7 +67,8 @@ export default function GlobalProductPicker({ businessId, currencyCode, initialS
         <ActionButton busy={busy} disabled={!term.trim()}>Search</ActionButton>
       </form>
       {page && <div className="mt-2">
-        {page.items.length === 0 && <p role="status">No matching catalogue products. Use the existing private product form.</p>}
+        {page.items.length === 0 && <p role="status">No matching catalogue products.</p>}
+        {page.items.length === 0 && onPrivateProduct && <button type="button" className="btn btn-outline-secondary" onClick={onPrivateProduct}>Create private product</button>}
         {page.items.map(item => <button type="button" key={item.id} className="btn btn-outline-secondary text-start w-100 mb-2"
           disabled={busy} onClick={() => { setSelected(item); setPrice(''); setLinkExisting(false); setSavedId(null); setError('') }}>
           <strong>{item.name}</strong><span className="d-block small">{[item.brand, item.packSize, item.unit, item.barcode].filter(Boolean).join(' · ')}</span>

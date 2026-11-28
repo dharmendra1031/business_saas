@@ -5,6 +5,7 @@ import { baseQuantity } from './stockQuantity'
 import LookupDialog, { MasterLookup } from './LookupDialog'
 import { ActionButton } from './ActionFeedback'
 import GlobalProductPicker from './GlobalProductPicker'
+import RetailProducts from './RetailProducts'
 
 interface Supplier {
   id: number
@@ -116,6 +117,14 @@ export default function RetailPurchases({ businessId, canOperate, locations, rol
   const [supplierName, setSupplierName] = useState('')
   const [lookup, setLookup] = useState<'supplier' | 'product' | null>(null)
   const [catalogueOpen, setCatalogueOpen] = useState(false)
+  const [privateProductOpen, setPrivateProductOpen] = useState(false)
+  const privateProductDialog = useRef<HTMLDialogElement>(null)
+  useLayoutEffect(() => {
+    if (!privateProductOpen) return
+    const element = privateProductDialog.current
+    element?.showModal()
+    return () => element?.close()
+  }, [privateProductOpen])
   const [resolving, setResolving] = useState(false)
   const [lookupPage, setLookupPage] = useState(1)
   const [lookupTotal, setLookupTotal] = useState(0)
@@ -327,8 +336,8 @@ export default function RetailPurchases({ businessId, canOperate, locations, rol
         if (lines.some(line => line.productId === match.id)) setError('This item is already in the order.')
         else addLine(match)
       } else {
-        if (result.total === 0 && globalCatalogueEnabled && canOperate) setCatalogueOpen(true)
-        else openLookup('product')
+        // Always offer local name search before catalogue adoption.
+        openLookup('product')
       }
     } catch (cause) {
       if (!(cause instanceof SessionExpiredError)) setError(message(cause))
@@ -360,7 +369,7 @@ export default function RetailPurchases({ businessId, canOperate, locations, rol
 
   async function createOrder(event: FormEvent<HTMLFormElement>) {
     event.preventDefault()
-    if (!canOperate || busy || resolving || lookup || addingSupplier || supplierFormOpen || catalogueOpen) return
+    if (!canOperate || busy || resolving || lookup || addingSupplier || supplierFormOpen || catalogueOpen || privateProductOpen) return
     const approveNow = roleCode === 'Owner' &&
       (event.nativeEvent as SubmitEvent).submitter?.getAttribute('data-action') !== 'draft'
     if (!locationId || !supplierId || lines.length === 0 || lines.length > 50 ||
@@ -595,6 +604,8 @@ export default function RetailPurchases({ businessId, canOperate, locations, rol
           </div>
           {globalCatalogueEnabled && canOperate && lines.length < 50 && <button type="button" className="btn btn-sm btn-outline-secondary" disabled={busy || resolving}
             onClick={() => setCatalogueOpen(true)}>Add from Global Catalogue</button>}
+          {canOperate && lines.length < 50 && <button type="button" className="btn btn-sm btn-outline-secondary ms-2" disabled={busy || resolving}
+            onClick={() => setPrivateProductOpen(true)}>New Private Product</button>}
           {lines.length >= 50 && <p className="field-help" role="status">Maximum 50 products per purchase order.</p>}
           {lines.length > 0 && <p className="text-end mb-0">
             <strong>Total: {money(lines.reduce((sum, line) =>
@@ -637,7 +648,13 @@ export default function RetailPurchases({ businessId, canOperate, locations, rol
       </form>}
 
       {creating && catalogueOpen && canOperate && <GlobalProductPicker businessId={businessId} currencyCode={currencyCode} initialSearch={productSearch}
-        onClose={() => setCatalogueOpen(false)} onSelect={product => { setCatalogueOpen(false); addLine(product) }} />}
+        onClose={() => setCatalogueOpen(false)} onPrivateProduct={() => { setCatalogueOpen(false); setPrivateProductOpen(true) }}
+        onSelect={product => { setCatalogueOpen(false); addLine(product) }} />}
+      {creating && privateProductOpen && canOperate && <dialog ref={privateProductDialog} className="entry-dialog" aria-label="New private product"
+        onCancel={event => event.preventDefault()}>
+        <RetailProducts businessId={businessId} currencyCode={currencyCode} canOperate={canOperate}
+          onCancel={() => setPrivateProductOpen(false)} onCreated={product => { setPrivateProductOpen(false); addLine(product) }} />
+      </dialog>}
       {creating && supplierFormOpen && <dialog ref={supplierDialog} className="entry-dialog" aria-labelledby="new-supplier-heading"
         onCancel={event => { event.preventDefault(); if (!supplierSaving.current) closeSupplierForm() }}
         onKeyDownCapture={event => {

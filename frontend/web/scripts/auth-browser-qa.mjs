@@ -62,7 +62,7 @@ async function scenario(name, {
   width = 1366, height = 768, role = 'Owner', initialFailure = false,
   businessFailure = false, multiple = false, challenge = false, verified = true,
   badPassword = false, lockedPassword = false, badMfa = false, hasProducts = false, pendingApprovals = 0,
-  locationCount = 1, productsFixture = false, cashSalesFixture = false, stockAlertsFixture = false, ownerPos = false
+  locationCount = 1, productsFixture = false, cashSalesFixture = false, stockAlertsFixture = false, ownerPos = false, globalCatalogueEnabled = false
 } = {}) {
   const context = await browser.newContext({ viewport: { width, height }, deviceScaleFactor: 1 })
   const page = await context.newPage()
@@ -81,7 +81,7 @@ async function scenario(name, {
       if (!state.authenticated) return response(route, 401, { message: 'Unauthenticated' })
       return response(route, 200, {
         id: 10, email: 'qa@example.test',
-        isPlatformOwner: role === 'Platform', mfaVerified: role === 'Platform' && verified
+        isPlatformOwner: role === 'Platform', mfaVerified: role === 'Platform' && verified, globalCatalogueEnabled
       })
     }
     if (path === '/auth/options') return response(route, 200, { canRegister: false })
@@ -622,6 +622,68 @@ try {
     await t.check()
     await t.context.close()
     console.log('PASS Purchase catalogs load on demand; canceled drafts reopen empty')
+  }
+
+
+  {
+    const t = await scenario('purchase-catalogue-and-private-adoption', {
+      role: 'Owner', hasProducts: true, productsFixture: true, globalCatalogueEnabled: true
+    })
+    let adoptionCalls = 0
+    let privateCalls = 0
+    let readCalls = 0
+    await t.page.route('**/api/businesses/1/global-products?*', route =>
+      response(route, 200, { items: [{ id: 50, name: 'Catalogue Rice', barcode: null,
+        brand: 'QA Brand', packSize: '1kg', unit: 'ITEM', revision: 1 }], nextAfterId: null }))
+    await t.page.route('**/api/businesses/1/global-products/50/adopt', route => {
+      adoptionCalls++
+      assert.equal(route.request().postDataJSON().salePrice, 25)
+      return response(route, 201, { id: 51 })
+    })
+    await t.page.route('**/api/businesses/1/products/51', route =>
+      response(route, 200, { id: 51, name: 'Catalogue Rice', sku: 'AUTO-51', unitCode: 'ITEM', isActive: true }))
+    await t.page.route('**/api/businesses/1/products', route => {
+      if (route.request().method() !== 'POST') return route.fallback()
+      privateCalls++
+      assert.equal(route.request().postDataJSON().name, 'Private Rice')
+      return response(route, 201, { id: 52 })
+    })
+    await t.page.route('**/api/businesses/1/products/52', route => {
+      readCalls++
+      return readCalls === 1 ? response(route, 503, { message: 'Refresh failed' }) :
+        response(route, 200, { id: 52, name: 'Private Rice', sku: 'AUTO-52', unitCode: 'ITEM', isActive: true })
+    })
+    await t.login()
+    await t.page.locator('.app-sidebar .nav-entry').filter({ hasText: 'Purchase Orders' }).click()
+    await t.page.getByRole('button', { name: 'New Purchase Order' }).click()
+    await t.page.locator('#purchase-supplier').click()
+    await t.page.locator('#purchase-supplier-search-option-21').click()
+    await t.page.locator('#purchase-product').fill('BLUE-11')
+    await t.page.locator('#purchase-product').press('Enter')
+    await t.page.locator('#purchase-qty-11').fill('3')
+    await t.page.getByRole('button', { name: 'Add from Global Catalogue' }).click()
+    const picker = t.page.getByRole('dialog', { name: 'Global product catalogue' })
+    await picker.getByLabel('Catalogue name or barcode').fill('Catalogue Rice')
+    await picker.getByRole('button', { name: 'Search', exact: true }).click()
+    await picker.getByRole('button', { name: /Catalogue Rice/ }).click()
+    await picker.locator('#catalogue-price').fill('25')
+    await picker.getByRole('button', { name: 'Add to My Products' }).click()
+    await t.page.locator('#purchase-qty-51').waitFor()
+    await t.page.getByRole('button', { name: 'New Private Product' }).click()
+    const form = t.page.getByRole('dialog', { name: 'New private product' })
+    await form.locator('#product-name').fill('Private Rice')
+    await form.locator('#product-price').fill('30')
+    await form.getByRole('button', { name: 'Save product' }).click()
+    await form.getByRole('button', { name: 'Verify saved product' }).click()
+    await t.page.locator('#purchase-qty-52').waitFor()
+    assert.equal(adoptionCalls, 1)
+    assert.equal(privateCalls, 1)
+    assert.equal(readCalls, 2)
+    assert.equal(await t.page.locator('#purchase-qty-11').inputValue(), '3')
+    assert.equal(await t.page.locator('#purchase-supplier').inputValue(), 'Wholesaler')
+    await t.check()
+    await t.context.close()
+    console.log('PASS catalogue and private adoption preserve purchase draft and verify saved product without repost')
   }
 
   for (const { retryPosting, converted } of [

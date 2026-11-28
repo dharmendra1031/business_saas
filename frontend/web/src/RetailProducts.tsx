@@ -5,7 +5,7 @@ import { classificationPath, classificationTrail } from './retailClassification'
 import { ActionButton, useActionFeedback } from './ActionFeedback'
 import { moneyCents } from './posMoney'
 import { MasterLookup } from './LookupDialog'
-import GlobalProductPicker from './GlobalProductPicker'
+import GlobalProductPicker, { type AdoptedProduct } from './GlobalProductPicker'
 
 interface Product {
   id: number
@@ -19,7 +19,7 @@ interface Product {
   brandName?: string | null
   unitId: number
   unitCode: string
-  conversions?: { unitId: number; factor: number; salePrice?: number | null }[]
+  conversions?: { unitId: number; factor: number; salePrice?: number | null; unitCode?: string; isActive?: boolean }[]
   salePrice: number
   reorderLevel: number | null
   taxClassification: string
@@ -70,13 +70,21 @@ function errorMessage(error: unknown): string {
   return error instanceof Error ? error.message : 'Request failed. Please try again.'
 }
 
-export default function RetailProducts({ businessId, canOperate, currencyCode, globalCatalogueEnabled = false }: {
+export default function RetailProducts({ businessId, canOperate, currencyCode, globalCatalogueEnabled = false, onCreated, onCancel }: {
+  onCreated?: (product: AdoptedProduct) => void
+  onCancel?: () => void
   globalCatalogueEnabled?: boolean
   businessId: number
   canOperate: boolean
   currencyCode: string
 }) {
   const { run } = useActionFeedback()
+  const embedded = !!onCreated
+  const initialized = useRef(false)
+  const writeLock = useRef(false)
+  const [savedId, setSavedId] = useState<number | null>(null)
+  const [needsReview, setNeedsReview] = useState(false)
+  const [verificationError, setVerificationError] = useState('')
   const [products, setProducts] = useState<Product[]>([])
   const [options, setOptions] = useState<CatalogOptions>({ categories: [], units: [], brands: [] })
   const [inlineType, setInlineType] = useState<'categories' | 'units' | 'brands' | null>(null)
@@ -117,13 +125,22 @@ export default function RetailProducts({ businessId, canOperate, currencyCode, g
     setOptions({ categories: [], units: [], brands: [] })
     setOptionsError('')
     api<CatalogOptions>(basePath + '/options?includeInactiveCategories=true', { signal: controller.signal })
-      .then(value => { if (active) setOptions({ ...value, brands: value.brands ?? [] }) })
+      .then(value => {
+        if (!active) return
+        setOptions({ ...value, brands: value.brands ?? [] })
+        if (embedded && !initialized.current) {
+          initialized.current = true
+          setForm(newProductForm(value))
+          setFormOpen(true)
+        }
+      })
       .catch(cause => { if (active && !(cause instanceof SessionExpiredError)) setOptionsError(errorMessage(cause)) })
       .finally(() => { if (active) setOptionsLoading(false) })
     return () => { active = false; controller.abort() }
-  }, [basePath, optionsReload])
+  }, [basePath, optionsReload, embedded])
 
   useEffect(() => {
+    if (embedded) return
     const controller = new AbortController()
     let active = true
     setLoading(true)
@@ -143,7 +160,7 @@ export default function RetailProducts({ businessId, canOperate, currencyCode, g
       .catch(cause => { if (active && !(cause instanceof SessionExpiredError)) setLoadError(errorMessage(cause)) })
       .finally(() => { if (active) setLoading(false) })
     return () => { active = false; controller.abort() }
-  }, [basePath, query, status, page, categoryFilter, reload])
+  }, [basePath, query, status, page, categoryFilter, reload, embedded])
 
   useEffect(() => { if (formOpen) firstInput.current?.focus() }, [formOpen, editingId])
 
@@ -157,16 +174,20 @@ export default function RetailProducts({ businessId, canOperate, currencyCode, g
     setEditingId(null)
   }, [businessId])
 
-  function startCreate() {
-    setEditingId(null)
-    setInlineType(null)
-    setForm({
+  function newProductForm(options: CatalogOptions): ProductForm {
+    return {
       ...initialForm,
       categoryId: options.categories.find(item => item.parentId == null && item.isActive && item.name === 'General')?.id
         ?? options.categories.find(item => item.parentId == null && item.isActive)?.id ?? 0,
       unitId: options.units.find(item => item.code === 'ITEM')?.id
         ?? options.units[0]?.id ?? 0
-    })
+    }
+  }
+
+  function startCreate() {
+    setEditingId(null)
+    setInlineType(null)
+    setForm(newProductForm(options))
     setSkuError('')
     setFormOpen(true)
   }
@@ -208,8 +229,9 @@ export default function RetailProducts({ businessId, canOperate, currencyCode, g
 
   async function save(event: FormEvent) {
     event.preventDefault()
-    if (!canOperate || saving || inlineSaving || inlineType || optionsLoading || !form.categoryId || !form.unitId || !conversionValid) return
+    if (!canOperate || writeLock.current || savedId !== null || needsReview || saving || inlineSaving || inlineType || optionsLoading || !form.categoryId || !form.unitId || !conversionValid) return
 
+    writeLock.current = true
     setSaving(true)
     setSkuError('')
 
@@ -228,29 +250,51 @@ export default function RetailProducts({ businessId, canOperate, currencyCode, g
     }
 
     try {
-      await run('Saving product…',
-        editingId === null ? 'Product added. Set its opening quantity from Stock when ready.'
-          : 'Product updated successfully.', async () => {
-          if (editingId === null)
-            await post(basePath, body)
-          else
-            await api(`${basePath}/${editingId}`, { method: 'PUT', body: JSON.stringify(body) })
-        })
+      const result = await run('Saving product…',
+        editingId === null ? embedded ? 'Product added.' : 'Product added. Set its opening quantity from Stock when ready.'
+          : 'Product updated successfully.', () => editingId === null
+            ? post<{ id: number }>(basePath, body)
+            : api<{ id: number }>(`${basePath}/${editingId}`, { method: 'PUT', body: JSON.stringify(body) }))
+      if (embedded && onCreated) {
+        setSavedId(result.id)
+        await verifyCreated(result.id)
+        return
+      }
       setFormOpen(false)
       setEditingId(null)
       setForm(initialForm)
       setReload(value => value + 1)
     } catch (cause) {
+      if (embedded && cause instanceof UncertainWriteError) setNeedsReview(true)
       // Shared feedback reports the failure. Only SKU/barcode gets a field hint.
       if (!(cause instanceof SessionExpiredError)) {
         const message = errorMessage(cause)
         if (message.toLowerCase().includes('sku or barcode')) setSkuError(message)
       }
     } finally {
+      writeLock.current = false
       setSaving(false)
     }
   }
 
+  async function verifyCreated(id: number) {
+    setVerificationError('')
+    try {
+      const product = await api<AdoptedProduct>(basePath + '/' + id)
+      if (!product.isActive) throw new Error('Product is inactive. Review it before selecting.')
+      onCreated?.(product)
+    } catch (cause) {
+      setVerificationError(errorMessage(cause))
+    }
+  }
+
+  async function retryVerification() {
+    if (savedId === null || writeLock.current) return
+    writeLock.current = true
+    setSaving(true)
+    try { await verifyCreated(savedId) }
+    finally { writeLock.current = false; setSaving(false) }
+  }
 
   useLayoutEffect(() => {
     if (!inlineType || !formOpen || !canOperate) return
@@ -352,7 +396,7 @@ export default function RetailProducts({ businessId, canOperate, currencyCode, g
 
   return (
     <section className="content-section retail-products business-module-card" aria-label="Product master">
-      <div className="masters-heading business-module-heading">
+      {!embedded && <div className="masters-heading business-module-heading">
         <h2>Products</h2>
         <div className="business-module-actions">
           {!formOpen && !loading && !loadError && total > 0 && <span className="business-module-count">{total.toLocaleString()} products</span>}
@@ -360,7 +404,9 @@ export default function RetailProducts({ businessId, canOperate, currencyCode, g
           {canOperate && !formOpen && <button type="button" className="btn btn-primary"
             disabled={!!optionsError || optionsLoading} onClick={startCreate}><Plus size={17} /> Add Product</button>}
         </div>
-      </div>
+      </div>}
+      {embedded && !formOpen && <button type="button" className="btn btn-outline-secondary" onClick={onCancel}>Cancel</button>}
+      {embedded && optionsLoading && <p role="status">Loading product setup…</p>}
 
       {catalogueOpen && canOperate && <GlobalProductPicker businessId={businessId} currencyCode={currencyCode}
         onClose={() => setCatalogueOpen(false)} onSelect={() => { setCatalogueOpen(false); setReload(value => value + 1); setOptionsReload(value => value + 1) }} />}
@@ -376,9 +422,15 @@ export default function RetailProducts({ businessId, canOperate, currencyCode, g
           onClick={() => setOptionsReload(value => value + 1)}>Retry setup</button>
       </div>}
 
-      {formOpen && canOperate && <form className="product-form" aria-busy={saving || inlineSaving} onSubmit={event => void save(event)}>
+      {savedId !== null && embedded && <div role="status" className="mb-2">
+        <p>Product saved. Verify it before adding to the order.</p>
+        {verificationError && <p role="alert">{verificationError}</p>}
+        <button type="button" className="btn btn-primary me-2" disabled={saving} onClick={() => void retryVerification()}>Verify saved product</button>
+        <button type="button" className="btn btn-outline-secondary" disabled={saving} onClick={onCancel}>Close</button>
+      </div>}
+      {formOpen && canOperate && savedId === null && <form className="product-form" aria-busy={saving || inlineSaving} onSubmit={event => void save(event)}>
         <h3>{editingId === null ? 'New product' : 'Edit product'}</h3>
-        <fieldset className="form-grid" disabled={saving || inlineSaving}>
+        <fieldset className="form-grid" disabled={saving || inlineSaving || needsReview}>
           <div className="form-wide">
             <label className="form-label" htmlFor="product-name">Product name *</label>
             <input ref={firstInput} id="product-name" className="form-control" required
@@ -499,10 +551,11 @@ export default function RetailProducts({ businessId, canOperate, currencyCode, g
             </details>
           </div>
         </fieldset>
+        {needsReview && <p role="alert">Creation status is unknown. Close and search My Products before attempting to create this item again.</p>}
         <div className="form-footer">
           <button type="button" className="btn btn-outline-secondary" disabled={saving || inlineSaving}
-            onClick={() => { setFormOpen(false); setSkuError('') }}>Cancel</button>
-          <ActionButton busy={saving} disabled={optionsLoading || inlineSaving || !!inlineType || !form.categoryId || !form.unitId || !conversionValid}>Save product</ActionButton>
+            onClick={() => { if (embedded) onCancel?.(); else { setFormOpen(false); setSkuError('') } }}>Cancel</button>
+          <ActionButton busy={saving} disabled={needsReview || optionsLoading || inlineSaving || !!inlineType || !form.categoryId || !form.unitId || !conversionValid}>Save product</ActionButton>
         </div>
       </form>}
 
@@ -540,7 +593,7 @@ export default function RetailProducts({ businessId, canOperate, currencyCode, g
         </form>
       </dialog>}
 
-      {!formOpen && <>
+      {!embedded && !formOpen && <>
         <form className="product-filters" onSubmit={event => {
           event.preventDefault()
           setPage(1)
