@@ -63,7 +63,8 @@ jobs:
           retention-days: 7
 
   sql-server:
-    runs-on: ubuntu-latest
+    # Match the supported Playwright runner used by Auth Browser QA.
+    runs-on: ubuntu-24.04
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-dotnet@v4
