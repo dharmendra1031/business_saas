@@ -97,6 +97,7 @@ public sealed class SqlServerTests(Xunit.Abstractions.ITestOutputHelper output)
             Assert.Contains("20261128150000_RetailSupplierDocuments", await db.Database.GetAppliedMigrationsAsync());
             Assert.Contains("20261128160000_RetailRegisterClosing", await db.Database.GetAppliedMigrationsAsync());
             Assert.Contains("20261128170000_RetailStockTransfers", await db.Database.GetAppliedMigrationsAsync());
+            Assert.Contains("20261128180000_RetailTransferReturn", await db.Database.GetAppliedMigrationsAsync());
             Assert.Equal(1, await db.Database.SqlQueryRaw<int>(
                 "SELECT COUNT(*) AS [Value] FROM sys.columns WHERE object_id = OBJECT_ID('RetailProducts') " +
                 "AND name = 'GlobalProductId' AND is_nullable = 1").SingleAsync());
@@ -2759,6 +2760,37 @@ public sealed class SqlServerTests(Xunit.Abstractions.ITestOutputHelper output)
             Assert.Equal(8m, await db.RetailStockBalances.Where(x => x.BusinessId == businessId && x.ProductId == productId).SumAsync(x => x.Quantity));
             Assert.Equal(1, await db.RetailStockMovements.CountAsync(x => x.BusinessId == businessId && x.SourceType == "TransferDispatch"));
             Assert.Equal(1, await db.RetailStockMovements.CountAsync(x => x.BusinessId == businessId && x.SourceType == "TransferReceive"));
+        }
+        var dispatchAgain = await Post(owner, path, request with {
+            requestKey = "sql-transfer-return-dispatch", lines = new[] { new { productId, quantity = 2m } }
+        });
+        Assert.Equal(HttpStatusCode.OK, dispatchAgain.StatusCode);
+        var returnId = (await dispatchAgain.Content.ReadFromJsonAsync<JsonElement>()).GetProperty("id").GetInt64();
+        var returnPath = path + "/" + returnId;
+        var returnLine = (await owner.GetFromJsonAsync<JsonElement>(returnPath)).GetProperty("lines")[0].GetProperty("id").GetInt64();
+        var returned = receipt with { lineId = returnLine, quantity = 2m, kind = "Returned",
+            reason = "Goods received back at source", requestKey = "sql-transfer-return-source", expectedRemaining = 2m };
+        Assert.Equal(HttpStatusCode.BadRequest, (await Post(owner, returnPath + "/receive", returned with { reason = "" })).StatusCode);
+        Assert.Equal(HttpStatusCode.Conflict, (await Post(owner, returnPath + "/receive", returned with { quantity = 3m })).StatusCode);
+        var returnResult = await Post(owner, returnPath + "/receive", returned);
+        Assert.Equal(HttpStatusCode.OK, returnResult.StatusCode);
+        var replay = await Post(owner, returnPath + "/receive", returned);
+        Assert.Equal(HttpStatusCode.OK, replay.StatusCode);
+        Assert.Equal((await returnResult.Content.ReadFromJsonAsync<JsonElement>()).GetProperty("id").GetInt64(),
+            (await replay.Content.ReadFromJsonAsync<JsonElement>()).GetProperty("id").GetInt64());
+        var returnedDetail = await owner.GetFromJsonAsync<JsonElement>(returnPath);
+        Assert.Equal("Completed", returnedDetail.GetProperty("transfer").GetProperty("status").GetString());
+        Assert.Equal(2m, returnedDetail.GetProperty("lines")[0].GetProperty("returned").GetDecimal());
+        Assert.Equal(0m, returnedDetail.GetProperty("lines")[0].GetProperty("remaining").GetDecimal());
+        Assert.Empty((await owner.GetFromJsonAsync<JsonElement>(path + "/in-transit")).GetProperty("items").EnumerateArray());
+        using (var scope = factory.Services.CreateScope())
+        {
+            var db = scope.ServiceProvider.GetRequiredService<AppDbContext>();
+            Assert.Equal(3m, await db.RetailStockBalances.Where(x => x.BusinessId == businessId && x.LocationId == from &&
+                x.ProductId == productId).Select(x => x.Quantity).SingleAsync());
+            Assert.Equal(5m, await db.RetailStockBalances.Where(x => x.BusinessId == businessId && x.LocationId == to &&
+                x.ProductId == productId).Select(x => x.Quantity).SingleAsync());
+            Assert.Equal(1, await db.RetailStockMovements.CountAsync(x => x.BusinessId == businessId && x.SourceType == "TransferReturn"));
         }
     }
 

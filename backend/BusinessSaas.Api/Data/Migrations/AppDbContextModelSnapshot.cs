@@ -2325,7 +2325,7 @@ namespace BusinessSaas.Api.Data.Migrations
                     b.HasIndex("BusinessId", "RequestKey").IsUnique();
                     b.HasIndex("TransferLineId");
                     b.HasIndex("ActorUserId");
-                    b.ToTable("RetailStockTransferReceipts", t => t.HasCheckConstraint("CK_RetailStockTransferReceipts_Valid", "[Quantity] > 0 AND [Kind] IN ('Received','Damaged','Missing')"));
+                    b.ToTable("RetailStockTransferReceipts", t => t.HasCheckConstraint("CK_RetailStockTransferReceipts_Valid", "[Quantity] > 0 AND [Kind] IN ('Received','Damaged','Missing','Returned')"));
                 });
             modelBuilder.Entity("BusinessSaas.Api.Data.RetailStockTransfer", b =>
                 {

@@ -7,7 +7,7 @@ interface Options { locations: Location[]; canWrite: boolean; isOwner: boolean }
 interface Product { id: number; name: string; sku: string; unitCode: string; availableStock: number | null }
 interface DraftLine extends Product { quantity: string }
 interface Transfer { id: number; fromLocationId: number; toLocationId: number; status: string; reason: string; requestedAtUtc: string }
-interface Line { id: number; productId: number; name: string; unitCode: string; quantity: number; received: number; damaged: number; missing: number; remaining: number }
+interface Line { id: number; productId: number; name: string; unitCode: string; quantity: number; received: number; damaged: number; missing: number; returned?: number; remaining: number }
 interface Receipt { id: number; transferLineId: number; quantity: number; kind: string; reason: string; postedAtUtc: string }
 interface Detail { transfer: Transfer; lines: Line[]; history: Receipt[] }
 interface Page<T> { items: T[]; hasMore: boolean }
@@ -154,7 +154,7 @@ export default function RetailStockTransfers({ businessId, userId, canOperate }:
     event.preventDefault()
     if (!detail || !line || !allowed || pending || baseQuantity(Number(qty), 1) === null ||
         Number(qty) > line.remaining || kind !== 'Received' && receiveReason.trim().length < 5) return
-    if (!window.confirm(kind === 'Received' ? 'Confirm goods physically received and sellable.' : 'Confirm this transit exception. Quantity will not be added to sellable stock.')) return
+    if (!window.confirm(kind === 'Received' ? 'Confirm goods physically received and sellable.' : kind === 'Returned' ? 'Confirm sellable goods have physically arrived back at the source location.' : 'Confirm this transit exception. Quantity will not be added to sellable stock.')) return
     void send({ path: base + '/' + detail.transfer.id + '/receive', transferId: detail.transfer.id, action: kind,
       body: { lineId, quantity: Number(qty), kind, reason: receiveReason.trim(), expectedRemaining: line.remaining, requestKey: operationKey() } })
   }
@@ -228,8 +228,8 @@ export default function RetailStockTransfers({ businessId, userId, canOperate }:
           {canEdit && options?.isOwner && ['Requested', 'Approved'].includes(detail.transfer.status) && <button type="button" className="btn btn-outline-secondary" onClick={() => transition('cancel')}>Cancel transfer</button>}
         </div>
         <div className="table-responsive"><table className="table table-sm">
-          <thead><tr><th>Product</th><th>Requested</th><th>Received</th><th>Damaged</th><th>Missing</th><th>In transit</th></tr></thead>
-          <tbody>{detail.lines.map(l => <tr key={l.id}><td>{l.name} · {l.unitCode}</td><td>{l.quantity}</td><td>{l.received}</td><td>{l.damaged}</td><td>{l.missing}</td><td>{l.remaining}</td></tr>)}</tbody></table></div>
+          <thead><tr><th>Product</th><th>Requested</th><th>Received</th><th>Damaged</th><th>Missing</th><th>Returned to source</th><th>In transit</th></tr></thead>
+          <tbody>{detail.lines.map(l => <tr key={l.id}><td>{l.name} · {l.unitCode}</td><td>{l.quantity}</td><td>{l.received}</td><td>{l.damaged}</td><td>{l.missing}</td><td>{l.returned ?? 0}</td><td>{l.remaining}</td></tr>)}</tbody></table></div>
         {canEdit && access(detail.transfer.toLocationId) && detail.transfer.status === 'InTransit' && <form onSubmit={receive}>
           <h4 className="h6">Receive / reconcile stock</h4>
           <label className="form-label" htmlFor="transfer-line">Product</label><select id="transfer-line" required className="form-select mb-2" value={lineId}
@@ -237,8 +237,9 @@ export default function RetailStockTransfers({ businessId, userId, canOperate }:
           <label className="form-label" htmlFor="transfer-receive-qty">Quantity</label><input id="transfer-receive-qty" required type="number" min="0.001" max={line?.remaining ?? 0}
             step="0.001" className="form-control mb-2" value={qty} onChange={event => setQty(event.target.value)} />
           <label className="form-label" htmlFor="transfer-kind">Disposition</label><select id="transfer-kind" className="form-select mb-2" value={kind} onChange={event => setKind(event.target.value)}>
-            <option value="Received">Received — sellable</option>{options?.isOwner && <><option value="Damaged">Damaged — exclude from sellable stock</option><option value="Missing">Missing — confirmed loss</option></>}</select>
+            <option value="Received">Received — sellable</option>{options?.isOwner && <><option value="Damaged">Damaged — exclude from sellable stock</option><option value="Missing">Missing — confirmed loss</option><option value="Returned">Returned — received back at source</option></>}</select>
           <label className="form-label" htmlFor="transfer-receive-reason">Reason (required for exceptions)</label><input id="transfer-receive-reason" maxLength={200} className="form-control mb-2" value={receiveReason} onChange={event => setReceiveReason(event.target.value)} />
+          {kind === "Returned" && <p className="small">Stock will be restored at {name(detail.transfer.fromLocationId)} only after physical return. Already received quantities require a separate transfer.</p>}
           <button type="submit" className="btn btn-primary" disabled={!line || baseQuantity(Number(qty), 1) === null || Number(qty) > line.remaining || kind !== 'Received' && receiveReason.trim().length < 5}>Post receiving</button>
         </form>}
         <h4 className="h6 mt-3">Recent receiving history</h4>

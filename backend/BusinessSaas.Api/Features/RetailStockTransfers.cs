@@ -120,6 +120,7 @@ internal static class RetailStockTransfers
             received = totals.Where(x => x.TransferLineId == l.Id && x.Kind == "Received").Sum(x => x.Quantity),
             damaged = totals.Where(x => x.TransferLineId == l.Id && x.Kind == "Damaged").Sum(x => x.Quantity),
             missing = totals.Where(x => x.TransferLineId == l.Id && x.Kind == "Missing").Sum(x => x.Quantity),
+            returned = totals.Where(x => x.TransferLineId == l.Id && x.Kind == "Returned").Sum(x => x.Quantity),
             remaining = transfer.Status is "InTransit" or "Completed" ?
                 l.Quantity - totals.Where(x => x.TransferLineId == l.Id).Sum(x => x.Quantity) : 0m
         }), history });
@@ -254,7 +255,7 @@ internal static class RetailStockTransfers
     {
         var key = request.RequestKey?.Trim() ?? "";
         var reason = request.Reason?.Trim() ?? "";
-        if (request.Kind is not ("Received" or "Damaged" or "Missing") || !StockPosting.ValidBaseQuantity(request.Quantity, 1m) ||
+        if (request.Kind is not ("Received" or "Damaged" or "Missing" or "Returned") || !StockPosting.ValidBaseQuantity(request.Quantity, 1m) ||
             key.Length is < 16 or > 80 || reason.Length > 200 || (request.Kind != "Received" && reason.Length < 5))
             return Results.BadRequest(new { message = "Enter valid receiving quantity and a reason for exceptions." });
         try
@@ -264,7 +265,9 @@ internal static class RetailStockTransfers
             if (role is null) return Results.NotFound();
             var transfer = await Visible(db, businessId, role).SingleOrDefaultAsync(x => x.Id == id, ct);
             if (transfer is null) return Results.NotFound();
-            var denied = await WriteAccess(db, user, businessId, environment, ct, transfer.ToLocationId, request.Kind != "Received");
+            var returnedToSource = request.Kind == "Returned";
+            var postingLocation = returnedToSource ? transfer.FromLocationId : transfer.ToLocationId;
+            var denied = await WriteAccess(db, user, businessId, environment, ct, postingLocation, request.Kind != "Received");
             if (denied is not null) return denied;
             var line = await db.RetailStockTransferLines.SingleOrDefaultAsync(x => x.TransferId == id && x.Id == request.LineId, ct);
             if (line is null) return Results.NotFound();
@@ -287,9 +290,9 @@ internal static class RetailStockTransfers
                 RequestKey = key, PostedAtUtc = DateTime.UtcNow };
             db.RetailStockTransferReceipts.Add(entry);
             await db.SaveChangesAsync(ct);
-            if (entry.Kind == "Received" && await StockPosting.ApplyAsync(db, businessId, transfer.ToLocationId,
-                line.ProductId, entry.Quantity, "TransferReceive", entry.Id, actor, reason: reason) is null)
-                return Results.Conflict(new { message = "Destination stock could not be posted." });
+            if ((entry.Kind is "Received" or "Returned") && await StockPosting.ApplyAsync(db, businessId, postingLocation,
+                line.ProductId, entry.Quantity, returnedToSource ? "TransferReturn" : "TransferReceive", entry.Id, actor, reason: reason) is null)
+                return Results.Conflict(new { message = "Receiving location stock could not be posted." });
             var lines = await db.RetailStockTransferLines.Where(x => x.TransferId == id).ToListAsync(ct);
             var lineIds = lines.Select(x => x.Id).ToArray();
             var totals = await db.RetailStockTransferReceipts.Where(x => x.BusinessId == businessId && lineIds.Contains(x.TransferLineId))
